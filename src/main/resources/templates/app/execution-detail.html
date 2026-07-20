@@ -19,8 +19,8 @@
 			<div><div class="metric" th:text="#{execution.processed}">Processados</div><div class="value" th:text="${execution.filesFound()}">0</div></div>
 			<div><div class="metric" th:text="#{execution.totalEstimated}">Total estimado</div><div class="value" th:text="${execution.totalExpected() != null ? execution.totalExpected() : '-'}">0</div></div>
 			<div><div class="metric" th:text="#{execution.percent}">Percentual</div><div class="value" th:text="${execution.percentComplete() != null ? execution.percentComplete() + '%' : '-'}">-</div></div>
-			<div><div class="metric" th:text="#{common.start}">Início</div><div class="value" th:text="${execution.startedAt() != null ? T(br.com.jorgemelo.nimbusfilemanager.common.util.DateTimeFormatUtils).human(execution.startedAt()) : '-'}">-</div></div>
-			<div><div class="metric" th:text="#{common.end}">Fim</div><div class="value" th:text="${execution.finishedAt() != null ? T(br.com.jorgemelo.nimbusfilemanager.common.util.DateTimeFormatUtils).human(execution.finishedAt()) : '-'}">-</div></div>
+			<div><div class="metric" th:text="#{common.start}">Início</div><div class="value" th:text="${execution.startedAt() != null ? T(br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils).human(execution.startedAt()) : '-'}">-</div></div>
+			<div><div class="metric" th:text="#{common.end}">Fim</div><div class="value" th:text="${execution.finishedAt() != null ? T(br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils).human(execution.finishedAt()) : '-'}">-</div></div>
 		</div>
 		<p class="path" th:text="${execution.sourcePath()}">source</p>
 		<p class="path" th:text="${execution.targetPath()}">target</p>

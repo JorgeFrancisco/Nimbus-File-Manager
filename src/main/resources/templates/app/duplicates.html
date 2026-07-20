@@ -202,12 +202,12 @@
 					<td th:text="${file.resolution()} ?: '—'">—</td>
 					<td>
 							<div class="duplicate-date-cell">
-								<span th:text="${file.captureDate() != null ? T(br.com.jorgemelo.nimbusfilemanager.common.util.DateTimeFormatUtils).human(file.captureDate()) : '—'}">-</span>
+								<span th:text="${file.captureDate() != null ? T(br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils).human(file.captureDate()) : '—'}">-</span>
 								<span class="badge" th:classappend="${file.dateSourceBadgeClass()}" th:text="${file.dateSourceLabel()}"
 										title="Origem da data usada pelo sistema" th:title="#{duplicates.dateSource.title}">fonte</span>
 							</div>
 						</td>
-						<td th:text="${T(br.com.jorgemelo.nimbusfilemanager.common.util.DateTimeFormatUtils).human(file.modifiedAt())}">-</td>
+						<td th:text="${T(br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils).human(file.modifiedAt())}">-</td>
 				</tr>
 				</tbody>
 			</table>

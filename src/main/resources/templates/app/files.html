@@ -120,7 +120,7 @@
 				</td>
 				<td th:text="${item.fileType()}">FILE</td>
 				<td th:text="${item.sizeBytes() == null ? '-' : item.sizeBytes()}">0</td>
-				<td th:text="${T(br.com.jorgemelo.nimbusfilemanager.common.util.DateTimeFormatUtils).human(item.modifiedAt())}">-</td>
+				<td th:text="${T(br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils).human(item.modifiedAt())}">-</td>
 				<td>
 					<span class="badge warn" th:if="${item.missing()}" th:text="#{files.status.missing}">Ausente</span>
 					<span class="badge ok" th:if="${!item.missing() and !item.directory() and item.registered()}" th:text="#{files.status.cataloged}">Inventariado</span>
