@@ -167,4 +167,52 @@ class LocationOrganizationPolicyTest {
 		Assertions.assertThat(policy.confidenceLabel(null)).isNull();
 		Assertions.assertThat(policy.distanceLabel(MediaGeoLocation.builder().build())).isNull();
 	}
+
+	@Test
+	void nullOrPlacelessLocationNeverQualifies() {
+		Assertions.assertThat(policy.subdivisionSegments(null, LocationSubdivision.COUNTRY, LocationConfidence.LOW,
+				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+
+		MediaGeoLocation placeless = MediaGeoLocation.builder().build();
+
+		Assertions.assertThat(policy.subdivisionSegments(placeless, LocationSubdivision.COUNTRY, LocationConfidence.LOW,
+				LocationFallbackMode.IGNORE)).isEmpty();
+	}
+
+	@Test
+	void dropsNamesThatSanitizeToADotSegment() {
+		MediaGeoLocation location = MediaGeoLocation.builder()
+				.place(ResolvedPlace.builder().countryName("..").confidence(LocationConfidence.HIGH).build()).build();
+
+		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.MEDIUM,
+				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+	}
+
+	@Test
+	void displayLabelSkipsBlankPartsAndIsNullWhenEverythingIsBlank() {
+		MediaGeoLocation allBlank = MediaGeoLocation.builder().place(ResolvedPlace.builder().cityName("  ")
+				.stateName("  ").countryName("  ").countryCode("  ").confidence(LocationConfidence.HIGH).build()).build();
+
+		Assertions.assertThat(policy.displayLabel(allBlank)).isNull();
+
+		MediaGeoLocation stateOnly = MediaGeoLocation.builder()
+				.place(ResolvedPlace.builder().stateName("Paraná").build()).build();
+
+		Assertions.assertThat(policy.displayLabel(stateOnly)).isEqualTo("Paraná");
+	}
+
+	@Test
+	void confidenceAndDistanceLabelsAreNullWhenPlaceOrValueMissing() {
+		Assertions.assertThat(policy.confidenceLabel(MediaGeoLocation.builder().build())).isNull();
+		Assertions.assertThat(policy.distanceLabel(null)).isNull();
+
+		MediaGeoLocation noConfidence = MediaGeoLocation.builder().place(ResolvedPlace.builder().build()).build();
+
+		Assertions.assertThat(policy.confidenceLabel(noConfidence)).isNull();
+
+		MediaGeoLocation noDistance = MediaGeoLocation.builder()
+				.place(ResolvedPlace.builder().confidence(LocationConfidence.HIGH).build()).build();
+
+		Assertions.assertThat(policy.distanceLabel(noDistance)).isNull();
+	}
 }

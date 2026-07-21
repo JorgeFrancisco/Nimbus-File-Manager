@@ -58,6 +58,23 @@ class FileTypeTest {
 		Assertions.assertThat(FileType.fromExtension("docx")).isEqualTo(FileType.WORD);
 		Assertions.assertThat(FileType.fromExtension("pptx")).isEqualTo(FileType.POWERPOINT);
 		Assertions.assertThat(FileType.fromExtension(" ")).isEqualTo(FileType.OTHER);
+		Assertions.assertThat(FileType.fromExtension(null)).isEqualTo(FileType.OTHER);
 		Assertions.assertThat(FileType.fromPath(null)).isEqualTo(FileType.OTHER);
+		// A root path has no file-name element.
+		Assertions.assertThat(FileType.fromPath(Path.of("/"))).isEqualTo(FileType.OTHER);
+	}
+
+	@Test
+	void typePredicatesAreFalseForOtherTypes() {
+		Assertions.assertThat(FileType.PHOTO.isAudio()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isPdf()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isWord()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isExcel()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isPowerPoint()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isText()).isFalse();
+		Assertions.assertThat(FileType.PDF.isMedia()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isDocument()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isArchive()).isFalse();
+		Assertions.assertThat(FileType.PHOTO.isOther()).isFalse();
 	}
 }

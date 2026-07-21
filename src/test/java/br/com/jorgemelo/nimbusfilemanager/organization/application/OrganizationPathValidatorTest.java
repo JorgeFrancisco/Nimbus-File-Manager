@@ -74,6 +74,22 @@ class OrganizationPathValidatorTest {
 				.hasMessageContaining("de origem do desfazer deve estar dentro");
 	}
 
+	@Test
+	void rejectsANullPathAndLabelsUndoTargetAndUnknownRoles() throws Exception {
+		Path workspace = Files.createDirectory(tempDir.resolve("workspace"));
+		Path outside = Files.createDirectory(tempDir.resolve("outside"));
+
+		OrganizationPathValidator validator = validator(workspace);
+
+		Assertions.assertThatThrownBy(() -> validator.validateAllowed(null, "target"))
+				.isInstanceOf(IllegalArgumentException.class);
+		Assertions.assertThatThrownBy(() -> validator.validateAllowed(outside.resolve("file.jpg"), "undo target"))
+				.hasMessageContaining("de destino do desfazer deve estar dentro");
+		// Unknown role is echoed back unchanged (defensive default branch).
+		Assertions.assertThatThrownBy(() -> validator.validateAllowed(outside.resolve("file.jpg"), "mystery role"))
+				.hasMessageContaining("mystery role");
+	}
+
 	private OrganizationPathValidator validator(Path... roots) {
 		WorkspaceManager workspace = mock(WorkspaceManager.class);
 		AppSettingService settings = mock(AppSettingService.class);

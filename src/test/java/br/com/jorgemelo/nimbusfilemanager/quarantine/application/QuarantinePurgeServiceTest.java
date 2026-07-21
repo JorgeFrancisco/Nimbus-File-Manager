@@ -207,6 +207,89 @@ class QuarantinePurgeServiceTest {
 		verify(purgePersistence, never()).deleteMovement(1L);
 	}
 
+	@Test
+	void purgeSelectedIsNoOpForNullOrEmptyInput() {
+		Assertions.assertThat(service.purgeSelected(null).scanned()).isZero();
+		Assertions.assertThat(service.purgeSelected(List.of()).scanned()).isZero();
+
+		verify(movementRepository, never()).findByPublicId(any());
+	}
+
+	@Test
+	void purgeSelectedSkipsAMovementThatIsNoLongerQuarantined() {
+		UUID publicId = UUID.randomUUID();
+
+		Movement restored = Movement.builder().id(1L).publicId(publicId).targetPath("ignored").sourcePath("ignored")
+				.status(MovementStatus.SKIPPED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(LocalDateTime.now()).build();
+
+		when(movementRepository.findByPublicId(publicId)).thenReturn(Optional.of(restored));
+
+		QuarantinePurgeResult result = service.purgeSelected(List.of(publicId));
+
+		Assertions.assertThat(result.skipped()).isEqualTo(1);
+		Assertions.assertThat(result.purged()).isZero();
+
+		verify(purgePersistence, never()).deleteMovement(anyLong());
+	}
+
+	@Test
+	void keepsTheCatalogRowWhenTheBestEffortCleanupThrows(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path file = Files.writeString(exec.resolve("10__a.jpg"), "old");
+
+		Movement movement = overdueMovement(1L, file);
+
+		overdueReturns(movement);
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
+		when(purgePersistence.deleteCatalogFileIfOrphan(9L)).thenThrow(new RuntimeException("foreign key"));
+
+		QuarantinePurgeResult result = service.purgeOlderThan(90);
+
+		Assertions.assertThat(result.purged()).isEqualTo(1);
+		Assertions.assertThat(result.catalogsFreed()).isZero();
+		Assertions.assertThat(Files.exists(file)).isFalse();
+	}
+
+	@Test
+	void leavesAQuarantineFolderThatStillHasOtherFiles(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path file = Files.writeString(exec.resolve("10__a.jpg"), "old");
+
+		Files.writeString(exec.resolve("11__sibling.jpg"), "keep");
+
+		Movement movement = overdueMovement(1L, file);
+
+		overdueReturns(movement);
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(null));
+
+		service.purgeOlderThan(90);
+
+		Assertions.assertThat(Files.exists(file)).isFalse();
+		Assertions.assertThat(Files.exists(exec)).as("folder kept because a sibling remains").isTrue();
+	}
+
+	@Test
+	void cleanupAbsentSkipsALockedItem(@TempDir Path tmp) {
+		Path absent = tmp.resolve("trash").resolve("exec-1").resolve("10__gone.jpg");
+
+		Movement movement = overdueMovement(1L, absent);
+
+		OperationLockService lockService = mock(OperationLockService.class);
+
+		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
+
+		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
+				Clock.systemDefaultZone());
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+
+		Assertions.assertThat(locked.cleanupAbsent()).isZero();
+
+		verify(purgePersistence, never()).deleteMovement(anyLong());
+	}
+
 	private void overdueReturns(Movement movement) {
 		when(movementRepository.findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
 				eq(MovementReason.DUPLICATE_QUARANTINED), any(), any())).thenReturn(new PageImpl<>(List.of(movement)));

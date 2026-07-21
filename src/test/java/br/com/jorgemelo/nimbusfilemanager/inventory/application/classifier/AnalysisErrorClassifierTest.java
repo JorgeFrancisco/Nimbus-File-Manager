@@ -38,4 +38,29 @@ class AnalysisErrorClassifierTest {
 		Assertions.assertThat(classifier.classify(new RuntimeException("unexpected")))
 				.isEqualTo(AnalysisErrorType.UNKNOWN);
 	}
+
+	@Test
+	void shouldClassifyEveryMessageVariant() {
+		Assertions.assertThat(classifier.classify(new RuntimeException("Erro de CRC no setor")))
+				.isEqualTo(AnalysisErrorType.CRC_ERROR);
+		Assertions.assertThat(classifier.classify(new RuntimeException("verificação cíclica de redundância")))
+				.isEqualTo(AnalysisErrorType.CRC_ERROR);
+		Assertions.assertThat(classifier.classify(new RuntimeException("Access is denied")))
+				.isEqualTo(AnalysisErrorType.ACCESS_DENIED);
+		Assertions.assertThat(classifier.classify(new RuntimeException("acesso negado ao arquivo")))
+				.isEqualTo(AnalysisErrorType.ACCESS_DENIED);
+		Assertions.assertThat(classifier.classify(new RuntimeException("não é possível encontrar o arquivo")))
+				.isEqualTo(AnalysisErrorType.FILE_NOT_FOUND);
+		Assertions.assertThat(classifier.classify(new RuntimeException("cannot find the path specified")))
+				.isEqualTo(AnalysisErrorType.FILE_NOT_FOUND);
+		Assertions.assertThat(classifier.classify(new RuntimeException("The system cannot find the file")))
+				.isEqualTo(AnalysisErrorType.FILE_NOT_FOUND);
+		Assertions.assertThat(classifier.classify(new RuntimeException("mediainfo returned nothing")))
+				.isEqualTo(AnalysisErrorType.METADATA_ERROR);
+	}
+
+	@Test
+	void shouldTreatANullMessageAsUnknown() {
+		Assertions.assertThat(classifier.classify(new IllegalStateException())).isEqualTo(AnalysisErrorType.UNKNOWN);
+	}
 }

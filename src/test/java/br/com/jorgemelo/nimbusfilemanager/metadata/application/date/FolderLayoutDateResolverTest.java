@@ -41,4 +41,14 @@ class FolderLayoutDateResolverTest {
 		// Enough folders for a subcategory but not for the day / year-month levels.
 		Assertions.assertThat(resolver.resolve(Path.of("CAMERA/IMAGENS/photo.jpg"))).isNull();
 	}
+
+	@Test
+	void shouldRejectWhenTheLayoutDepthIsIncomplete() {
+		// Only a file-type folder above the file: no subcategory level.
+		Assertions.assertThat(resolver.resolve(Path.of("IMAGENS/photo.jpg"))).isNull();
+		// Day present but no year-month level above it.
+		Assertions.assertThat(resolver.resolve(Path.of("09/CAMERA/IMAGENS/photo.jpg"))).isNull();
+		// Year-month level lands on the filesystem root, whose path has no name element.
+		Assertions.assertThat(resolver.resolve(Path.of("/09/CAMERA/IMAGENS/photo.jpg"))).isNull();
+	}
 }

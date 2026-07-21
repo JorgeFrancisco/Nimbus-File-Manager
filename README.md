@@ -998,19 +998,26 @@ Run PIT mutation testing:
 ./mvnw -Ppitest org.pitest:pitest-maven:mutationCoverage
 ```
 
-Last local PIT result, generated on 2026-07-08:
+The `pitest` profile excludes the Testcontainers / `@SpringBootTest` classes: booting a
+Spring context (and a Postgres container) once per mutation is intractable. So production
+code covered *only* by integration tests shows up as *no coverage*, and **test strength**
+(killed / covered mutations) is the more meaningful figure than the raw mutation score
+here. The class-level exclusions mirror the JaCoCo / Sonar coverage exclusions
+(`**/domain/model/**`, `**/dto/**`, `**/*Repository`, config, native glue, …).
+
+Most recent local PIT run:
 
 ```text
-Line coverage for mutated classes: 2451/2630 (93%)
-Generated mutations:              1594
-Killed mutations:                 1321
-Survived mutations:               172
-No coverage:                      101
-Timed out:                        1
+Line coverage for mutated classes: 8088/8658 (93%)
+Generated mutations:              4906
+Killed mutations:                 3951
+Survived mutations:               709
+No coverage:                      246
+Timed out:                        14
 Run error:                        0
-Mutation score:                   83%
-Test strength:                    88%
-Duration:                         20m18s
+Mutation score:                   81%
+Test strength:                    85%
+Duration:                         10m16s
 ```
 
 Reports:

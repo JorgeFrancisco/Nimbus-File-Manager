@@ -70,6 +70,7 @@ class PerformanceTelemetryServiceTest {
 
 		ExecutionMetrics metrics = savedMetrics();
 
+		Assertions.assertThat(metrics.getExecution()).isSameAs(execution);
 		Assertions.assertThat(metrics.getDurationMillis()).isEqualTo(10_000);
 		Assertions.assertThat(metrics.getFilesPerSecond()).isEqualTo(10.0);
 		Assertions.assertThat(metrics.getWorkers()).isEqualTo(4);
@@ -153,6 +154,35 @@ class PerformanceTelemetryServiceTest {
 		// 01:45 EST = 06:45 UTC; 03:15 EDT = 07:15 UTC -> 30 min of real elapsed time. The
 		// zone-less subtraction would instead have reported the 90-minute wall-clock delta.
 		Assertions.assertThat(savedMetrics().getDurationMillis()).isEqualTo(1_800_000L);
+	}
+
+	@Test
+	void keepsAnExistingApplicationVersionInsteadOfOverwriting() {
+		Execution execution = Execution.builder().id(31L).applicationVersion("already-set")
+				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0))
+				.finishedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 1)).filesFound(1).build();
+
+		when(executionRepository.findById(31L)).thenReturn(Optional.of(execution));
+		when(executionMetricsRepository.findById(31L)).thenReturn(Optional.empty());
+
+		service("service-version", ZoneId.of("UTC")).recordMetrics(31L, null, Map.of());
+
+		Assertions.assertThat(execution.getApplicationVersion()).isEqualTo("already-set");
+	}
+
+	@Test
+	void savesNoMetricsWhenThereIsNothingToRecord() {
+		// No finishedAt (so no duration), no config, no counters: nothing to store, so no
+		// execution_metrics row is created - only the execution's version is stamped.
+		Execution execution = Execution.builder().id(40L)
+				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).filesFound(5).build();
+
+		when(executionRepository.findById(40L)).thenReturn(Optional.of(execution));
+
+		service("v", ZoneId.of("UTC")).recordMetrics(40L, null, Map.of());
+
+		verify(executionRepository).save(execution);
+		verify(executionMetricsRepository, never()).save(any());
 	}
 
 	@Test

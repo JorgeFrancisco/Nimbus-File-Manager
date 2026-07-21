@@ -189,4 +189,56 @@ class DuplicateKeepPolicyTest {
 		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.BEST_IN_GROUP))
 				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY));
 	}
+
+	@Test
+	void returnsNoDecisionsForNullOrEmptyGroup() {
+		Assertions.assertThat(policy.decide(null, false)).isEmpty();
+		Assertions.assertThat(policy.decide(List.of(), true)).isEmpty();
+	}
+
+	@Test
+	void aDerivativeMarkerBeatsCameraExifSoTheFileIsNotOriginal() {
+		// Camera EXIF present, but the WhatsApp derivative marker wins: not "original".
+		Signals cameraWhatsApp = new Signals(A, true, MediaSubcategory.WHATSAPP, 4000, 3000, DateSource.EXIF,
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+
+		Map<UUID, Decision> d = policy.decide(List.of(cameraWhatsApp, original(B, 4000, 3000)), false);
+
+		Assertions.assertThat(d).containsEntry(B, new Decision(Verdict.KEEP, Reason.ORIGINAL));
+		Assertions.assertThat(d.get(A).verdict()).isEqualTo(Verdict.DELETE_CANDIDATE);
+	}
+
+	@Test
+	void tiebreakFallsToDateReliabilityWhenOriginalityAndPixelsTie() {
+		// Non-original, non-derivative siblings with identical pixels: the more reliable
+		// date source is kept (exact group -> a candidate is marked, not REVIEW).
+		Map<UUID, Decision> byModifiedOverCreated = policy
+				.decide(List.of(tiebreak(B, DateSource.FILE_CREATED_AT), tiebreak(A, DateSource.FILE_MODIFIED_AT)), true);
+
+		Assertions.assertThat(byModifiedOverCreated.get(A).verdict()).isEqualTo(Verdict.KEEP);
+		Assertions.assertThat(byModifiedOverCreated.get(B).verdict()).isEqualTo(Verdict.DELETE_CANDIDATE);
+
+		Map<UUID, Decision> byConfirmedOverUnknown = policy
+				.decide(List.of(tiebreak(B, DateSource.UNKNOWN), tiebreak(A, DateSource.FILE_NAME_CONFIRMED)), true);
+
+		Assertions.assertThat(byConfirmedOverUnknown.get(A).verdict()).isEqualTo(Verdict.KEEP);
+	}
+
+	@Test
+	void aMissingDimensionCountsAsZeroPixels() {
+		Signals noHeight = new Signals(A, false, MediaSubcategory.OTHER, 4000, null, DateSource.FILE_NAME,
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+		Signals withDimensions = new Signals(B, false, MediaSubcategory.OTHER, 800, 600, DateSource.FILE_NAME,
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+
+		Map<UUID, Decision> d = policy.decide(List.of(noHeight, withDimensions), true);
+
+		Assertions.assertThat(d.get(B).verdict()).isEqualTo(Verdict.KEEP);
+		Assertions.assertThat(d.get(A).verdict()).isEqualTo(Verdict.DELETE_CANDIDATE);
+	}
+
+	private Signals tiebreak(UUID id, DateSource dateSource) {
+		return new Signals(id, false, MediaSubcategory.OTHER, 1000, 1000, dateSource,
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+	}
 }
