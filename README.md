@@ -14,8 +14,6 @@ Rather than acting as a traditional file explorer, Nimbus File Manager builds an
 
 It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web interface with login, optional 2FA, dashboard, file explorer, organization, execution history and runtime settings/preferences. Inventory runs continuously in the background once configured; it has no dedicated screen or REST endpoint.
 
-Project started on July 5, 2026.
-
 ## Stack
 
 - Java 25
@@ -42,6 +40,7 @@ Project started on July 5, 2026.
 - Metadata extraction from filesystem, EXIF, filename patterns and video streams.
 - Fully offline GPS reverse geocoding based on administrative boundaries (point-in-polygon), persisted as reusable media metadata.
 - Duplicate detection using SHA-256, plus visual similarity for photos and videos (perceptual hashing + SSIM).
+- Quarantine for removed media: files deleted during duplicate resolution are soft-deleted into a quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items.
 - Statistics and paginated media search.
 - Timeline screen for browsing media grouped by date.
 - Map screen plotting geo-referenced media: one aggregated pin per location (EXIF media at their real coordinate rounded to ~11 m, coordinate-less media at their administrative region's representative point), each opening the paginated media captured there.
@@ -57,7 +56,7 @@ Project started on July 5, 2026.
 - Local web UI with login, optional TOTP 2FA QR code and application version.
 - File explorer screen with breadcrumb navigation, list/grid views, recent-path suggestions and image/video preview.
 - Configurable organization folder layouts (date-only, date+category, category-first, ...), described in [Organization Layouts](#organization-layouts).
-- Role-based web UI: Files, Organization, Users, Access history and system settings are restricted to `ADMIN` accounts.
+- Role-based web UI: the operational screens (Files, Organization, Duplicates, Quarantine, Statistics) and their data/export APIs, plus Users, Access history and system settings, are restricted to `ADMIN` accounts; Dashboard, Timeline and Map stay open to any authenticated user.
 - Runtime settings stored in PostgreSQL with creation/update audit fields.
 - User access history for login, 2FA and logout events, searchable by e-mail.
 
@@ -448,18 +447,21 @@ Screens currently available:
 - Onboarding (shown automatically on first run, to pick the folder to monitor)
 - Organization *(administrators only; preview and execute, with the folder-layout picker described below)*
 - Timeline (media browsing grouped by date, with cursor-based pagination)
-- Duplicates *(shown to administrators; SHA-256 duplicate groups)*
+- Map (geo-referenced media on an interactive map; see [Media map](#media-map))
+- Duplicates *(administrators only; byte-identical SHA-256 groups plus visually similar photos and videos)*
+- Quarantine *(administrators only; soft-deleted media, with restore and permanent purge)*
+- Statistics *(administrators only; library totals, codecs, extensions and error breakdowns)*
 - Executions (history, live progress, list auto-refreshes while something is running)
 - Account (password, optional TOTP 2FA)
 - Users *(administrators only)*
 - Access history *(administrators only)*
 - Settings *(administrators only)*
 
-Files, Organization, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes reject non-admin access. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
+Files, Organization, Duplicates, Quarantine, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal Preferencias tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
 
 Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: `InventoryWatchService` calls `OrganizationReconcileService.reconcileAndApply` automatically - once per debounced batch of file-system changes, and again on a fixed 60-second timer regardless of changes - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Although neither has a screen of its own, both are visible in the execution history: a reconcile is persisted as a distinct `RECONCILE` execution only when it actually repairs the catalog (renames, stale-path fixes or missing marks), while the frequent "nothing changed" checks leave only an in-memory heartbeat in the topbar; each execution (inventory and reconcile alike) also records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`.
 
-The file-system change detection is a pluggable `FileChangeSource` (see `docs/design-watcher-escala-e-reconcile.md` and `docs/adr/0001-windows-change-source.md`). On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
+The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
 
 The Settings screen has two tabs: "Sistema" (admin-only) persists runtime parameters in PostgreSQL, and "Preferencias" (any authenticated user) stores personal defaults - default Arquivos view/page size and default Organizacao layout/checkboxes/page size - reusing the same `UserPagePreferenceService` that Arquivos already relies on to remember your last-used folder, view and sort.
 
@@ -494,9 +496,9 @@ There are only two roles:
 - USER
 - ADMIN
 
-The USER role has access to all of the system's operational features.
+The USER role can browse the shared collection (dashboard, timeline and map) and manage its own account and preferences.
 
-The ADMIN role inherits all permissions of the USER role and additionally has access to administrative features, such as configuration, maintenance, user management, and technical operations.
+The ADMIN role inherits all permissions of the USER role and additionally has access to the operational and administrative features, such as the file explorer, organization, duplicate resolution, quarantine and statistics, plus configuration, maintenance, user management and technical operations.
 
 All users see and operate on the same collection. The user's role only defines which features can be used, never which media can be accessed.
 
@@ -506,8 +508,8 @@ This model significantly reduces the application's complexity, eliminates unnece
 
 - The web UI (`/app/**`) and the REST API (`/api/**`) require a logged-in session. Login supports optional TOTP 2FA and optional Google OAuth2. Idle sessions are logged out automatically after the configured timeout. Only the login/registration pages, static assets, the OpenAPI docs and `/actuator/health` are public.
 - Roles form a hierarchy: `ROLE_ADMIN` inherits `ROLE_USER` (a `RoleHierarchy` bean), so operational rules are written as `hasRole("USER")` and administrators satisfy them automatically.
-- **Operational features are open to any logged-in user (`USER`):** the file explorer, statistics, timeline, organization (preview, export, execute and undo), quarantine (view, restore and purge), duplicate resolution (browse, select and delete), the read data APIs and the user's own account and preferences (including the shared folder picker). Modifying, moving or deleting media is a normal operation, not an administrative one.
-- **Administrative and technical features require `ADMIN`:** user/role management (`/app/users/**`), access auditing (`/app/accesses/**`), global system configuration and maintenance (`/app/settings/**`, except the personal `preferences` tab and the shared folder picker), global technical reprocessing (`POST /api/metadata/rebuild` and the `/app/duplicates/phash/**` fingerprint rebuild) and the non-public actuator endpoints.
+- **Features open to any logged-in user (`USER`):** the dashboard, timeline, map, execution history, the shared media/map/timeline read APIs (which also feed the timeline/map lightbox), and the user's own account and preferences (including the shared folder picker).
+- **Administrative features require `ADMIN`:** the file explorer, organization (preview, export, execute, undo), duplicate resolution, quarantine (view, restore, purge) and statistics screens, together with their data/export APIs (`/api/organization/**`, `/api/duplicates/**`, `/api/statistics/**`, `/api/catalog/**`); user/role management (`/app/users/**`), access auditing (`/app/accesses/**`), global system configuration and maintenance (`/app/settings/**`, except the personal `preferences` tab and the shared folder picker), global technical reprocessing (`POST /api/metadata/rebuild` and the `/app/duplicates/phash/**` fingerprint rebuild) and the non-public actuator endpoints.
 - `/actuator/health` is public; other actuator endpoints require `ADMIN`.
 - CSRF protection stays at Spring Security's default: enabled for every state-changing request, including `/api/**` mutations (which ride the same session). The only public actuator endpoints are read-only GETs, which CSRF never guards.
 
@@ -583,18 +585,34 @@ POST   /api/organization/execute
 POST   /api/organization/execute/{executionId}/undo
 
 GET    /api/media
+GET    /api/media/{publicId}
+GET    /api/media/{publicId}/content
 
 GET    /api/duplicates
 GET    /api/duplicates/{sha256}/files
 GET    /api/duplicates/summary
 GET    /api/duplicates/candidates
+GET    /api/duplicates/similar-photos
+GET    /api/duplicates/similar-photos/failures
+GET    /api/duplicates/similar-videos
+GET    /api/duplicates/similar-videos/failures
+
+GET    /api/timeline/index
+GET    /api/timeline/items
+GET    /api/timeline/undated
+
+GET    /api/map/pins
+GET    /api/map/items
 
 GET    /api/statistics
 GET    /api/statistics/codecs
+GET    /api/statistics/extensions
 GET    /api/statistics/folders
 GET    /api/statistics/errors
 GET    /api/statistics/errors/files
 GET    /api/statistics/errors/files/details
+
+GET    /api/catalog/export
 
 GET    /api/executions
 GET    /api/executions/{id}
@@ -973,20 +991,11 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       1516 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      96.00% instruction, 85.90% branch, 95.43% line, 96.20% method, 99.70% class
+JaCoCo:      95.94% instruction, 85.80% branch, 95.35% line, 96.20% method, 99.70% class
 ```
 
 The 9 skipped tests are OS-dependent (symbolic-link / POSIX-permission) cases that
 self-abort via JUnit `Assumptions` on platforms where they cannot run (e.g. Windows).
-
-**AssertJ style — Sonar rule `java:S5853` is disabled on purpose.** The project keeps AssertJ
-assertions as separate statements (one `assertThat(...)` per line) instead of chaining them onto
-a single subject. Separate assertions fail independently — a run reports every failing check with
-its own message rather than short-circuiting at the first link of a chain — and the diffs stay
-line-oriented and easy to review. `java:S5853` ("Join these multiple assertions subject to one
-assertion chain") flags exactly this convention; it is a pure formatting preference with no
-correctness value, so it is deactivated in the project's Java quality profile. (Audited across the
-whole project: all occurrences were this same style, none a real defect.)
 
 Tests run in parallel (configured in `src/test/resources/junit-platform.properties`):
 different test classes execute concurrently while the methods inside one class stay on a
