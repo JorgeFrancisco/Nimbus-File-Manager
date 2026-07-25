@@ -47,25 +47,30 @@ public class SecurityConfig {
 						"/favicon.ico", "/css/**", "/js/**", "/img/**", "/.well-known/**", "/swagger-ui.html",
 						"/swagger-ui/**", "/v3/api-docs/**")
 				.permitAll().requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-				// Administrative surfaces (ADMIN only): user/role management and access auditing.
+				// Administrative surfaces (ADMIN only): user/role management and access auditing,
+				// plus the operational screens whose data is admin-scoped (files, organization,
+				// duplicates, quarantine, statistics) together with their dedicated data/export
+				// APIs. The shared read APIs that also feed the USER-facing timeline/map lightbox
+				// (media, map, timeline) stay operational under the USER fallback below.
 				.requestMatchers("/app/users/**", "/app/accesses/**").hasRole(Role.ADMIN.name())
+				.requestMatchers("/app/files/**", "/app/organization/**", "/app/duplicates/**",
+						"/app/quarantine/**", "/app/statistics/**").hasRole(Role.ADMIN.name())
+				.requestMatchers("/api/organization/**", "/api/duplicates/**", "/api/statistics/**",
+						"/api/catalog/**").hasRole(Role.ADMIN.name())
 				// Personal preferences and the shared folder picker are operational even though
 				// they live under /app/settings; the rest of Settings is global system
 				// configuration and maintenance, so it stays ADMIN.
 				.requestMatchers("/app/settings/preferences", "/app/settings/folders").hasRole(Role.USER.name())
 				.requestMatchers("/app/settings/**").hasRole(Role.ADMIN.name())
-				// Global technical reprocessing (ADMIN only): metadata rebuild and pHash/fingerprint
-				// (re)generation. Browsing and resolving duplicates stays operational (falls through
-				// to the USER rule below); only the bulk regeneration jobs are restricted.
+				// Global technical reprocessing (ADMIN only): metadata rebuild.
 				.requestMatchers(HttpMethod.POST, "/api/metadata/rebuild").hasRole(Role.ADMIN.name())
-				.requestMatchers("/app/duplicates/phash/**").hasRole(Role.ADMIN.name())
 				// Actuator (other than the public health probe) exposes technical diagnostics.
 				.requestMatchers("/actuator/**").hasRole(Role.ADMIN.name())
 				// Everything else is a normal operational feature over the single shared
-				// collection - file explorer, statistics, timeline, organization (preview,
-				// export, execute, undo), quarantine (view, restore, purge), duplicate
-				// resolution, the data APIs and the user's own account. Any authenticated USER
-				// may use it; the role hierarchy below lets ADMIN inherit all of it.
+				// collection - dashboard, timeline, map, execution history, the shared
+				// media/map/timeline read APIs (which also feed the lightbox), and the user's own
+				// account and preferences. Any authenticated USER may use it; the role hierarchy
+				// below lets ADMIN inherit all of it.
 				.anyRequest().hasRole(Role.USER.name()))
 				// CSRF stays at Spring Security's default (enabled for every state-changing
 				// request). /api/** is authenticated by the same form-login session - it is not
