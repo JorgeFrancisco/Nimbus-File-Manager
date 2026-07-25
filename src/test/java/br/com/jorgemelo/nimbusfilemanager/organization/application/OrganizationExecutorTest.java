@@ -748,6 +748,7 @@ class OrganizationExecutorTest {
 				anyString());
 		verify(executionProgressService, times(2)).updateProgress(eq(execution), anyInt(), anyInt(), anyInt(), anyInt(),
 				anyString());
+		verify(executionProgressService).updateLiveProgress(eq(execution), eq(25), anyInt(), anyInt(), anyInt(), any());
 	}
 
 	@Test

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -149,6 +150,12 @@ public class InventoryPersistenceService {
 	 */
 	public List<InventoryBatchItemResult> saveOrCacheBatch(List<Path> files, Path sourcePath, MetadataOptions options,
 			Function<Path, MetadataResult> metadataExtractor, BooleanSupplier cancelled) {
+		return saveOrCacheBatch(files, sourcePath, options, metadataExtractor, cancelled, _ -> {
+		});
+	}
+
+	public List<InventoryBatchItemResult> saveOrCacheBatch(List<Path> files, Path sourcePath, MetadataOptions options,
+			Function<Path, MetadataResult> metadataExtractor, BooleanSupplier cancelled, IntConsumer onExtractionProgress) {
 		if (files.isEmpty()) {
 			return List.of();
 		}
@@ -174,7 +181,7 @@ public class InventoryPersistenceService {
 		long extractionStart = System.nanoTime();
 
 		List<Outcome<Path, MetadataResult>> extracted = processingCoordinator.process(toExtract, cancelled,
-				metadataExtractor::apply);
+				metadataExtractor::apply, onExtractionProgress);
 
 		executionPhaseTimings.addNanos(ExecutionPhaseType.EXTRACTION, System.nanoTime() - extractionStart);
 		executionPhaseTimings.addItems(ExecutionPhaseType.EXTRACTION, toExtract.size());

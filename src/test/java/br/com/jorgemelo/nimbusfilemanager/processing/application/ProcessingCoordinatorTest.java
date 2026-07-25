@@ -50,6 +50,28 @@ class ProcessingCoordinatorTest {
 	}
 
 	@Test
+	void reportsCompletionProgressExactlyOncePerItem() {
+		ProcessingCoordinator coordinator = coordinator(4, 32);
+
+		try {
+			List<Integer> items = IntStream.range(0, 50).boxed().toList();
+
+			AtomicInteger callbackCount = new AtomicInteger();
+			AtomicInteger maxReported = new AtomicInteger();
+
+			coordinator.process(items, () -> false, item -> item, done -> {
+				callbackCount.incrementAndGet();
+				maxReported.accumulateAndGet(done, Math::max);
+			});
+
+			assertThat(callbackCount.get()).isEqualTo(50);
+			assertThat(maxReported.get()).isEqualTo(50);
+		} finally {
+			coordinator.shutdown();
+		}
+	}
+
+	@Test
 	void runsTasksConcurrentlyUpToTheWorkerLimit() {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 

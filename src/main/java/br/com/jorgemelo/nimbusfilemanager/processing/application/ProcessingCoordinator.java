@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,9 +93,25 @@ public class ProcessingCoordinator {
 	}
 
 	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker) {
+		return process(items, cancelled, worker, _ -> {
+		});
+	}
+
+	/**
+	 * Same as {@link #process(List, BooleanSupplier, Worker)}, but calls
+	 * {@code onCompleted} once per finished item (success, error or cancel) with the
+	 * running completed count, so callers can surface granular progress while a
+	 * batch runs. The callback fires from pool threads and may run concurrently, so
+	 * it must be thread-safe and cheap - throttle any expensive reporting (e.g. only
+	 * act every N items).
+	 */
+	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker,
+			IntConsumer onCompleted) {
 		int size = items.size();
 
 		AtomicReferenceArray<Outcome<I, O>> slots = new AtomicReferenceArray<>(size);
+		AtomicInteger completed = new AtomicInteger();
+		Runnable onItemDone = () -> onCompleted.accept(completed.incrementAndGet());
 
 		List<Future<?>> futures = new ArrayList<>(size);
 
@@ -105,6 +122,7 @@ public class ProcessingCoordinator {
 				slots.set(index, Outcome.cancelled(item));
 
 				metrics.incCancelled();
+				onItemDone.run();
 
 				continue;
 			}
@@ -118,13 +136,15 @@ public class ProcessingCoordinator {
 			int slot = index;
 
 			try {
-				futures.add(executor.submit(() -> execute(slot, item, submittedAt, cancelled, worker, slots)));
+				futures.add(
+						executor.submit(() -> execute(slot, item, submittedAt, cancelled, worker, slots, onItemDone)));
 			} catch (RejectedExecutionException rejected) {
 				backpressure.release();
 
 				slots.set(index, Outcome.error(item, rejected));
 
 				metrics.incError();
+				onItemDone.run();
 			}
 		}
 
@@ -134,7 +154,7 @@ public class ProcessingCoordinator {
 	}
 
 	private <I, O> void execute(int index, I item, long submittedAt, BooleanSupplier cancelled, Worker<I, O> worker,
-			AtomicReferenceArray<Outcome<I, O>> slots) {
+			AtomicReferenceArray<Outcome<I, O>> slots, Runnable onItemDone) {
 		long startedAt = System.nanoTime();
 
 		metrics.recordQueueWait(startedAt - submittedAt);
@@ -170,6 +190,8 @@ public class ProcessingCoordinator {
 			metrics.recordTaskTotal(System.nanoTime() - startedAt);
 
 			backpressure.release();
+
+			onItemDone.run();
 		}
 	}
 

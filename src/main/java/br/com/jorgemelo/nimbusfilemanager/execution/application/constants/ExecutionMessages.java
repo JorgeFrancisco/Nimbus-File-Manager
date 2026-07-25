@@ -18,6 +18,7 @@ public final class ExecutionMessages {
 	public static final String INVENTORY_STARTED = "backend.execution.inventoryStarted";
 	public static final String COUNTING_FILES = "backend.execution.countingFiles";
 	public static final String PROCESSING_FILES = "backend.execution.processingFiles";
+	public static final String EXTRACTING_METADATA = "backend.execution.extractingMetadata";
 	public static final String INVENTORY_COMPLETED = "backend.execution.inventoryCompleted";
 	public static final String INVENTORY_CANCELLED = "backend.execution.inventoryCancelled";
 	public static final String INVENTORY_REJECTED = "backend.execution.inventoryRejected";
@@ -51,6 +52,10 @@ public final class ExecutionMessages {
 
 	public static ExecutionMessage processingFiles() {
 		return of(PROCESSING_FILES);
+	}
+
+	public static ExecutionMessage extractingMetadata() {
+		return of(EXTRACTING_METADATA);
 	}
 
 	public static ExecutionMessage inventoryCompleted() {

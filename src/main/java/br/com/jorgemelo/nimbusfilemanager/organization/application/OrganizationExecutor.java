@@ -49,6 +49,8 @@ public class OrganizationExecutor {
 
 	private static final String SKIPPED_LABEL = ", skipped=";
 	private static final String ERRORS_LABEL = ", errors=";
+	private static final int LIVE_PROGRESS_STRIDE = 25;
+	private static final int STEP_PROGRESS_STRIDE = 500;
 
 	private final OrganizationPlanner organizationPlanner;
 	private final ExecutionRepository executionRepository;
@@ -219,12 +221,27 @@ public class OrganizationExecutor {
 
 	private void reportExecuteProgress(Execution execution, int processed, long moved, long skipped, long errors,
 			OrganizationItem item) {
-		if (processed != 1 && processed % 500 != 0) {
+		boolean step = processed == 1 || processed % STEP_PROGRESS_STRIDE == 0;
+		boolean live = processed % LIVE_PROGRESS_STRIDE == 0;
+
+		if (!step && !live) {
 			return;
 		}
 
-		executionProgressService.updateProgress(execution, processed, NumberUtils.toInt(moved),
-				NumberUtils.toInt(skipped), NumberUtils.toInt(errors), item == null ? null : item.sourcePath());
+		int movedInt = NumberUtils.toInt(moved);
+		int skippedInt = NumberUtils.toInt(skipped);
+		int errorsInt = NumberUtils.toInt(errors);
+
+		// A durable step at the coarse cadence keeps the audit trail small; the finer
+		// live updates only refresh the row so the bar advances per file without
+		// flooding the steps table.
+		if (step) {
+			executionProgressService.updateProgress(execution, processed, movedInt, skippedInt, errorsInt,
+					item == null ? null : item.sourcePath());
+		} else {
+			executionProgressService.updateLiveProgress(execution, processed, movedInt, skippedInt, errorsInt,
+					item == null ? ExecutionMessages.progressUpdated() : ExecutionMessages.processing(item.sourcePath()));
+		}
 	}
 
 	/**

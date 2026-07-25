@@ -42,6 +42,7 @@ class FingerprintBacklogEngine {
 	static final int BATCH_SIZE = 200;
 	static final String UNSUPPORTED_PREFIX = "[unsupported] ";
 	private static final int MAX_ERROR_LENGTH = 500;
+	private static final int PROGRESS_STRIDE = 25;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
@@ -117,7 +118,14 @@ class FingerprintBacklogEngine {
 				break;
 			}
 
-			List<Outcome<P, R>> outcomes = processingCoordinator.process(batch, stop, producer::compute);
+			long baseProcessed = processed;
+			long baseFailed = failed;
+
+			List<Outcome<P, R>> outcomes = processingCoordinator.process(batch, stop, producer::compute, done -> {
+				if (done % PROGRESS_STRIDE == 0) {
+					progress.onProgress(baseProcessed + done, baseFailed);
+				}
+			});
 			BatchCounts counts = Objects.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
 
 			processed += counts.done();

@@ -972,8 +972,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1513 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      95.95% instruction, 85.80% branch, 95.35% line, 96.18% method, 99.70% class
+Tests:       1516 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      95.94% instruction, 85.80% branch, 95.35% line, 96.20% method, 99.70% class
 ```
 
 The 9 skipped tests are OS-dependent (symbolic-link / POSIX-permission) cases that

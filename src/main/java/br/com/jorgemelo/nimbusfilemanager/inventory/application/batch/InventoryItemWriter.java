@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.batch;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.Chunk;
@@ -10,8 +11,9 @@ import org.springframework.batch.item.ItemWriter;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
@@ -31,6 +33,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
 @Component
 @StepScope
 public class InventoryItemWriter implements ItemWriter<Path> {
+
+	private static final int PROGRESS_STRIDE = 25;
 
 	private final InventoryPersistenceService inventoryPersistenceService;
 	private final MetadataFacade metadataFacade;
@@ -69,11 +73,20 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 
 		List<Path> files = List.copyOf(chunk.getItems());
 
+		int baseFound = found.get();
+
 		found.addAndGet(files.size());
+
+		IntConsumer onExtractionProgress = done -> {
+			if (done % PROGRESS_STRIDE == 0) {
+				executionProgressService.updateLiveProgress(execution, baseFound + done, analyzed.get(), cacheHits.get(),
+						errors.get(), ExecutionMessages.extractingMetadata());
+			}
+		};
 
 		List<InventoryBatchItemResult> results = inventoryPersistenceService.saveOrCacheBatch(files, sourcePath,
 				metadataOptions, file -> metadataFacade.extract(file, metadataOptions),
-				() -> executionCancellationService.isCancelled(executionId));
+				() -> executionCancellationService.isCancelled(executionId), onExtractionProgress);
 
 		Path lastFile = null;
 

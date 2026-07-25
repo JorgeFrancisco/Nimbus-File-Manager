@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.IntConsumer;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -18,8 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.item.Chunk;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryPersistenceResult;
@@ -61,7 +63,7 @@ class InventoryItemWriterTest {
 		Exception boom = new IllegalStateException("boom");
 
 		when(executionRepository.findById(5L)).thenReturn(Optional.of(execution));
-		when(inventoryPersistenceService.saveOrCacheBatch(anyList(), any(), any(), any(), any()))
+		when(inventoryPersistenceService.saveOrCacheBatch(anyList(), any(), any(), any(), any(), any()))
 				.thenReturn(List.of(
 						InventoryBatchItemResult.of(analyzed,
 								new InventoryPersistenceResult(ProcessResult.ANALYZED,
@@ -86,10 +88,10 @@ class InventoryItemWriterTest {
 		Path second = Path.of("C:/media/b.jpg");
 
 		when(executionRepository.findById(5L)).thenReturn(Optional.of(execution));
-		when(inventoryPersistenceService.saveOrCacheBatch(eq(List.of(first)), any(), any(), any(), any()))
+		when(inventoryPersistenceService.saveOrCacheBatch(eq(List.of(first)), any(), any(), any(), any(), any()))
 				.thenReturn(List.of(InventoryBatchItemResult.of(first,
 						new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.CREATED))));
-		when(inventoryPersistenceService.saveOrCacheBatch(eq(List.of(second)), any(), any(), any(), any()))
+		when(inventoryPersistenceService.saveOrCacheBatch(eq(List.of(second)), any(), any(), any(), any(), any()))
 				.thenReturn(List.of(InventoryBatchItemResult.of(second,
 						new InventoryPersistenceResult(ProcessResult.CACHE, InventoryPersistenceAction.CACHED))));
 
@@ -100,6 +102,32 @@ class InventoryItemWriterTest {
 
 		verify(executionProgressService).updateProgress(execution, 1, 1, 0, 0, first);
 		verify(executionProgressService).updateProgress(execution, 2, 1, 1, 0, second);
+	}
+
+	@Test
+	void reportsGranularLiveProgressWhileTheChunkIsStillExtracting() {
+		Execution execution = Execution.builder().id(5L).build();
+
+		Path file = Path.of("C:/media/a.jpg");
+
+		when(executionRepository.findById(5L)).thenReturn(Optional.of(execution));
+		when(inventoryPersistenceService.saveOrCacheBatch(anyList(), any(), any(), any(), any(), any()))
+				.thenAnswer(invocation -> {
+					IntConsumer onExtractionProgress = invocation.getArgument(5);
+					onExtractionProgress.accept(25);
+					onExtractionProgress.accept(50);
+
+					return List.of();
+				});
+
+		InventoryItemWriter writer = writer();
+
+		writer.write(new Chunk<>(List.of(file)));
+
+		verify(executionProgressService).updateLiveProgress(execution, 25, 0, 0, 0,
+				ExecutionMessages.extractingMetadata());
+		verify(executionProgressService).updateLiveProgress(execution, 50, 0, 0, 0,
+				ExecutionMessages.extractingMetadata());
 	}
 
 	@Test

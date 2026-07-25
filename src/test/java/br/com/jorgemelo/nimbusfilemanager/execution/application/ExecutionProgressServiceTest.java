@@ -129,6 +129,21 @@ class ExecutionProgressServiceTest {
 	}
 
 	@Test
+	void updateLiveProgressSetsCountersAndMessageWithoutRecordingAStep() {
+		Execution execution = execution(1L);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
+
+		service().updateLiveProgress(execution, 25, 10, 3, 1, ExecutionMessages.extractingMetadata());
+
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(25);
+		Assertions.assertThat(execution.getFilesAnalyzed()).isEqualTo(10);
+		Assertions.assertThat(execution.getStatusMessage().getCode()).isEqualTo(ExecutionMessages.EXTRACTING_METADATA);
+
+		verify(executionStepRepository, never()).save(any());
+	}
+
+	@Test
 	void recordErrorWithoutAFileKeepsTheRawErrorAsALegacyMessage() {
 		Execution execution = execution(1L);
 
