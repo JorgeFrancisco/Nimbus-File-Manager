@@ -62,8 +62,8 @@ public class OrganizationReconcileService {
 
 	/**
 	 * Deliberately NOT {@code @Transactional}: the disk walk in {@link #scan}
-	 * (minutes of pure I/O over a whole-drive tree of 100k+ files) must never hold a
-	 * database transaction open, and an app restart mid-walk must not roll back a
+	 * (minutes of pure I/O over a whole-drive tree of 100k+ files) must never hold
+	 * a database transaction open, and an app restart mid-walk must not roll back a
 	 * transaction that never had a chance to commit. The scan runs transaction-free
 	 * (its paged repository reads each open their own short read transaction) and
 	 * only the writes go through {@link ReconcileApplier#apply} in a short

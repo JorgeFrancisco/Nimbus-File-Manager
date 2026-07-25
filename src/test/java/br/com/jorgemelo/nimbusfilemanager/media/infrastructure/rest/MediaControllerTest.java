@@ -38,9 +38,9 @@ class MediaControllerTest {
 
 		when(mediaSearchService.search(any(), any())).thenReturn(new PageImpl<>(List.of()));
 
-		// The endpoint returns a PagedResponse (a plain record), so it serializes cleanly in
-		// standalone MockMvc and yields the stable envelope clients rely on - unlike a raw
-		// Page, whose JSON is unsupported here and unstable in general.
+		// The endpoint returns a PagedResponse (a plain record), so it serializes
+		// cleanly in standalone MockMvc and yields the stable envelope clients rely on
+		// - unlike a raw Page, whose JSON is unsupported here and unstable in general.
 		mockMvc.perform(get("/api/media").param("fileType", "PHOTO").param("codec", "h264").param("folder", "D:/x")
 				.param("extension", "jpg").param("year", "2026").param("month", "1").param("minSizeBytes", "10")
 				.param("maxSizeBytes", "99").param("size", "50")).andExpect(status().isOk())

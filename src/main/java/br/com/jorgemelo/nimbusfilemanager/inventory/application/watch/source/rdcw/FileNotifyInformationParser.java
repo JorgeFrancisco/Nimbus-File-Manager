@@ -8,8 +8,8 @@ import java.util.List;
 
 /**
  * Parses the raw {@code FILE_NOTIFY_INFORMATION} bytes returned by
- * {@code ReadDirectoryChangesW} into the changed entries' paths, relative to the
- * watched root. Pure and native-free: it only decodes a little-endian byte
+ * {@code ReadDirectoryChangesW} into the changed entries' paths, relative to
+ * the watched root. Pure and native-free: it only decodes a little-endian byte
  * buffer, so it is fully unit-tested with synthetic buffers on any platform.
  *
  * <p>
@@ -26,7 +26,8 @@ import java.util.List;
  * The action is intentionally not surfaced: every action (create, modify,
  * delete, and both sides of a rename) is reported as a changed path, and the
  * debounced full reconcile resolves what actually happened - so a rename yields
- * both the old and the new path, and a directory move is caught by the reconcile.
+ * both the old and the new path, and a directory move is caught by the
+ * reconcile.
  */
 public final class FileNotifyInformationParser {
 

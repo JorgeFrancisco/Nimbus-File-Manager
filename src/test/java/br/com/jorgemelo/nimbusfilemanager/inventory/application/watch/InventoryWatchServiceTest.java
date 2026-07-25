@@ -517,7 +517,8 @@ class InventoryWatchServiceTest {
 		when(queries.active()).thenReturn(Optional.empty());
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(), recorder(),
+				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
+						recorder(),
 				Clock.systemDefaultZone(), watchProps(true));
 
 		service.stop();
@@ -552,7 +553,8 @@ class InventoryWatchServiceTest {
 		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
 
 		service = new InventoryWatchService(configuredSettings(), launcher, queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(), recorder(),
+				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
+						recorder(),
 				Clock.systemDefaultZone(), watchProps(false));
 
 		service.stop();
@@ -573,7 +575,8 @@ class InventoryWatchServiceTest {
 		// thread's interrupt flag survives to the active() call - the same way a
 		// cancel(true)'d poll thread carries its interrupt into a shutdown-time query.
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(), recorder(),
+				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
+						recorder(),
 				Clock.systemDefaultZone(), watchProps(false));
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
@@ -609,7 +612,8 @@ class InventoryWatchServiceTest {
 		when(queries.active()).thenThrow(new IllegalStateException("unexpected failure"));
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(), recorder(),
+				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
+						recorder(),
 				Clock.systemDefaultZone(), watchProps(false));
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
@@ -622,8 +626,8 @@ class InventoryWatchServiceTest {
 
 		try {
 			// A reused ForkJoinPool worker may carry a stray interrupt left by an earlier
-			// parallel test; clear it so the "not interrupted" premise below is deterministic
-			// regardless of test-scheduling order.
+			// parallel test; clear it so the "not interrupted" premise below is
+			// deterministic regardless of test-scheduling order.
 			Thread.interrupted();
 
 			// Not shutting down and not interrupted: a genuine poll failure must surface as

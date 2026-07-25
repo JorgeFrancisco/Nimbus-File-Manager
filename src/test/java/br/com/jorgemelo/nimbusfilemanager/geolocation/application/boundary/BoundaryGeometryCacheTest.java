@@ -20,8 +20,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 
 /**
  * The in-memory acceleration layer over the boundary table: geometries are
- * parsed once per id and reused, availability is memoized until invalidated, and
- * the cache stays bounded and safe for transient (id-less) boundaries.
+ * parsed once per id and reused, availability is memoized until invalidated,
+ * and the cache stays bounded and safe for transient (id-less) boundaries.
  */
 class BoundaryGeometryCacheTest {
 

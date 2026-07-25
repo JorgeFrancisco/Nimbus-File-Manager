@@ -18,8 +18,8 @@ public interface DuplicateFileExclusionRepository extends JpaRepository<Duplicat
 
 	/**
 	 * Every file exclusion joined to its current path for the management list. The
-	 * FK cascade keeps this consistent - an exclusion cannot outlive its catalog_file
-	 * - so a plain inner join never drops a row.
+	 * FK cascade keeps this consistent - an exclusion cannot outlive its
+	 * catalog_file - so a plain inner join never drops a row.
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileExclusionView(e.id, e.publicId, l.currentPath, e.createdAt)

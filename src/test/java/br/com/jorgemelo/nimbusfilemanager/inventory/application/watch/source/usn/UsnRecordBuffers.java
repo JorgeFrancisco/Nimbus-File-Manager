@@ -53,7 +53,9 @@ final class UsnRecordBuffers {
 		return out.toByteArray();
 	}
 
-	/** Overwrites the major-version field to simulate an unsupported record version. */
+	/**
+	 * Overwrites the major-version field to simulate an unsupported record version.
+	 */
 	static byte[] withMajorVersion(byte[] recordBytes, int major) {
 		byte[] copy = recordBytes.clone();
 

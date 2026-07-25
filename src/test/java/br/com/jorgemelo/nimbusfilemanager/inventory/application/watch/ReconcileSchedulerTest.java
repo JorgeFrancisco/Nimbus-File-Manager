@@ -54,7 +54,8 @@ class ReconcileSchedulerTest {
 		scheduler.runOnce();
 
 		verify(organizationReconcileService).reconcileAndApply(any());
-		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER, tempDir.toAbsolutePath().normalize(),
+		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER, tempDir.toAbsolutePath()
+				.normalize(),
 				response);
 	}
 
@@ -87,7 +88,8 @@ class ReconcileSchedulerTest {
 	}
 
 	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(null, null, null, null, new Inventory(0, false, 60_000L), null, null, null,
+		return new NimbusFileManagerProperties(null, null, null, null, new Inventory(0, false, 60_000L), null, null,
+				null,
 				null, null);
 	}
 

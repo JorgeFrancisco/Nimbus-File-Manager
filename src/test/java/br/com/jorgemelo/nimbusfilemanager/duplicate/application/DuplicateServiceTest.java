@@ -65,7 +65,8 @@ class DuplicateServiceTest {
 
 	@Test
 	void groupsShouldClampPageSizeToConfiguredMax() {
-		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 100)))).thenReturn(new PageImpl<>(List.of()));
+		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 100))))
+				.thenReturn(new PageImpl<>(List.of()));
 
 		service().groups(PageRequest.of(0, 500), null);
 
@@ -158,7 +159,8 @@ class DuplicateServiceTest {
 
 	@Test
 	void candidatesShouldNotQueryFilesWhenPageIsEmpty() {
-		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 10)))).thenReturn(new PageImpl<>(List.of()));
+		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 10))))
+				.thenReturn(new PageImpl<>(List.of()));
 
 		service().candidates(PageRequest.of(0, 10), null);
 

@@ -54,7 +54,8 @@ public class WorkspaceBootstrapListener implements ApplicationListener<Applicati
 
 	private List<String> getWorkspaceFolders(Environment environment) {
 		return Arrays
-				.stream(environment.getProperty(NIMBUS_FILE_MANAGER_WORKSPACE_FOLDERS, DEFAULT_WORKSPACE_FOLDERS).split(","))
+				.stream(environment.getProperty(NIMBUS_FILE_MANAGER_WORKSPACE_FOLDERS, DEFAULT_WORKSPACE_FOLDERS)
+						.split(","))
 				.map(String::trim).filter(folder -> !folder.isBlank()).distinct().toList();
 	}
 }

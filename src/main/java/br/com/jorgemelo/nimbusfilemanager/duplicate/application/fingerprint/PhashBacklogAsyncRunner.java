@@ -11,8 +11,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConf
 import jakarta.annotation.PreDestroy;
 
 /**
- * Runs the photo fingerprint backlog in the background. Lives in its own bean so
- * the {@code @Async} proxy is honored; callers do
+ * Runs the photo fingerprint backlog in the background. Lives in its own bean
+ * so the {@code @Async} proxy is honored; callers do
  * {@code if (runner.start()) runner.run()} so the guard is evaluated
  * synchronously and the drain runs off-thread.
  *

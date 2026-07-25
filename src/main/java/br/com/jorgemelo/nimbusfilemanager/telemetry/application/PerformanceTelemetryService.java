@@ -149,8 +149,8 @@ public class PerformanceTelemetryService {
 	 * clock's zone before measuring the duration. This yields the true elapsed time
 	 * across a DST spring-forward instead of the wall-clock delta. It does not
 	 * remove the ambiguity inherent to LocalDateTime storage: on a DST fall-back
-	 * overlap the original offset is already lost, so atZone() reconstructs only one
-	 * of the two possible instants. Future work: adopt Instant for technical
+	 * overlap the original offset is already lost, so atZone() reconstructs only
+	 * one of the two possible instants. Future work: adopt Instant for technical
 	 * timestamps and a monotonic time source for duration metrics.
 	 */
 	private Long durationMillis(Execution execution) {

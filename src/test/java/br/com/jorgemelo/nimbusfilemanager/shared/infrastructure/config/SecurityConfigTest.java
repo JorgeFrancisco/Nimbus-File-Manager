@@ -31,11 +31,14 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepo
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModelAdvice;
 
-@WebMvcTest(controllers = OrganizationController.class, properties = "nimbus-file-manager.security.google-login-enabled=false", excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
+@WebMvcTest(controllers = OrganizationController.class,
+		properties = "nimbus-file-manager.security.google-login-enabled=false",
+		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
 		WebMvcConfig.class, LocaleConfig.class, AppViewModelAdvice.class }))
-// The real LogoutAwareAccessDeniedHandler (no dependencies) is imported alongside
-// SecurityConfig so the slice context loads and access-denied still yields a real 403
-// (a mock handler would swallow it and break the isForbidden assertions).
+// The real LogoutAwareAccessDeniedHandler (no dependencies) is imported
+// alongside SecurityConfig so the slice context loads and access-denied still
+// yields a real 403 (a mock handler would swallow it and break the isForbidden
+// assertions).
 @Import({ SecurityConfig.class, LogoutAwareAccessDeniedHandler.class })
 class SecurityConfigTest {
 
@@ -77,9 +80,9 @@ class SecurityConfigTest {
 				{"sourcePath":"C:/workspace/source","targetPath":"C:/workspace/target"}
 				""";
 
-		// Anonymous is bounced to login; a POST without a CSRF token is rejected; a plain
-		// USER is forbidden because organizing the collection is an admin operation; an
-		// ADMIN with a valid token gets through.
+		// Anonymous is bounced to login; a POST without a CSRF token is rejected; a
+		// plain USER is forbidden because organizing the collection is an admin
+		// operation; an ADMIN with a valid token gets through.
 		mockMvc.perform(
 				post("/api/organization/execute").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().is3xxRedirection());
@@ -108,9 +111,9 @@ class SecurityConfigTest {
 				{"sourcePath":"C:/workspace/source","targetPath":"C:/workspace/target"}
 				""";
 
-		// preview and preview/export ride the same form-login session, so a missing token
-		// must be rejected (403) before the request ever reaches a handler - checked here
-		// with an ADMIN so the failure is the CSRF filter, not the role.
+		// preview and preview/export ride the same form-login session, so a missing
+		// token must be rejected (403) before the request ever reaches a handler -
+		// checked here with an ADMIN so the failure is the CSRF filter, not the role.
 		for (String path : new String[] { "/api/organization/preview", "/api/organization/preview/export" }) {
 			mockMvc.perform(
 					post(path).with(user("admin").roles("ADMIN")).contentType(MediaType.APPLICATION_JSON).content(body))
@@ -131,7 +134,8 @@ class SecurityConfigTest {
 
 	@Test
 	void dataApisRequireLoginAndAdminScopedApisRejectUser() throws Exception {
-		// Every /api/** route (other than the OpenAPI docs) requires a logged-in session.
+		// Every /api/** route (other than the OpenAPI docs) requires a logged-in
+		// session.
 		for (String url : new String[] { "/api/catalog", "/api/duplicates", "/api/executions", "/api/statistics",
 				"/api/timeline" }) {
 			mockMvc.perform(get(url)).andExpect(status().is3xxRedirection());
@@ -150,10 +154,10 @@ class SecurityConfigTest {
 
 	@Test
 	void operationalWebRoutesAreOpenToUser() throws Exception {
-		// Dashboard, timeline, map and the personal preferences/folder picker are normal
-		// operational features of the single shared collection. A logged-in USER is not
-		// forbidden (404 here only because these controllers are outside this @WebMvcTest
-		// slice; the point is that security lets the request pass).
+		// Dashboard, timeline, map and the personal preferences/folder picker are
+		// normal operational features of the single shared collection. A logged-in USER
+		// is not forbidden (404 here only because these controllers are outside this
+		// @WebMvcTest slice; the point is that security lets the request pass).
 		for (String path : new String[] { "/app/timeline", "/app/settings/preferences", "/app/settings/folders" }) {
 			mockMvc.perform(get(path).with(user("user").roles("USER"))).andExpect(status().isNotFound());
 		}

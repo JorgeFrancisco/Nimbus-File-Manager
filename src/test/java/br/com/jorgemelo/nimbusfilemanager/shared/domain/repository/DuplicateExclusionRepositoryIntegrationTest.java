@@ -122,7 +122,8 @@ class DuplicateExclusionRepositoryIntegrationTest {
 		folderExclusionRepository
 				.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a").build());
 
-		// Only the single copy in folder B remains, so the group falls below two and vanishes.
+		// Only the single copy in folder B remains, so the group falls below two and
+		// vanishes.
 		Assertions.assertThat(duplicateRepository.findDuplicateGroups(PHOTOS, PAGE).getContent()).isEmpty();
 
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA))
@@ -157,9 +158,10 @@ class DuplicateExclusionRepositoryIntegrationTest {
 
 		folderExclusionRepository.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a_b").build());
 
-		// The '_' in the excluded folder is escaped in the LIKE pattern, so it is a literal
-		// underscore: only the real descendant of "C:/Media/a_b" is dropped, while the
-		// "C:/Media/aXb/sub" sibling (which a wildcard '_' would have swallowed) stays.
+		// The '_' in the excluded folder is escaped in the LIKE pattern, so it is a
+		// literal underscore: only the real descendant of "C:/Media/a_b" is dropped,
+		// while the "C:/Media/aXb/sub" sibling (which a wildcard '_' would have
+		// swallowed) stays.
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
 				.contains(sibling.getPublicId()).doesNotContain(underExcluded.getPublicId());
 	}

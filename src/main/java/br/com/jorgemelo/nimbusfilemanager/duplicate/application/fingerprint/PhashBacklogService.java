@@ -31,12 +31,13 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoord
 /**
  * Photo half of the fingerprint backlog: the {@link FingerprintProducer} that
  * knows how to find pending photos, compute a photo's 256-bit pHash (through
- * {@link PhotoPerceptualHashService}, reusing the ffmpeg {@code ExternalToolGate})
- * and store its single fingerprint row. All the orchestration - batch drain,
- * transactions, retry/failure bookkeeping, inventory yielding, rebuild/reset -
- * lives in the shared {@link FingerprintBacklogEngine}; this class supplies only
- * the photo-specific behavior and keeps the same public API the screen and the
- * async runner already call.
+ * {@link PhotoPerceptualHashService}, reusing the ffmpeg
+ * {@code ExternalToolGate}) and store its single fingerprint row. All the
+ * orchestration - batch drain, transactions, retry/failure bookkeeping,
+ * inventory yielding, rebuild/reset - lives in the shared
+ * {@link FingerprintBacklogEngine}; this class supplies only the photo-specific
+ * behavior and keeps the same public API the screen and the async runner
+ * already call.
  */
 @Service
 public class PhashBacklogService
@@ -113,8 +114,8 @@ public class PhashBacklogService
 
 	@Override
 	public List<PendingPhoto> fetchPendingBatch(int batchSize) {
-		return deduplicate(mediaFingerprintRepository.findPendingPhotos(KIND, DuplicateConstants.ALGORITHM, MAX_ATTEMPTS,
-				PageRequest.of(0, batchSize)));
+		return deduplicate(mediaFingerprintRepository.findPendingPhotos(KIND, DuplicateConstants.ALGORITHM,
+				MAX_ATTEMPTS, PageRequest.of(0, batchSize)));
 	}
 
 	@Override

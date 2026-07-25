@@ -8,9 +8,9 @@ import org.springframework.stereotype.Component;
 /**
  * Invalidates or prunes the photo AND video similarity caches together. Every
  * place that changes what the Duplicados screen should show - excluding or
- * restoring a file/folder from comparison, quarantining duplicates - must affect
- * both tabs, so routing it through one component keeps the two caches in step
- * and makes it impossible to update one and forget the other.
+ * restoring a file/folder from comparison, quarantining duplicates - must
+ * affect both tabs, so routing it through one component keeps the two caches in
+ * step and makes it impossible to update one and forget the other.
  */
 @Component
 public class SimilarityCaches {

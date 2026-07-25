@@ -99,7 +99,8 @@ public class SettingsWebController extends LocalizedComponent {
 			@RequestParam(defaultValue = "false") boolean confirmLibraryChange, Authentication authentication,
 			RedirectAttributes redirectAttributes) {
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.inventoryBlocked"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.settings.inventoryBlocked"));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
@@ -185,7 +186,8 @@ public class SettingsWebController extends LocalizedComponent {
 					form.organizationSize().toString());
 		}
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.preferencesUpdated"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.preferencesUpdated"));
 
 		return "redirect:/app/settings/preferences";
 	}

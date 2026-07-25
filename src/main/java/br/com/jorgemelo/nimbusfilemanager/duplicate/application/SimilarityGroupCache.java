@@ -19,14 +19,14 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
  * Neutral cache for a heavy similarity grouping, keyed by the similarity
  * threshold and tagged with the fingerprint signature it was computed from. The
  * result is served (and paginated) only while that signature still holds, so
- * re-opening or paginating a tab is instant, and a change in the fingerprint set
- * transparently forces a recompute.
+ * re-opening or paginating a tab is instant, and a change in the fingerprint
+ * set transparently forces a recompute.
  *
  * <p>
- * Shared by the photo and video grouping services: the media-specific parts (how
- * the signature is derived, how a stale group is dropped on delete) are passed
- * in, everything mechanical (the map, signature check, pagination) lives here
- * once.
+ * Shared by the photo and video grouping services: the media-specific parts
+ * (how the signature is derived, how a stale group is dropped on delete) are
+ * passed in, everything mechanical (the map, signature check, pagination) lives
+ * here once.
  *
  * @param <T> the group response type
  */

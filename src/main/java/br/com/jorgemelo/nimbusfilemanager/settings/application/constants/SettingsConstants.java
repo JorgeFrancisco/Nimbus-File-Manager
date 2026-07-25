@@ -3,8 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application.constants;
 /**
  * Contract data constants for the settings domain: the {@code AppSetting} keys
  * (and the default time zone value) read across the application to look up
- * configured values. Keeping them in one place lets any collaborator reference a
- * key without depending on {@link AppSettingService} itself.
+ * configured values. Keeping them in one place lets any collaborator reference
+ * a key without depending on {@link AppSettingService} itself.
  */
 public final class SettingsConstants {
 
@@ -39,7 +39,8 @@ public final class SettingsConstants {
 	public static final String BOUNDARY_ADM1_URL = "nimbus-file-manager.location.boundary.adm1-url";
 	public static final String BOUNDARY_ADM2_URL = "nimbus-file-manager.location.boundary.adm2-url";
 	public static final String BOUNDARY_GBOPEN_API_URL = "nimbus-file-manager.location.boundary.gbopen-api-url";
-	public static final String BOUNDARY_AUTO_TERRITORIES = "nimbus-file-manager.location.boundary.auto-complete-territories";
+	public static final String BOUNDARY_AUTO_TERRITORIES =
+			"nimbus-file-manager.location.boundary.auto-complete-territories";
 	public static final String MAP_ENABLED = "nimbus-file-manager.map.enabled";
 	public static final String MAP_TILE_URL = "nimbus-file-manager.map.tile-url";
 	public static final String MAP_TILE_ATTRIBUTION = "nimbus-file-manager.map.tile-attribution";

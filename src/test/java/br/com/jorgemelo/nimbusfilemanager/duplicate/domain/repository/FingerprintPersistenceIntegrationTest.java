@@ -23,9 +23,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
 /**
  * Persistence of the fingerprint/failure tables, which are linked to
  * {@code catalog_file} by a loose id rather than a managed JPA relationship:
- * deleting the file must cascade them away through the FK {@code ON DELETE
- * CASCADE}, and the exhausted-failure lookup must expose the file's current path
- * and last error.
+ * deleting the file must cascade them away through the FK
+ * {@code ON DELETE CASCADE}, and the exhausted-failure lookup must expose the
+ * file's current path and last error.
  */
 @SpringBootTest
 @Transactional

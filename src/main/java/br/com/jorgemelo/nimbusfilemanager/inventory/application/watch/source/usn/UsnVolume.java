@@ -4,10 +4,11 @@ import java.io.Closeable;
 
 /**
  * The native seam over an opened NTFS volume and its USN Change Journal. Every
- * Win32 call ({@code CreateFile} on the volume, {@code FSCTL_QUERY_USN_JOURNAL},
- * {@code FSCTL_READ_USN_JOURNAL}) lives behind this interface, so the reader and
- * interpreter above it are pure Java tested with a fake volume - only the JNA
- * implementation is platform-specific and unverifiable off Windows.
+ * Win32 call ({@code CreateFile} on the volume,
+ * {@code FSCTL_QUERY_USN_JOURNAL}, {@code FSCTL_READ_USN_JOURNAL}) lives behind
+ * this interface, so the reader and interpreter above it are pure Java tested
+ * with a fake volume - only the JNA implementation is platform-specific and
+ * unverifiable off Windows.
  */
 public interface UsnVolume extends Closeable {
 
@@ -28,8 +29,8 @@ public interface UsnVolume extends Closeable {
 
 	/**
 	 * Reads the next batch of records at or after {@code fromUsn}, filling up to
-	 * {@code bufferBytes}. The returned {@link UsnReadResult#nextStartUsn()} is where
-	 * the following read must continue; a drained result carries no records.
+	 * {@code bufferBytes}. The returned {@link UsnReadResult#nextStartUsn()} is
+	 * where the following read must continue; a drained result carries no records.
 	 */
 	UsnReadResult readRecords(long fromUsn, int bufferBytes);
 

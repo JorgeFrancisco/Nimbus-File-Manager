@@ -30,17 +30,18 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 
 /**
- * Destructive-path validation of the catalog missing-record purge against a real
- * Postgres (the SQL cascade/SET-NULL behaviour a Mockito test cannot cover):
+ * Destructive-path validation of the catalog missing-record purge against a
+ * real Postgres (the SQL cascade/SET-NULL behaviour a Mockito test cannot
+ * cover):
  * <ul>
  * <li>an overdue MISSING row and its placement are removed, while ACTIVE and
  * recently-missing rows survive;</li>
  * <li>a movement audit row that referenced the purged file is detached
  * ({@code ON DELETE SET NULL}), not deleted, so history is preserved and the
  * bulk delete never trips the foreign key;</li>
- * <li>{@code markMissingByIds} stamps {@code lifecycle_changed_at} only on a real
- * ACTIVE -&gt; MISSING transition and never resets an already-missing row (so the
- * retention clock is stable across reconciles).</li>
+ * <li>{@code markMissingByIds} stamps {@code lifecycle_changed_at} only on a
+ * real ACTIVE -&gt; MISSING transition and never resets an already-missing row
+ * (so the retention clock is stable across reconciles).</li>
  * </ul>
  */
 @SpringBootTest

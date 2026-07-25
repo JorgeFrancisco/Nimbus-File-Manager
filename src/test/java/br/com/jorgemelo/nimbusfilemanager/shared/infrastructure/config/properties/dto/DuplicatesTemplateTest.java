@@ -72,9 +72,11 @@ class DuplicatesTemplateTest {
 	void toolbarSizeAndTypeControlsAlignWithTheViewSwitchButtons() throws Exception {
 		String css = Files.readString(Path.of("src/main/resources/static/css/pages/duplicates.css"));
 
-		// The view-switch buttons are 38px tall; without these rules the page-size select and the
-		// "Tipo" filter had no explicit height and rode higher, breaking the toolbar's vertical line.
-		assertThat(css).contains("align-items: center;", ".explorer-size select {", ".duplicates-type-filter > summary {",
+		// The view-switch buttons are 38px tall; without these rules the page-size
+		// select and the "Tipo" filter had no explicit height and rode higher, breaking
+		// the toolbar's vertical line.
+		assertThat(css).contains("align-items: center;", ".explorer-size select {",
+				".duplicates-type-filter > summary {",
 				"height: 38px;");
 	}
 

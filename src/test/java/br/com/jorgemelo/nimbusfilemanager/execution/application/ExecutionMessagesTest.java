@@ -57,7 +57,8 @@ class ExecutionMessagesTest {
 		assertMessage(ExecutionMessages.organizationFinished(5, 2, 1), ExecutionMessages.ORGANIZATION_FINISHED, 5L, 2L,
 				1L);
 		assertMessage(ExecutionMessages.previewFinished(3, 0, 0), ExecutionMessages.PREVIEW_FINISHED, 3L, 0L, 0L);
-		assertMessage(ExecutionMessages.organizationCancelled(4, 1, 2), ExecutionMessages.ORGANIZATION_CANCELLED, 4L, 1L,
+		assertMessage(ExecutionMessages.organizationCancelled(4, 1, 2), ExecutionMessages.ORGANIZATION_CANCELLED, 4L,
+				1L,
 				2L);
 	}
 

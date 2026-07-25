@@ -248,7 +248,8 @@ public class QuarantinePurgeService {
 		} catch (Exception e) {
 			// Best-effort: an unexpected foreign key from another table just means we keep
 			// the DELETED row.
-			log.warn("Quarantine purge kept catalog row for media file {} (constraints prevented removal)", catalogFileId,
+			log.warn("Quarantine purge kept catalog row for media file {} (constraints prevented removal)",
+					catalogFileId,
 					e);
 
 			return false;

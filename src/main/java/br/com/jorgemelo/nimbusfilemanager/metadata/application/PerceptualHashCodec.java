@@ -13,8 +13,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.Metadat
  * <p>
  * It works on a decoded 1024-byte sample and knows nothing about ffmpeg,
  * photos, videos or frames - a photo passes its single frame, a video passes
- * each sampled frame. Keeping the math here (rather than inside a photo service)
- * is what lets the video algorithm reuse it without duplicating a single line.
+ * each sampled frame. Keeping the math here (rather than inside a photo
+ * service) is what lets the video algorithm reuse it without duplicating a
+ * single line.
  */
 public final class PerceptualHashCodec {
 
@@ -85,7 +86,9 @@ public final class PerceptualHashCodec {
 		return coefficients;
 	}
 
-	/** Thresholds each coefficient against the AC median into a packed 256-bit hash. */
+	/**
+	 * Thresholds each coefficient against the AC median into a packed 256-bit hash.
+	 */
 	private static byte[] pack(double[] coefficients, double median) {
 		byte[] hash = new byte[MetadataConstants.HASH_BYTES];
 

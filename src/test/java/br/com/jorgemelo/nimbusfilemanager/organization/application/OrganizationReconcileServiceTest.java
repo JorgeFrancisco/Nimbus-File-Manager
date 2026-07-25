@@ -75,7 +75,8 @@ class OrganizationReconcileServiceTest {
 		Path oldPath = source.resolve("old-name.jpg");
 		Path newPath = Files.writeString(source.resolve("new-name.jpg"), "hello");
 
-		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0));
+		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024,
+				Month.JANUARY, 1, 10, 0));
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
 				any(), any(Pageable.class)))
@@ -100,7 +101,8 @@ class OrganizationReconcileServiceTest {
 
 		Files.writeString(source.resolve("unrelated.jpg"), "a much longer content than the original");
 
-		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0));
+		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024,
+				Month.JANUARY, 1, 10, 0));
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
 				any(), any(Pageable.class)))
@@ -189,7 +191,8 @@ class OrganizationReconcileServiceTest {
 		// file_key-based
 		// repair (not the rename merge) is what must fix it.
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(3L))).thenReturn(
-				List.of(catalogFileWithLocation(3L, phantom, 5L, "sha-x", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0))));
+				List.of(catalogFileWithLocation(3L, phantom, 5L, "sha-x", LocalDateTime.of(2024, Month.JANUARY, 1, 10,
+						0))));
 
 		CatalogFileLocation location = catalogFileWithLocation(3L, phantom, 5L, "sha-x",
 				LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0)).getLocation();
@@ -382,8 +385,8 @@ class OrganizationReconcileServiceTest {
 		try {
 			Files.setAttribute(directory, "dos:hidden", Boolean.TRUE);
 		} catch (UnsupportedOperationException | IllegalArgumentException | IOException _) {
-			// Non-DOS file systems (for example POSIX) already treat the dot-prefixed name as
-			// hidden, so no explicit attribute is needed there.
+			// Non-DOS file systems (for example POSIX) already treat the dot-prefixed name
+			// as hidden, so no explicit attribute is needed there.
 		}
 	}
 
@@ -392,7 +395,8 @@ class OrganizationReconcileServiceTest {
 	}
 
 	private OrganizationReconcileService service() {
-		return new OrganizationReconcileService(catalogFileLocationRepository, scanExclusionService, operationLockService,
+		return new OrganizationReconcileService(catalogFileLocationRepository, scanExclusionService,
+				operationLockService,
 				applier());
 	}
 
@@ -416,7 +420,8 @@ class OrganizationReconcileServiceTest {
 				.createdAt(createdAt).modifiedAt(createdAt != null ? createdAt : LocalDateTime.now())
 				.fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING).build();
 
-		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(normalizedPath)
+		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(normalizedPath)
 				.currentFolder(normalizedFolder).originalPath(normalizedPath).originalFolder(normalizedFolder)
 				.updatedAt(LocalDateTime.now()).build();
 

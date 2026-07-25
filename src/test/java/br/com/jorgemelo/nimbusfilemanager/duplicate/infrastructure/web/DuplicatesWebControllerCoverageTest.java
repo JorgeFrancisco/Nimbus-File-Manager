@@ -79,8 +79,9 @@ class DuplicatesWebControllerCoverageTest {
 
 	@Test
 	void duplicatesDefaultsToTheFirstPageWhenThePageParamIsAbsent() throws Exception {
-		// Regression: the initial screen load carries no ?page=, so record binding sees null
-		// for the (formerly primitive int) page component. It must default to 0, not fail (500).
+		// Regression: the initial screen load carries no ?page=, so record binding sees
+		// null for the (formerly primitive int) page component. It must default to 0,
+		// not fail (500).
 		Fixture fixture = new Fixture();
 		MockMvc mockMvc = MockMvcBuilders.standaloneSetup(fixture.controller())
 				.setViewResolvers(new InternalResourceViewResolver()).build();
@@ -349,7 +350,8 @@ class DuplicatesWebControllerCoverageTest {
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		fixture.controller().duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null, model);
+		fixture.controller().duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null,
+				model);
 
 		Assertions.assertThat(groups(model).getFirst().headerText()).isEqualTo("2 fotos semelhantes");
 	}

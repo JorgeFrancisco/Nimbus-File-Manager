@@ -3,9 +3,9 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application.constants;
 /**
  * Contract data constants for the organization domain. The page/preference keys
  * are shared between OrganizationWebController (auto-saved on every
- * preview/execute submit) and SettingsWebController's Preferencias tab (explicit
- * editing) - the two are just different entry points onto the same stored
- * values.
+ * preview/execute submit) and SettingsWebController's Preferencias tab
+ * (explicit editing) - the two are just different entry points onto the same
+ * stored values.
  */
 public final class OrganizationConstants {
 

@@ -44,7 +44,8 @@ class DatabaseMigrationTest {
 
 		Assertions.assertThat(migration).contains("ix_catalog_file_location_current_path",
 				"ix_catalog_file_location_lower_current_path", "ix_catalog_file_location_lower_current_folder",
-				"ix_catalog_file_lifecycle_sha256_size", "ix_catalog_file_lifecycle_id", "ix_catalog_file_lower_extension",
+				"ix_catalog_file_lifecycle_sha256_size", "ix_catalog_file_lifecycle_id",
+						"ix_catalog_file_lower_extension",
 				"ix_media_metadata_rebuild_filters", "ix_video_upper_trim_video_codec",
 				"ix_analysis_error_execution_created", "ix_analysis_error_type_path_created",
 				"ix_analysis_error_lower_path", "ix_execution_finished_status", "ix_execution_step_execution_created");
@@ -191,7 +192,8 @@ class DatabaseMigrationTest {
 
 		Assertions.assertThat(migration)
 				.contains("ix_timeline_capture_date_file", "media_metadata(capture_date DESC, catalog_file_id DESC)",
-						"WHERE capture_date IS NOT NULL", "ix_timeline_active_visual_file", "catalog_file(file_type, id)",
+						"WHERE capture_date IS NOT NULL", "ix_timeline_active_visual_file",
+								"catalog_file(file_type, id)",
 						"lifecycle_status = 'ACTIVE'", "file_type IN ('PHOTO', 'VIDEO')")
 				.doesNotContain("CREATE INDEX CONCURRENTLY", "DROP INDEX", "DROP TABLE");
 	}

@@ -10,17 +10,18 @@ import lombok.NoArgsConstructor;
 
 /**
  * The user-facing status message of an execution or execution step: either a
- * stable {@code code} plus its typed {@code args} (resolved to localized text on
- * read), or a raw free-text {@code text} for arbitrary messages that have no
+ * stable {@code code} plus its typed {@code args} (resolved to localized text
+ * on read), or a raw free-text {@code text} for arbitrary messages that have no
  * catalog code (e.g. an external tool's failure string).
  *
  * <p>
  * The two forms are mutually exclusive - a coded message clears the text and a
- * raw message clears the code - and that invariant is expressed here through the
- * factory methods so no call site has to juggle the three columns by hand. Shared
- * as an {@code @Embeddable} by {@link Execution} and {@link ExecutionStep}, which
- * both carry the same {@code message}/{@code message_code}/{@code message_args}
- * columns, so the concept lives in one place instead of being duplicated.
+ * raw message clears the code - and that invariant is expressed here through
+ * the factory methods so no call site has to juggle the three columns by hand.
+ * Shared as an {@code @Embeddable} by {@link Execution} and
+ * {@link ExecutionStep}, which both carry the same
+ * {@code message}/{@code message_code}/{@code message_args} columns, so the
+ * concept lives in one place instead of being duplicated.
  */
 @Embeddable
 @Getter
@@ -38,7 +39,9 @@ public class StatusMessage {
 	@Column(name = "message_args", length = 2000)
 	private String args;
 
-	/** Raw free-text message with no catalog code (e.g. an arbitrary error string). */
+	/**
+	 * Raw free-text message with no catalog code (e.g. an arbitrary error string).
+	 */
 	public static StatusMessage raw(String text) {
 		return new StatusMessage(text, null, null);
 	}

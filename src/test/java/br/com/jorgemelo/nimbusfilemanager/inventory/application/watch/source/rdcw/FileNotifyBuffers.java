@@ -8,8 +8,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * Builds synthetic {@code FILE_NOTIFY_INFORMATION} buffers matching the layout
  * {@link FileNotifyInformationParser} decodes, with correct DWORD-aligned
- * {@code NextEntryOffset} chaining, so the parser is tested with realistic bytes
- * on any platform. The action is arbitrary (the parser ignores it).
+ * {@code NextEntryOffset} chaining, so the parser is tested with realistic
+ * bytes on any platform. The action is arbitrary (the parser ignores it).
  */
 final class FileNotifyBuffers {
 

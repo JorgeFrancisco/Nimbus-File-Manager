@@ -189,7 +189,8 @@ class InventoryPersistenceServiceTest {
 
 		MetadataResult metadata = MetadataResult.builder().build();
 
-		when(catalogFileRepository.findExistingFileKeys(List.of(fileKey(first), fileKey(second)))).thenReturn(List.of());
+		when(catalogFileRepository.findExistingFileKeys(List.of(fileKey(first), fileKey(second))))
+				.thenReturn(List.of());
 		when(catalogFileRepository.findByFileKeyIn(List.of(fileKey(first), fileKey(second)))).thenReturn(List.of());
 		when(catalogFileMapper.toEntity(first, Path.of("C:/input"), metadata)).thenReturn(firstEntity);
 		when(catalogFileMapper.toEntity(second, Path.of("C:/input"), metadata)).thenReturn(secondEntity);
@@ -324,7 +325,8 @@ class InventoryPersistenceServiceTest {
 			coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 8, 2, 2, 2), new ProcessingMetrics());
 		}
 
-		return new InventoryPersistenceService(catalogFileRepository, catalogFileMapper, mediaLocationService, coordinator,
+		return new InventoryPersistenceService(catalogFileRepository, catalogFileMapper, mediaLocationService,
+				coordinator,
 				new ResourcelessTransactionManager(), new ProcessingMetrics(), new ExecutionPhaseTimings());
 	}
 

@@ -10,8 +10,8 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.UsnJournalCurso
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.UsnJournalCursorRepository;
 
 /**
- * Load/save side of the USN journal cursor, keyed by the monitored volume. Keeps
- * the JPA details out of the change source (which is Windows-only and
+ * Load/save side of the USN journal cursor, keyed by the monitored volume.
+ * Keeps the JPA details out of the change source (which is Windows-only and
  * native-heavy) so the persistence is plain, cross-platform and
  * integration-tested on any OS.
  */

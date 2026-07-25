@@ -21,21 +21,21 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Runs periodic reconciliation of the configured watch folder on its own daemon
- * thread, mirroring how {@code QuarantinePurgeScheduler} schedules its work (the
- * app has no Spring {@code @EnableScheduling}). Unlike the reactive reconcile in
- * {@link InventoryWatchService}, this one is independent of the watcher's running
- * state, so drift heals even while monitoring is stopped. It is concurrency-safe
- * against an active operation because
- * {@link OrganizationReconcileService#reconcileAndApply} defers (no-op) when the
- * tree is locked, rather than corrupting it.
+ * thread, mirroring how {@code QuarantinePurgeScheduler} schedules its work
+ * (the app has no Spring {@code @EnableScheduling}). Unlike the reactive
+ * reconcile in {@link InventoryWatchService}, this one is independent of the
+ * watcher's running state, so drift heals even while monitoring is stopped. It
+ * is concurrency-safe against an active operation because
+ * {@link OrganizationReconcileService#reconcileAndApply} defers (no-op) when
+ * the tree is locked, rather than corrupting it.
  */
 @Slf4j
 @Service
 public class ReconcileScheduler {
 
 	/**
-	 * Wait a bit after startup so booting (and any startup inventory) settles before
-	 * the first reconcile.
+	 * Wait a bit after startup so booting (and any startup inventory) settles
+	 * before the first reconcile.
 	 */
 	private static final long INITIAL_DELAY_MILLIS = 60_000;
 

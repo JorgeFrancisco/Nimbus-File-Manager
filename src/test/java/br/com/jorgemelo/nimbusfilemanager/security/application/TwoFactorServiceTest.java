@@ -45,9 +45,9 @@ class TwoFactorServiceTest {
 
 	@Test
 	void verifyShouldAcceptNextTimeWindow() {
-		// Clock-skew tolerance is symmetric: besides the current and previous 30s steps, a code
-		// from the NEXT step (offset +1) must also verify. This pins the upper window boundary,
-		// which the current/previous-only tests leave unguarded.
+		// Clock-skew tolerance is symmetric: besides the current and previous 30s
+		// steps, a code from the NEXT step (offset +1) must also verify. This pins the
+		// upper window boundary, which the current/previous-only tests leave unguarded.
 		String secret = "JBSWY3DPEHPK3PXP";
 
 		long counter = clock.instant().getEpochSecond() / 30;
@@ -59,8 +59,8 @@ class TwoFactorServiceTest {
 
 	@Test
 	void verifyShouldRejectCodeOutsideTheWindow() {
-		// A code two steps away is outside the ±1 window and must be rejected, otherwise the
-		// tolerance would be unbounded.
+		// A code two steps away is outside the ±1 window and must be rejected,
+		// otherwise the tolerance would be unbounded.
 		String secret = "JBSWY3DPEHPK3PXP";
 
 		long counter = clock.instant().getEpochSecond() / 30;
@@ -71,11 +71,12 @@ class TwoFactorServiceTest {
 
 	@Test
 	void generateMatchesRfc4226ReferenceVectors() {
-		// RFC 4226 Appendix D reference values for the ASCII secret "12345678901234567890"
-		// (Base32 "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"). Asserting the produced codes against the
-		// published vectors pins the HOTP/TOTP truncation math to the spec - a non-self-referential
-		// check that breaks if any bit operation drifts, which would silently break interop with
-		// authenticator apps.
+		// RFC 4226 Appendix D reference values for the ASCII secret
+		// "12345678901234567890" (Base32 "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"). Asserting
+		// the produced codes against the published vectors pins the HOTP/TOTP
+		// truncation math to the spec - a non-self-referential check that breaks if any
+		// bit operation drifts, which would silently break interop with authenticator
+		// apps.
 		String secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
 
 		String[] expected = { "755224", "287082", "359152", "969429", "338314", "254676", "287922", "162583", "399871",
@@ -92,7 +93,8 @@ class TwoFactorServiceTest {
 		String second = service.newSecret();
 
 		Assertions.assertThat(first).isNotBlank().matches("[A-Z2-7]+");
-		// Two freshly generated secrets must differ - a fixed or empty secret would defeat 2FA.
+		// Two freshly generated secrets must differ - a fixed or empty secret would
+		// defeat 2FA.
 		Assertions.assertThat(second).isNotBlank().isNotEqualTo(first);
 	}
 }

@@ -10,10 +10,10 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCan
 
 /**
  * Media-agnostic helpers shared by the photo and video similarity services.
- * These pieces were byte-for-byte duplicated between the two services, differing
- * only in the candidate/response type; they are parameterized by accessor
- * functions here rather than shared through an artificial common supertype on
- * the response records or candidate DTOs.
+ * These pieces were byte-for-byte duplicated between the two services,
+ * differing only in the candidate/response type; they are parameterized by
+ * accessor functions here rather than shared through an artificial common
+ * supertype on the response records or candidate DTOs.
  */
 final class SimilarityGroupSupport {
 
@@ -28,6 +28,7 @@ final class SimilarityGroupSupport {
 	static <C> List<C> withoutExcluded(List<C> candidates, DuplicateExclusionService exclusion, Function<C, UUID> id,
 			Function<C, String> folder) {
 		Set<UUID> excludedIds = new HashSet<>(exclusion.excludedFilePublicIds());
+
 		List<String> excludedFolders = exclusion.excludedFolders();
 
 		if (excludedIds.isEmpty() && excludedFolders.isEmpty()) {
@@ -35,7 +36,8 @@ final class SimilarityGroupSupport {
 		}
 
 		return candidates.stream().filter(candidate -> !excludedIds.contains(id.apply(candidate)))
-				.filter(candidate -> !exclusion.isUnderExcludedFolder(folder.apply(candidate), excludedFolders)).toList();
+				.filter(candidate -> !exclusion.isUnderExcludedFolder(folder.apply(candidate), excludedFolders))
+				.toList();
 	}
 
 	/**

@@ -34,8 +34,8 @@ import lombok.Setter;
 public class MediaGeoLocation {
 
 	/**
-	 * Same identity as {@link MediaMetadata} (catalog_file_id) - mapped as a plain id
-	 * (the FK lives in the database) so persistence never needs to load the
+	 * Same identity as {@link MediaMetadata} (catalog_file_id) - mapped as a plain
+	 * id (the FK lives in the database) so persistence never needs to load the
 	 * metadata aggregate.
 	 */
 	@Id

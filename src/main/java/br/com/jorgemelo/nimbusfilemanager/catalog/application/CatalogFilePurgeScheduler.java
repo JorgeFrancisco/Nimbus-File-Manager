@@ -13,13 +13,13 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Runs the catalog missing-record purge once a day on its own daemon thread,
- * mirroring the quarantine purge (the app has no Spring {@code @EnableScheduling}).
- * The retention window is read fresh from
- * {@link SettingsConstants#CATALOG_MISSING_RETENTION_DAYS} each run, so changing
- * it in Settings takes effect on the next pass. Any non-positive, blank or
- * invalid value disables the purge entirely (fail-safe: a destructive purge never
- * runs on an unreadable retention window); only a positive number of days runs
- * it.
+ * mirroring the quarantine purge (the app has no Spring
+ * {@code @EnableScheduling}). The retention window is read fresh from
+ * {@link SettingsConstants#CATALOG_MISSING_RETENTION_DAYS} each run, so
+ * changing it in Settings takes effect on the next pass. Any non-positive,
+ * blank or invalid value disables the purge entirely (fail-safe: a destructive
+ * purge never runs on an unreadable retention window); only a positive number
+ * of days runs it.
  */
 @Slf4j
 @Service

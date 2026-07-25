@@ -21,11 +21,12 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
  * Atomic catalog side of a duplicate quarantine move and its restore (undo).
- * Mirrors {@code OrganizationMovePersistence}: the {@link CatalogFile} placement,
- * its lifecycle flag and the {@link Movement} audit row commit in a single
- * transaction, so the catalog and its trail can never diverge. The physical
- * {@code Files.move} happens in {@code DuplicateDeletionService} before these
- * calls; on a thrown transaction the service rolls the file back on disk.
+ * Mirrors {@code OrganizationMovePersistence}: the {@link CatalogFile}
+ * placement, its lifecycle flag and the {@link Movement} audit row commit in a
+ * single transaction, so the catalog and its trail can never diverge. The
+ * physical {@code Files.move} happens in {@code DuplicateDeletionService}
+ * before these calls; on a thrown transaction the service rolls the file back
+ * on disk.
  */
 @Service
 public class DuplicateDeletionPersistence {
@@ -99,7 +100,8 @@ public class DuplicateDeletionPersistence {
 			throw new IllegalStateException("Movement has no media file: " + movement.getId());
 		}
 
-		CatalogFile catalogFile = catalogFileRepository.findByPublicIdIn(List.of(detached.getPublicId())).stream().findFirst()
+		CatalogFile catalogFile = catalogFileRepository.findByPublicIdIn(List.of(detached.getPublicId())).stream()
+				.findFirst()
 				.orElseThrow(() -> new IllegalStateException("CatalogFile not found: " + detached.getPublicId()));
 
 		repoint(catalogFile, destination);

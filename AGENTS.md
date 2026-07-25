@@ -40,25 +40,74 @@ As regras valem igualmente para **produção** (`src/main/java`) e **testes** (`
 
 ## Regras mecânicas (`editor/.editorconfig`)
 
-Os artefatos de configuração do editor vivem na pasta `editor/` (fora da raiz, como referência versionada): `editor/.editorconfig` (regras mecânicas, fonte canônica), `editor/FormatacaoEclipseJava.xml` (profile do formatter Java `Formatação Eclipse Java`, que substituiu o antigo `FormatacaoJorge`) e `editor/eclipsejava.importorder` (ordem de *Organize Imports*). Resumo do `editor/.editorconfig`:
+Os artefatos de configuração do editor vivem na pasta `editor/` (fora da raiz, como referência versionada — por morar num subdiretório, o `.editorconfig` **não é aplicado automaticamente** a `src/`: ele documenta a regra, e quem a torna obrigatória é este documento): `editor/.editorconfig` (regras mecânicas, fonte canônica), `editor/FormatacaoEclipseJava.xml` (profile do formatter Java `Formatação Eclipse Java`, que substituiu o antigo `FormatacaoJorge`) e `editor/eclipsejava.importorder` (ordem de *Organize Imports*). Resumo do `editor/.editorconfig`:
 
-- Codificação UTF-8; fim de linha CRLF; **sem linha em branco no final do arquivo**; espaços à direita removidos (exceto em `.md`).
+- Codificação UTF-8; fim de linha CRLF; **sem newline final** (`insert_final_newline = false`); espaços à direita removidos (exceto em `.md`).
 - Indentação: **tab** em `java`, `xml`, `html`, `css`, `js`; **espaço** em `sql` (4), `json`/`yml`/`yaml` (2) e `md` (2).
 - Largura máxima de 120 colunas apenas em Java.
 
-"Sem linha em branco no final" refere-se ao **fim do arquivo**; linhas em branco **entre** blocos são parte do estilo (ver Espaçamento vertical).
+**Sem newline final — o último byte do arquivo é a `}`, não `\n`.** A regra é `insert_final_newline = false`, e vale para o **caractere** de fim de linha, não só para linhas em branco visíveis: um arquivo terminado em `}\n` **viola** a regra tanto quanto um terminado em `}\n\n`. Em `git diff` a conformidade aparece como `\ No newline at end of file` na última linha. Linhas em branco **entre** blocos, essas sim, são parte do estilo (ver Espaçamento vertical).
 
 **Text blocks Java (`"""`):** as regras de espaços à direita e indentação **não se aplicam ao interior** de um text block. O conteúdo entre `"""` é significativo e regido pelas regras do próprio Java (whitespace incidental / `\s`), não pelo editor. Trim ou reindentação automática deve **preservar o interior — nunca reescrevê-lo**. São muito usados nas queries dos repositórios (`@Query("""…""")`), então um trim ingênuo linha a linha corromperia o SQL.
+
+**Cuidado ao detectar text block por varredura:** um delimitador **fecha e reabre na mesma linha** — `""", countQuery = """` (usado em `MediaFingerprintRepository` e `MapRepository`). Uma varredura que trate "qualquer `"""` na linha" como fim do bloco **inverte a paridade** dali em diante, passando a tratar interior de query como código (e código como interior). O estado correto **alterna a cada ocorrência** de `"""`, não uma vez por linha. Reindentar uma linha de query por engano insere **tab literal** na string e dispara `java:S2479`.
 
 ## Formatter (`Formatação Eclipse Java`)
 
 A formatação mecânica do Java é responsabilidade **exclusiva** do profile do Eclipse `Formatação Eclipse Java` (Ctrl+Shift+F), consistente com o `editor/.editorconfig`. Especificidades úteis ao escrever:
 
-- Código em **120** colunas; comentários em **80**.
+- **Código em 120 colunas**, contadas **da coluna 0** com **tab = 4**.
+- **Comentários em 80 colunas**, contadas **a partir da coluna em que o comentário começa** — o `/` de `//`, `/*` ou `/**` — e **não** da coluna 0 (é o `count_line_length_from_starting_position` do Eclipse). Ver *Limite de 80 dos comentários* abaixo: as duas larguras usam origens diferentes, e confundi-las é a causa mais comum de varredura errada.
 - Continuação: linhas quebradas indentam **2 níveis** (tabs).
 - Chaves K&R: `{` no fim da linha; `} else {` e `} catch` na mesma linha do `}`.
 - No máximo **1** linha em branco consecutiva; **1** antes de cada método; **nenhuma** entre campos consecutivos; imports em grupos separados por 1 linha em branco.
 - O profile não insere linha ao final do arquivo (casa com o `editor/.editorconfig`).
+
+> **Estado do arquivo do profile:** `editor/FormatacaoEclipseJava.xml` está hoje **vazio** (`<profiles version="23"/>`, sem nenhum profile dentro), então **não dá para importar nem reproduzir o formatter a partir do repositório**. Enquanto ele não for reexportado do Eclipse, as regras escritas abaixo são a única fonte verificável — por isso elas descrevem o comportamento em números, não por referência ao arquivo. Não há plugin de formatação no `pom.xml` (nem `formatter-maven-plugin` nem `spotless`): **nada no build reprova formatação**, o que torna a verificação manual obrigatória.
+
+### Limite de 80 dos comentários
+
+O limite de 80 dos comentários é medido **a partir da coluna inicial do próprio comentário**, com **tab = 4**. Um Javadoc indentado por 1 tab pode, portanto, chegar a **84 colunas absolutas** sem violar nada — medir a partir da coluna 0 produz centenas de falsos positivos e foi a causa das varreduras anteriores errarem.
+
+Em orçamento de caracteres, o limite equivale a:
+
+| Forma | Prefixo | Máximo do texto |
+| --- | --- | --- |
+| Corpo de Javadoc/bloco (` * texto`) | `* ` | **77** caracteres |
+| Comentário de linha (`// texto`) | `// ` | **77** caracteres |
+| Javadoc de uma linha (`/** texto */`) | `/** ` + ` */` | **73** caracteres |
+
+Regras de reflow, todas observáveis no código já formatado:
+
+- O parágrafo é **refluído por inteiro, de forma gulosa** (cada linha recebe o máximo de palavras que couber) — não basta quebrar a linha que estourou: a quebra **propaga** até o fim do parágrafo.
+- São **fronteiras de parágrafo** (nunca se juntam ao texto vizinho): a linha `*` em branco, `<p>`, `<ul>`/`</ul>`/`<ol>`/`</ol>`/`<li>`, e cada tag de bloco (`@param`, `@return`, `@throws`, `@see`, …).
+- Tags inline `{@link …}`, `{@code …}` e `{@literal …}` são **unidades atômicas**: cabem inteiras na linha ou descem inteiras para a próxima.
+- O interior de `<pre>` e `{@snippet}` é **verbatim** — nunca refluir.
+- Um Javadoc de uma linha que estoure vira bloco de várias linhas; o caminho inverso **não** existe (o formatter não recolhe um bloco em one-liner).
+
+### Limite de 120 do código
+
+Medido em **colunas absolutas a partir da coluna 0**, com **tab = 4**. Quebra com indentação de continuação de **2 tabs**, preenchendo cada linha ao máximo.
+
+São **exceções legítimas** (o formatter não as quebra; deixar como estão):
+
+- O **interior de text blocks** (`"""…"""`) — já é território exclusivo do Java, ver acima.
+- Linhas de `import` / `import static`.
+- Uma linha cuja largura vem de **um único token indivisível** — literal `String` longo, anotação com `description`/`example` extenso — em que nenhuma quebra possível traria a linha para dentro de 120.
+
+Fora dessas três, uma linha acima de 120 é violação e deve ser quebrada.
+
+## Verificação mecânica
+
+Regra mecânica não se verifica "de olho" — as varreduras anteriores falharam justamente aí. Antes de encerrar qualquer tarefa, **medir**, em **todo o projeto** e não só nos arquivos tocados, e chegar a zero em cada item:
+
+1. **Newline final** — nenhum arquivo termina em `\n` (último byte é o do conteúdo). **Ficam de fora os arquivos não autorais**: `mvnw`, `mvnw.cmd`, `.mvn/wrapper/maven-wrapper.properties` (gerados pelo Maven Wrapper) e `LICENSE` (texto legal verbatim) — o estilo do projeto não reescreve arquivo de terceiro.
+2. **Comentários** — nenhum comentário acima de 80 colunas **medidas do início do comentário**, exceto o interior de `<pre>`/`{@snippet}` (verbatim por definição).
+3. **Código Java** — nenhuma linha acima de 120 colunas absolutas fora das três exceções acima.
+4. **Espaços à direita** — zero, exceto em `.md` e no interior de text blocks.
+5. **Fim de linha** — CRLF.
+
+Os itens 1, 4 e 5 valem para **todo tipo de arquivo** (`.java`, `.html`, `.css`, `.js`, `.sql`, `.xml`, `.json`, `.yml`), pela seção `[*]` do `editor/.editorconfig`; os itens 2 e 3 são só de Java.
 
 ## Espaçamento vertical
 
@@ -141,7 +190,7 @@ Modelo e adapters **transversais** (usados por ≥3 domínios ou sem dono único
 
 A arquitetura hexagonal deve ser aplicada de forma **pragmática, não cerimonial**.
 
-- **Isolamento do domínio.** Nenhuma classe em `**/domain/**` depende de `**/application/**`, `**/infrastructure/**`, framework, tecnologia ou sistema externo. A dependência aponta sempre para dentro (`infrastructure → application → domain`); domínios dependem de `shared`, nunca o contrário. O que um port de repositório **retorna ou recebe é contrato do domínio**: projections, filtros e value objects de consulta vivem em `<domínio>/domain/repository/projection`, nunca em `application/dto`. *Verificável:* nenhum `import` de `.application.`/`.infrastructure.` dentro de `**/domain/**` (o build deve manter isso em zero).
+- **Isolamento do domínio.** Nenhuma classe em `**/domain/**` depende de `**/application/**`, `**/infrastructure/**`, framework, tecnologia ou sistema externo. A dependência aponta sempre para dentro (`infrastructure → application → domain`); domínios dependem de `shared`, nunca o contrário. O que um port de repositório **retorna ou recebe é contrato do domínio**: projections, filtros e value objects de consulta vivem em `<domínio>/domain/repository/projection`, nunca em `application/dto`. *Verificável:* nenhum `import` de `.application.`/`.infrastructure.` dentro de `src/main/java/**/domain/**` (o build deve manter isso em zero). **A regra é sobre código de produção.** Um **teste de integração co-localizado** num package `domain` pode importar o service de `application` que ele exercita — é justamente o serviço que escreve pelo repositório sob teste (ex.: `DuplicateExclusionRepositoryIntegrationTest`, `MovementSummaryQueryIntegrationTest`). Isso **não** é inversão de dependência: o artefato publicado continua com o `domain` isolado.
 - **Portas e adaptadores nas fronteiras reais.** Adaptadores de I/O externo (ffmpeg/exiftool/mediainfo, HTTP, filesystem, e-mail, glue nativo) ficam **só** em `infrastructure`. Suporte de domínio que atravessa inevitavelmente a fronteira do framework (ex.: `ClockHolder`, ponte estática para os callbacks `@PrePersist`/`@PreUpdate` das entidades, que não recebem injeção) mora no domínio (`shared/domain`), não em `application`.
 - **Abstração só onde paga.** Criar uma porta/interface quando ela isola uma fronteira real — um sistema externo, uma tecnologia que pode mudar, ou um ganho concreto de testabilidade. **Não** criar abstração por rito: uma interface com um único implementador que apenas embrulha o framework, sem ponto de variação nem valor de teste, é cerimônia — evitar.
 - **Exceções pragmáticas conscientes.** As entidades JPA (`@Entity`) **são** o modelo de domínio e os repositórios Spring Data (`extends JpaRepository`) **são** os ports — vivem no `domain` mesmo carregando anotações de tecnologia. Não se separa um modelo POJO das entidades JPA nem se cria adapter só para embrulhar o Spring Data: o boilerplate de mapeamento não se paga numa aplicação (ao contrário de uma biblioteca de domínio complexo). É decisão explícita — o isolamento do primeiro item vale para dependências **entre classes do projeto**; JPA/Spring dentro do `domain` é a fronteira pragmática aceita.
@@ -272,6 +321,7 @@ Lógica de verdade **nunca** mora nessas classes excluídas — fica no serviço
 - Issues **preexistentes** podem permanecer apenas quando **não pertencem ao escopo** da tarefa.
 - Qualquer **aumento por regra** — inclusive uma issue nova surgida como **efeito colateral** de outra correção — deve ser **investigado e eliminado antes de encerrar**. Não se entrega tarefa que introduz débito, ainda que trivial.
 - Falsos positivos e casos legítimos (padrão idiomático, exigência de biblioteca/spec, hotspot seguro por design) são **marcados como aceitos/revisados no Sonar com justificativa**, nunca "resolvidos" com código artificial.
+- **Caso aceito recorrente — `java:S2479` em `@Query("""…""")`.** A indentação do text block das queries JPQL deixa whitespace significativo na string, e o Sonar reclama do caractere não escapado. É **idiomático e proposital** (a query fica legível no código), então a issue é **aceita no Sonar**, nunca contornada com concatenação ou escapes artificiais. Já há dezenas assim aceitas nos repositórios. Uma S2479 **nova** nesses arquivos, porém, é sinal de que alguém **reindentou uma linha da query** — nesse caso o certo é reverter a reindentação, não aceitar a issue.
 
 ---
 

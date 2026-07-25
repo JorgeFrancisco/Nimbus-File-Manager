@@ -13,10 +13,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
 
 /**
- * Runtime checks that the USN cursor round-trips through PostgreSQL: a first save
- * inserts, a second save for the same volume updates in place, and unknown keys
- * read back empty. The 64-bit journal id / USN bit patterns must survive the
- * BIGINT columns unchanged.
+ * Runtime checks that the USN cursor round-trips through PostgreSQL: a first
+ * save inserts, a second save for the same volume updates in place, and unknown
+ * keys read back empty. The 64-bit journal id / USN bit patterns must survive
+ * the BIGINT columns unchanged.
  */
 @SpringBootTest
 @Transactional

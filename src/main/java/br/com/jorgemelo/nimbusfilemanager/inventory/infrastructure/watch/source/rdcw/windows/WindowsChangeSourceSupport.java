@@ -7,6 +7,7 @@ import java.util.Optional;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwFileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwReadSeam;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCatchUpResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnSupport;
@@ -14,18 +15,17 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The single Windows entry point that assembles the change source for a root:
- * {@code ReadDirectoryChangesW} for recursive real-time events (single handle, no
- * elevation, no folder lock), plus a one-shot USN journal catch-up for the
+ * {@code ReadDirectoryChangesW} for recursive real-time events (single handle,
+ * no elevation, no folder lock), plus a one-shot USN journal catch-up for the
  * changes made while the app was down when the volume can be opened (elevated).
  *
  * <ul>
  * <li>The recursive watch is the floor: if it cannot be opened the caller falls
- * back to the per-directory {@code WatchService} (a {@link
- * br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException}
- * propagates).</li>
- * <li>USN catch-up is best-effort: without privilege it is skipped and a startup
- * reconcile is requested instead, so real-time watching still works with no
- * elevation.</li>
+ * back to the per-directory {@code WatchService} (a
+ * {@link RdcwUnavailableException} propagates).</li>
+ * <li>USN catch-up is best-effort: without privilege it is skipped and a
+ * startup reconcile is requested instead, so real-time watching still works
+ * with no elevation.</li>
  * </ul>
  */
 @Slf4j

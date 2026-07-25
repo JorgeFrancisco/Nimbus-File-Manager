@@ -25,9 +25,9 @@ import lombok.extern.slf4j.Slf4j;
  * {@link OrganizationReconcileService} runs outside any transaction while only
  * these catalog mutations - rename merges, stale-path repairs and missing marks
  * - execute inside a short {@link Transactional} unit. Kept as a separate bean
- * on purpose: Spring's {@code @Transactional} does not apply to self-invocation,
- * so the orchestrator has to call the write step across a bean boundary for the
- * transaction to actually open.
+ * on purpose: Spring's {@code @Transactional} does not apply to
+ * self-invocation, so the orchestrator has to call the write step across a bean
+ * boundary for the transaction to actually open.
  */
 @Slf4j
 @Component
@@ -54,11 +54,11 @@ public class ReconcileApplier {
 		Set<Long> renamedIds = renameDetectionService.detectAndApplyRenames(response);
 
 		// Self-heal stragglers where a move updated catalog_file.file_key but left
-		// catalog_file_location.current_path pointing at the old (now non-existent) path -
-		// which made those files linger with a phantom path in Duplicados and re-appear
-		// as ALREADY_MOVED skips on every run. Only synced when file_key is a real file
-		// on disk and current_path is not, so a legitimately different row is never
-		// touched.
+		// catalog_file_location.current_path pointing at the old (now non-existent)
+		// path - which made those files linger with a phantom path in Duplicados and
+		// re-appear as ALREADY_MOVED skips on every run. Only synced when file_key is a
+		// real file on disk and current_path is not, so a legitimately different row is
+		// never touched.
 		Set<Long> repairedIds = repairStalePaths(scan.pathSyncs());
 
 		List<Long> missingIds = response.missingOnDiskSamples().stream()

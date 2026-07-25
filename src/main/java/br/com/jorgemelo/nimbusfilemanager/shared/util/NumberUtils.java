@@ -31,9 +31,9 @@ public final class NumberUtils {
 	}
 
 	/**
-	 * Parses {@code value} into an {@link Integer}, returning {@code null} when it is
-	 * null, blank or not a valid integer. Matched as-is (no trimming), preserving the
-	 * strictness of {@link Integer#valueOf(String)}.
+	 * Parses {@code value} into an {@link Integer}, returning {@code null} when it
+	 * is null, blank or not a valid integer. Matched as-is (no trimming),
+	 * preserving the strictness of {@link Integer#valueOf(String)}.
 	 */
 	public static Integer parseIntOrNull(String value) {
 		if (value == null || value.isBlank()) {

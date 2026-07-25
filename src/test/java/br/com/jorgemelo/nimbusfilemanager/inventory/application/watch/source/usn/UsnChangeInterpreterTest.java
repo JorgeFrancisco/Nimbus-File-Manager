@@ -30,7 +30,8 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void reportsAFileCreatedUnderTheRoot() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_CREATE, false, "photo.jpg")));
+		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_CREATE, false,
+				"photo.jpg")));
 
 		Assertions.assertThat(result.reconcileNeeded()).isFalse();
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("photo.jpg"));
@@ -38,21 +39,24 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void ignoresChangesOutsideTheRoot() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, OUTSIDE, UsnReason.FILE_CREATE, false, "x.jpg")));
+		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, OUTSIDE, UsnReason.FILE_CREATE,
+				false, "x.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).isEmpty();
 	}
 
 	@Test
 	void reportsDeletesSoTheReconcileRemovesThem() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_DELETE, false, "gone.jpg")));
+		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_DELETE, false,
+				"gone.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("gone.jpg"));
 	}
 
 	@Test
 	void ignoresNonMaterialFileReasons() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.CLOSE, false, "touched.jpg")));
+		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.CLOSE, false,
+				"touched.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).isEmpty();
 	}
@@ -88,7 +92,8 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void unpairedOldNameStillReportsTheFileLeftBehind() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "moved.jpg")));
+		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME,
+				false, "moved.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("moved.jpg"));
 	}

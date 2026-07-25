@@ -176,7 +176,8 @@ public class MetadataRebuildService {
 		MediaMetadata media = catalogFile.getMetadata();
 
 		if (media == null) {
-			media = MediaMetadata.builder().catalogFile(catalogFile).category(FileType.categoryOf(metadata.getFileType()))
+			media = MediaMetadata.builder().catalogFile(catalogFile)
+					.category(FileType.categoryOf(metadata.getFileType()))
 					.subcategory(metadata.getSubcategory()).build();
 
 			catalogFile.setMetadata(media);

@@ -118,7 +118,8 @@ class ExecutionMapperTest {
 
 	@Test
 	void marksEveryTerminalStatusAsFinishedAndActiveStatusesAsNotFinished() {
-		assertThat(mapper().toResponse(execution(ExecutionStatus.FINISHED_WITH_ERRORS, null, null)).finished()).isTrue();
+		assertThat(mapper().toResponse(execution(ExecutionStatus.FINISHED_WITH_ERRORS, null, null)).finished())
+				.isTrue();
 		assertThat(mapper().toResponse(execution(ExecutionStatus.INTERRUPTED, null, null)).finished()).isTrue();
 		assertThat(mapper().toResponse(execution(ExecutionStatus.ERROR, null, null)).finished()).isTrue();
 		assertThat(mapper().toResponse(execution(ExecutionStatus.CANCELLED, null, null)).finished()).isTrue();

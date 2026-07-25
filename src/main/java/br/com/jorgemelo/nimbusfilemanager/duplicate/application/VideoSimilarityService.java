@@ -35,9 +35,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 
 /**
- * Finds visually related videos. It reassembles each video's sampled frames into
- * a {@link VideoSignature}, buckets candidates by approximate duration so it
- * never runs an all-pairs O(n^2) comparison, and delegates the actual
+ * Finds visually related videos. It reassembles each video's sampled frames
+ * into a {@link VideoSignature}, buckets candidates by approximate duration so
+ * it never runs an all-pairs O(n^2) comparison, and delegates the actual
  * comparison/aggregation to the pluggable {@link VideoSimilarityAlgorithm}
  * (frame pHash pre-filter + SSIM + trimmed mean + concordant-frame quorum). The
  * heavy grouping is cached per threshold by the shared
@@ -137,7 +137,9 @@ public class VideoSimilarityService implements SimilarityGrouping {
 		cache.invalidate();
 	}
 
-	/** Reassembles the per-frame rows (ordered by file then sampleIndex) per video. */
+	/**
+	 * Reassembles the per-frame rows (ordered by file then sampleIndex) per video.
+	 */
 	private List<VideoCandidate> reassemble(List<VideoFrameRawResponse> rows) {
 		List<VideoCandidate> candidates = new ArrayList<>();
 

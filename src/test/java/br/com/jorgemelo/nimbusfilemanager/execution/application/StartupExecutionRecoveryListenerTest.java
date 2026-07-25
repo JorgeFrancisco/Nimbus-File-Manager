@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 
-
 class StartupExecutionRecoveryListenerTest {
 
 	@Test

@@ -21,10 +21,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
  * Needs a Google "App Password" (Google Account &gt; Security &gt; 2-Step
  * Verification &gt; App passwords - requires 2-Step Verification to be turned
  * on first), never the account's regular password. Credentials come from
- * {@code nimbus-file-manager.email.gmail.username}/{@code .password}, which in turn
- * read {@code NIMBUS_FILE_MANAGER_SMTP_USERNAME}/{@code NIMBUS_FILE_MANAGER_SMTP_PASSWORD}
- * environment variables (see application.properties) - they are never committed
- * to the repository or stored in the database.
+ * {@code nimbus-file-manager.email.gmail.username}/{@code .password}, which in
+ * turn read {@code NIMBUS_FILE_MANAGER_SMTP_USERNAME} /
+ * {@code NIMBUS_FILE_MANAGER_SMTP_PASSWORD} environment variables (see
+ * application.properties) - they are never committed to the repository or
+ * stored in the database.
  * <p>
  * Deliberately does <b>not</b> use Spring Boot's auto-configured
  * {@code spring.mail.*} properties / shared {@link JavaMailSender} bean: that

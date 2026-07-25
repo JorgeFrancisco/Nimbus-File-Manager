@@ -36,10 +36,10 @@ public interface FileChangeSource extends Closeable {
 	List<Path> pollChangedFiles();
 
 	/**
-	 * Whether the source lost events or cannot guarantee completeness since the last
-	 * poll (buffer overflow, an invalidated USN cursor, a recreated journal, ...).
-	 * Reading the flag clears it. A {@code true} return asks the watcher for an
-	 * early full reconcile.
+	 * Whether the source lost events or cannot guarantee completeness since the
+	 * last poll (buffer overflow, an invalidated USN cursor, a recreated journal,
+	 * ...). Reading the flag clears it. A {@code true} return asks the watcher for
+	 * an early full reconcile.
 	 */
 	boolean consumeOverflow();
 

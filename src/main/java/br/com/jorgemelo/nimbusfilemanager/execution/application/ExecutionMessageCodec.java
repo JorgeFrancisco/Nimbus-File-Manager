@@ -6,13 +6,15 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
+
 /**
- * Serializes the typed arguments of an {@link br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage}
- * to the JSON array persisted in the {@code message_args} column, and reads them
- * back for localization on the response side. Uses the project's configured
- * Jackson {@link ObjectMapper} so the round-trip matches the rest of the app.
- * An empty argument list is stored as {@code null} (no {@code message_args}), and
- * a {@code null}/blank column decodes back to an empty argument array.
+ * Serializes the typed arguments of an {@link ExecutionMessage} to the JSON
+ * array persisted in the {@code message_args} column, and reads them back for
+ * localization on the response side. Uses the project's configured Jackson
+ * {@link ObjectMapper} so the round-trip matches the rest of the app. An empty
+ * argument list is stored as {@code null} (no {@code message_args}), and a
+ * {@code null}/blank column decodes back to an empty argument array.
  */
 @Component
 public class ExecutionMessageCodec {

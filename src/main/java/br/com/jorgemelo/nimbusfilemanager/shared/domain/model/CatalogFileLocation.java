@@ -26,10 +26,11 @@ import lombok.ToString;
  * {@link MediaGeoLocation}, which is the place in the world.
  *
  * <p>
- * Because {@code catalog_file.file_key} is UNIQUE and is the path itself, a file
- * has exactly one placement: the relationship is 1:1 and shares the identity of
- * {@link CatalogFile} (catalog_file_id), the same pattern used by {@code media},
- * {@code photo} and {@code video}. The DB now guarantees this uniqueness.
+ * Because {@code catalog_file.file_key} is UNIQUE and is the path itself, a
+ * file has exactly one placement: the relationship is 1:1 and shares the
+ * identity of {@link CatalogFile} (catalog_file_id), the same pattern used by
+ * {@code media}, {@code photo} and {@code video}. The DB now guarantees this
+ * uniqueness.
  */
 @Getter
 @Setter

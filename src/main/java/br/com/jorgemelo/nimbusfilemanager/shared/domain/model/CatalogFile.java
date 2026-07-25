@@ -131,8 +131,8 @@ public class CatalogFile {
 	/*
 	 * JPA's default fetch type for @OneToOne is EAGER (unlike @OneToMany, which
 	 * already defaults to LAZY) - without an explicit fetch = LAZY, any code that
-	 * loads a CatalogFile outside a projection DTO (e.g. repository.findById/findAll)
-	 * pays 3 extra SELECTs it usually doesn't need.
+	 * loads a CatalogFile outside a projection DTO (e.g.
+	 * repository.findById/findAll) pays 3 extra SELECTs it usually doesn't need.
 	 */
 	@OneToOne(mappedBy = "catalogFile", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
 	@ToString.Exclude

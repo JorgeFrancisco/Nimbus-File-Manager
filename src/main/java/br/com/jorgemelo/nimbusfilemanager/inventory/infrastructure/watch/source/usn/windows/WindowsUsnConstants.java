@@ -23,7 +23,8 @@ final class WindowsUsnConstants {
 	static final int FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
 	static final int FILE_READ_ATTRIBUTES = 0x00000080;
 
-	// FILE_ID_DESCRIPTOR Type discriminator: FileIdType selects the 8-byte FRN union member.
+	// FILE_ID_DESCRIPTOR Type discriminator: FileIdType selects the 8-byte FRN
+	// union member.
 	static final int FILE_ID_TYPE = 0;
 
 	// GetFinalPathNameByHandle flags and the \\?\ prefix it returns.

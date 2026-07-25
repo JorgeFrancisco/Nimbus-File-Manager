@@ -17,12 +17,12 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoPerceptualHa
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 
 /**
- * Calibration tests for the default video similarity algorithm: they pin how the
- * configurable comparison thresholds (concordant-frame quorum, trimmed-lowest
- * count, per-frame pHash radius, duration/aspect tolerance) turn per-frame
- * agreement into a match percentage. Frames are made concordant with an
- * identical hash + luminance and divergent with an opposite hash (distance 256),
- * so the pHash pre-filter is what drives each frame to 100 or 0.
+ * Calibration tests for the default video similarity algorithm: they pin how
+ * the configurable comparison thresholds (concordant-frame quorum,
+ * trimmed-lowest count, per-frame pHash radius, duration/aspect tolerance) turn
+ * per-frame agreement into a match percentage. Frames are made concordant with
+ * an identical hash + luminance and divergent with an opposite hash (distance
+ * 256), so the pHash pre-filter is what drives each frame to 100 or 0.
  */
 class FfmpegLanczosFramesPhashAlgorithmTest {
 

@@ -21,8 +21,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepos
  * reports both whether it was actually removed and which media file it pointed
  * at, so a no-op caused by a concurrent restore is never counted as a
  * purge.</li>
- * <li>{@link #deleteCatalogFileIfOrphan} is a best-effort cleanup of the catalog
- * row itself, run in its own transaction so an unexpected foreign-key
+ * <li>{@link #deleteCatalogFileIfOrphan} is a best-effort cleanup of the
+ * catalog row itself, run in its own transaction so an unexpected foreign-key
  * constraint from some other table cannot roll back - and thus endlessly retry
  * - the movement/file removal. If it fails, the media file simply stays as
  * {@code DELETED}, which is harmless.</li>
@@ -34,7 +34,8 @@ public class QuarantinePurgePersistence {
 	private final MovementRepository movementRepository;
 	private final CatalogFileRepository catalogFileRepository;
 
-	public QuarantinePurgePersistence(MovementRepository movementRepository, CatalogFileRepository catalogFileRepository) {
+	public QuarantinePurgePersistence(MovementRepository movementRepository,
+			CatalogFileRepository catalogFileRepository) {
 		this.movementRepository = movementRepository;
 		this.catalogFileRepository = catalogFileRepository;
 	}

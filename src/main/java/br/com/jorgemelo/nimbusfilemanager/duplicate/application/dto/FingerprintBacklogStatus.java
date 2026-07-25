@@ -5,8 +5,8 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
  * the DB counts. {@code failed} counts only items that exhausted their attempts
  * (they no longer block the screen); items still being retried count as
  * {@code pending}. The matching similarity tab is blocked while
- * {@link #blocking()} (pending &gt; 0) and unblocks once pending reaches 0, even
- * if there are failures.
+ * {@link #blocking()} (pending &gt; 0) and unblocks once pending reaches 0,
+ * even if there are failures.
  */
 public record FingerprintBacklogStatus(long pending, long done, long failed) {
 

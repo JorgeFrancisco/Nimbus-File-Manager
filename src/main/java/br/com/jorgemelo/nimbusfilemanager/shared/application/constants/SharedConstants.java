@@ -2,14 +2,14 @@ package br.com.jorgemelo.nimbusfilemanager.shared.application.constants;
 
 /**
  * Contract data constants shared across the application UI. The cross-page
- * preference page keys ({@code layout} for the shell theme/sidebar, {@code
- * files} for the Arquivos defaults, {@code app} for the shell locale) are
- * read/written by more than one domain, so they live here instead of in any
+ * preference page keys ({@code layout} for the shell theme/sidebar,
+ * {@code files} for the Arquivos defaults, {@code app} for the shell locale)
+ * are read/written by more than one domain, so they live here instead of in any
  * single controller. The theme preference key and its values are read both when
- * rendering the shell (AppViewModelAdvice) and when the theme is edited from the
- * Preferencias tab. The flash/model feedback keys and the settings redirect are
- * reused by the several web controllers that back the Configuracoes screen. The
- * page-size preference key is written by every server-paginated screen
+ * rendering the shell (AppViewModelAdvice) and when the theme is edited from
+ * the Preferencias tab. The flash/model feedback keys and the settings redirect
+ * are reused by the several web controllers that back the Configuracoes screen.
+ * The page-size preference key is written by every server-paginated screen
  * (Duplicados, Quarentena, ...), so it lives here rather than duplicated inline
  * in each controller.
  */

@@ -36,7 +36,8 @@ class TimelineServiceTest {
 	@Test
 	void shouldBuildDescendingYearAndMonthIndexWithTotals() {
 		when(repository.findCountSummary(eq(FileType.PHOTO), any())).thenReturn(new TimelineCountSummary(36, 35, 1));
-		when(repository.findMonthCounts(eq(FileType.PHOTO), any())).thenReturn(List.of(new TimelineMonthCount(2026, 7, 10),
+		when(repository.findMonthCounts(eq(FileType.PHOTO), any())).thenReturn(List.of(new TimelineMonthCount(2026, 7,
+				10),
 				new TimelineMonthCount(2026, 6, 20), new TimelineMonthCount(2025, 12, 5)));
 
 		TimelineIndex index = new TimelineService(repository, cursorCodec).index(FileType.PHOTO, null);

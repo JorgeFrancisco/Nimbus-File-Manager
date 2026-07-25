@@ -22,7 +22,8 @@ public class MetadataController {
 	}
 
 	@PostMapping("/rebuild")
-	@Operation(summary = "Rebuilds selected metadata fields for files already registered in the inventory", description = "Updates metadata for files already known by the inventory. When refresh is omitted or empty, DATE is rebuilt by default.")
+	@Operation(summary = "Rebuilds selected metadata fields for files already registered in the inventory",
+			description = "Updates metadata for files already known by the inventory. When refresh is omitted or empty, DATE is rebuilt by default.")
 	public MetadataRebuildResponse rebuild(@RequestBody @Valid MetadataRebuildRequest request) {
 		return metadataRebuildService.rebuild(request);
 	}

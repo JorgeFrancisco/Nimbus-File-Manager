@@ -9,10 +9,10 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepo
 
 /**
  * Owns the 2FA-login business decision for {@code POST /login/2fa}: it checks
- * the account lock, verifies the TOTP code, updates the brute-force counters and
- * records the audit log, returning only which outcome the web layer must render.
- * The controller keeps solely the web-security infrastructure (session and
- * {@code SecurityContext}); no business decision lives there.
+ * the account lock, verifies the TOTP code, updates the brute-force counters
+ * and records the audit log, returning only which outcome the web layer must
+ * render. The controller keeps solely the web-security infrastructure (session
+ * and {@code SecurityContext}); no business decision lives there.
  */
 @Service
 public class TwoFactorLoginService {

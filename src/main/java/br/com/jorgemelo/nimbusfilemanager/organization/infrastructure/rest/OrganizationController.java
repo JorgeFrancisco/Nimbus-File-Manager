@@ -42,7 +42,8 @@ public class OrganizationController extends LocalizedComponent {
 	}
 
 	@PostMapping("/preview")
-	@Operation(summary = "Builds a limited organization plan for interactive preview", description = "Calculates target paths and conflicts without persisting a plan and without moving files. The target path cannot be the same as the source path or inside it.")
+	@Operation(summary = "Builds a limited organization plan for interactive preview",
+			description = "Calculates target paths and conflicts without persisting a plan and without moving files. The target path cannot be the same as the source path or inside it.")
 	public OrganizationPlan preview(@RequestBody @Valid OrganizationPreviewRequest request) {
 		if (request.safeLimit() > MAX_INLINE_PREVIEW_LIMIT) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -53,7 +54,8 @@ public class OrganizationController extends LocalizedComponent {
 	}
 
 	@PostMapping("/preview/export")
-	@Operation(summary = "Exports an organization plan as a ZIP file", description = "Builds the complete organization plan and streams it as a downloadable ZIP file containing the JSON preview. This endpoint does not move files.")
+	@Operation(summary = "Exports an organization plan as a ZIP file",
+			description = "Builds the complete organization plan and streams it as a downloadable ZIP file containing the JSON preview. This endpoint does not move files.")
 	public ResponseEntity<StreamingResponseBody> exportPreview(@RequestBody @Valid OrganizationPreviewRequest request) {
 		OrganizationPreviewExport export = organizationPreviewExportService.export(request);
 
@@ -63,13 +65,15 @@ public class OrganizationController extends LocalizedComponent {
 	}
 
 	@PostMapping("/execute")
-	@Operation(summary = "Executes an organization plan and moves the files on disk", description = "Recalculates the organization plan internally, validates conflicts and physically moves files. There is no previewId, dryRun or copy mode in the current contract.")
+	@Operation(summary = "Executes an organization plan and moves the files on disk",
+			description = "Recalculates the organization plan internally, validates conflicts and physically moves files. There is no previewId, dryRun or copy mode in the current contract.")
 	public OrganizationExecuteResponse execute(@RequestBody @Valid OrganizationExecuteRequest request) {
 		return organizationService.execute(request);
 	}
 
 	@PostMapping("/execute/{executionId}/undo")
-	@Operation(summary = "Undoes an organization execution", description = "Moves files from the organization target paths back to their original paths using movement records from the given executionId. Already undone movements are skipped.")
+	@Operation(summary = "Undoes an organization execution",
+			description = "Moves files from the organization target paths back to their original paths using movement records from the given executionId. Already undone movements are skipped.")
 	public OrganizationUndoResponse undo(@PathVariable UUID executionId) {
 		return organizationService.undoPublic(executionId);
 	}

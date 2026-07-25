@@ -3,9 +3,10 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.application;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Thread-safe running totals for a single location rebuild pass. Package-private
- * holder used only by {@link LocationRebuildService}; its counters are updated
- * concurrently by the parallel batch workers, so each is an {@link AtomicLong}.
+ * Thread-safe running totals for a single location rebuild pass.
+ * Package-private holder used only by {@link LocationRebuildService}; its
+ * counters are updated concurrently by the parallel batch workers, so each is
+ * an {@link AtomicLong}.
  */
 final class RebuildCounters {
 

@@ -20,7 +20,8 @@ public class LibraryCatalogCleanupService {
 	private final CatalogFileRepository catalogFileRepository;
 	private final WorkspaceManager workspaceManager;
 
-	public LibraryCatalogCleanupService(CatalogFileRepository catalogFileRepository, WorkspaceManager workspaceManager) {
+	public LibraryCatalogCleanupService(CatalogFileRepository catalogFileRepository,
+			WorkspaceManager workspaceManager) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.workspaceManager = workspaceManager;
 	}

@@ -11,8 +11,8 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService
 
 /**
  * Application-wide {@link Clock} whose zone tracks the
- * {@code nimbus-file-manager.timezone} setting live: {@link #getZone()} reads the
- * current configuration on every call, so changing the time zone on the
+ * {@code nimbus-file-manager.timezone} setting live: {@link #getZone()} reads
+ * the current configuration on every call, so changing the time zone on the
  * settings screen takes effect without a restart. The instant is always the
  * real {@link Instant#now()}; only the zone is configurable, which keeps the
  * stored {@code LocalDateTime}s in the configured zone exactly as before
@@ -47,6 +47,7 @@ public class ConfigurableClock extends Clock {
 		if (this == obj) {
 			return true;
 		}
+
 		if (!(obj instanceof ConfigurableClock other)) {
 			return false;
 		}

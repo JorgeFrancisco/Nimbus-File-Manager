@@ -15,7 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Owns the inventory job's performance instrumentation, extracted from
  * {@link InventoryJobExecutionListener} so the listener keeps a single
- * responsibility (driving the {@link br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution}
+ * responsibility (driving the
+ * {@link br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution}
  * status). Groups the processing metrics, per-phase timings and the telemetry
  * persistence that only make sense together.
  */

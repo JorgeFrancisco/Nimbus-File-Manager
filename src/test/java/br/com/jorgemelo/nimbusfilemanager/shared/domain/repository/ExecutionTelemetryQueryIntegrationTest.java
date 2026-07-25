@@ -27,9 +27,10 @@ import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionM
  * {@code ExecutionMetrics} became unidirectional: they now join
  * {@code execution -> execution_metrics} via an explicit entity join
  * ({@code JOIN ExecutionMetrics m ON m.id = e.id}) instead of navigating the
- * removed {@code Execution.metrics} field. Covers the tricky parts a mock cannot:
- * the INNER-join queries exclude executions without a metrics row, while the
- * LEFT-join lookups still return those rows with null metrics columns.
+ * removed {@code Execution.metrics} field. Covers the tricky parts a mock
+ * cannot: the INNER-join queries exclude executions without a metrics row,
+ * while the LEFT-join lookups still return those rows with null metrics
+ * columns.
  */
 @SpringBootTest
 @Transactional
@@ -78,7 +79,8 @@ class ExecutionTelemetryQueryIntegrationTest {
 					Assertions.assertThat(row.applicationVersion()).isEqualTo("3.0.0.3");
 				});
 
-		// LEFT JOIN by ids: all three returned, most recent first, unmeasured with null metrics.
+		// LEFT JOIN by ids: all three returned, most recent first, unmeasured with null
+		// metrics.
 		Assertions.assertThat(executionRepository.findTelemetryByIds(List.of(measuredOld, measuredNew, unmeasured)))
 				.extracting(ExecutionTelemetryRow::id).containsExactly(unmeasured, measuredNew, measuredOld);
 

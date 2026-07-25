@@ -24,7 +24,8 @@ class AsyncConfigTest {
 
 		ThreadPoolTaskExecutor operational = (ThreadPoolTaskExecutor) config.nimbusFileManagerTaskExecutor();
 		ThreadPoolTaskExecutor geolocation = (ThreadPoolTaskExecutor) config.nimbusFileManagerGeolocationExecutor();
-		ThreadPoolTaskExecutor visualAnalysis = (ThreadPoolTaskExecutor) config.nimbusFileManagerVisualAnalysisExecutor();
+		ThreadPoolTaskExecutor visualAnalysis =
+				(ThreadPoolTaskExecutor) config.nimbusFileManagerVisualAnalysisExecutor();
 
 		try {
 			assertThat(operational.getCorePoolSize()).isEqualTo(2);

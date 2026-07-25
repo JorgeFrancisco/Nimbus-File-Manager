@@ -1,10 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.util;
 
 /**
- * Lenient parsing of user-supplied strings into enum constants: a null, blank or
- * unrecognized value never throws, it resolves to the caller's fallback. Centralizes
- * the {@code try { Enum.valueOf } catch (IllegalArgumentException)} template that web
- * controllers repeated per enum type.
+ * Lenient parsing of user-supplied strings into enum constants: a null, blank
+ * or unrecognized value never throws, it resolves to the caller's fallback.
+ * Centralizes the {@code try { Enum.valueOf } catch (IllegalArgumentException)}
+ * template that web controllers repeated per enum type.
  */
 public final class EnumUtils {
 
@@ -13,9 +13,10 @@ public final class EnumUtils {
 	}
 
 	/**
-	 * Resolves {@code value} to a constant of {@code type}, returning {@code fallback}
-	 * when it is null, blank or does not match any constant. The value is matched as-is
-	 * (no trimming or case folding), preserving the strictness of {@link Enum#valueOf}.
+	 * Resolves {@code value} to a constant of {@code type}, returning
+	 * {@code fallback} when it is null, blank or does not match any constant. The
+	 * value is matched as-is (no trimming or case folding), preserving the
+	 * strictness of {@link Enum#valueOf}.
 	 */
 	public static <E extends Enum<E>> E valueOfOrDefault(Class<E> type, String value, E fallback) {
 		if (value == null || value.isBlank()) {
@@ -29,7 +30,10 @@ public final class EnumUtils {
 		}
 	}
 
-	/** Same as {@link #valueOfOrDefault(Class, String, Enum)} with a {@code null} fallback. */
+	/**
+	 * Same as {@link #valueOfOrDefault(Class, String, Enum)} with a {@code null}
+	 * fallback.
+	 */
 	public static <E extends Enum<E>> E valueOfOrNull(Class<E> type, String value) {
 		return valueOfOrDefault(type, value, null);
 	}

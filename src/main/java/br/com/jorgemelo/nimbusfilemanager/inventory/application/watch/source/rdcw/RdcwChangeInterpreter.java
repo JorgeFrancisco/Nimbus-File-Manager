@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Resolves the root-relative paths from {@code ReadDirectoryChangesW} to absolute
- * paths under the monitored root, de-duplicating within a batch. Pure and
- * native-free (unit-tested on any platform). Back-slash separators from Win32 are
- * accepted; a resolved path that escapes the root (defensive, from a malformed
- * {@code ..}) is dropped.
+ * Resolves the root-relative paths from {@code ReadDirectoryChangesW} to
+ * absolute paths under the monitored root, de-duplicating within a batch. Pure
+ * and native-free (unit-tested on any platform). Back-slash separators from
+ * Win32 are accepted; a resolved path that escapes the root (defensive, from a
+ * malformed {@code ..}) is dropped.
  */
 public class RdcwChangeInterpreter {
 

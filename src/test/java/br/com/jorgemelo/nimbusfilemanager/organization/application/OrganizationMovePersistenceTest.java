@@ -53,7 +53,8 @@ class OrganizationMovePersistenceTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("old.jpg")
 				.modifiedAt(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0)).build();
 
-		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile).currentPath("D:/src/old.jpg")
+		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath("D:/src/old.jpg")
 				.build();
 
 		Path source = tempDir.resolve("old.jpg");

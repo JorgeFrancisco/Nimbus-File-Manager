@@ -17,7 +17,8 @@ class InventoryRunningStateTest {
 	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
 
 	private static ExecutionResponse execution(String type) {
-		return new ExecutionResponse(1L, type, "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1, 0, 0, 0,
+		return new ExecutionResponse(1L, type, "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1, 0, 0,
+				0,
 				0, null, null, "running", false);
 	}
 

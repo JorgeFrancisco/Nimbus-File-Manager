@@ -15,8 +15,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * trimmed mean, per-frame pHash radius, duration/aspect tolerance, candidate
  * cap), so changing them is cheap and never invalidates stored fingerprints -
  * the similarity cache simply recomputes. Parameters that affect the stored
- * fingerprint itself (how many frames are sampled) are <b>not</b> here: they are
- * part of the algorithm's identity (its {@code algorithm} string), because
+ * fingerprint itself (how many frames are sampled) are <b>not</b> here: they
+ * are part of the algorithm's identity (its {@code algorithm} string), because
  * changing them would silently break the {@code sampleIndex} alignment of
  * existing fingerprints. Every value is optional; an unset, out-of-range or
  * invalid value uses a documented fallback and logs a WARN rather than failing
@@ -71,7 +71,8 @@ public record VideoSimilarityProperties(Integer minConcordantFrames, Integer tri
 	}
 
 	public double durationToleranceSecondsOrDefault() {
-		return normalizeDouble("durationToleranceSeconds", durationToleranceSeconds, DEFAULT_DURATION_TOLERANCE_SECONDS);
+		return normalizeDouble("durationToleranceSeconds", durationToleranceSeconds,
+				DEFAULT_DURATION_TOLERANCE_SECONDS);
 	}
 
 	public double aspectRatioToleranceOrDefault() {

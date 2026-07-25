@@ -415,8 +415,9 @@ class MapServiceTest {
 		when(mapRepository.exifPinsInBounds(anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyInt()))
 				.thenReturn(List.of());
 
-		// The region's representative point is ~(-25.45, -49.25); each box excludes it on a
-		// different edge (south, north, west, east), covering every branch of the bounds check.
+		// The region's representative point is ~(-25.45, -49.25); each box excludes it
+		// on a different edge (south, north, west, east), covering every branch of the
+		// bounds check.
 		Assertions.assertThat(service.pins(new MapBounds(-25.4, -49.3, -25.0, -49.2), 100, 12)).isEmpty();
 		Assertions.assertThat(service.pins(new MapBounds(-26.0, -49.3, -25.5, -49.2), 100, 12)).isEmpty();
 		Assertions.assertThat(service.pins(new MapBounds(-26.0, -49.2, -25.0, -49.0), 100, 12)).isEmpty();

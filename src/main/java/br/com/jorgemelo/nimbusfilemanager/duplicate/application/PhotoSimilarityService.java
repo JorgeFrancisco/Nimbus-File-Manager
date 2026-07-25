@@ -81,8 +81,9 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	/**
 	 * Synchronous read used by tests and as a fallback: returns the cached page,
 	 * computing (blocking) on a miss. The Duplicados screen does NOT use this - it
-	 * uses {@link #cachedPage} plus the background {@code PhotoSimilarityAsyncRunner}
-	 * so the page never blocks on the heavy grouping.
+	 * uses {@link #cachedPage} plus the background
+	 * {@code PhotoSimilarityAsyncRunner} so the page never blocks on the heavy
+	 * grouping.
 	 */
 	public Page<SimilarPhotoGroupResponse> groups(Integer minSimilarityPercent, Pageable pageable) {
 		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
@@ -111,7 +112,8 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 
 	/**
 	 * Runs the heavy grouping (clustering + SSIM) for a threshold and caches the
-	 * result, reporting how many candidates have been processed to {@code progress}.
+	 * result, reporting how many candidates have been processed to
+	 * {@code progress}.
 	 */
 	@Override
 	public void computeAndCache(int minSimilarityPercent, SimilarityProgressCallback progress) {

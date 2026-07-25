@@ -33,9 +33,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
  * <p>
  * "Original" = has camera EXIF (manufacturer/model) AND its subcategory is not
  * a derivative marker. The derivative subcategories are {@code WHATSAPP},
- * {@code AIRBRUSH}, {@code PHOTOGRID} and {@code SCREENSHOT} - editor/app outputs
- * and screen captures that are never preferred over a real original (Peachy/other
- * editors currently fall into OTHER - see the media families).
+ * {@code AIRBRUSH}, {@code PHOTOGRID} and {@code SCREENSHOT} - editor/app
+ * outputs and screen captures that are never preferred over a real original
+ * (Peachy/other editors currently fall into OTHER - see the media families).
  */
 @Component
 public class DuplicateKeepPolicy {

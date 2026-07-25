@@ -34,12 +34,12 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>
  * Backed by a single {@link Arena#ofShared() shared arena}: {@code open()},
- * {@code poll()} and {@code close()} run on different threads (the reconfigure /
- * web thread, the single watch thread and the shutdown thread), which a confined
- * arena would reject with {@code WrongThreadException}. The watcher serializes
- * poll and close on its own monitor, so no two of them ever touch the buffers
- * concurrently. The buffer, overlapped block and capture state are allocated once
- * and reused every poll - no per-poll allocation.
+ * {@code poll()} and {@code close()} run on different threads (the reconfigure
+ * / web thread, the single watch thread and the shutdown thread), which a
+ * confined arena would reject with {@code WrongThreadException}. The watcher
+ * serializes poll and close on its own monitor, so no two of them ever touch
+ * the buffers concurrently. The buffer, overlapped block and capture state are
+ * allocated once and reused every poll - no per-poll allocation.
  */
 @Slf4j
 final class FfmRdcwReadSeam implements RdcwReadSeam {

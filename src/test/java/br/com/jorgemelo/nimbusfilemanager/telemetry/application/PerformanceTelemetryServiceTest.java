@@ -44,7 +44,8 @@ class PerformanceTelemetryServiceTest {
 	private ExecutionPhaseRepository executionPhaseRepository;
 
 	private PerformanceTelemetryService service(String version, ZoneId zone) {
-		return new PerformanceTelemetryService(executionRepository, executionMetricsRepository, executionPhaseRepository,
+		return new PerformanceTelemetryService(executionRepository, executionMetricsRepository,
+				executionPhaseRepository,
 				version, Clock.system(zone));
 	}
 
@@ -122,7 +123,8 @@ class PerformanceTelemetryServiceTest {
 
 	@Test
 	void zeroDurationYieldsZeroFilesPerSecondInsteadOfDividingByZero() {
-		// A start == finish execution has zero duration; files/s must be 0, not Infinity/NaN.
+		// A start == finish execution has zero duration; files/s must be 0, not
+		// Infinity/NaN.
 		Execution execution = Execution.builder().id(12L).startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0))
 				.finishedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).filesFound(100).build();
 
@@ -139,9 +141,10 @@ class PerformanceTelemetryServiceTest {
 
 	@Test
 	void computesTrueElapsedAcrossADaylightSavingSpringForward() {
-		// America/New_York springs forward on 2024-03-10 at 02:00 -> 03:00 (offset -05:00 ->
-		// -04:00). The stored LocalDateTimes are 90 wall-clock minutes apart, but only 30
-		// minutes of real time elapsed; the zone-aware conversion measures the real elapsed.
+		// America/New_York springs forward on 2024-03-10 at 02:00 -> 03:00 (offset
+		// -05:00 -> -04:00). The stored LocalDateTimes are 90 wall-clock minutes apart,
+		// but only 30 minutes of real time elapsed; the zone-aware conversion measures
+		// the real elapsed.
 		Execution execution = Execution.builder().id(21L)
 				.startedAt(LocalDateTime.of(2024, Month.MARCH, 10, 1, 45, 0))
 				.finishedAt(LocalDateTime.of(2024, Month.MARCH, 10, 3, 15, 0)).filesFound(10).build();
@@ -151,8 +154,9 @@ class PerformanceTelemetryServiceTest {
 
 		service("v", ZoneId.of("America/New_York")).recordMetrics(21L, null, Map.of());
 
-		// 01:45 EST = 06:45 UTC; 03:15 EDT = 07:15 UTC -> 30 min of real elapsed time. The
-		// zone-less subtraction would instead have reported the 90-minute wall-clock delta.
+		// 01:45 EST = 06:45 UTC; 03:15 EDT = 07:15 UTC -> 30 min of real elapsed time.
+		// The zone-less subtraction would instead have reported the 90-minute
+		// wall-clock delta.
 		Assertions.assertThat(savedMetrics().getDurationMillis()).isEqualTo(1_800_000L);
 	}
 
@@ -172,8 +176,9 @@ class PerformanceTelemetryServiceTest {
 
 	@Test
 	void savesNoMetricsWhenThereIsNothingToRecord() {
-		// No finishedAt (so no duration), no config, no counters: nothing to store, so no
-		// execution_metrics row is created - only the execution's version is stamped.
+		// No finishedAt (so no duration), no config, no counters: nothing to store, so
+		// no execution_metrics row is created - only the execution's version is
+		// stamped.
 		Execution execution = Execution.builder().id(40L)
 				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).filesFound(5).build();
 

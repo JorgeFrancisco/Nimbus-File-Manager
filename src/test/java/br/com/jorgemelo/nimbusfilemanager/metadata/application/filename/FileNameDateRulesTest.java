@@ -33,13 +33,15 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(rule.supports("Captura_20240102_103045.png")).isTrue();
 		Assertions.assertThat(rule.resolve("Screenshot_20240102_103045.png"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(rule.resolve("Screenshot_20240102.png")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
+		Assertions.assertThat(rule.resolve("Screenshot_20240102.png")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY,
+				2, 0, 0));
 	}
 
 	@Test
 	void photoGridShouldResolveDateFromEpochMillis() {
 		// The PhotoGrid_<epochMillis> token carries the creation time (1443567518248 ms
-		// is late September 2015); a fixed UTC clock keeps the conversion deterministic.
+		// is late September 2015); a fixed UTC clock keeps the conversion
+		// deterministic.
 		PhotoGridMediaFamily rule = new PhotoGridMediaFamily(Clock.system(ZoneOffset.UTC));
 
 		Assertions.assertThat(rule.supports("PhotoGrid_1443567518248.jpg")).isTrue();
@@ -61,7 +63,8 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(imageUuid.supports("IMAGE_20240102_103045.jpg")).isTrue();
 		Assertions.assertThat(airBrush.resolve("AirBrush_20240102_103045.jpg"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(airBrush.resolve("AirBrush_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
+		Assertions.assertThat(airBrush.resolve("AirBrush_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY,
+				2, 0, 0));
 		Assertions.assertThat(peachy.resolve("Peachy_20240102_103045.jpg"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
 		Assertions.assertThat(imageUuid.resolve("IMAGE_20240102_103045.jpg"))
@@ -84,7 +87,8 @@ class FileNameDateRulesTest {
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
 		Assertions.assertThat(generic.resolve("VID_20240102_103045.mp4"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(generic.resolve("IMG_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
+		Assertions.assertThat(generic.resolve("IMG_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0,
+				0));
 	}
 
 	@Test

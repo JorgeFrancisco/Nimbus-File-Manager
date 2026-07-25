@@ -13,18 +13,18 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Provides the Windows change source: {@code ReadDirectoryChangesW} for recursive
- * real-time events (single handle, no elevation, no folder lock), plus a one-shot
- * USN journal catch-up when the volume can be opened. Off Windows, or when
- * disabled, it returns empty <em>before</em> touching any JNA class, so the native
- * library never loads on Linux.
+ * Provides the Windows change source: {@code ReadDirectoryChangesW} for
+ * recursive real-time events (single handle, no elevation, no folder lock),
+ * plus a one-shot USN journal catch-up when the volume can be opened. Off
+ * Windows, or when disabled, it returns empty <em>before</em> touching any JNA
+ * class, so the native library never loads on Linux.
  *
  * <p>
  * It only returns empty (letting the factory fall back to the per-directory
  * {@code WatchService}) when even the single-handle recursive watch cannot be
- * opened - a missing USN privilege never causes that fallback, it just skips the
- * catch-up. The platform check and native open are injected seams so selection and
- * fallback are unit-tested on any OS.
+ * opened - a missing USN privilege never causes that fallback, it just skips
+ * the catch-up. The platform check and native open are injected seams so
+ * selection and fallback are unit-tested on any OS.
  */
 @Slf4j
 @Component
@@ -41,7 +41,8 @@ public class WindowsFileChangeSourceProvider implements FileChangeSourceProvider
 		this(properties, cursorStore, WindowsFileChangeSourceProvider::isWindowsOs, opener);
 	}
 
-	WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore, BooleanSupplier windows,
+	WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore,
+			BooleanSupplier windows,
 			WindowsChangeSourceOpener opener) {
 		this.properties = properties;
 		this.cursorStore = cursorStore;

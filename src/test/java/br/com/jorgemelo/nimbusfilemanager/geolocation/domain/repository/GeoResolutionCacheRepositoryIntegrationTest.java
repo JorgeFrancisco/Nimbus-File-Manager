@@ -18,13 +18,14 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 
 /**
- * Runtime check that {@link GeoResolutionCacheRepository#insertIgnoringDuplicate}
- * behaves against a real PostgreSQL instance: it leans on the Postgres-only
+ * Runtime check that
+ * {@link GeoResolutionCacheRepository#insertIgnoringDuplicate} behaves against
+ * a real PostgreSQL instance: it leans on the Postgres-only
  * {@code ON CONFLICT DO NOTHING} to make a concurrent duplicate a no-op instead
  * of a unique-constraint violation that would abort the whole transaction
  * (SQLState 25P02), which is exactly what broke the parallel location rebuild.
- * The SpEL binding of the embedded {@link ResolvedPlace} (enums by name) is also
- * exercised end to end here.
+ * The SpEL binding of the embedded {@link ResolvedPlace} (enums by name) is
+ * also exercised end to end here.
  */
 @SpringBootTest
 @Transactional

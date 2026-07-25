@@ -20,11 +20,12 @@ import lombok.Setter;
 
 /**
  * Persisted position in an NTFS volume's USN Change Journal, so the Windows
- * change source can catch up after a restart instead of rescanning the disk. One
- * row per monitored volume, keyed by the monitored root path. {@code journalId}
- * pins the journal instance - a different value on restart means the journal was
- * recreated and this cursor is stale. {@code nextUsn} is the USN the next read
- * resumes from; it is advanced only after a batch is fully processed.
+ * change source can catch up after a restart instead of rescanning the disk.
+ * One row per monitored volume, keyed by the monitored root path.
+ * {@code journalId} pins the journal instance - a different value on restart
+ * means the journal was recreated and this cursor is stale. {@code nextUsn} is
+ * the USN the next read resumes from; it is advanced only after a batch is
+ * fully processed.
  */
 @Getter
 @Setter

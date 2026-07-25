@@ -33,21 +33,22 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Best-effort auto-repair, split out of {@link OrganizationReconcileService}
- * so that class stays focused on diagnostics (disk vs. database
- * comparison) while this one owns the separate concern of pairing up
- * disappearances with new files and relocating the matching record instead of
- * letting it be marked missing.
+ * Best-effort auto-repair, split out of {@link OrganizationReconcileService} so
+ * that class stays focused on diagnostics (disk vs. database comparison) while
+ * this one owns the separate concern of pairing up disappearances with new
+ * files and relocating the matching record instead of letting it be marked
+ * missing.
  *
  * <p>
  * The JDK's WatchService has no rename event kind, so an OS-level rename
  * reaches InventoryWatchService as a plain delete+create pair,
  * indistinguishable from an unrelated delete followed by an unrelated create
  * elsewhere. {@link #detectAndApplyRenames} pairs up "missing on disk"
- * catalog_file_location rows against "missing in database" disk paths by content
- * (size + sha256) and, only when a pairing is unambiguous, relocates the
- * existing CatalogFile/CatalogFileLocation instead of letting the caller mark it
- * missing while the next inventory creates a duplicate for the new path.
+ * catalog_file_location rows against "missing in database" disk paths by
+ * content (size + sha256) and, only when a pairing is unambiguous, relocates
+ * the existing CatalogFile/CatalogFileLocation instead of letting the caller
+ * mark it missing while the next inventory creates a duplicate for the new
+ * path.
  */
 @Slf4j
 @Service
@@ -58,7 +59,8 @@ public class OrganizationRenameDetectionService {
 	private final DateSourceService dateSourceService;
 	private final Clock clock;
 
-	public OrganizationRenameDetectionService(CatalogFileRepository catalogFileRepository, FileHashService fileHashService,
+	public OrganizationRenameDetectionService(CatalogFileRepository catalogFileRepository,
+			FileHashService fileHashService,
 			DateSourceService dateSourceService, Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.fileHashService = fileHashService;
@@ -119,7 +121,8 @@ public class OrganizationRenameDetectionService {
 			}
 
 			missingByKey
-					.computeIfAbsent(matchKey(catalogFile.getSizeBytes(), catalogFile.getSha256()), _ -> new ArrayList<>())
+					.computeIfAbsent(matchKey(catalogFile.getSizeBytes(), catalogFile.getSha256()),
+							_ -> new ArrayList<>())
 					.add(new MissingEntry(catalogFile, issue.path()));
 		}
 
@@ -183,10 +186,10 @@ public class OrganizationRenameDetectionService {
 
 	/**
 	 * A same size+hash group is unambiguous outright when exactly one missing entry
-	 * and one disk candidate share it - the common case, one CatalogFileLocation went
-	 * missing and one new file appeared with identical content. When several share
-	 * it (equal-content files, e.g. more than one empty file), each entry is only
-	 * paired when exactly one candidate also has its exact filesystem creation
+	 * and one disk candidate share it - the common case, one CatalogFileLocation
+	 * went missing and one new file appeared with identical content. When several
+	 * share it (equal-content files, e.g. more than one empty file), each entry is
+	 * only paired when exactly one candidate also has its exact filesystem creation
 	 * time, which a true rename preserves untouched on NTFS; anything still
 	 * ambiguous after that tie-break is left alone, since a wrong merge is worse
 	 * than a missed one.
@@ -224,8 +227,8 @@ public class OrganizationRenameDetectionService {
 	}
 
 	/**
-	 * Relocates the CatalogFile/matched CatalogFileLocation to the new path instead of
-	 * re-running metadata extraction - the content hash already matched, so
+	 * Relocates the CatalogFile/matched CatalogFileLocation to the new path instead
+	 * of re-running metadata extraction - the content hash already matched, so
 	 * lastAnalysis/analysisVersion are left as-is. Mirrors CatalogFileMapper's
 	 * existing convention of keeping originalPath/originalFolder mirrored to the
 	 * current ones on every update, rather than treating "original" as immutable

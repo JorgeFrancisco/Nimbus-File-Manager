@@ -27,12 +27,12 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 /**
  * Proves the Windows backslash / underscore / drive-root semantics of the
  * reconcile prefix match against a real PostgreSQL engine. The stored paths are
- * plain backslash strings (mere data on the Linux CI DB), and the LIKE pattern is
- * built by {@link PathUtils#descendantLikePattern} with an explicit backslash
- * separator so the test does not depend on the host's file separator. Regression
- * guard for the bug where {@code like concat(folder, '\', '%')} silently matched
- * zero rows because backslash is PostgreSQL's default LIKE escape char and '_' is
- * a LIKE wildcard.
+ * plain backslash strings (mere data on the Linux CI DB), and the LIKE pattern
+ * is built by {@link PathUtils#descendantLikePattern} with an explicit
+ * backslash separator so the test does not depend on the host's file separator.
+ * Regression guard for the bug where {@code like concat(folder, '\', '%')}
+ * silently matched zero rows because backslash is PostgreSQL's default LIKE
+ * escape char and '_' is a LIKE wildcard.
  */
 @SpringBootTest
 @Transactional
@@ -136,7 +136,8 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 
 	private List<String> reconcilePaths(String folder) {
 		return catalogFileLocationRepository
-				.findForReconcile(folder, PathUtils.descendantLikePattern(folder, SEPARATOR), PAGE).getContent().stream()
+				.findForReconcile(folder, PathUtils.descendantLikePattern(folder, SEPARATOR), PAGE).getContent()
+						.stream()
 				.map(MediaLocationReconcileProjection::getCurrentPath).toList();
 	}
 
@@ -147,7 +148,8 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 	}
 
 	private String currentPathOf(Long catalogFileId) {
-		return catalogFileRepository.findById(catalogFileId).map(CatalogFile::getLocation).map(CatalogFileLocation::getCurrentPath)
+		return catalogFileRepository.findById(catalogFileId).map(CatalogFile::getLocation)
+				.map(CatalogFileLocation::getCurrentPath)
 				.orElseThrow();
 	}
 

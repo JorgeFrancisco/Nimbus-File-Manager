@@ -25,7 +25,8 @@ class OrganizationStatisticsTest {
 				item(1, 100L, false, false, false, false),
 				// no date, already organized (same path), 200 bytes
 				item(2, 200L, true, true, false, false),
-				// has date, planned move, null size (counts as 0), target already exists (conflict)
+				// has date, planned move, null size (counts as 0), target already exists
+				// (conflict)
 				item(3, null, false, false, true, false));
 
 		OrganizationStatistics stats = new OrganizationStatistics();

@@ -1,8 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants;
 
 /**
- * Contract data constants for the duplicate domain: the preferences page key for
- * the Duplicados screen and its per-user sub-keys (active tab, view mode,
+ * Contract data constants for the duplicate domain: the preferences page key
+ * for the Duplicados screen and its per-user sub-keys (active tab, view mode,
  * minimum similarity and media-type filter), the similarity bounds shown on the
  * Fotos Semelhantes screen and the fingerprint algorithm identifier the backlog
  * job and its collaborators drain against.

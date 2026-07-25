@@ -185,14 +185,16 @@ class LocationOrganizationPolicyTest {
 		MediaGeoLocation location = MediaGeoLocation.builder()
 				.place(ResolvedPlace.builder().countryName("..").confidence(LocationConfidence.HIGH).build()).build();
 
-		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.MEDIUM,
+		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY,
+				LocationConfidence.MEDIUM,
 				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 	}
 
 	@Test
 	void displayLabelSkipsBlankPartsAndIsNullWhenEverythingIsBlank() {
 		MediaGeoLocation allBlank = MediaGeoLocation.builder().place(ResolvedPlace.builder().cityName("  ")
-				.stateName("  ").countryName("  ").countryCode("  ").confidence(LocationConfidence.HIGH).build()).build();
+				.stateName("  ").countryName("  ").countryCode("  ").confidence(LocationConfidence.HIGH).build())
+						.build();
 
 		Assertions.assertThat(policy.displayLabel(allBlank)).isNull();
 

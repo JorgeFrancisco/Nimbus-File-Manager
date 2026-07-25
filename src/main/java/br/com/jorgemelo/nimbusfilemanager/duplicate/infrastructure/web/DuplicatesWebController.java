@@ -268,8 +268,8 @@ public class DuplicatesWebController extends LocalizedComponent {
 	 * Hides a single file from duplicate comparison (both the exact and the similar
 	 * tab) without touching the file itself: it stays inventoried and visible
 	 * everywhere else. The exact tab reflects it on the next reload because its
-	 * queries filter the exclusion tables directly; the similar tab needs its cached
-	 * grouping cleared so the excluded photo drops out on recompute.
+	 * queries filter the exclusion tables directly; the similar tab needs its
+	 * cached grouping cleared so the excluded photo drops out on recompute.
 	 */
 	@PostMapping("/app/duplicates/exclude/file")
 	@ResponseBody
@@ -284,8 +284,8 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 	/**
 	 * Hides a whole folder (recursively) from duplicate comparison. Same semantics
-	 * as {@link #excludeFile(DuplicateExcludeRequest)}: nothing is deleted, both tabs
-	 * stop comparing every current and future file at or under the folder.
+	 * as {@link #excludeFile(DuplicateExcludeRequest)}: nothing is deleted, both
+	 * tabs stop comparing every current and future file at or under the folder.
 	 */
 	@PostMapping("/app/duplicates/exclude/folder")
 	@ResponseBody
@@ -504,8 +504,8 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private int resolveMinSimilarity(Integer requested, Authentication authentication, boolean videosTab) {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
 
-		// Photos and videos keep independent thresholds - each tab reads and persists its
-		// own preference key.
+		// Photos and videos keep independent thresholds - each tab reads and persists
+		// its own preference key.
 		String key = videosTab ? MIN_SIMILARITY_VIDEO_KEY : MIN_SIMILARITY_KEY;
 
 		if (requested != null) {
@@ -639,10 +639,12 @@ public class DuplicatesWebController extends LocalizedComponent {
 		String reason = reasonText(file.verdict(), file.reason());
 
 		return new DuplicateFileView(file.id(), file.fileName(), file.currentFolder(), file.currentPath(), file.size(),
-				file.modifiedAt(), file.captureDate(), keep, recommendedKeep, image, video, pdf, text, audio, previewUrl,
+				file.modifiedAt(), file.captureDate(), keep, recommendedKeep, image, video, pdf, text, audio,
+						previewUrl,
 				contentUrl, FileTypeIcon.iconClass(file.fileType()), localizedIconLabel(file.fileType()), highlight,
 				highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
-				openTitle(pdf, text, audio), dateSourceLabel(file.dateSource()), dateSourceBadgeClass(file.dateSource()),
+				openTitle(pdf, text, audio), dateSourceLabel(file.dateSource()),
+						dateSourceBadgeClass(file.dateSource()),
 				DateTimeFormatUtils.human(file.captureDate()), DateTimeFormatUtils.human(file.modifiedAt()));
 	}
 

@@ -9,10 +9,10 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
 
 /**
  * Renders the media map page. The map background (tile server URL, attribution,
- * max zoom) and the on/off flag come from {@link AppSettingService}, so an admin
- * can point the map at another provider or a self-hosted tile server, or disable
- * the screen entirely, without a redeploy. The pins themselves are loaded by
- * {@code map.js} from {@code /api/map/pins}.
+ * max zoom) and the on/off flag come from {@link AppSettingService}, so an
+ * admin can point the map at another provider or a self-hosted tile server, or
+ * disable the screen entirely, without a redeploy. The pins themselves are
+ * loaded by {@code map.js} from {@code /api/map/pins}.
  */
 @Controller
 public class MapWebController {

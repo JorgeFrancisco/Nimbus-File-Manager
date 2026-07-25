@@ -9,9 +9,9 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Vide
 
 /**
  * Parameter object bundling the video-similarity collaborators the Duplicados
- * screen needs, so {@link DuplicatesWebController}'s constructor stays within the
- * parameter limit (the video "Vídeos semelhantes" tab mirrors the photo tab and
- * would otherwise add four more constructor arguments).
+ * screen needs, so {@link DuplicatesWebController}'s constructor stays within
+ * the parameter limit (the video "Vídeos semelhantes" tab mirrors the photo tab
+ * and would otherwise add four more constructor arguments).
  */
 @Component
 public class VideoSimilarityWeb {

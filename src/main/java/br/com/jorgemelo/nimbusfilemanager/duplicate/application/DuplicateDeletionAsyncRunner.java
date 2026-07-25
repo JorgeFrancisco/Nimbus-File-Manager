@@ -87,10 +87,10 @@ public class DuplicateDeletionAsyncRunner extends LocalizedComponent {
 	/**
 	 * Releases the claim taken by {@link #start(int)} when the async submission of
 	 * {@link #run(Collection)} is rejected (shared executor saturated or shutting
-	 * down). Without it the {@code running} flag would stay {@code true} forever and
-	 * every future deletion would be refused until the app restarts, because the
-	 * {@code finally} in {@link #run(Collection)} never runs when the task is never
-	 * submitted.
+	 * down). Without it the {@code running} flag would stay {@code true} forever
+	 * and every future deletion would be refused until the app restarts, because
+	 * the {@code finally} in {@link #run(Collection)} never runs when the task is
+	 * never submitted.
 	 */
 	public void releaseRejectedSubmission() {
 		lastResult.set(new DuplicateDeletionResult(true, total.get(), 0, 0, total.get(), null,

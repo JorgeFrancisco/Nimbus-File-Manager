@@ -19,7 +19,8 @@ class AccessLogLabelsTest {
 		Assertions.assertThat(labels.eventType(SecurityConstants.LOGIN_2FA_FAILURE)).isEqualTo("Falha no 2FA");
 		Assertions.assertThat(labels.eventType(SecurityConstants.ACCOUNT_LOCKED)).isEqualTo("Conta bloqueada");
 		Assertions.assertThat(labels.eventType(SecurityConstants.LOGOUT)).isEqualTo("Logout");
-		Assertions.assertThat(labels.eventType(SecurityConstants.LOGOUT_INACTIVITY)).isEqualTo("Logout por inatividade");
+		Assertions.assertThat(labels.eventType(SecurityConstants.LOGOUT_INACTIVITY))
+				.isEqualTo("Logout por inatividade");
 	}
 
 	@Test
@@ -55,7 +56,8 @@ class AccessLogLabelsTest {
 				.isEqualTo("Conta ainda não confirmada.");
 		Assertions.assertThat(labels.messageLabel(AccessMessages.ACCOUNT_TEMPORARILY_LOCKED))
 				.isEqualTo("Conta temporariamente bloqueada após muitas tentativas malsucedidas.");
-		Assertions.assertThat(labels.messageLabel(AccessMessages.INVALID_CREDENTIALS)).isEqualTo("Credenciais inválidas.");
+		Assertions.assertThat(labels.messageLabel(AccessMessages.INVALID_CREDENTIALS))
+				.isEqualTo("Credenciais inválidas.");
 		Assertions.assertThat(labels.messageLabel(AccessMessages.LOGOUT_COMPLETED)).isEqualTo("Logout concluído.");
 		Assertions.assertThat(labels.messageLabel(AccessMessages.LOGOUT_BY_INACTIVITY))
 				.isEqualTo("Logout por inatividade.");

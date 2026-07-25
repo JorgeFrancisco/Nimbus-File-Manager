@@ -36,8 +36,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
  * of a pin. EXIF media pin at their real (4-decimal rounded) coordinate;
  * coordinate-less media fall back to the representative point of their deepest
  * known administrative region (municipality &gt; state &gt; country). The
- * {@code pinId} is an opaque, self-describing token so the client never parses a
- * coordinate/region contract.
+ * {@code pinId} is an opaque, self-describing token so the client never parses
+ * a coordinate/region contract.
  */
 @Service
 public class MapService {

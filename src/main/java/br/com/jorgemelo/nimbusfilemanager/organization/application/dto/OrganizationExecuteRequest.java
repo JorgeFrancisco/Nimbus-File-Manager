@@ -6,6 +6,7 @@ import java.util.List;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.MoveResult;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -17,23 +18,34 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 public record OrganizationExecuteRequest(
-		@Schema(description = "Folder used as organization source.", example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
-		@Schema(description = "Folder used as organization target.", example = "C:/nimbus-file-manager/workspace/organized") @NotBlank String targetPath,
+		@Schema(description = "Folder used as organization source.",
+				example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
+		@Schema(description = "Folder used as organization target.",
+				example = "C:/nimbus-file-manager/workspace/organized") @NotBlank String targetPath,
 		@Schema(description = "Scan source subfolders recursively.", example = "true") Boolean recursive,
 		@Schema(description = "Organization folder layout.", example = "DEFAULT") OrganizationLayout layout,
 		@Schema(description = "Maximum number of items to process.", example = "10000") Integer limit,
 		@Schema(description = "Rebuild metadata before planning.", example = "false") Boolean rebuildMetadata,
-		@Schema(description = "Metadata fields rebuilt when rebuildMetadata is true.", example = "[\"DATE\", \"MIME\", \"GPS\"]") List<MetadataRebuildField> rebuild,
-		@Schema(description = "Ignore files that are already in the expected organized location.", example = "true") Boolean skipAlreadyOrganized,
+		@Schema(description = "Metadata fields rebuilt when rebuildMetadata is true.",
+				example = "[\"DATE\", \"MIME\", \"GPS\"]") List<MetadataRebuildField> rebuild,
+		@Schema(description = "Ignore files that are already in the expected organized location.",
+				example = "true") Boolean skipAlreadyOrganized,
 		@Schema(description = "Optional category filter.", example = "[\"MEDIA\"]") List<FileCategory> onlyCategories,
-		@Schema(description = "Optional subcategory filter.", example = "[\"CAMERA\"]") List<MediaSubcategory> onlySubcategories,
-		@Schema(description = "Optional extension filter without dots.", example = "[\"jpg\", \"mp4\"]") List<String> onlyExtensions,
-		@Schema(description = "Optional file type filter.", example = "[\"PHOTO\", \"VIDEO\"]") List<FileType> onlyFileTypes,
-		@Schema(description = "When false, any conflict rejects the whole execution before moving files.", example = "false") Boolean allowConflicts,
+		@Schema(description = "Optional subcategory filter.",
+				example = "[\"CAMERA\"]") List<MediaSubcategory> onlySubcategories,
+		@Schema(description = "Optional extension filter without dots.",
+				example = "[\"jpg\", \"mp4\"]") List<String> onlyExtensions,
+		@Schema(description = "Optional file type filter.",
+				example = "[\"PHOTO\", \"VIDEO\"]") List<FileType> onlyFileTypes,
+		@Schema(description = "When false, any conflict rejects the whole execution before moving files.",
+				example = "false") Boolean allowConflicts,
 		@Schema(description = "Allow replacing an existing target file.", example = "false") Boolean overwriteExisting,
-		@Schema(description = "Geographic subdivision inserted under the layout (default NONE).", example = "COUNTRY_STATE_CITY") LocationSubdivision locationSubdivision,
-		@Schema(description = "Minimum confidence for the geographic subdivision; null accepts any confidence.", example = "HIGH") LocationConfidence locationMinConfidence,
-		@Schema(description = "What to do when location is missing or below the minimum confidence (default IGNORE).", example = "IGNORE") LocationFallbackMode locationFallback,
+		@Schema(description = "Geographic subdivision inserted under the layout (default NONE).",
+				example = "COUNTRY_STATE_CITY") LocationSubdivision locationSubdivision,
+		@Schema(description = "Minimum confidence for the geographic subdivision; null accepts any confidence.",
+				example = "HIGH") LocationConfidence locationMinConfidence,
+		@Schema(description = "What to do when location is missing or below the minimum confidence (default IGNORE).",
+				example = "IGNORE") LocationFallbackMode locationFallback,
 		@Schema(description = "Dry-run: run the full execute flow as a simulation, blocked from touching disk or database. Used by preview.", example = "false") Boolean dryRun) {
 
 	/**
@@ -106,10 +118,9 @@ public record OrganizationExecuteRequest(
 	/**
 	 * When true, the execute flow runs as a dry-run: every side effect (physical
 	 * move, catalog persistence, movement recording) is blocked, but all read-only
-	 * checks run, so the simulated
-	 * {@link br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.MoveResult} of each item
-	 * matches exactly what a real execute would produce. This is how preview is a
-	 * true simulator of execute.
+	 * checks run, so the simulated {@link MoveResult} of each item matches exactly
+	 * what a real execute would produce. This is how preview is a true simulator
+	 * of execute.
 	 */
 	public boolean dryRunValue() {
 		return dryRun != null && dryRun;

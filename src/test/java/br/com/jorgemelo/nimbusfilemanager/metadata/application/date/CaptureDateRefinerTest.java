@@ -76,7 +76,8 @@ class CaptureDateRefinerTest {
 	void shouldBeNullSafe() {
 		Assertions.assertThat(refiner.refine(null, DateSource.FILE_NAME, null, null).captureDate()).isNull();
 
-		RefinedDate onlyCreated = refiner.refine(NAME_DAY, DateSource.FILE_NAME, LocalDateTime.of(2024, Month.JANUARY, 2, 8, 0),
+		RefinedDate onlyCreated = refiner.refine(NAME_DAY, DateSource.FILE_NAME, LocalDateTime.of(2024, Month.JANUARY,
+				2, 8, 0),
 				null);
 
 		Assertions.assertThat(onlyCreated.captureDate()).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 8, 0));

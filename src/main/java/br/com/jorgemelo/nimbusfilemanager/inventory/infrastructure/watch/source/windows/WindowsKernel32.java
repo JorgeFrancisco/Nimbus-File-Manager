@@ -18,19 +18,20 @@ import java.nio.charset.StandardCharsets;
 /**
  * The single Foreign Function &amp; Memory (FFM) binding to the
  * {@code kernel32.dll} functions the Windows change source needs. Every native
- * call in the project goes through here: the {@link Linker}, {@link SymbolLookup},
- * {@code MethodHandle}s and {@code FunctionDescriptor}s live only in this class, so
- * no other class ever touches the FFM calling machinery. Symbols are resolved once
- * into static handles and reused for the process lifetime - a symbol is never
- * looked up nor a descriptor rebuilt per call.
+ * call in the project goes through here: the {@link Linker},
+ * {@link SymbolLookup}, {@code MethodHandle}s and {@code FunctionDescriptor}s
+ * live only in this class, so no other class ever touches the FFM calling
+ * machinery. Symbols are resolved once into static handles and reused for the
+ * process lifetime - a symbol is never looked up nor a descriptor rebuilt per
+ * call.
  *
  * <p>
- * Win32 {@code BOOL} is a 32-bit int (nonzero = success) and {@code HANDLE} is a
- * pointer, so handles are modelled as {@link MemorySegment} addresses. The last OS
- * error is captured per call via {@link Linker.Option#captureCallState} and read
- * with {@link #lastError(MemorySegment)} - the FFM equivalent of JNA's old
- * {@code Native.getLastError()}. The class initialises (and thus loads kernel32)
- * lazily on first use, so it stays inert off Windows.
+ * Win32 {@code BOOL} is a 32-bit int (nonzero = success) and {@code HANDLE} is
+ * a pointer, so handles are modelled as {@link MemorySegment} addresses. The
+ * last OS error is captured per call via {@link Linker.Option#captureCallState}
+ * and read with {@link #lastError(MemorySegment)} - the FFM equivalent of JNA's
+ * old {@code Native.getLastError()}. The class initialises (and thus loads
+ * kernel32) lazily on first use, so it stays inert off Windows.
  */
 public final class WindowsKernel32 {
 
@@ -44,24 +45,29 @@ public final class WindowsKernel32 {
 	private static final VarHandle LAST_ERROR = CAPTURE_LAYOUT
 			.varHandle(MemoryLayout.PathElement.groupElement("GetLastError"));
 
-	// HANDLE CreateFileW(name, access, share, securityAttributes, disposition, flags, template).
+	// HANDLE CreateFileW(name, access, share, securityAttributes, disposition,
+	// flags, template).
 	private static final MethodHandle CREATE_FILE_W = capturing("CreateFileW",
 			FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS));
-	// BOOL ReadDirectoryChangesW(dir, buffer, len, watchSubtree, filter, bytesReturned, overlapped, completion).
+	// BOOL ReadDirectoryChangesW(dir, buffer, len, watchSubtree, filter,
+	// bytesReturned, overlapped, completion).
 	private static final MethodHandle READ_DIRECTORY_CHANGES_W = capturing("ReadDirectoryChangesW",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
 	// BOOL GetOverlappedResult(file, overlapped, bytesTransferred, wait).
 	private static final MethodHandle GET_OVERLAPPED_RESULT = capturing("GetOverlappedResult",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
-	// BOOL DeviceIoControl(device, code, in, inSize, out, outSize, bytesReturned, overlapped).
+	// BOOL DeviceIoControl(device, code, in, inSize, out, outSize, bytesReturned,
+	// overlapped).
 	private static final MethodHandle DEVICE_IO_CONTROL = capturing("DeviceIoControl",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
 	// BOOL CloseHandle(object).
 	private static final MethodHandle CLOSE_HANDLE = capturing("CloseHandle",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS));
-	// BOOL CancelIo(file) - the failure path never inspects the error, so it is not captured.
+	// BOOL CancelIo(file) - the failure path never inspects the error, so it is not
+	// captured.
 	private static final MethodHandle CANCEL_IO = plain("CancelIo", FunctionDescriptor.of(JAVA_INT, ADDRESS));
-	// HANDLE OpenFileById(volumeHint, fileId, access, share, securityAttributes, flags).
+	// HANDLE OpenFileById(volumeHint, fileId, access, share, securityAttributes,
+	// flags).
 	private static final MethodHandle OPEN_FILE_BY_ID = plain("OpenFileById",
 			FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT));
 	// DWORD GetFinalPathNameByHandleW(file, buffer, cch, flags).
@@ -98,7 +104,10 @@ public final class WindowsKernel32 {
 		return allocator.allocateFrom(text, StandardCharsets.UTF_16LE);
 	}
 
-	/** Whether a {@code CreateFileW}/{@code OpenFileById} result is null or {@code INVALID_HANDLE_VALUE}. */
+	/**
+	 * Whether a {@code CreateFileW}/{@code OpenFileById} result is null or
+	 * {@code INVALID_HANDLE_VALUE}.
+	 */
 	public static boolean isInvalidHandle(MemorySegment handle) {
 		return handle == null || handle.address() == 0L || handle.address() == INVALID_HANDLE_VALUE;
 	}
@@ -183,8 +192,9 @@ public final class WindowsKernel32 {
 		}
 	}
 
-	// A downcall only throws for a JVM-level fault (a closed arena, a wrong-thread access): never for a
-	// Win32 failure, which surfaces as a false/INVALID_HANDLE_VALUE return the caller already handles.
+	// A downcall only throws for a JVM-level fault (a closed arena, a wrong-thread
+	// access): never for a Win32 failure, which surfaces as a
+	// false/INVALID_HANDLE_VALUE return the caller already handles.
 	private static RuntimeException invocationFailed(String symbol, Throwable failure) {
 		if (failure instanceof Error error) {
 			throw error;

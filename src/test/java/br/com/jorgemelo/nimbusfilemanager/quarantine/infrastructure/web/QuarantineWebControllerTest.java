@@ -231,7 +231,8 @@ class QuarantineWebControllerTest {
 	private QuarantineItemResponse item(String name, boolean presentInQuarantine) {
 		return new QuarantineItemResponse(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), name,
 				"C:\\lib\\" + name, "C:\\lib", "C:\\trash\\" + name, "C:\\trash", 100L, "100 B", LocalDateTime.now(),
-				presentInQuarantine, true, false, "PHOTO", "bi-file-earmark-image-fill image", "filetype.image", true, false,
+				presentInQuarantine, true, false, "PHOTO", "bi-file-earmark-image-fill image", "filetype.image", true,
+						false,
 				false, false, false, "/api/media/x/content");
 	}
 }

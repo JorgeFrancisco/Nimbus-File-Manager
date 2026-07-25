@@ -21,12 +21,12 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdc
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 
 /**
- * End-to-end validation of the real {@code ReadDirectoryChangesW} source against
- * the actual file system - <b>without elevation</b>, which is the whole point:
- * one directory handle on the root, recursive detection, and no folder lock.
- * Windows-only ({@link EnabledOnOs}); self-skips only if even the directory handle
- * cannot be opened. The USN catch-up is skipped silently here (no privilege), so
- * this exercises the real-time path alone.
+ * End-to-end validation of the real {@code ReadDirectoryChangesW} source
+ * against the actual file system - <b>without elevation</b>, which is the whole
+ * point: one directory handle on the root, recursive detection, and no folder
+ * lock. Windows-only ({@link EnabledOnOs}); self-skips only if even the
+ * directory handle cannot be opened. The USN catch-up is skipped silently here
+ * (no privilege), so this exercises the real-time path alone.
  */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsRdcwIntegrationTest {

@@ -25,12 +25,15 @@ class UsnJournalReaderTest {
 
 	@Test
 	void drainsEveryBatchAndAdvancesTheCursorToTheEnd() {
-		byte[] first = UsnRecordBuffers.recordBytes(1L, 100L, SUB_A, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+		byte[] first = UsnRecordBuffers.recordBytes(1L, 100L, SUB_A, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL,
 				"one.jpg");
-		byte[] second = UsnRecordBuffers.recordBytes(2L, 101L, SUB_A, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+		byte[] second = UsnRecordBuffers.recordBytes(2L, 101L, SUB_A, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL,
 				"two.jpg");
 
-		CountingUsnVolume volume = new CountingUsnVolume(List.of(new UsnReadResult(50L, first), new UsnReadResult(100L, second)));
+		CountingUsnVolume volume = new CountingUsnVolume(List.of(new UsnReadResult(50L, first), new UsnReadResult(100L,
+				second)));
 
 		UsnJournalReader reader = reader(volume, 0L);
 
@@ -45,9 +48,11 @@ class UsnJournalReaderTest {
 	@Test
 	void aggregatesTheReconcileSignalFromADirectoryMove() {
 		byte[] batch = UsnRecordBuffers.concat(
-				UsnRecordBuffers.recordBytes(1L, 500L, SUB_A, UsnReason.RENAME_OLD_NAME, UsnRecordBuffers.ATTR_DIRECTORY,
+				UsnRecordBuffers.recordBytes(1L, 500L, SUB_A, UsnReason.RENAME_OLD_NAME,
+						UsnRecordBuffers.ATTR_DIRECTORY,
 						"2023"),
-				UsnRecordBuffers.recordBytes(2L, 500L, SUB_A, UsnReason.RENAME_NEW_NAME, UsnRecordBuffers.ATTR_DIRECTORY,
+				UsnRecordBuffers.recordBytes(2L, 500L, SUB_A, UsnReason.RENAME_NEW_NAME,
+						UsnRecordBuffers.ATTR_DIRECTORY,
 						"2024"));
 
 		CountingUsnVolume volume = new CountingUsnVolume(List.of(new UsnReadResult(60L, batch)));
@@ -71,11 +76,14 @@ class UsnJournalReaderTest {
 
 	@Test
 	void stopsWhenTheJournalDoesNotAdvanceToAvoidSpinning() {
-		byte[] batch = UsnRecordBuffers.recordBytes(1L, 100L, SUB_A, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+		byte[] batch = UsnRecordBuffers.recordBytes(1L, 100L, SUB_A, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL,
 				"stuck.jpg");
 
-		// nextStartUsn (100) does not move past the start cursor (100): one pass, then stop.
-		CountingUsnVolume volume = new CountingUsnVolume(List.of(new UsnReadResult(100L, batch), new UsnReadResult(100L, batch)));
+		// nextStartUsn (100) does not move past the start cursor (100): one pass, then
+		// stop.
+		CountingUsnVolume volume = new CountingUsnVolume(List.of(new UsnReadResult(100L, batch), new UsnReadResult(100L,
+				batch)));
 
 		UsnJournalReader reader = reader(volume, 100L);
 

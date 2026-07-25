@@ -24,19 +24,20 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.windows.WindowsKernel32;
 
 /**
- * The FFM implementation of {@link UsnPathResolver}: opens a directory by its FRN
- * with {@code OpenFileById} (using the volume handle as the hint) and reads its
- * path back with {@code GetFinalPathNameByHandleW}. Returns empty when the FRN can
- * no longer be opened (e.g. the directory was deleted) - the interpreter then
- * treats the change as outside the tree and the periodic reconcile is the safety
- * net. Shares (never closes) the volume handle owned by {@link FfmUsnVolume}, and
- * uses a short-lived confined arena per resolution.
+ * The FFM implementation of {@link UsnPathResolver}: opens a directory by its
+ * FRN with {@code OpenFileById} (using the volume handle as the hint) and reads
+ * its path back with {@code GetFinalPathNameByHandleW}. Returns empty when the
+ * FRN can no longer be opened (e.g. the directory was deleted) - the
+ * interpreter then treats the change as outside the tree and the periodic
+ * reconcile is the safety net. Shares (never closes) the volume handle owned by
+ * {@link FfmUsnVolume}, and uses a short-lived confined arena per resolution.
  */
 final class FfmUsnPathResolver implements UsnPathResolver {
 
 	private static final int PATH_BUFFER_CHARS = 520;
 
-	// FILE_ID_DESCRIPTOR: dwSize(4) + Type(4) + union{ LARGE_INTEGER FileId; FILE_ID_128; } = 24 bytes.
+	// FILE_ID_DESCRIPTOR: dwSize(4) + Type(4) + union{ LARGE_INTEGER FileId;
+	// FILE_ID_128; } = 24 bytes.
 	private static final StructLayout FILE_ID_DESCRIPTOR = MemoryLayout.structLayout(JAVA_INT.withName("dwSize"),
 			JAVA_INT.withName("Type"), JAVA_LONG.withName("FileId"), MemoryLayout.paddingLayout(8));
 	private static final VarHandle DESCRIPTOR_SIZE = FILE_ID_DESCRIPTOR.varHandle(groupElement("dwSize"));

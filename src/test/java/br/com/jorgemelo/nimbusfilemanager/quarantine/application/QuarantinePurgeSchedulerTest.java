@@ -38,9 +38,9 @@ class QuarantinePurgeSchedulerTest {
 
 	@Test
 	void purgeIsFailSafeWhenTheRetentionSettingIsBlankOrInvalid() {
-		// A blank/invalid retention resolves to the fallback inside AppSettingService, so the
-		// scheduler must pass a non-positive fallback: an unreadable window disables the
-		// destructive purge instead of silently defaulting to 90 days.
+		// A blank/invalid retention resolves to the fallback inside AppSettingService,
+		// so the scheduler must pass a non-positive fallback: an unreadable window
+		// disables the destructive purge instead of silently defaulting to 90 days.
 		when(appSettingService.intValue(eq(SettingsConstants.TRASH_RETENTION_DAYS), anyInt()))
 				.thenAnswer(invocation -> invocation.getArgument(1));
 

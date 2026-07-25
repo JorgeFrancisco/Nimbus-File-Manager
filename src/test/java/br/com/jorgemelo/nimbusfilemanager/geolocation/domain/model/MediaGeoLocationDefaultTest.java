@@ -4,9 +4,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code manual} is a primitive {@code boolean}, so it defaults to {@code false}
- * both via the no-args constructor and the builder - no null third state,
- * matching the DB {@code DEFAULT FALSE}.
+ * {@code manual} is a primitive {@code boolean}, so it defaults to
+ * {@code false} both via the no-args constructor and the builder - no null
+ * third state, matching the DB {@code DEFAULT FALSE}.
  */
 class MediaGeoLocationDefaultTest {
 

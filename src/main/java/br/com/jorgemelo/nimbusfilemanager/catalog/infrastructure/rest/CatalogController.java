@@ -28,7 +28,8 @@ public class CatalogController extends LocalizedComponent {
 	}
 
 	@GetMapping("/export")
-	@Operation(summary = "Exports the whole media catalog as a downloadable file", description = "Streams every catalog_file with its location as CSV (default) or JSON. Read-only: it never touches files or the catalog.")
+	@Operation(summary = "Exports the whole media catalog as a downloadable file",
+			description = "Streams every catalog_file with its location as CSV (default) or JSON. Read-only: it never touches files or the catalog.")
 	public ResponseEntity<StreamingResponseBody> export(
 			@RequestParam(required = false, defaultValue = "csv") String format) {
 		CatalogExport export = catalogExportService.export(resolveFormat(format));

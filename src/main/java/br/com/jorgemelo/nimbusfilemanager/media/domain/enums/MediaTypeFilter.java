@@ -14,8 +14,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
  * Coarse media-type groups used by the Duplicados screen's type filter. Each
  * group expands to the concrete {@link FileType}s it covers, so the five
  * checkboxes (photos, videos, audio, documents, others) together span every
- * FileType. Groups are derived from {@link FileCategory} where possible, so they
- * never drift if new FileTypes are added.
+ * FileType. Groups are derived from {@link FileCategory} where possible, so
+ * they never drift if new FileTypes are added.
  */
 public enum MediaTypeFilter {
 

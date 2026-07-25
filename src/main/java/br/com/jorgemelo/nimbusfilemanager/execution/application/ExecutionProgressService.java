@@ -89,10 +89,10 @@ public class ExecutionProgressService {
 	/**
 	 * Lightweight, high-frequency progress refresh used <em>while</em> a chunk is
 	 * still being processed, so the live progress screen advances smoothly instead
-	 * of freezing between chunk commits. It updates the execution row's counters and
-	 * message but records <strong>no</strong> {@link ExecutionStep}: the per-chunk
-	 * {@link #updateProgress} keeps the durable step trail, so these granular updates
-	 * never flood the steps table.
+	 * of freezing between chunk commits. It updates the execution row's counters
+	 * and message but records <strong>no</strong> {@link ExecutionStep}: the
+	 * per-chunk {@link #updateProgress} keeps the durable step trail, so these
+	 * granular updates never flood the steps table.
 	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void updateLiveProgress(Execution execution, int filesFound, int filesAnalyzed, int cacheHits, int errors,

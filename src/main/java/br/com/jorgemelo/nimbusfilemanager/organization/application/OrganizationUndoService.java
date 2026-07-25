@@ -205,7 +205,8 @@ public class OrganizationUndoService {
 		CatalogFileLocation location = catalogFileLocationRepository
 				.findByCatalogFileIdAndCurrentPath(catalogFile.getId(), PathUtils.normalize(target))
 				.orElseThrow(() -> new IllegalStateException(
-						"CatalogFileLocation not found for catalogFileId=" + catalogFile.getId() + " and path=" + target));
+						"CatalogFileLocation not found for catalogFileId=" + catalogFile.getId() + " and path="
+								+ target));
 		Path parent = requireParent(source, "organization source");
 
 		catalogFile.setFileKey(PathUtils.normalize(source));

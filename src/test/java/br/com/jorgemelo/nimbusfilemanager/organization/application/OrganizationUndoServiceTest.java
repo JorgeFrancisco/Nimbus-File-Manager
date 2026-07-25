@@ -287,10 +287,10 @@ class OrganizationUndoServiceTest {
 
 	@Test
 	void undoLocksTheOriginalRestorePathsNotOnlyTheExecutionRoot() {
-		// A DEDUP_DELETE execution's source/target are both the quarantine root, yet each
-		// file is restored to its ORIGINAL path (movement.sourcePath), which lies outside
-		// the root. The lock must cover those paths too, or a concurrent organization on the
-		// original tree would race the restore.
+		// A DEDUP_DELETE execution's source/target are both the quarantine root, yet
+		// each file is restored to its ORIGINAL path (movement.sourcePath), which lies
+		// outside the root. The lock must cover those paths too, or a concurrent
+		// organization on the original tree would race the restore.
 		Path quarantineRoot = tempDir.resolve("trash");
 		Path original = tempDir.resolve("library").resolve("photo.jpg");
 		Path quarantineCopy = quarantineRoot.resolve("exec-1").resolve("10__photo.jpg");
@@ -303,7 +303,8 @@ class OrganizationUndoServiceTest {
 
 		Movement movement = Movement.builder().id(100L).execution(dedup).catalogFile(catalogFile)
 				.sourcePath(original.toAbsolutePath().normalize().toString())
-				.targetPath(quarantineCopy.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED).build();
+				.targetPath(quarantineCopy.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED)
+						.build();
 
 		OperationLockService lockService = mock(OperationLockService.class);
 

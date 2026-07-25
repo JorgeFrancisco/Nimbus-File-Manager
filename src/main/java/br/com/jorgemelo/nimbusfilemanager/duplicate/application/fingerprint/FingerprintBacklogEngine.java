@@ -22,12 +22,12 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoord
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
 
 /**
- * Media-agnostic engine that drains a fingerprint backlog OUTSIDE the inventory.
- * It knows nothing about photos or videos: it drives a {@link FingerprintProducer}
- * through the batch loop (fetch pending → hash in parallel on the shared
- * {@link ProcessingCoordinator} → persist the batch in its own short
- * transaction), records/retires failures, and yields to any active inventory.
- * Because "done"/"failed" are the {@code media_fingerprint}/
+ * Media-agnostic engine that drains a fingerprint backlog OUTSIDE the
+ * inventory. It knows nothing about photos or videos: it drives a
+ * {@link FingerprintProducer} through the batch loop (fetch pending → hash in
+ * parallel on the shared {@link ProcessingCoordinator} → persist the batch in
+ * its own short transaction), records/retires failures, and yields to any
+ * active inventory. Because "done"/"failed" are the {@code media_fingerprint}/
  * {@code fingerprint_failure} rows themselves, a crash only loses the in-flight
  * batch and the next run re-derives the rest.
  *
@@ -126,7 +126,9 @@ class FingerprintBacklogEngine {
 					progress.onProgress(baseProcessed + done, baseFailed);
 				}
 			});
-			BatchCounts counts = Objects.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
+
+			BatchCounts counts = Objects
+					.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
 
 			processed += counts.done();
 

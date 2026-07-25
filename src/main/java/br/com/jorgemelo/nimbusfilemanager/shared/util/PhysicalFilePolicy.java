@@ -8,10 +8,10 @@ import java.util.Locale;
 
 /**
  * Central, reusable rule for whether a filesystem path is a real, physical
- * file/directory the Nimbus File Manager may process. Everything indirect is rejected
- * and must never be inventoried, monitored, displayed, organized, moved,
- * renamed, deleted, hashed, have metadata/thumbnails extracted or be considered
- * for duplicates:
+ * file/directory the Nimbus File Manager may process. Everything indirect is
+ * rejected and must never be inventoried, monitored, displayed, organized,
+ * moved, renamed, deleted, hashed, have metadata/thumbnails extracted or be
+ * considered for duplicates:
  * <ul>
  * <li>symbolic links (file and directory);</li>
  * <li>Windows junctions / reparse points (directory);</li>

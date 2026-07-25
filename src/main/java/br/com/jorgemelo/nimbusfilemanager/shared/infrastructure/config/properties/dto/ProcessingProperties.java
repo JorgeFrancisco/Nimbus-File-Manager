@@ -7,8 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Configuration for the central processing coordination infrastructure
  * ({@code br.com.jorgemelo.nimbusfilemanager.processing}). Standalone
- * {@link ConfigurationProperties} (prefix {@code nimbus-file-manager.processing}) so
- * it never touches the {@link NimbusFileManagerProperties} record's constructor.
+ * {@link ConfigurationProperties} (prefix
+ * {@code nimbus-file-manager.processing}) so it never touches the
+ * {@link NimbusFileManagerProperties} record's constructor.
  *
  * <p>
  * All values are optional; an unset, out-of-range or otherwise invalid value

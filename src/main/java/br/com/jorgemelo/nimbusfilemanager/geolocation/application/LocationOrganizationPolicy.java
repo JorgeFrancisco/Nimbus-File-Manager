@@ -46,7 +46,8 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 		LocationFallbackMode fallbackMode = fallback == null ? LocationFallbackMode.IGNORE : fallback;
 
 		if (!qualifies(location, minimumConfidence)) {
-			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
+			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER
+					? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
 				: List.of();
 		}
 
@@ -67,7 +68,8 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 		}
 
 		if (segments.isEmpty()) {
-			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
+			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER
+					? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
 				: List.of();
 		}
 

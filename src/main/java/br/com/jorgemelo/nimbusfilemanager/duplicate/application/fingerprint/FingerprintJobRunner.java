@@ -18,16 +18,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 
 /**
  * Neutral background driver for a {@link FingerprintBacklog}: the idempotent,
- * coordinated {@link #start()} guard (refuses while an inventory is active, when
- * nothing is pending, or when a run is already going), the drain-and-finalize
- * cycle that records a {@link FingerprintJobRun}, live progress/ETA, and
- * cooperative cancellation.
+ * coordinated {@link #start()} guard (refuses while an inventory is active,
+ * when nothing is pending, or when a run is already going), the
+ * drain-and-finalize cycle that records a {@link FingerprintJobRun}, live
+ * progress/ETA, and cooperative cancellation.
  *
  * <p>
  * The photo and video async runner beans each hold one of these and only add
- * the {@code @Async} proxy boundary, so all of this state and lifecycle lives in
- * one place - no per-media duplication - while each media keeps its own runner
- * bean (and therefore its own independent run state).
+ * the {@code @Async} proxy boundary, so all of this state and lifecycle lives
+ * in one place - no per-media duplication - while each media keeps its own
+ * runner bean (and therefore its own independent run state).
  */
 class FingerprintJobRunner {
 
@@ -167,7 +167,9 @@ class FingerprintJobRunner {
 		return failed.get();
 	}
 
-	/** Estimated seconds remaining from the rate at which pending items disappear. */
+	/**
+	 * Estimated seconds remaining from the rate at which pending items disappear.
+	 */
 	public long etaSeconds() {
 		if (!running.get()) {
 			return -1;

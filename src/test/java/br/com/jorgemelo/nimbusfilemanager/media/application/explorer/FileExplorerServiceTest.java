@@ -71,7 +71,8 @@ class FileExplorerServiceTest {
 		WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
 
 		when(workspaceManager.temp()).thenReturn(tempDir);
-		when(catalogFileLocationRepository.findActiveByCurrentFolder(PathUtils.normalize(tempDir))).thenReturn(List.of());
+		when(catalogFileLocationRepository.findActiveByCurrentFolder(PathUtils.normalize(tempDir)))
+				.thenReturn(List.of());
 
 		FileExplorerView view = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
 				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(" ", "bad");
@@ -193,7 +194,8 @@ class FileExplorerServiceTest {
 			Files.writeString(folder.resolve("image-" + String.format("%02d", index) + ".jpg"), "a");
 		}
 
-		when(catalogFileLocationRepository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of());
+		when(catalogFileLocationRepository.findActiveByCurrentFolder(PathUtils.normalize(folder)))
+				.thenReturn(List.of());
 
 		FileExplorerView view = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
 				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))

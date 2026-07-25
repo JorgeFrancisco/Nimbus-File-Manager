@@ -6,10 +6,11 @@ import org.springframework.stereotype.Service;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
 
 /**
- * Computes the "Vídeos semelhantes" grouping in the background so the Duplicados
- * screen never blocks on it. Lives in its own bean so the {@code @Async} proxy
- * is honored and its run state stays independent from the photo runner; the
- * claim/track/release logic itself is the shared {@link SimilarityGroupingRunner}.
+ * Computes the "Vídeos semelhantes" grouping in the background so the
+ * Duplicados screen never blocks on it. Lives in its own bean so the
+ * {@code @Async} proxy is honored and its run state stays independent from the
+ * photo runner; the claim/track/release logic itself is the shared
+ * {@link SimilarityGroupingRunner}.
  */
 @Service
 public class VideoSimilarityAsyncRunner {

@@ -99,11 +99,11 @@ public class ProcessingCoordinator {
 
 	/**
 	 * Same as {@link #process(List, BooleanSupplier, Worker)}, but calls
-	 * {@code onCompleted} once per finished item (success, error or cancel) with the
-	 * running completed count, so callers can surface granular progress while a
+	 * {@code onCompleted} once per finished item (success, error or cancel) with
+	 * the running completed count, so callers can surface granular progress while a
 	 * batch runs. The callback fires from pool threads and may run concurrently, so
-	 * it must be thread-safe and cheap - throttle any expensive reporting (e.g. only
-	 * act every N items).
+	 * it must be thread-safe and cheap - throttle any expensive reporting (e.g.
+	 * only act every N items).
 	 */
 	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker,
 			IntConsumer onCompleted) {

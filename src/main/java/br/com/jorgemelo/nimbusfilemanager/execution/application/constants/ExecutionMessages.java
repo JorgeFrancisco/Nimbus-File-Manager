@@ -9,9 +9,10 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMes
  * Central catalog of the stable execution message codes and the factory methods
  * that pair each code with its typed arguments. Every user-facing execution
  * message is authored here as a {@code backend.execution.*} bundle key, so a
- * message is emitted as {@code code + args} and localized only when the response
- * is read. Keeping the codes in one place makes the catalog auditable and lets
- * {@code BackendMessageKeysTest} find every key referenced in the source.
+ * message is emitted as {@code code + args} and localized only when the
+ * response is read. Keeping the codes in one place makes the catalog auditable
+ * and lets {@code BackendMessageKeysTest} find every key referenced in the
+ * source.
  */
 public final class ExecutionMessages {
 

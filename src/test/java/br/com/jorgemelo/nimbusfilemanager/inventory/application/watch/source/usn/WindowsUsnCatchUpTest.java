@@ -32,7 +32,8 @@ class WindowsUsnCatchUpTest {
 	void replaysTheGapAndAdvancesTheCursorWhenValid() {
 		when(cursorStore.load(KEY)).thenReturn(Optional.of(new PersistedCursor(JOURNAL, 100L)));
 
-		byte[] batch = UsnRecordBuffers.recordBytes(150L, 100L, SUB, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+		byte[] batch = UsnRecordBuffers.recordBytes(150L, 100L, SUB, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL,
 				"offline.jpg");
 		CatchUpUsnVolume volume = new CatchUpUsnVolume(JOURNAL, 200L, 50L);
 		volume.enqueue(new UsnReadResult(180L, batch));

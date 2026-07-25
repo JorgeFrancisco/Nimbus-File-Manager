@@ -22,11 +22,11 @@ import lombok.Setter;
 
 /**
  * One visual fingerprint sample (results only, no operational state). Linked to
- * {@code catalog_file} by id - not a managed relationship - so writing one never
- * loads the parent graph. A photo has a single row (sample_index 0); a video
- * will have several. Rows of different {@code algorithm} are never compared to
- * each other, so evolving the hash implementation is just a new algorithm
- * string.
+ * {@code catalog_file} by id - not a managed relationship - so writing one
+ * never loads the parent graph. A photo has a single row (sample_index 0); a
+ * video will have several. Rows of different {@code algorithm} are never
+ * compared to each other, so evolving the hash implementation is just a new
+ * algorithm string.
  *
  * <p>
  * Because it is not a JPA relationship, cleanup on media deletion is done by

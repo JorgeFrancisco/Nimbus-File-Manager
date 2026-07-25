@@ -47,11 +47,12 @@ public class SecurityConfig {
 						"/favicon.ico", "/css/**", "/js/**", "/img/**", "/.well-known/**", "/swagger-ui.html",
 						"/swagger-ui/**", "/v3/api-docs/**")
 				.permitAll().requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-				// Administrative surfaces (ADMIN only): user/role management and access auditing,
-				// plus the operational screens whose data is admin-scoped (files, organization,
-				// duplicates, quarantine, statistics) together with their dedicated data/export
-				// APIs. The shared read APIs that also feed the USER-facing timeline/map lightbox
-				// (media, map, timeline) stay operational under the USER fallback below.
+				// Administrative surfaces (ADMIN only): user/role management and access
+				// auditing, plus the operational screens whose data is admin-scoped (files,
+				// organization, duplicates, quarantine, statistics) together with their
+				// dedicated data/export APIs. The shared read APIs that also feed the
+				// USER-facing timeline/map lightbox (media, map, timeline) stay operational
+				// under the USER fallback below.
 				.requestMatchers("/app/users/**", "/app/accesses/**").hasRole(Role.ADMIN.name())
 				.requestMatchers("/app/files/**", "/app/organization/**", "/app/duplicates/**",
 						"/app/quarantine/**", "/app/statistics/**").hasRole(Role.ADMIN.name())
@@ -68,9 +69,9 @@ public class SecurityConfig {
 				.requestMatchers("/actuator/**").hasRole(Role.ADMIN.name())
 				// Everything else is a normal operational feature over the single shared
 				// collection - dashboard, timeline, map, execution history, the shared
-				// media/map/timeline read APIs (which also feed the lightbox), and the user's own
-				// account and preferences. Any authenticated USER may use it; the role hierarchy
-				// below lets ADMIN inherit all of it.
+				// media/map/timeline read APIs (which also feed the lightbox), and the user's
+				// own account and preferences. Any authenticated USER may use it; the role
+				// hierarchy below lets ADMIN inherit all of it.
 				.anyRequest().hasRole(Role.USER.name()))
 				// CSRF stays at Spring Security's default (enabled for every state-changing
 				// request). /api/** is authenticated by the same form-login session - it is not
@@ -113,9 +114,10 @@ public class SecurityConfig {
 
 	@Bean
 	RoleHierarchy roleHierarchy() {
-		// ADMIN inherits every USER permission. This lets operational rules be written as
-		// hasRole("USER") while administrators satisfy them without a separate ROLE_USER grant,
-		// keeping the "ADMIN can do everything USER can" contract in a single place.
+		// ADMIN inherits every USER permission. This lets operational rules be written
+		// as hasRole("USER") while administrators satisfy them without a separate
+		// ROLE_USER grant, keeping the "ADMIN can do everything USER can" contract in a
+		// single place.
 		return RoleHierarchyImpl.withDefaultRolePrefix().role(Role.ADMIN.name()).implies(Role.USER.name()).build();
 	}
 

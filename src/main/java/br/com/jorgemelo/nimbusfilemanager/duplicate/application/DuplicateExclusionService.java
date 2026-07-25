@@ -45,12 +45,12 @@ public class DuplicateExclusionService {
 	}
 
 	/**
-	 * Stores the folder path in a single, separator-agnostic form: the same absolute
-	 * normalization used for {@code catalog_file_location.current_folder} (which drops
-	 * any trailing separator), but with every separator forced to {@code /}. The
-	 * duplicate queries compare against {@code REPLACE(current_folder, '\', '/')}, so
-	 * a folder excluded on Windows (back-slashes) still matches its files and,
-	 * crucially, its subfolders.
+	 * Stores the folder path in a single, separator-agnostic form: the same
+	 * absolute normalization used for {@code catalog_file_location.current_folder}
+	 * (which drops any trailing separator), but with every separator forced to
+	 * {@code /}. The duplicate queries compare against
+	 * {@code REPLACE(current_folder, '\', '/')}, so a folder excluded on Windows
+	 * (back-slashes) still matches its files and, crucially, its subfolders.
 	 *
 	 * @return true when a new exclusion was created, false if already excluded.
 	 */

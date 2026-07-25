@@ -5,8 +5,8 @@ import java.util.Arrays;
 /**
  * The outcome of one {@code FSCTL_READ_USN_JOURNAL} call, already split by the
  * native seam: the leading 8-byte USN that the next read should start from,
- * followed by the raw {@code USN_RECORD_V2} bytes (empty when the journal has no
- * more records past the requested USN).
+ * followed by the raw {@code USN_RECORD_V2} bytes (empty when the journal has
+ * no more records past the requested USN).
  *
  * @param nextStartUsn the USN to pass to the next read to continue where this
  *                     one stopped.
@@ -21,7 +21,9 @@ public record UsnReadResult(long nextStartUsn, byte[] records) {
 		}
 	}
 
-	/** Whether this read returned no records (the journal is drained up to here). */
+	/**
+	 * Whether this read returned no records (the journal is drained up to here).
+	 */
 	public boolean drained() {
 		return records.length == 0;
 	}

@@ -136,7 +136,8 @@ class LocationRebuildServiceTest {
 		LocationRebuildProperties properties = new LocationRebuildProperties();
 		properties.setParallelism(0);
 
-		LocationRebuildService singleThreaded = new LocationRebuildService(repository, mediaLocationService, properties);
+		LocationRebuildService singleThreaded = new LocationRebuildService(repository, mediaLocationService,
+				properties);
 
 		when(repository.findAllResolvableIds(eq(0L), any())).thenReturn(List.of(1L));
 		when(repository.findAllResolvableIds(eq(1L), any())).thenReturn(List.of());

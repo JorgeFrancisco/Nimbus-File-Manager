@@ -32,8 +32,8 @@ class ExecutionPhaseTimingsTest {
 		ExecutionPhaseTimings timings = new ExecutionPhaseTimings();
 
 		timings.addNanos(ExecutionPhaseType.PERSISTENCE, TimeUnit.MILLISECONDS.toNanos(30));
-		// Populate the item counters too, so reset() must clear both maps (durations and items),
-		// not just the durations.
+		// Populate the item counters too, so reset() must clear both maps (durations
+		// and items), not just the durations.
 		timings.addItems(ExecutionPhaseType.EXTRACTION, 7);
 
 		timings.reset();

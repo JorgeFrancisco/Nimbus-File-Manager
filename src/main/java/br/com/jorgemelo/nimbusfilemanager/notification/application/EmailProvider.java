@@ -7,8 +7,8 @@ package br.com.jorgemelo.nimbusfilemanager.notification.application;
  * annotate the class with {@code @Component} and {@code @Order(n)} (controls
  * priority when more than one provider is configured at the same time), and
  * read whatever credentials/toggle it needs from typed configuration (e.g.
- * {@code @ConfigurationProperties}, as {@link GmailEmailProvider} does). No other
- * class needs to change.
+ * {@code @ConfigurationProperties}, as {@link GmailEmailProvider} does). No
+ * other class needs to change.
  */
 public interface EmailProvider {
 

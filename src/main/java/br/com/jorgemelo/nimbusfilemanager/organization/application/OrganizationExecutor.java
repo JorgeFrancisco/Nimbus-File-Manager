@@ -240,7 +240,8 @@ public class OrganizationExecutor {
 					item == null ? null : item.sourcePath());
 		} else {
 			executionProgressService.updateLiveProgress(execution, processed, movedInt, skippedInt, errorsInt,
-					item == null ? ExecutionMessages.progressUpdated() : ExecutionMessages.processing(item.sourcePath()));
+					item == null ? ExecutionMessages.progressUpdated()
+							: ExecutionMessages.processing(item.sourcePath()));
 		}
 	}
 
@@ -258,9 +259,9 @@ public class OrganizationExecutor {
 
 	/**
 	 * Classifies a single plan item for the execute loop. A same-path item is a
-	 * no-op skip (it must never reach {@link #moveOne}); everything else is delegated
-	 * to {@code moveOne}. The caller's {@code switch} counts the returned result and
-	 * reports progress exactly once, matching the original inline flow.
+	 * no-op skip (it must never reach {@link #moveOne}); everything else is
+	 * delegated to {@code moveOne}. The caller's {@code switch} counts the returned
+	 * result and reports progress exactly once, matching the original inline flow.
 	 */
 	private MoveResult resolveItemResult(Execution execution, OrganizationItem item,
 			OrganizationExecuteRequest request) {
@@ -325,10 +326,11 @@ public class OrganizationExecutor {
 	}
 
 	/**
-	 * Runs every read-only pre-move check in order, recording the appropriate movement
-	 * and returning the {@link MoveResult} for the first check that blocks the move, or
-	 * {@code null} when the item is clear to proceed. Extracted from {@link #moveOne} so
-	 * the move flow stays flat and the many audit branches live on their own.
+	 * Runs every read-only pre-move check in order, recording the appropriate
+	 * movement and returning the {@link MoveResult} for the first check that blocks
+	 * the move, or {@code null} when the item is clear to proceed. Extracted from
+	 * {@link #moveOne} so the move flow stays flat and the many audit branches live
+	 * on their own.
 	 */
 	private MoveResult evaluateGuards(Execution execution, OrganizationItem item, MovePaths paths, boolean dryRun,
 			OrganizationExecuteRequest request) {
@@ -395,8 +397,8 @@ public class OrganizationExecutor {
 
 	/**
 	 * Handles a failure from the physical move or catalog update: classifies it,
-	 * attempts a physical rollback when a stray file would otherwise be left behind,
-	 * logs a partial failure and records the audit movement. Extracted from
+	 * attempts a physical rollback when a stray file would otherwise be left
+	 * behind, logs a partial failure and records the audit movement. Extracted from
 	 * {@link #moveOne}.
 	 */
 	private MoveResult handleMoveFailure(Execution execution, OrganizationItem item, MovePaths paths,
@@ -448,7 +450,8 @@ public class OrganizationExecutor {
 	}
 
 	private boolean isAlreadyMoved(OrganizationItem item, Path target, CatalogFile existing) {
-		return existing != null && Objects.equals(existing.getId(), item.internalCatalogFileId()) && Files.exists(target);
+		return existing != null && Objects.equals(existing.getId(),
+				item.internalCatalogFileId()) && Files.exists(target);
 	}
 
 	private MovementReason resolveFailureReason(boolean integrityFailure, boolean movedOnDisk) {
@@ -533,7 +536,8 @@ public class OrganizationExecutor {
 				recordMovement(execution, catalogFile, paths, MovementStatus.ERROR, reason, message, dryRun);
 			}
 		} catch (Exception e) {
-			log.error("Could not record movement error. catalogFileId={} source={} target={}", catalogFileId, paths.source(),
+			log.error("Could not record movement error. catalogFileId={} source={} target={}", catalogFileId,
+					paths.source(),
 					paths.target(), e);
 		}
 	}

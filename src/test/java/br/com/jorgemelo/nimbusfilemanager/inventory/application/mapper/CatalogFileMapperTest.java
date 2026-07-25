@@ -133,7 +133,8 @@ class CatalogFileMapperTest {
 		when(mediaDateResolver.resolve(metadata))
 				.thenReturn(new ResolvedMediaDate(captureDate, DateSource.FILE_CREATED_AT));
 
-		CatalogFile catalogFile = CatalogFile.builder().photo(Photo.builder().build()).video(Video.builder().build()).build();
+		CatalogFile catalogFile = CatalogFile.builder().photo(Photo.builder().build()).video(Video.builder().build())
+				.build();
 
 		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
 				Path.of("C:/input/doc.pdf"), Path.of("C:/input"), metadata);

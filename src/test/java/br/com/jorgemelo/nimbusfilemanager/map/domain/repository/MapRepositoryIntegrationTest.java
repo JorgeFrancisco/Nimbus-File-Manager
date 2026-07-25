@@ -39,10 +39,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
  * Runtime checks that {@link MapRepository}'s native aggregate queries behave
  * against a real PostgreSQL instance - they lean on Postgres-only constructs
  * ({@code COUNT(*) FILTER}, {@code FLOOR(...)} grid bucketing and
- * {@code IS NOT DISTINCT FROM}) that HSQLDB/H2 cannot reproduce. Media with EXIF
- * coordinates aggregate by a square grid cell whose size the caller derives from
- * the zoom; coordinate-less media aggregate by their resolved administrative
- * region; inactive media never appear.
+ * {@code IS NOT DISTINCT FROM}) that HSQLDB/H2 cannot reproduce. Media with
+ * EXIF coordinates aggregate by a square grid cell whose size the caller
+ * derives from the zoom; coordinate-less media aggregate by their resolved
+ * administrative region; inactive media never appear.
  */
 @SpringBootTest
 @Transactional
@@ -77,7 +77,8 @@ class MapRepositoryIntegrationTest {
 		exif(FileType.PHOTO, 10.0, 20.0, LocalDateTime.of(2024, Month.JANUARY, 1, 0, 0), null, null);
 
 		// An inactive EXIF media at the busy coordinate must be excluded everywhere.
-		CatalogFile deleted = exif(FileType.PHOTO, -23.55050, -46.63330, LocalDateTime.of(2024, Month.JUNE, 1, 0, 0), null,
+		CatalogFile deleted = exif(FileType.PHOTO, -23.55050, -46.63330, LocalDateTime.of(2024, Month.JUNE, 1, 0, 0),
+				null,
 				null);
 		deleted.setLifecycleStatus(LifecycleStatus.DELETED);
 		catalogFileRepository.saveAndFlush(deleted);
@@ -164,7 +165,8 @@ class MapRepositoryIntegrationTest {
 		Assertions.assertThat(saoPaulo.getTotalElements()).isEqualTo(1);
 	}
 
-	private CatalogFile exif(FileType fileType, double latitude, double longitude, LocalDateTime captureDate, String city,
+	private CatalogFile exif(FileType fileType, double latitude, double longitude, LocalDateTime captureDate,
+			String city,
 			String state) {
 		CatalogFile file = persist(fileType, captureDate, latitude, longitude);
 
@@ -201,10 +203,12 @@ class MapRepositoryIntegrationTest {
 	}
 
 	private void resolvePlace(CatalogFile file, String countryCode, String stateName, String cityName) {
-		ResolvedPlace place = ResolvedPlace.builder().countryCode(countryCode).countryName("Brasil").stateName(stateName)
+		ResolvedPlace place = ResolvedPlace.builder().countryCode(countryCode).countryName("Brasil")
+				.stateName(stateName)
 				.cityName(cityName).confidence(LocationConfidence.HIGH).provider(LocationProvider.ADMIN_BOUNDARIES)
 				.resolvedAt(LocalDateTime.now()).build();
 
-		geoLocationRepository.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).manual(false).build());
+		geoLocationRepository.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).manual(false)
+				.build());
 	}
 }

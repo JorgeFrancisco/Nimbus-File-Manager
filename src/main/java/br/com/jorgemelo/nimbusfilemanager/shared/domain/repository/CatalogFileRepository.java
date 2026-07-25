@@ -41,9 +41,10 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	/**
 	 * Marks the given files MISSING (absent from disk) and stamps
 	 * {@code lifecycle_changed_at} with {@code changedAt}. Only real ACTIVE -&gt;
-	 * MISSING transitions are touched: a DELETED file is never downgraded (invariant
-	 * preserved) and an already-MISSING file keeps its original timestamp, so the
-	 * retention clock the catalog purge uses does not reset on every reconcile pass.
+	 * MISSING transitions are touched: a DELETED file is never downgraded
+	 * (invariant preserved) and an already-MISSING file keeps its original
+	 * timestamp, so the retention clock the catalog purge uses does not reset on
+	 * every reconcile pass.
 	 */
 	@Modifying(clearAutomatically = true)
 	@Query("""
@@ -58,13 +59,13 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 
 	/**
 	 * Permanently removes {@code catalog_file} rows that have been MISSING since
-	 * before {@code cutoff}, anchored on {@code lifecycle_changed_at}. Set-based and
-	 * reliant on the database foreign keys to handle dependents: location, metadata,
-	 * photo and video rows cascade away ({@code ON DELETE CASCADE}), while movement
-	 * audit rows are detached, not deleted ({@code ON DELETE SET NULL}), so history
-	 * survives. DELETED rows are intentionally excluded - their removal is owned by
-	 * the quarantine retention purge, which also clears the quarantined file and its
-	 * movement.
+	 * before {@code cutoff}, anchored on {@code lifecycle_changed_at}. Set-based
+	 * and reliant on the database foreign keys to handle dependents: location,
+	 * metadata, photo and video rows cascade away ({@code ON DELETE CASCADE}),
+	 * while movement audit rows are detached, not deleted
+	 * ({@code ON DELETE SET NULL}), so history survives. DELETED rows are
+	 * intentionally excluded - their removal is owned by the quarantine retention
+	 * purge, which also clears the quarantined file and its movement.
 	 */
 	@Modifying(clearAutomatically = true)
 	@Query("""
@@ -79,8 +80,8 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 * matched case-insensitively against the location's current or inventory path
 	 * (exact root or prefixed with {@code root + separator}). Native and set-based
 	 * on purpose: it deletes by subquery over {@code catalog_file_location} without
-	 * loading entities, relies on the {@code ON DELETE CASCADE} foreign keys to wipe
-	 * the dependent rows, and uses {@code left()/length()} which have no JPQL
+	 * loading entities, relies on the {@code ON DELETE CASCADE} foreign keys to
+	 * wipe the dependent rows, and uses {@code left()/length()} which have no JPQL
 	 * equivalent. Used when switching/clearing a library, so it can drop the whole
 	 * catalog in one statement.
 	 */

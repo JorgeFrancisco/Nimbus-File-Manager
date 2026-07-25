@@ -24,8 +24,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 /**
  * Computes a video's multi-frame perceptual fingerprint: a single ffmpeg pass
  * samples {@code frameCount} frames at deterministic relative positions, and
- * each frame is turned into the same 256-bit pHash + 32x32 luminance sample as a
- * photo via {@link PerceptualHashCodec}. The math is shared, only the frame
+ * each frame is turned into the same 256-bit pHash + 32x32 luminance sample as
+ * a photo via {@link PerceptualHashCodec}. The math is shared, only the frame
  * selection is video-specific. {@code frameCount} is supplied by the algorithm
  * (part of its identity), never a runtime setting, so a stored fingerprint's
  * frame alignment can never drift under it.

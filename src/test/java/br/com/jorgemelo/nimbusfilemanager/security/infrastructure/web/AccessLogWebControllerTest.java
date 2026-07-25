@@ -37,7 +37,8 @@ class AccessLogWebControllerTest {
 	void accessesShouldExposeResolvedViewsForEachRowWhenSearched() {
 		UserAccessLog log = UserAccessLog.builder().username("admin@nimbus-file-manager.local")
 				.eventType(SecurityConstants.LOGIN_SUCCESS).status("SUCCESS").ipAddress("127.0.0.1")
-				.message(AccessMessages.LOGIN_COMPLETED).createdAt(LocalDateTime.of(2026, Month.JULY, 24, 12, 0)).build();
+				.message(AccessMessages.LOGIN_COMPLETED).createdAt(LocalDateTime.of(2026, Month.JULY, 24, 12, 0))
+						.build();
 
 		when(userAccessLogService.findByEmail("admin@nimbus-file-manager.local")).thenReturn(List.of(log));
 		when(accessLogLabels.eventType(SecurityConstants.LOGIN_SUCCESS)).thenReturn("Login");

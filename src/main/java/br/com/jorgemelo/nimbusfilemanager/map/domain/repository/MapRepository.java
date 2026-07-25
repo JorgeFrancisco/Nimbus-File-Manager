@@ -15,10 +15,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 
 /**
  * Read-only aggregate queries backing the media map. Pins are always aggregated
- * (never one row per media): EXIF media snap to a square grid whose cell size the
- * caller derives from the zoom (so nearby pins never pile up on screen), and
- * coordinate-less media fall back to their administrative region. Media with EXIF
- * coordinates never contribute to an administrative pin.
+ * (never one row per media): EXIF media snap to a square grid whose cell size
+ * the caller derives from the zoom (so nearby pins never pile up on screen),
+ * and coordinate-less media fall back to their administrative region. Media
+ * with EXIF coordinates never contribute to an administrative pin.
  */
 public interface MapRepository extends Repository<CatalogFile, Long> {
 

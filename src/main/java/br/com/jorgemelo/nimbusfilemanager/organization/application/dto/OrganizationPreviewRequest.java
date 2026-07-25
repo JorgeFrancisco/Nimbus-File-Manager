@@ -17,21 +17,31 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 public record OrganizationPreviewRequest(
-		@Schema(description = "Folder used as organization source.", example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
-		@Schema(description = "Folder used as organization target.", example = "C:/nimbus-file-manager/workspace/organized") @NotBlank String targetPath,
+		@Schema(description = "Folder used as organization source.",
+				example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
+		@Schema(description = "Folder used as organization target.",
+				example = "C:/nimbus-file-manager/workspace/organized") @NotBlank String targetPath,
 		@Schema(description = "Scan source subfolders recursively.", example = "true") Boolean recursive,
 		@Schema(description = "Organization folder layout.", example = "DEFAULT") OrganizationLayout layout,
 		@Schema(description = "Maximum number of preview items returned inline.", example = "10000") Integer limit,
 		@Schema(description = "Rebuild metadata before planning.", example = "false") Boolean rebuildMetadata,
-		@Schema(description = "Metadata fields rebuilt when rebuildMetadata is true.", example = "[\"DATE\", \"MIME\", \"GPS\"]") List<MetadataRebuildField> rebuild,
-		@Schema(description = "Ignore files that are already in the expected organized location.", example = "true") Boolean skipAlreadyOrganized,
+		@Schema(description = "Metadata fields rebuilt when rebuildMetadata is true.",
+				example = "[\"DATE\", \"MIME\", \"GPS\"]") List<MetadataRebuildField> rebuild,
+		@Schema(description = "Ignore files that are already in the expected organized location.",
+				example = "true") Boolean skipAlreadyOrganized,
 		@Schema(description = "Optional category filter.", example = "[\"MEDIA\"]") List<FileCategory> onlyCategories,
-		@Schema(description = "Optional subcategory filter.", example = "[\"CAMERA\"]") List<MediaSubcategory> onlySubcategories,
-		@Schema(description = "Optional extension filter without dots.", example = "[\"jpg\", \"mp4\"]") List<String> onlyExtensions,
-		@Schema(description = "Optional file type filter.", example = "[\"PHOTO\", \"VIDEO\"]") List<FileType> onlyFileTypes,
-		@Schema(description = "Geographic subdivision inserted under the layout (default NONE).", example = "COUNTRY_STATE_CITY") LocationSubdivision locationSubdivision,
-		@Schema(description = "Minimum confidence for the geographic subdivision; null accepts any confidence.", example = "HIGH") LocationConfidence locationMinConfidence,
-		@Schema(description = "What to do when location is missing or below the minimum confidence (default IGNORE).", example = "IGNORE") LocationFallbackMode locationFallback) {
+		@Schema(description = "Optional subcategory filter.",
+				example = "[\"CAMERA\"]") List<MediaSubcategory> onlySubcategories,
+		@Schema(description = "Optional extension filter without dots.",
+				example = "[\"jpg\", \"mp4\"]") List<String> onlyExtensions,
+		@Schema(description = "Optional file type filter.",
+				example = "[\"PHOTO\", \"VIDEO\"]") List<FileType> onlyFileTypes,
+		@Schema(description = "Geographic subdivision inserted under the layout (default NONE).",
+				example = "COUNTRY_STATE_CITY") LocationSubdivision locationSubdivision,
+		@Schema(description = "Minimum confidence for the geographic subdivision; null accepts any confidence.",
+				example = "HIGH") LocationConfidence locationMinConfidence,
+		@Schema(description = "What to do when location is missing or below the minimum confidence (default IGNORE).",
+				example = "IGNORE") LocationFallbackMode locationFallback) {
 
 	/**
 	 * Real ceiling for {@link #limit}, independent of the caller-supplied value -

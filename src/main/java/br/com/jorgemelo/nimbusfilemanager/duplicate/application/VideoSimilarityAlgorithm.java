@@ -9,10 +9,11 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptu
 
 /**
  * The pluggable contract for a video similarity algorithm. It owns the three
- * things that differ between algorithms - how a video's fingerprint is computed,
- * how candidates are bucketed to avoid an O(n^2) all-pairs comparison, and how
- * two signatures are compared/aggregated into a percentage - so the backlog
- * producer and the grouping orchestrator stay closed for modification.
+ * things that differ between algorithms - how a video's fingerprint is
+ * computed, how candidates are bucketed to avoid an O(n^2) all-pairs
+ * comparison, and how two signatures are compared/aggregated into a percentage
+ * - so the backlog producer and the grouping orchestrator stay closed for
+ * modification.
  *
  * <p>
  * A future algorithm (a temporal-alignment matcher, a visual-embedding matcher)

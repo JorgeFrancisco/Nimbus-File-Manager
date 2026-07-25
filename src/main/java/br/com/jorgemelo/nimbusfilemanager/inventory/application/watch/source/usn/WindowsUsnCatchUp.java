@@ -10,12 +10,12 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCur
  * Reads the USN journal once at startup to recover the changes made while the
  * application was down, then advances the persisted cursor. Pure orchestration
  * over the {@link UsnVolume} seam, so the cursor-validity and gap decisions are
- * unit-tested with fakes on any platform - the USN journal is used only for this
- * catch-up; the live events come from {@code ReadDirectoryChangesW}.
+ * unit-tested with fakes on any platform - the USN journal is used only for
+ * this catch-up; the live events come from {@code ReadDirectoryChangesW}.
  *
  * <ul>
- * <li>Cursor present, same journal and still retained → replay the gap and report
- * the offline changes.</li>
+ * <li>Cursor present, same journal and still retained → replay the gap and
+ * report the offline changes.</li>
  * <li>Otherwise (no cursor, journal recreated, or the USN aged out) → cannot
  * replay: report a reconcile and pin the cursor at the journal's current end so
  * the next start replays from there.</li>

@@ -23,12 +23,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
 /**
- * Geographic Database administration actions on the Sistema tab (admin): rebuild
- * of resolved locations, offline-dataset download/removal and cache clearing.
- * Every action blocks while an inventory, an import or a rebuild is running,
- * because each of those reads or writes the boundary dataset or the location
- * cache and a concurrent change would corrupt work in flight. The read-side
- * model for this same section lives in {@link GeoDatasetSettingsModel}.
+ * Geographic Database administration actions on the Sistema tab (admin):
+ * rebuild of resolved locations, offline-dataset download/removal and cache
+ * clearing. Every action blocks while an inventory, an import or a rebuild is
+ * running, because each of those reads or writes the boundary dataset or the
+ * location cache and a concurrent change would corrupt work in flight. The
+ * read-side model for this same section lives in
+ * {@link GeoDatasetSettingsModel}.
  */
 @Controller
 public class SettingsGeodataWebController extends LocalizedComponent {
@@ -74,7 +75,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 		}
 
 		if (!locationRebuildAsyncRunner.start(scope)) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.rebuildRunning"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.settings.rebuildRunning"));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
@@ -103,14 +105,16 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 		}
 
 		if (!geoDatasetAsyncRunner.start()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.geoImportRunning"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.settings.geoImportRunning"));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		geoDatasetAsyncRunner.downloadAndImport();
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.geoImportStarted"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.geoImportStarted"));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}
@@ -131,7 +135,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 		}
 
 		if (geoDatasetAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.waitRunningImport"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.settings.waitRunningImport"));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
@@ -168,7 +173,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 
 		long removed = mediaLocationService.clearCache();
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.cacheCleared", removed));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.cacheCleared",
+				removed));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}

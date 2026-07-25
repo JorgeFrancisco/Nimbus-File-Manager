@@ -39,10 +39,10 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	long deleteByKindAndAlgorithm(FingerprintKind kind, String algorithm);
 
 	/**
-	 * Cheap signature ({@code [count, maxCatalogFileId, maxComputedAt]}) of the exact
-	 * set the similarity grouping consumes - i.e. {@code ACTIVE} cataloged photos
-	 * that have a fingerprint - used to invalidate the similar-photos cache. It
-	 * mirrors the {@code lifecycleStatus = ACTIVE} filter of
+	 * Cheap signature ({@code [count, maxCatalogFileId, maxComputedAt]}) of the
+	 * exact set the similarity grouping consumes - i.e. {@code ACTIVE} cataloged
+	 * photos that have a fingerprint - used to invalidate the similar-photos cache.
+	 * It mirrors the {@code lifecycleStatus = ACTIVE} filter of
 	 * {@link #findFingerprintedPhotos}, so quarantining/restoring a photo (which
 	 * flips the lifecycle, not the fingerprint) changes the count and forces a
 	 * recompute. No hash/luminance is loaded.

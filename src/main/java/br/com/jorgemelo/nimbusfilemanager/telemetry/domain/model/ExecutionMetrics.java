@@ -24,11 +24,11 @@ import lombok.ToString;
  * <p>
  * Split out of {@link Execution} because it is a distinct concept - how a run
  * performed, not what it did - and it is populated only for measured processing
- * runs (inventory/fingerprint). Organization and reconcile executions never have
- * a row, so {@code execution} stays free of these mostly-null columns. Only the
- * telemetry/statistics screen joins this table; the frequent execution history
- * and dashboard queries never touch it. The relationship is 1:1 sharing the
- * identity of {@link Execution} (execution_id), the same pattern used by
+ * runs (inventory/fingerprint). Organization and reconcile executions never
+ * have a row, so {@code execution} stays free of these mostly-null columns.
+ * Only the telemetry/statistics screen joins this table; the frequent execution
+ * history and dashboard queries never touch it. The relationship is 1:1 sharing
+ * the identity of {@link Execution} (execution_id), the same pattern used by
  * {@link CatalogFileLocation}.
  */
 @Getter

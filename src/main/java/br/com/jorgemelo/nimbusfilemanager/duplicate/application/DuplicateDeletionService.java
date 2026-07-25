@@ -54,7 +54,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	private final OperationLockService operationLockService;
 	private final Clock clock;
 
-	public DuplicateDeletionService(CatalogFileRepository catalogFileRepository, ExecutionRepository executionRepository,
+	public DuplicateDeletionService(CatalogFileRepository catalogFileRepository,
+			ExecutionRepository executionRepository,
 			AppSettingService appSettingService, DuplicateDeletionPersistence duplicateDeletionPersistence,
 			SecureFileMove secureFileMove, SimilarityCaches similarityCaches,
 			OperationLockService operationLockService, Clock clock) {
@@ -113,7 +114,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 		}
 	}
 
-	private DuplicateDeletionResult deleteLocked(Collection<UUID> publicIds, List<CatalogFile> files, Path quarantineRoot,
+	private DuplicateDeletionResult deleteLocked(Collection<UUID> publicIds, List<CatalogFile> files,
+			Path quarantineRoot,
 			DeletionProgressCallback progress) {
 		Execution execution = startExecution(quarantineRoot);
 

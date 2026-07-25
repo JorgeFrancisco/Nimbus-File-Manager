@@ -31,7 +31,8 @@ public class AccessLogWebController {
 
 		model.addAttribute("email", normalizedEmail);
 		model.addAttribute("searched", searched);
-		model.addAttribute("accessLogs", searched ? toViews(userAccessLogService.findByEmail(normalizedEmail)) : List.of());
+		model.addAttribute("accessLogs",
+				searched ? toViews(userAccessLogService.findByEmail(normalizedEmail)) : List.of());
 
 		return "app/accesses";
 	}

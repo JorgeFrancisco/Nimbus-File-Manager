@@ -218,7 +218,8 @@ public class OrganizationWebController extends LocalizedComponent {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
-			model.addAttribute(SharedConstants.ATTR_ERROR, message("backend.organization.previewNotFound", executionId));
+			model.addAttribute(SharedConstants.ATTR_ERROR, message("backend.organization.previewNotFound",
+					executionId));
 
 			return VIEW;
 		}
@@ -424,13 +425,15 @@ public class OrganizationWebController extends LocalizedComponent {
 	 */
 
 	private Defaults loadDefaults(Authentication authentication) {
-		Map<String, String> preferences = userPagePreferenceService.find(username(authentication), OrganizationConstants.PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(username(authentication),
+				OrganizationConstants.PAGE_KEY);
 
 		if (preferences == null) {
 			preferences = Map.of();
 		}
 
-		boolean recursive = !preferences.containsKey(OrganizationConstants.RECURSIVE) || Boolean.parseBoolean(preferences.get(OrganizationConstants.RECURSIVE));
+		boolean recursive = !preferences.containsKey(OrganizationConstants.RECURSIVE)
+				|| Boolean.parseBoolean(preferences.get(OrganizationConstants.RECURSIVE));
 		boolean allowConflicts = Boolean.parseBoolean(preferences.get(OrganizationConstants.ALLOW_CONFLICTS));
 		boolean overwriteExisting = Boolean.parseBoolean(preferences.get(OrganizationConstants.OVERWRITE_EXISTING));
 
@@ -451,14 +454,19 @@ public class OrganizationWebController extends LocalizedComponent {
 	private void saveDefaults(Authentication authentication, OrganizationForm form) {
 		String username = username(authentication);
 
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.RECURSIVE, Boolean.toString(form.recursive()));
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.LAYOUT, form.layout().name());
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.ALLOW_CONFLICTS, Boolean.toString(form.allowConflicts()));
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.OVERWRITE_EXISTING,
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.RECURSIVE,
+				Boolean.toString(form.recursive()));
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.LAYOUT,
+				form.layout().name());
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.ALLOW_CONFLICTS,
+				Boolean.toString(form.allowConflicts()));
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
+				OrganizationConstants.OVERWRITE_EXISTING,
 				Boolean.toString(form.overwriteExisting()));
 
 		if (form.size() != null) {
-			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.SIZE, form.size().toString());
+			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.SIZE,
+					form.size().toString());
 		}
 
 		if (form.limit() != null) {
@@ -466,7 +474,8 @@ public class OrganizationWebController extends LocalizedComponent {
 		}
 
 		if (form.locationSubdivision() != null) {
-			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, LOCATION_SUBDIVISION, form.locationSubdivision().name());
+			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, LOCATION_SUBDIVISION,
+					form.locationSubdivision().name());
 		}
 
 		// "Qualquer" (null) is a real choice, so persist it as an empty value to
@@ -475,7 +484,8 @@ public class OrganizationWebController extends LocalizedComponent {
 				form.locationMinConfidence() == null ? "" : form.locationMinConfidence().name());
 
 		if (form.locationFallback() != null) {
-			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, LOCATION_FALLBACK, form.locationFallback().name());
+			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, LOCATION_FALLBACK,
+					form.locationFallback().name());
 		}
 
 		if (form.sourcePath() != null && !form.sourcePath().isBlank()) {

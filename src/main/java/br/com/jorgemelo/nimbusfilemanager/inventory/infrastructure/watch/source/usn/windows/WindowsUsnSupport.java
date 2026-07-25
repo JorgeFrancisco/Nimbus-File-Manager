@@ -13,9 +13,9 @@ import lombok.extern.slf4j.Slf4j;
  * Windows-only entry point for the USN startup catch-up: opens the hosting NTFS
  * volume, runs the one-shot catch-up, and closes the volume again (the live
  * events come from {@code ReadDirectoryChangesW}, so the volume is not kept
- * open). Opening the volume needs the manage-volume/backup privilege, so this is
- * best-effort: on {@code ERROR_ACCESS_DENIED} (no elevation) it returns empty and
- * the caller keeps using {@code ReadDirectoryChangesW} alone.
+ * open). Opening the volume needs the manage-volume/backup privilege, so this
+ * is best-effort: on {@code ERROR_ACCESS_DENIED} (no elevation) it returns
+ * empty and the caller keeps using {@code ReadDirectoryChangesW} alone.
  */
 @Slf4j
 public final class WindowsUsnSupport {

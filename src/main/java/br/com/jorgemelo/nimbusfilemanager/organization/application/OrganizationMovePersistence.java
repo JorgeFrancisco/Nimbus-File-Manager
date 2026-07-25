@@ -26,12 +26,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  *
  * <p>
  * The catalog update ({@link CatalogFile#setFileKey}, the
- * {@link CatalogFileLocation} path) and the {@code MOVED} {@link Movement} record
- * are written in a <em>single</em> transaction, so the catalog and its audit
- * trail can never diverge: either the file's new location and its movement both
- * commit, or neither does. This is the transactional boundary the reliability
- * work requires - the physical {@code Files.move} happens before this call, and
- * the executor rolls the file back on disk if this transaction throws.
+ * {@link CatalogFileLocation} path) and the {@code MOVED} {@link Movement}
+ * record are written in a <em>single</em> transaction, so the catalog and its
+ * audit trail can never diverge: either the file's new location and its
+ * movement both commit, or neither does. This is the transactional boundary the
+ * reliability work requires - the physical {@code Files.move} happens before
+ * this call, and the executor rolls the file back on disk if this transaction
+ * throws.
  *
  * <p>
  * Lives in its own bean (not inside {@link OrganizationExecutor}) so the

@@ -44,8 +44,8 @@ class ExecutionMessageCodecTest {
 
 	@Test
 	void raisesWhenArgumentsCannotBeSerialized() {
-		// A bare Object has no serializable properties: Jackson fails on the empty bean,
-		// which the codec must surface as an IllegalStateException.
+		// A bare Object has no serializable properties: Jackson fails on the empty
+		// bean, which the codec must surface as an IllegalStateException.
 		assertThatIllegalStateException().isThrownBy(() -> codec.encode(List.of(new Object())))
 				.withMessageContaining("Could not encode execution message arguments");
 	}

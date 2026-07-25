@@ -55,7 +55,8 @@ class TimelineServicePageTest {
 	void pageRejectsCursorAndFromCombined() {
 		Assertions.assertThatIllegalArgumentException()
 				.isThrownBy(
-						() -> service.page(TimelineMediaType.ALL, null, 10, "cursor", LocalDate.of(2026, Month.JULY, 1)))
+						() -> service.page(TimelineMediaType.ALL, null, 10, "cursor", LocalDate.of(2026, Month.JULY,
+								1)))
 				.withMessageContaining("cannot be combined");
 	}
 

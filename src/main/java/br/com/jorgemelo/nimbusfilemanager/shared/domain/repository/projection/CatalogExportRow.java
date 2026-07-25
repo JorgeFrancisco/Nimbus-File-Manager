@@ -7,8 +7,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * One catalog row streamed by the catalog export. A flat projection of
- * {@code catalog_file} joined to its {@code catalog_file_location}, so the export
- * carries no lazy associations and can be written outside any transaction.
+ * {@code catalog_file} joined to its {@code catalog_file_location}, so the
+ * export carries no lazy associations and can be written outside any
+ * transaction.
  *
  * <p>
  * The internal {@code id} is present only to drive keyset pagination during the

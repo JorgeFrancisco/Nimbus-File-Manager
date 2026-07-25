@@ -71,8 +71,8 @@ class ProcessingMetricsTest {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
 		// Populate every accumulator with a non-zero value so that omitting any single
-		// reset() call would leave that field dirty - otherwise a field that starts at 0
-		// makes its reset indistinguishable from a no-op.
+		// reset() call would leave that field dirty - otherwise a field that starts at
+		// 0 makes its reset indistinguishable from a no-op.
 		metrics.incExecuted();
 		metrics.incCacheAvoided(3);
 		metrics.incCancelled();

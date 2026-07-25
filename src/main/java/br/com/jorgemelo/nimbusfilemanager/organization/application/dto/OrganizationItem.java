@@ -17,7 +17,8 @@ public record OrganizationItem(@JsonIgnore Long internalCatalogFileId, UUID cata
 			String day, String category, String subcategory, String fileType, String rule, String matchReason,
 			Long sizeBytes, boolean samePath, boolean missingDate, boolean targetExists, boolean duplicateTarget,
 			boolean conflict, String conflictType) {
-		this(catalogFileId, UuidV7.fromLegacy(catalogFileId), fileName, sourcePath, targetPath, yearMonth, day, category,
+		this(catalogFileId, UuidV7.fromLegacy(catalogFileId), fileName, sourcePath, targetPath, yearMonth, day,
+				category,
 				subcategory, fileType, rule, matchReason, sizeBytes, samePath, missingDate, targetExists,
 				duplicateTarget, conflict, conflictType, null, null);
 	}
@@ -27,7 +28,8 @@ public record OrganizationItem(@JsonIgnore Long internalCatalogFileId, UUID cata
 
 		OrganizationConflictType conflictType = resolveConflictType(targetExists, duplicateTarget);
 
-		return new OrganizationItem(internalCatalogFileId, catalogFileId, fileName, sourcePath, targetPath, yearMonth, day,
+		return new OrganizationItem(internalCatalogFileId, catalogFileId, fileName, sourcePath, targetPath, yearMonth,
+				day,
 				category, subcategory, fileType, rule, matchReason, sizeBytes, samePath, missingDate, targetExists,
 				duplicateTarget, conflict, conflictType == null ? null : conflictType.name(), location,
 				locationConfidence);

@@ -41,7 +41,8 @@ class VideoSimilarityPropertiesTest {
 
 		assertThat(tooLow.maxFrameHashDistanceOrDefault()).isEqualTo(VideoSimilarityProperties.MIN_FRAME_HASH_DISTANCE);
 		assertThat(tooLow.maxCandidatesOrDefault()).isEqualTo(VideoSimilarityProperties.MIN_MAX_CANDIDATES);
-		assertThat(tooHigh.maxFrameHashDistanceOrDefault()).isEqualTo(VideoSimilarityProperties.MAX_FRAME_HASH_DISTANCE);
+		assertThat(tooHigh.maxFrameHashDistanceOrDefault())
+				.isEqualTo(VideoSimilarityProperties.MAX_FRAME_HASH_DISTANCE);
 		assertThat(tooHigh.maxCandidatesOrDefault()).isEqualTo(VideoSimilarityProperties.MAX_MAX_CANDIDATES);
 	}
 

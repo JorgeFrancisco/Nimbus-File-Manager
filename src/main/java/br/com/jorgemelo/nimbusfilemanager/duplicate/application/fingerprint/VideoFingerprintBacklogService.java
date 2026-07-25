@@ -30,8 +30,8 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoord
 
 /**
  * Video half of the fingerprint backlog: the {@link FingerprintProducer} that
- * finds pending videos, computes each one's multi-frame fingerprint (through the
- * active {@link VideoSimilarityAlgorithm}, which reuses the ffmpeg
+ * finds pending videos, computes each one's multi-frame fingerprint (through
+ * the active {@link VideoSimilarityAlgorithm}, which reuses the ffmpeg
  * {@code ExternalToolGate}) and stores one {@code media_fingerprint} row per
  * sampled frame. All the orchestration is the shared
  * {@link FingerprintBacklogEngine}; this class only supplies the video-specific
@@ -148,10 +148,10 @@ public class VideoFingerprintBacklogService
 		for (VideoFrameFingerprint frame : fingerprint.frames()) {
 			if (!mediaFingerprintRepository.existsByCatalogFileIdAndKindAndAlgorithmAndSampleIndex(
 					video.catalogFileId(), kind(), algorithm(), frame.sampleIndex())) {
-				mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(video.catalogFileId())
-						.kind(kind()).algorithm(algorithm()).sampleIndex(frame.sampleIndex())
-						.positionMs(frame.positionMs()).hashBytes(frame.hash()).sampleBytes(frame.luminance())
-						.computedAt(computedAt).build());
+				mediaFingerprintRepository
+						.save(MediaFingerprint.builder().catalogFileId(video.catalogFileId()).kind(kind())
+								.algorithm(algorithm()).sampleIndex(frame.sampleIndex()).positionMs(frame.positionMs())
+								.hashBytes(frame.hash()).sampleBytes(frame.luminance()).computedAt(computedAt).build());
 			}
 		}
 	}

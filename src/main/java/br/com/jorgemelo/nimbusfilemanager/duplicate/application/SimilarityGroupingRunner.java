@@ -7,8 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Neutral background driver for a {@link SimilarityGrouping}: claims a run for a
- * threshold (unless already cached or a run is in progress), computes it
+ * Neutral background driver for a {@link SimilarityGrouping}: claims a run for
+ * a threshold (unless already cached or a run is in progress), computes it
  * off-thread while tracking progress, and always releases the lock. The photo
  * and video async runner beans each hold one and only add the {@code @Async}
  * boundary, so the claim/track/release logic lives once.
@@ -28,8 +28,8 @@ class SimilarityGroupingRunner {
 	}
 
 	/**
-	 * Claims a background grouping for the threshold, unless already cached or a run
-	 * is in progress. Returns true only when a run was claimed.
+	 * Claims a background grouping for the threshold, unless already cached or a
+	 * run is in progress. Returns true only when a run was claimed.
 	 */
 	public synchronized boolean start(int minSimilarityPercent) {
 		if (grouping.isCached(minSimilarityPercent)) {

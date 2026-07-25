@@ -41,8 +41,8 @@ public abstract class LocalizedComponent {
 	/**
 	 * Optional setter injection: in a Spring context the framework supplies the
 	 * {@link MessageSource}; in plain unit construction the setter is never called,
-	 * so {@code messageSource} stays {@code null} and messages fall back to the base
-	 * bundle. Setter injection is the idiomatic Spring pattern for an optional
+	 * so {@code messageSource} stays {@code null} and messages fall back to the
+	 * base bundle. Setter injection is the idiomatic Spring pattern for an optional
 	 * dependency and keeps this dual-mode behaviour without field injection.
 	 */
 	@Autowired(required = false)

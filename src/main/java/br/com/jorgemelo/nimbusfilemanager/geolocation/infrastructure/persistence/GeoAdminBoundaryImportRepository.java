@@ -9,9 +9,9 @@ import org.springframework.stereotype.Repository;
 /**
  * JDBC write access for the boundary import. Deliberately set-based and native:
  * a worldwide dataset must not build a JPA session, so the bulk delete and the
- * batched inserts go straight through {@link NamedParameterJdbcTemplate} instead
- * of {@code geo_admin_boundary}'s JPA repository. The importer keeps the
- * streaming/progress orchestration; this class owns only the SQL.
+ * batched inserts go straight through {@link NamedParameterJdbcTemplate}
+ * instead of {@code geo_admin_boundary}'s JPA repository. The importer keeps
+ * the streaming/progress orchestration; this class owns only the SQL.
  */
 @Repository
 public class GeoAdminBoundaryImportRepository {

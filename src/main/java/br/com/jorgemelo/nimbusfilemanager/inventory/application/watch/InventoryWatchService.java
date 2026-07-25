@@ -198,9 +198,10 @@ public class InventoryWatchService extends LocalizedComponent {
 			// Skip the debounced inventory while the watched tree is under any operation.
 			// executionActive is a DB check; the in-memory lock (isBusy) closes the race
 			// window where an organization already holds the tree but its Execution row
-			// hasn't flipped to an active status yet. Skipping keeps inventoryPending, so it
-			// simply retries next cycle - deferred, never dropped. (Periodic reconcile now
-			// lives in the independent ReconcileScheduler, which defers on the same lock.)
+			// hasn't flipped to an active status yet. Skipping keeps inventoryPending, so
+			// it simply retries next cycle - deferred, never dropped. (Periodic reconcile
+			// now lives in the independent ReconcileScheduler, which defers on the same
+			// lock.)
 			boolean blocked = executionQueryService.active().isPresent() || isWatchFolderBusy();
 
 			launchPendingInventory(blocked);

@@ -236,10 +236,12 @@ class DuplicateKeepPolicyTest {
 
 	@Test
 	void tiebreakFallsToDateReliabilityWhenOriginalityAndPixelsTie() {
-		// Non-original, non-derivative siblings with identical pixels: the more reliable
-		// date source is kept (exact group -> a candidate is marked, not REVIEW).
+		// Non-original, non-derivative siblings with identical pixels: the more
+		// reliable date source is kept (exact group -> a candidate is marked, not
+		// REVIEW).
 		Map<UUID, Decision> byModifiedOverCreated = policy
-				.decide(List.of(tiebreak(B, DateSource.FILE_CREATED_AT), tiebreak(A, DateSource.FILE_MODIFIED_AT)), true);
+				.decide(List.of(tiebreak(B, DateSource.FILE_CREATED_AT), tiebreak(A, DateSource.FILE_MODIFIED_AT)),
+						true);
 
 		Assertions.assertThat(byModifiedOverCreated.get(A).verdict()).isEqualTo(Verdict.KEEP);
 		Assertions.assertThat(byModifiedOverCreated.get(B).verdict()).isEqualTo(Verdict.DELETE_CANDIDATE);

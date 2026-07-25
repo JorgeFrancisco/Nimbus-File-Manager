@@ -16,8 +16,8 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.Interpretati
  * Turns a batch of {@link UsnRecord}s into the set of physical files under the
  * monitored root that changed, plus a "reconcile needed" signal for the cases a
  * flat event stream cannot represent safely. Pure and native-free: all NTFS
- * access is behind {@link UsnPathResolver}, so every branch is unit-tested with a
- * fake resolver on any platform.
+ * access is behind {@link UsnPathResolver}, so every branch is unit-tested with
+ * a fake resolver on any platform.
  *
  * <p>
  * <b>Subtree filtering.</b> The journal is volume-wide; a change is inside the
@@ -27,9 +27,9 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.Interpretati
  *
  * <p>
  * <b>Rename/move.</b> NTFS emits a {@code RENAME_OLD_NAME} then a
- * {@code RENAME_NEW_NAME} record for the same FRN. A file rename reports both the
- * old and new paths (whichever fall under the root), so a move into, out of or
- * within the library re-syncs correctly.
+ * {@code RENAME_NEW_NAME} record for the same FRN. A file rename reports both
+ * the old and new paths (whichever fall under the root), so a move into, out of
+ * or within the library re-syncs correctly.
  *
  * <p>
  * <b>Reconcile fallback.</b> A <em>directory</em> rename/move moves its whole
@@ -48,7 +48,9 @@ public class UsnChangeInterpreter {
 	private final Path root;
 	private final UsnPathResolver resolver;
 
-	/** Parent-FRN -> directory path under root, or null when confirmed outside root. */
+	/**
+	 * Parent-FRN -> directory path under root, or null when confirmed outside root.
+	 */
 	private final Map<Long, Path> directoryCache = new LinkedHashMap<>(256, 0.75f, true) {
 		@Override
 		protected boolean removeEldestEntry(Map.Entry<Long, Path> eldest) {
@@ -76,8 +78,9 @@ public class UsnChangeInterpreter {
 			}
 		}
 
-		// A RENAME_OLD_NAME whose RENAME_NEW_NAME lands in a later batch: the entry left
-		// this location, so report the old path (or reconcile if a directory moved).
+		// A RENAME_OLD_NAME whose RENAME_NEW_NAME lands in a later batch: the entry
+		// left this location, so report the old path (or reconcile if a directory
+		// moved).
 		for (UsnRecord old : pendingRenameOld.values()) {
 			reconcileNeeded |= applyOldName(old, changed);
 		}
@@ -110,8 +113,9 @@ public class UsnChangeInterpreter {
 	}
 
 	private void applySimple(UsnRecord entry, Set<Path> changed) {
-		// A directory create, delete or attribute change needs no action from this method.
-		// Only a directory move matters, and that arrives as a pair of RENAME records.
+		// A directory create, delete or attribute change needs no action from this
+		// method. Only a directory move matters, and that arrives as a pair of RENAME
+		// records.
 		if (entry.directory()) {
 			return;
 		}
@@ -126,7 +130,10 @@ public class UsnChangeInterpreter {
 				.ifPresent(parent -> changed.add(parent.resolve(entry.fileName())));
 	}
 
-	/** @return the parent directory path when it resolves under the root, else empty. */
+	/**
+	 * @return the parent directory path when it resolves under the root, else
+	 *         empty.
+	 */
 	private Optional<Path> resolveParent(long parentFrn) {
 		if (directoryCache.containsKey(parentFrn)) {
 			return Optional.ofNullable(directoryCache.get(parentFrn));

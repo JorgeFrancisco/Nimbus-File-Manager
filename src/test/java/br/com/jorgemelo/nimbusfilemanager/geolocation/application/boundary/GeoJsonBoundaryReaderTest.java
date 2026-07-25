@@ -24,7 +24,8 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Feature;
 class GeoJsonBoundaryReaderTest {
 
 	private static final String POLYGON = "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[0,1],[1,1],[1,0],[0,0]]]}";
-	private static final String MULTI_POLYGON = "{\"type\":\"MultiPolygon\",\"coordinates\":[[[[0,0],[0,2],[2,2],[2,0],[0,0]]]]}";
+	private static final String MULTI_POLYGON =
+			"{\"type\":\"MultiPolygon\",\"coordinates\":[[[[0,0],[0,2],[2,2],[2,0],[0,0]]]]}";
 	private static final String POINT = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
 	private static final String LINE_STRING = "{\"type\":\"LineString\",\"coordinates\":[[0,0],[1,1]]}";
 	private static final String GEOMETRY_COLLECTION = "{\"type\":\"GeometryCollection\",\"geometries\":[]}";

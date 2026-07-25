@@ -1,8 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows;
 
 /**
- * Win32 flags and codes for {@code ReadDirectoryChangesW} (winnt.h / winbase.h).
- * Isolated so the native seam reads declaratively.
+ * Win32 flags and codes for {@code ReadDirectoryChangesW} (winnt.h /
+ * winbase.h). Isolated so the native seam reads declaratively.
  */
 final class WindowsRdcwConstants {
 

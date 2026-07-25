@@ -157,7 +157,8 @@ public class InventoryPersistenceService {
 	}
 
 	public List<InventoryBatchItemResult> saveOrCacheBatch(List<Path> files, Path sourcePath, MetadataOptions options,
-			Function<Path, MetadataResult> metadataExtractor, BooleanSupplier cancelled, IntConsumer onExtractionProgress) {
+			Function<Path, MetadataResult> metadataExtractor, BooleanSupplier cancelled,
+					IntConsumer onExtractionProgress) {
 		if (files.isEmpty()) {
 			return List.of();
 		}

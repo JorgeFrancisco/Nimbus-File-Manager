@@ -21,14 +21,15 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameSam
  * process per video, never one per timestamp.
  *
  * <p>
- * Frame selection uses a {@code select} expression - {@code gte(t,T)*lt(prev_t,T)}
- * per target - which picks the first frame that crosses each timestamp {@code T}.
- * This is exact per-timestamp sampling, NOT the fixed-frequency behavior of the
- * {@code fps} filter (which does not honor arbitrary target timestamps).
- * {@code -fps_mode passthrough} keeps the selected frames' timing intact.
- * Isolated in its own {@code *ProcessRunner} (excluded from coverage) because
- * the spawn cannot be meaningfully unit-tested; the decode-free logic (slicing,
- * hashing) stays in {@code VideoPerceptualHashService}.
+ * Frame selection uses a {@code select} expression -
+ * {@code gte(t,T)*lt(prev_t,T)} per target - which picks the first frame that
+ * crosses each timestamp {@code T}. This is exact per-timestamp sampling, NOT
+ * the fixed-frequency behavior of the {@code fps} filter (which does not honor
+ * arbitrary target timestamps). {@code -fps_mode passthrough} keeps the
+ * selected frames' timing intact. Isolated in its own {@code *ProcessRunner}
+ * (excluded from coverage) because the spawn cannot be meaningfully
+ * unit-tested; the decode-free logic (slicing, hashing) stays in
+ * {@code VideoPerceptualHashService}.
  */
 @Component
 public class FfmpegVideoFrameProcessRunner {

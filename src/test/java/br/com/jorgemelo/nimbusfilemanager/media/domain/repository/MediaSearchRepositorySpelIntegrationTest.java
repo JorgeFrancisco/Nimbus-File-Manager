@@ -30,10 +30,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.FilterBuilder
 
 /**
  * Runtime checks that {@code MediaSearchRepository.search} binds its
- * {@link MediaSearchFilter} through the SpEL placeholders ({@code :#{#filter.x}})
- * against a real PostgreSQL instance. Every filter field is exercised in both a
- * matching and a non-matching value so the {@code (:x IS NULL OR ...)} branches
- * are proven to fire at runtime, not just compile.
+ * {@link MediaSearchFilter} through the SpEL placeholders
+ * ({@code :#{#filter.x}}) against a real PostgreSQL instance. Every filter
+ * field is exercised in both a matching and a non-matching value so the
+ * {@code (:x IS NULL OR ...)} branches are proven to fire at runtime, not just
+ * compile.
  */
 @SpringBootTest
 @Transactional
@@ -111,7 +112,8 @@ class MediaSearchRepositorySpelIntegrationTest {
 
 	@Test
 	void sizeBoundsBindAsLongs() {
-		Assertions.assertThat(search(filter().minSizeBytes(1000L).maxSizeBytes(5000L).build())).anyMatch(this::isSeeded);
+		Assertions.assertThat(search(filter().minSizeBytes(1000L).maxSizeBytes(5000L).build()))
+				.anyMatch(this::isSeeded);
 		Assertions.assertThat(search(filter().minSizeBytes(5000L).build())).noneMatch(this::isSeeded);
 		Assertions.assertThat(search(filter().maxSizeBytes(1000L).build())).noneMatch(this::isSeeded);
 	}

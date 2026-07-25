@@ -35,10 +35,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 /**
  * End-to-end validation of video similarity against the real ffmpeg binary: it
  * generates synthetic clips, runs the actual frame extraction + pHash pipeline
- * and asserts the robustness targets. Runs only where the bundled Windows ffmpeg
- * is present (like every other external-process glue, it is skipped on the Linux
- * CI, which has no {@code tools/bin/ffmpeg.exe}); this is the manual/local
- * verification the {@code *ProcessRunner} coverage exclusion refers to.
+ * and asserts the robustness targets. Runs only where the bundled Windows
+ * ffmpeg is present (like every other external-process glue, it is skipped on
+ * the Linux CI, which has no {@code tools/bin/ffmpeg.exe}); this is the
+ * manual/local verification the {@code *ProcessRunner} coverage exclusion
+ * refers to.
  *
  * <p>
  * It also empirically confirms exact per-timestamp sampling: a 10s clip yields

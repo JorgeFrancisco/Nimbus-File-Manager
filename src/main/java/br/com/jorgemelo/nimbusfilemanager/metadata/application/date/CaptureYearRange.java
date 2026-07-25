@@ -4,8 +4,8 @@ import java.time.Clock;
 import java.time.Year;
 
 /**
- * Shared plausibility guard for a parsed capture year: a real photo/video year is
- * between 1900 and next year (a small allowance for clock skew), so anything
+ * Shared plausibility guard for a parsed capture year: a real photo/video year
+ * is between 1900 and next year (a small allowance for clock skew), so anything
  * outside that range is a mis-parse and must be rejected. Centralised so the
  * folder-layout resolver and the filename rules apply the exact same bounds
  * instead of each hardcoding 1900.

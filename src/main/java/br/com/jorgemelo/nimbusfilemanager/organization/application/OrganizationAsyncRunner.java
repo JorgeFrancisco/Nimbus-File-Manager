@@ -78,7 +78,8 @@ public class OrganizationAsyncRunner {
 		try {
 			long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
 
-			performanceTelemetryService.recordMetrics(executionId, null, Map.of(phase, new PhaseSnapshot(millis, items)));
+			performanceTelemetryService.recordMetrics(executionId, null, Map.of(phase, new PhaseSnapshot(millis,
+					items)));
 		} catch (RuntimeException _) {
 			// Best-effort telemetry: never break the run because a phase failed to record.
 		}

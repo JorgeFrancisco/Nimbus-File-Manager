@@ -405,7 +405,8 @@ class MediaInfoServiceTest {
 	}
 
 	private NimbusFileManagerProperties properties(String ffprobe) {
-		return new NimbusFileManagerProperties("C:/workspace", List.of(), null, new Tools(ffprobe, null, null), null, null,
+		return new NimbusFileManagerProperties("C:/workspace", List.of(), null, new Tools(ffprobe, null, null), null,
+				null,
 				null, null, null, null);
 	}
 

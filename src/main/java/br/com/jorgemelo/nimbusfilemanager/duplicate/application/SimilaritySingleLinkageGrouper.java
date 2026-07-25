@@ -7,11 +7,11 @@ import java.util.function.ToIntBiFunction;
 /**
  * Single-linkage clustering shared by the photo and video similarity services:
  * each candidate joins the first cluster whose every member scores at or above
- * the threshold, otherwise it starts a new cluster; only clusters with more than
- * one member survive. The pairwise score (0-100, or negative when a cheap
- * pre-filter rejects the pair before the expensive comparison) is supplied by the
- * caller and expected to be memoized there. Media-agnostic: it knows nothing
- * about photos, videos, pHash or SSIM.
+ * the threshold, otherwise it starts a new cluster; only clusters with more
+ * than one member survive. The pairwise score (0-100, or negative when a cheap
+ * pre-filter rejects the pair before the expensive comparison) is supplied by
+ * the caller and expected to be memoized there. Media-agnostic: it knows
+ * nothing about photos, videos, pHash or SSIM.
  */
 final class SimilaritySingleLinkageGrouper {
 
@@ -59,6 +59,7 @@ final class SimilaritySingleLinkageGrouper {
 				return false;
 			}
 		}
+
 		return true;
 	}
 

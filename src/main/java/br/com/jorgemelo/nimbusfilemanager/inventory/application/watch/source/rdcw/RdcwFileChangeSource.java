@@ -18,8 +18,8 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.Fil
  * The optional USN catch-up (available only when the volume can be opened, i.e.
  * elevated) is folded in as a one-shot: the offline changes it found are
  * delivered on the first poll, then the source is pure real-time. When no
- * catch-up was possible, a startup reconcile is requested so offline changes are
- * still picked up.
+ * catch-up was possible, a startup reconcile is requested so offline changes
+ * are still picked up.
  */
 public class RdcwFileChangeSource implements FileChangeSource {
 

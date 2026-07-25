@@ -23,9 +23,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
 
 /**
  * Entry point the web layer (Onboarding and manual "Inventario" screens) calls
- * to kick off an inventory run. Creates the {@link Execution} row, then launches
- * the Spring Batch job in the background via {@link InventoryBatchAsyncRunner} so
- * the request can redirect to the progress screen right away.
+ * to kick off an inventory run. Creates the {@link Execution} row, then
+ * launches the Spring Batch job in the background via
+ * {@link InventoryBatchAsyncRunner} so the request can redirect to the progress
+ * screen right away.
  */
 @Service
 public class InventoryBatchLauncherService {

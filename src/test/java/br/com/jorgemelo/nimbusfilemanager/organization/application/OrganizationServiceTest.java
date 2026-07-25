@@ -161,7 +161,8 @@ class OrganizationServiceTest {
 
 		OrganizationPreviewRequest samePathRequest = new OrganizationPreviewRequest("C:/input", "C:/input", true,
 				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
-		OrganizationPreviewRequest nestedTargetRequest = new OrganizationPreviewRequest("C:/input", "C:/input/organized",
+		OrganizationPreviewRequest nestedTargetRequest = new OrganizationPreviewRequest("C:/input",
+				"C:/input/organized",
 				true, OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
 
 		Assertions.assertThatThrownBy(() -> service.preview(samePathRequest))

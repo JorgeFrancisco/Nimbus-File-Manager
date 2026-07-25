@@ -9,16 +9,16 @@ import java.util.Set;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.Interpretation;
 
 /**
- * Drives the read loop over a {@link UsnVolume}: from the current cursor it keeps
- * reading batches until the journal is drained, parses and interprets each, and
- * advances the cursor. Pure orchestration - the native access is behind
- * {@link UsnVolume} and the change logic behind {@link UsnChangeInterpreter} - so
- * cursor advance, coalescing across batches and the drain loop are all tested
- * with fakes.
+ * Drives the read loop over a {@link UsnVolume}: from the current cursor it
+ * keeps reading batches until the journal is drained, parses and interprets
+ * each, and advances the cursor. Pure orchestration - the native access is
+ * behind {@link UsnVolume} and the change logic behind
+ * {@link UsnChangeInterpreter} - so cursor advance, coalescing across batches
+ * and the drain loop are all tested with fakes.
  *
  * <p>
- * The cursor ({@link #nextUsn()}) only moves forward as batches are consumed; the
- * owner persists it after a full {@link #poll()} so an interrupted process
+ * The cursor ({@link #nextUsn()}) only moves forward as batches are consumed;
+ * the owner persists it after a full {@link #poll()} so an interrupted process
  * re-reads from the last fully-processed point. {@link #consumeOverflow()}
  * aggregates every "reconcile needed" signal (directory move, or an explicit
  * {@link #requestReconcile()} from a cursor gap).
@@ -39,12 +39,16 @@ public class UsnJournalReader {
 		this.nextUsn = startUsn;
 	}
 
-	/** The USN the next poll will start from - the value to persist as the cursor. */
+	/**
+	 * The USN the next poll will start from - the value to persist as the cursor.
+	 */
 	public long nextUsn() {
 		return nextUsn;
 	}
 
-	/** Reads (and clears) whether a full reconcile is needed since the last call. */
+	/**
+	 * Reads (and clears) whether a full reconcile is needed since the last call.
+	 */
 	public boolean consumeOverflow() {
 		boolean happened = overflow;
 
@@ -53,12 +57,17 @@ public class UsnJournalReader {
 		return happened;
 	}
 
-	/** Flags that the catalog must be reconciled (e.g. the cursor could not catch up). */
+	/**
+	 * Flags that the catalog must be reconciled (e.g. the cursor could not catch
+	 * up).
+	 */
 	void requestReconcile() {
 		overflow = true;
 	}
 
-	/** Jumps the cursor to {@code usn}, used to resynchronize after a journal gap. */
+	/**
+	 * Jumps the cursor to {@code usn}, used to resynchronize after a journal gap.
+	 */
 	void resetTo(long usn) {
 		this.nextUsn = usn;
 	}

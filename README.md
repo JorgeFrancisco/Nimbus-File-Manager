@@ -991,7 +991,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       1521 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      95.90% instruction, 85.69% branch, 95.29% line, 96.22% method, 99.70% class
+JaCoCo:      95.90% instruction, 85.69% branch, 95.30% line, 96.22% method, 99.70% class
 ```
 
 The 9 skipped tests are OS-dependent (symbolic-link / POSIX-permission) cases that

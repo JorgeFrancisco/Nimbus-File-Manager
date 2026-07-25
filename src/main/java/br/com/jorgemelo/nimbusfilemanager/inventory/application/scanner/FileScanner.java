@@ -100,14 +100,14 @@ public class FileScanner {
 	 * Recursive walk that (1) never follows symbolic links/junctions - it skips
 	 * their whole subtree, so the app only ever sees physical paths and can't loop
 	 * on a circular link; (2) prunes hidden/system directory subtrees (e.g. Windows
-	 * {@code System Volume Information} or {@code $RECYCLE.BIN} at a drive root, both
-	 * hidden) unless {@code includeHidden} is set, so their contents are never
+	 * {@code System Volume Information} or {@code $RECYCLE.BIN} at a drive root,
+	 * both hidden) unless {@code includeHidden} is set, so their contents are never
 	 * inventoried even when the files inside are not individually flagged hidden -
 	 * the per-file hidden filter alone misses those; and (3) never aborts the whole
 	 * scan on an unreadable or protected directory: such entries are skipped
-	 * instead. A plain {@link Files#walk} would throw {@code UncheckedIOException} on
-	 * the first such directory and lose the entire tree. This mirrors the directory
-	 * pruning the reconcile walk already performs, so both stay in sync.
+	 * instead. A plain {@link Files#walk} would throw {@code UncheckedIOException}
+	 * on the first such directory and lose the entire tree. This mirrors the
+	 * directory pruning the reconcile walk already performs, so both stay in sync.
 	 */
 	private Stream<Path> walkPhysicalTree(Path sourcePath, boolean includeHidden) throws IOException {
 		List<Path> files = new ArrayList<>();

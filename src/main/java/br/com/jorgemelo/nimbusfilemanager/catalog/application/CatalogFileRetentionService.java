@@ -12,9 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Retention cleanup of the catalog: permanently removes {@code catalog_file}
  * rows that have been MISSING (their file absent from disk) longer than the
- * configured number of days, anchored on {@code lifecycle_changed_at}. Reconcile
- * marks records MISSING but never removes them, so without this they accumulate
- * forever.
+ * configured number of days, anchored on {@code lifecycle_changed_at}.
+ * Reconcile marks records MISSING but never removes them, so without this they
+ * accumulate forever.
  *
  * <p>
  * Only MISSING is purged. DELETED rows are left untouched on purpose: their
@@ -36,10 +36,10 @@ class CatalogFileRetentionService {
 	}
 
 	/**
-	 * Removes catalog rows MISSING for more than {@code days} days. Their placement,
-	 * metadata and media rows cascade away in the database; movement audit rows are
-	 * detached (SET NULL), so history is preserved. A non-positive {@code days} is a
-	 * no-op (retention disabled).
+	 * Removes catalog rows MISSING for more than {@code days} days. Their
+	 * placement, metadata and media rows cascade away in the database; movement
+	 * audit rows are detached (SET NULL), so history is preserved. A non-positive
+	 * {@code days} is a no-op (retention disabled).
 	 *
 	 * @return number of catalog rows removed
 	 */

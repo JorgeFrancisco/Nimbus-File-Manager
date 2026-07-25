@@ -42,8 +42,10 @@ class AdminBoundaryPipStrategyTest {
 	// Curitiba is a wide polygon (centroid far to the west); Pinhais is a small
 	// polygon to the east. The test point sits inside Curitiba but closer to
 	// Pinhais' centroid, so nearest-centroid would be wrong.
-	private static final String CURITIBA = "POLYGON((-49.55 -25.60, -49.18 -25.60, -49.18 -25.35, -49.55 -25.35, -49.55 -25.60))";
-	private static final String PINHAIS = "POLYGON((-49.18 -25.60, -49.10 -25.60, -49.10 -25.35, -49.18 -25.35, -49.18 -25.60))";
+	private static final String CURITIBA =
+			"POLYGON((-49.55 -25.60, -49.18 -25.60, -49.18 -25.35, -49.55 -25.35, -49.55 -25.60))";
+	private static final String PINHAIS =
+			"POLYGON((-49.18 -25.60, -49.10 -25.60, -49.10 -25.35, -49.18 -25.35, -49.18 -25.60))";
 	private static final String PARANA = "POLYGON((-54 -27, -48 -27, -48 -22, -54 -22, -54 -27))";
 	private static final String BRAZIL = "POLYGON((-74 -34, -34 -34, -34 5, -74 5, -74 -34))";
 

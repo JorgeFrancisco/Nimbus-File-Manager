@@ -2,7 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection;
 
 import java.util.UUID;
 
-/** Aggregated EXIF pin row: media grouped by coordinate rounded to 4 decimals. */
+/**
+ * Aggregated EXIF pin row: media grouped by coordinate rounded to 4 decimals.
+ */
 public interface MapExifPinProjection {
 
 	Double getLat();

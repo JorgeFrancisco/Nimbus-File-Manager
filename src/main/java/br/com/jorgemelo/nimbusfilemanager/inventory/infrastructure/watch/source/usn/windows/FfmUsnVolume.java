@@ -30,19 +30,20 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The FFM implementation of {@link UsnVolume}: opens the NTFS volume device
- * ({@code \\.\C:}), queries (creating if needed) its USN journal, and reads record
- * batches. The Win32 structures are described with {@link MemoryLayout} and read
- * through named {@link VarHandle}s instead of scattered raw offsets, keeping the
- * ABI explicit and free of union/field-order surprises. Unverifiable off Windows -
- * guarded by {@code WindowsUsnSupport} and covered by conditional NTFS integration
- * tests.
+ * ({@code \\.\C:}), queries (creating if needed) its USN journal, and reads
+ * record batches. The Win32 structures are described with {@link MemoryLayout}
+ * and read through named {@link VarHandle}s instead of scattered raw offsets,
+ * keeping the ABI explicit and free of union/field-order surprises.
+ * Unverifiable off Windows - guarded by {@code WindowsUsnSupport} and covered
+ * by conditional NTFS integration tests.
  *
  * <p>
- * The volume handle is a bare pointer with no arena of its own; each native call
- * uses a short-lived {@link Arena#ofConfined() confined arena} for its scratch
- * buffers, freed as soon as the call returns. The whole volume lifecycle (open,
- * read, close) runs synchronously on one thread, so confinement holds and nothing
- * accumulates across the many reads of a catch-up.
+ * The volume handle is a bare pointer with no arena of its own; each native
+ * call uses a short-lived {@link Arena#ofConfined() confined arena} for its
+ * scratch buffers, freed as soon as the call returns. The whole volume
+ * lifecycle (open, read, close) runs synchronously on one thread, so
+ * confinement holds and nothing accumulates across the many reads of a
+ * catch-up.
  */
 @Slf4j
 final class FfmUsnVolume implements UsnVolume {
@@ -54,7 +55,8 @@ final class FfmUsnVolume implements UsnVolume {
 	private static final int ALL_REASONS = 0xFFFFFFFF;
 	private static final long OUTPUT_ALIGNMENT = 8L;
 
-	// USN_JOURNAL_DATA_V2 prefix (the device may write up to 80 bytes; only these fields are read).
+	// USN_JOURNAL_DATA_V2 prefix (the device may write up to 80 bytes; only these
+	// fields are read).
 	private static final StructLayout USN_JOURNAL_DATA = MemoryLayout.structLayout(JAVA_LONG.withName("UsnJournalID"),
 			JAVA_LONG.withName("FirstUsn"), JAVA_LONG.withName("NextUsn"), JAVA_LONG.withName("LowestValidUsn"));
 	private static final VarHandle JOURNAL_ID = USN_JOURNAL_DATA.varHandle(groupElement("UsnJournalID"));
@@ -89,7 +91,10 @@ final class FfmUsnVolume implements UsnVolume {
 		this.volumePath = volumePath;
 	}
 
-	/** Opens the volume that hosts {@code driveLetter} (e.g. {@code "C"}) and its journal. */
+	/**
+	 * Opens the volume that hosts {@code driveLetter} (e.g. {@code "C"}) and its
+	 * journal.
+	 */
 	static FfmUsnVolume open(String driveLetter) {
 		String volumePath = "\\\\.\\" + driveLetter + ":";
 
@@ -180,13 +185,17 @@ final class FfmUsnVolume implements UsnVolume {
 
 			if (!ok) {
 				throw new UsnUnavailableException(
-						"Could not create USN journal on " + volumePath + " (error " + WindowsKernel32.lastError(capture)
+						"Could not create USN journal on " + volumePath + " (error "
+								+ WindowsKernel32.lastError(capture)
 								+ ")");
 			}
 		}
 	}
 
-	/** The shared volume handle, reused by {@link FfmUsnPathResolver} (which never closes it). */
+	/**
+	 * The shared volume handle, reused by {@link FfmUsnPathResolver} (which never
+	 * closes it).
+	 */
 	MemorySegment nativeHandle() {
 		return handle;
 	}

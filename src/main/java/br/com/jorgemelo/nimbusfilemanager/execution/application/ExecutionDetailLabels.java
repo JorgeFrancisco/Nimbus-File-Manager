@@ -13,9 +13,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 /**
  * Localized labels for the movement and analysis-error enums shown on the
  * execution-detail screen, resolved in the backend so the template renders the
- * audit tables without translating any domain code itself. The maps are keyed by
- * enum name, since the responses carry the name string; exhaustive switches over
- * literal bundle keys keep every key visible to the i18n key-parity test.
+ * audit tables without translating any domain code itself. The maps are keyed
+ * by enum name, since the responses carry the name string; exhaustive switches
+ * over literal bundle keys keep every key visible to the i18n key-parity test.
  */
 @Component
 public class ExecutionDetailLabels extends LocalizedComponent {

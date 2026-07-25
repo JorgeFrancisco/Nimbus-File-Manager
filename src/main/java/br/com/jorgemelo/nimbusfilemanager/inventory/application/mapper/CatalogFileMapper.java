@@ -180,7 +180,8 @@ public class CatalogFileMapper {
 	}
 
 	public CatalogFile toEntity(Path file, Path sourcePath, MetadataResult metadata) {
-		CatalogFile catalogFile = CatalogFile.builder().fileKey(PathUtils.normalize(file)).fileName(metadata.getFileName())
+		CatalogFile catalogFile = CatalogFile.builder().fileKey(PathUtils.normalize(file))
+				.fileName(metadata.getFileName())
 				.extension(metadata.getExtension()).sizeBytes(metadata.getSizeBytes()).sha256(metadata.getSha256())
 				.md5(metadata.getMd5()).mimeType(metadata.getMimeType()).createdAt(metadata.getCreatedAt())
 				.modifiedAt(metadata.getModifiedAt()).fileType(metadata.getFileType())
@@ -191,7 +192,8 @@ public class CatalogFileMapper {
 
 		Path parent = requireParent(normalized, "media file");
 
-		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(normalized.toString())
+		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(normalized.toString())
 				.currentFolder(PathUtils.normalize(parent)).originalPath(normalized.toString())
 				.originalFolder(PathUtils.normalize(parent)).inventoryPath(PathUtils.normalize(sourcePath)).build();
 

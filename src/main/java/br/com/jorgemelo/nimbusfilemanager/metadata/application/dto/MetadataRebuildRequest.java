@@ -11,10 +11,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 public record MetadataRebuildRequest(
-		@Schema(description = "Folder scope for files already registered in the inventory.", example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
-		@Schema(description = "Fields to rebuild. When omitted or empty, DATE is rebuilt.", example = "[\"DATE\", \"MIME\", \"GPS\", \"DIMENSIONS\", \"CAMERA\", \"SUBCATEGORY\"]") List<MetadataRebuildField> refresh,
+		@Schema(description = "Folder scope for files already registered in the inventory.",
+				example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
+		@Schema(description = "Fields to rebuild. When omitted or empty, DATE is rebuilt.",
+				example = "[\"DATE\", \"MIME\", \"GPS\", \"DIMENSIONS\", \"CAMERA\", \"SUBCATEGORY\"]") List<MetadataRebuildField> refresh,
 		@Schema(description = "Only rebuild files with null capture date.", example = "false") Boolean captureDateNull,
-		@Schema(description = "Only rebuild files with this current date source.", example = "FILE_NAME") DateSource dateSource,
+		@Schema(description = "Only rebuild files with this current date source.",
+				example = "FILE_NAME") DateSource dateSource,
 		@Schema(description = "Maximum number of files to process.", example = "10000") Integer limit,
 		@Schema(description = "Simulate rebuild without persisting changes.", example = "false") boolean dryRun) {
 

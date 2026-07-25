@@ -25,7 +25,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "user_page_preference", uniqueConstraints = @UniqueConstraint(name = "uk_user_page_preference", columnNames = {
+@Table(name = "user_page_preference", uniqueConstraints = @UniqueConstraint(name = "uk_user_page_preference",
+		columnNames = {
 		"user_id", "page_key", "preference_key" }))
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class UserPagePreference {

@@ -11,8 +11,8 @@ import java.util.Optional;
  *
  * <p>
  * The single seam over the native {@code OpenFileById} +
- * {@code GetFinalPathNameByHandle} calls, so the interpreter's filtering logic is
- * testable with a fake resolver. Returns empty when the FRN can no longer be
+ * {@code GetFinalPathNameByHandle} calls, so the interpreter's filtering logic
+ * is testable with a fake resolver. Returns empty when the FRN can no longer be
  * opened (for example the directory was already deleted).
  */
 public interface UsnPathResolver {

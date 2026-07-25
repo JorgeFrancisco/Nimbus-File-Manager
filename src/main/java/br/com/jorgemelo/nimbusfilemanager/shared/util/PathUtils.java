@@ -57,9 +57,10 @@ public final class PathUtils {
 	 * <p>
 	 * The pattern uses backslash as the LIKE escape character. In native PostgreSQL
 	 * that is the default; in HQL/JPQL a bound LIKE parameter treats backslash as a
-	 * literal unless the query declares it, so the {@code @Query} must pair this with
-	 * {@code like :pattern escape '\'} (written {@code escape '\\'} inside a text
-	 * block). Without that clause HQL would match zero rows for any Windows path.
+	 * literal unless the query declares it, so the {@code @Query} must pair this
+	 * with {@code like :pattern escape '\'} (written {@code escape '\\'} inside a
+	 * text block). Without that clause HQL would match zero rows for any Windows
+	 * path.
 	 */
 	public static String descendantLikePattern(String folder, String separator) {
 		String prefix = folder.endsWith(separator) ? folder : folder + separator;

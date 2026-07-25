@@ -78,7 +78,8 @@ class AppUserAccountServiceTest {
 		when(passwordEncoder.encode(ArgumentMatchers.anyString())).thenReturn("hash");
 		when(repository.save(ArgumentMatchers.any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		// 5 characters is below the 6-character minimum and must be rejected before any save.
+		// 5 characters is below the 6-character minimum and must be rejected before any
+		// save.
 		Assertions.assertThatThrownBy(() -> service.register("a@example.com", "A", "12345"))
 				.isInstanceOf(IllegalArgumentException.class).hasMessage("A senha deve ter pelo menos 6 caracteres.");
 
@@ -204,7 +205,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("oldHash")
 				.passwordChangeRequired(true).build();
@@ -230,7 +232,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("hash").build();
 
@@ -251,7 +254,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("hash")
 				.lockedUntil(LocalDateTime.now(ClockHolder.clock()).plusMinutes(10)).build();
@@ -275,7 +279,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("defaultHash")
 				.passwordChangeRequired(true).build();
@@ -298,7 +303,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("hash")
 				.passwordChangeRequired(false).build();
@@ -318,7 +324,8 @@ class AppUserAccountServiceTest {
 
 		AccountLockService accountLockService = mock(AccountLockService.class);
 
-		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService, Clock.systemDefaultZone());
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder, accountLockService,
+				Clock.systemDefaultZone());
 
 		AppUser user = AppUser.builder().username("admin@example.com").passwordHash("defaultHash")
 				.passwordChangeRequired(true).build();

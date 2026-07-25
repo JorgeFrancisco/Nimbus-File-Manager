@@ -111,7 +111,8 @@ class SettingsWebControllerTest {
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		Assertions.assertThat(
-				controller.update("nimbus-file-manager.inventory.watch-folder", "C:/media", true, authentication, redirect))
+				controller.update("nimbus-file-manager.inventory.watch-folder", "C:/media", true, authentication,
+						redirect))
 				.isEqualTo("redirect:/app/settings");
 
 		verify(librarySwitch).validateNewFolder("C:/media");
@@ -209,7 +210,8 @@ class SettingsWebControllerTest {
 
 	@Test
 	void updatePreferencesShouldAcceptAbsentOptionalValues() {
-		controller.updatePreferences(new UpdatePreferencesForm(null, null, null, false, false, false, null, "unexpected"),
+		controller.updatePreferences(new UpdatePreferencesForm(null, null, null, false, false, false, null,
+				"unexpected"),
 				null, new RedirectAttributesModelMap());
 
 		verify(preferences).save("system", "layout", SharedConstants.THEME_PREFERENCE_KEY, "light");
@@ -247,9 +249,10 @@ class SettingsWebControllerTest {
 
 	@Test
 	void updatePreferencesSavesUncheckedCheckboxesAsFalseInsteadOfFailing() throws Exception {
-		// Regression: an unchecked checkbox is absent from the POST, so record binding sees
-		// null for the boolean flags. They must default to false (not a 400), which is the
-		// "switch to dark mode and save" path where the organization checkboxes are untouched.
+		// Regression: an unchecked checkbox is absent from the POST, so record binding
+		// sees null for the boolean flags. They must default to false (not a 400),
+		// which is the "switch to dark mode and save" path where the organization
+		// checkboxes are untouched.
 		MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
 				.setViewResolvers(new InternalResourceViewResolver()).build();
 

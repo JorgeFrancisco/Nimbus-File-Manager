@@ -28,7 +28,8 @@ class UsnRecordParserTest {
 
 	@Test
 	void flagsDirectoryRecordsFromTheAttributes() {
-		byte[] buffer = UsnRecordBuffers.recordBytes(1L, 1L, 2L, UsnReason.RENAME_NEW_NAME, UsnRecordBuffers.ATTR_DIRECTORY,
+		byte[] buffer = UsnRecordBuffers.recordBytes(1L, 1L, 2L, UsnReason.RENAME_NEW_NAME,
+				UsnRecordBuffers.ATTR_DIRECTORY,
 				"2024");
 
 		Assertions.assertThat(UsnRecordParser.parse(buffer)).singleElement()
@@ -38,8 +39,10 @@ class UsnRecordParserTest {
 	@Test
 	void parsesSeveralConcatenatedRecordsInOrder() {
 		byte[] buffer = UsnRecordBuffers.concat(
-				UsnRecordBuffers.recordBytes(1L, 10L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL, "a.jpg"),
-				UsnRecordBuffers.recordBytes(2L, 11L, 20L, UsnReason.FILE_DELETE, UsnRecordBuffers.ATTR_NORMAL, "b.png"));
+				UsnRecordBuffers.recordBytes(1L, 10L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+						"a.jpg"),
+				UsnRecordBuffers.recordBytes(2L, 11L, 20L, UsnReason.FILE_DELETE, UsnRecordBuffers.ATTR_NORMAL,
+						"b.png"));
 
 		Assertions.assertThat(UsnRecordParser.parse(buffer)).extracting(UsnRecord::fileName).containsExactly("a.jpg",
 				"b.png");
@@ -48,8 +51,10 @@ class UsnRecordParserTest {
 	@Test
 	void skipsUnsupportedMajorVersionButKeepsSteppingByLength() {
 		byte[] unsupported = UsnRecordBuffers.withMajorVersion(
-				UsnRecordBuffers.recordBytes(1L, 10L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL, "skip.me"), 3);
-		byte[] supported = UsnRecordBuffers.recordBytes(2L, 11L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+				UsnRecordBuffers.recordBytes(1L, 10L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
+						"skip.me"), 3);
+		byte[] supported = UsnRecordBuffers.recordBytes(2L, 11L, 20L, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL,
 				"keep.jpg");
 
 		Assertions.assertThat(UsnRecordParser.parse(UsnRecordBuffers.concat(unsupported, supported)))
@@ -62,7 +67,8 @@ class UsnRecordParserTest {
 				"a.jpg");
 		byte[] truncated = UsnRecordBuffers.concat(valid, new byte[] { 5, 0, 0, 0, 1, 2 });
 
-		Assertions.assertThat(UsnRecordParser.parse(truncated)).extracting(UsnRecord::fileName).containsExactly("a.jpg");
+		Assertions.assertThat(UsnRecordParser.parse(truncated)).extracting(UsnRecord::fileName)
+				.containsExactly("a.jpg");
 	}
 
 	@Test

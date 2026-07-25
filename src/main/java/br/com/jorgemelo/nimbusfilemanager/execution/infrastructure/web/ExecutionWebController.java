@@ -47,7 +47,8 @@ public class ExecutionWebController {
 		ExecutionResponse execution = executionQueryService.get(id);
 
 		// While the run is still active, detail would render with incomplete data, so
-		// send the user to the live progress screen (also how they resume watching a run).
+		// send the user to the live progress screen (also how they resume watching a
+		// run).
 		if (ExecutionStatusNames.IN_PROGRESS_NAMES.contains(execution.status())) {
 			return "redirect:/app/progress/" + id + "?kind=" + progressKind(execution);
 		}
