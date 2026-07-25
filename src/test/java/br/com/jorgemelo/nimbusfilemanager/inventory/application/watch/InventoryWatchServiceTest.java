@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.LoggerFactory;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
@@ -653,6 +655,30 @@ class InventoryWatchServiceTest {
 	// source for the temp dir - the exact behaviour the watcher had before the USN
 	// work
 	// and what runs on the Linux CI (where the USN provider returns empty anyway).
+	/**
+	 * When the platform refuses to open a watcher the service must stay up and
+	 * report why on the status screen, instead of leaving the app half-started with
+	 * no explanation.
+	 */
+	@Test
+	void aFailureToOpenTheWatcherShouldSurfaceOnTheStatusInsteadOfPropagating() {
+		FileChangeSourceFactory failing = new FileChangeSourceFactory(_ -> {
+			throw new IllegalStateException("no watcher available on this volume");
+		});
+
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
+				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
+				mock(OperationLockService.class), failing, recorder(), Clock.systemDefaultZone(), watchProps(true));
+
+		service.reconfigure();
+
+		InventoryWatchStatus status = service.status();
+
+		Assertions.assertThat(status.running()).isFalse();
+		Assertions.assertThat(status.configured()).isTrue();
+		Assertions.assertThat(status.error()).contains("no watcher available on this volume");
+	}
+
 	private FileChangeSourceFactory watchOnlyFactory() {
 		return new FileChangeSourceFactory(_ -> Optional.empty());
 	}

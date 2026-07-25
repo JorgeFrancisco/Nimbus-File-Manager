@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -289,6 +290,78 @@ class ProcessingCoordinatorTest {
 			assertThat(metrics.snapshot().tasksError()).isZero();
 		} finally {
 			coordinator.shutdown();
+		}
+	}
+
+	/**
+	 * A coordinator whose executor is already shut down rejects every submission.
+	 * The batch must still come back complete - one error outcome per item, the
+	 * backpressure permit released and progress reported - instead of blowing up
+	 * the caller or leaking a permit and deadlocking the next batch.
+	 */
+	@Test
+	void submissionRejectedByAShutDownExecutorBecomesAnErrorOutcome() {
+		ProcessingMetrics metrics = new ProcessingMetrics();
+
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 1, 2, 2, 2), metrics);
+
+		coordinator.shutdown();
+
+		AtomicInteger progress = new AtomicInteger();
+
+		List<Outcome<Integer, Integer>> outcomes = coordinator.process(List.of(1, 2), () -> false, item -> item,
+				progress::set);
+
+		assertThat(outcomes).hasSize(2).allMatch(Outcome::failed);
+		assertThat(outcomes.get(0).error()).isInstanceOf(RejectedExecutionException.class);
+		assertThat(progress).hasValue(2);
+		assertThat(metrics.snapshot().tasksError()).isEqualTo(2);
+	}
+
+	/**
+	 * {@code execute} only captures {@link Exception}, so an {@link Error} escapes
+	 * the task and surfaces at {@code future.get()} with the slot never filled.
+	 * That single item comes back cancelled and the rest of the batch still
+	 * completes - one broken worker never aborts the run.
+	 */
+	@Test
+	void anErrorThrownByAWorkerLeavesThatItemCancelledWithoutAbortingTheBatch() {
+		ProcessingCoordinator coordinator = coordinator(2, 8);
+
+		try {
+			List<Outcome<Integer, Integer>> outcomes = coordinator.process(List.of(1, 2), () -> false, item -> {
+				if (item == 1) {
+					throw new StackOverflowError("worker blew the stack");
+				}
+
+				return item;
+			});
+
+			assertThat(outcomes.get(0).wasCancelled()).isTrue();
+			assertThat(outcomes.get(1).executed()).isTrue();
+			assertThat(outcomes.get(1).value()).isEqualTo(2);
+		} finally {
+			coordinator.shutdown();
+		}
+	}
+
+	/**
+	 * Shutting down from an already-interrupted thread must force the executor
+	 * down and hand the interruption back to the caller rather than swallowing it.
+	 */
+	@Test
+	void shutdownOnAnInterruptedThreadForcesTerminationAndKeepsTheInterruptFlag() {
+		ProcessingCoordinator coordinator = coordinator(1, 1);
+
+		Thread.currentThread().interrupt();
+
+		try {
+			coordinator.shutdown();
+
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+			assertThat(coordinator.isTerminated()).isTrue();
+		} finally {
+			Thread.interrupted();
 		}
 	}
 }

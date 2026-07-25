@@ -230,6 +230,41 @@ class MediaInfoServiceTest {
 				.hasMessageContaining("DLL not found");
 	}
 
+	/**
+	 * A broken ffprobe install fails with an NTSTATUS code that means nothing to
+	 * the user, so every code we can name gets its own hint in the message - that
+	 * hint is the whole point of the mapping.
+	 */
+	@Test
+	void extractShouldDescribeEveryKnownWindowsStartupFailureCode() {
+		Path file = Path.of("C:/video.mp4");
+
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000139, "", "")).extract(file))
+				.hasMessageContaining("Entry point not found");
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000142, "", "")).extract(file))
+				.hasMessageContaining("DLL initialization failed");
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC000007B, "", "")).extract(file))
+				.hasMessageContaining("32/64-bit architecture mismatch");
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000005, "", "")).extract(file))
+				.hasMessageContaining("Access violation");
+	}
+
+	/**
+	 * A failure to even launch the process is an error for the file, not a silent
+	 * empty result - the original cause has to survive in the message.
+	 */
+	@Test
+	void extractShouldWrapAFailureToRunFfprobe() {
+		MediaInfoService service = new MediaInfoService(properties(), new ObjectMapper(), (_, _) -> {
+			throw new IllegalStateException("ffprobe binary is missing");
+		}, appSettingService());
+
+		Path file = Path.of("C:/video.mp4");
+
+		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Could not run ffprobe").hasMessageContaining("ffprobe binary is missing");
+	}
+
 	@Test
 	void extractShouldThrowWithoutDllHintForUnrecognizedExitCode() {
 		var service = service(new FfprobeResult(true, 42, "", ""));

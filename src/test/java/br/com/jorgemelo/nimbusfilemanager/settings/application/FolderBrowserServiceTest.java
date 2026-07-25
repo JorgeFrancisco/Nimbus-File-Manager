@@ -59,4 +59,48 @@ class FolderBrowserServiceTest {
 		assertThat(FolderBrowserService.formatRootName("C:\\", "C:\\")).isEqualTo("C:\\");
 		assertThat(FolderBrowserService.formatRootName("D:\\", "\\\\?\\Volume{abc}")).isEqualTo("D:\\");
 	}
+
+	/**
+	 * A label that only repeats the drive letter, or one long enough to be a
+	 * description rather than a name, adds nothing to the root.
+	 */
+	@Test
+	void formatRootNameSkipsLabelsThatRepeatTheRootOrAreTooLong() {
+		assertThat(FolderBrowserService.formatRootName("C:\\", " c: ")).isEqualTo("C:\\");
+		assertThat(FolderBrowserService.formatRootName("E:\\", "x".repeat(41))).isEqualTo("E:\\");
+		assertThat(FolderBrowserService.formatRootName("E:\\", "x".repeat(40))).isEqualTo("E:\\ (" + "x".repeat(40)
+				+ ")");
+	}
+
+	@Test
+	void shouldTreatABlankPathAsTheRootListing() {
+		assertThat(service.browse("   ").currentPath()).isNull();
+		assertThat(service.browse("   ").directories()).isNotEmpty();
+	}
+
+	/**
+	 * The listing is capped so a folder with tens of thousands of subfolders never
+	 * builds an unbounded response; the flag tells the screen it was cut.
+	 */
+	@Test
+	void shouldCapTheListingAndFlagItAsTruncated() throws Exception {
+		for (int i = 0; i <= 1000; i++) {
+			Files.createDirectory(tempDir.resolve("folder-" + i));
+		}
+
+		var result = service.browse(tempDir.toString());
+
+		assertThat(result.directories()).hasSize(1000);
+		assertThat(result.truncated()).isTrue();
+	}
+
+	@Test
+	void shouldReportNoParentWhenBrowsingAFileSystemRoot() {
+		Path root = tempDir.getRoot();
+
+		var result = service.browse(root.toString());
+
+		assertThat(result.currentPath()).isEqualTo(root.toString());
+		assertThat(result.parentPath()).isNull();
+	}
 }

@@ -166,6 +166,45 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(Files.exists(okSource)).isTrue();
 	}
 
+	/**
+	 * The physical restore already happened when the catalog write runs, so a
+	 * movement with no media row, or one whose placement no longer matches, has to
+	 * fail loudly enough to trigger the rollback rather than leave the catalog
+	 * pointing at the old path.
+	 */
+	@Test
+	void undoShouldFailTheMovementWhenTheCatalogSideCannotBeResolved() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+
+		Path orphanSource = sourceFolder.resolve("orphan.jpg");
+		Path orphanTarget = Files.writeString(targetFolder.resolve("orphan.jpg"), "content");
+
+		Path unlinkedSource = sourceFolder.resolve("unlinked.jpg");
+		Path unlinkedTarget = Files.writeString(targetFolder.resolve("unlinked.jpg"), "content");
+
+		Movement withoutCatalog = Movement.builder().id(100L).execution(execution())
+				.sourcePath(orphanSource.toAbsolutePath().normalize().toString())
+				.targetPath(orphanTarget.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED).build();
+
+		Movement withoutLocation = movement(101L, catalogFile(20L, unlinkedTarget), unlinkedSource, unlinkedTarget,
+				MovementStatus.MOVED);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
+		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
+				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				.thenReturn(List.of(withoutCatalog, withoutLocation));
+		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(eq(20L), any()))
+				.thenReturn(Optional.empty());
+
+		var response = service().undo(1L);
+
+		Assertions.assertThat(response.errors()).isEqualTo(2);
+		Assertions.assertThat(response.undone()).isZero();
+		Assertions.assertThat(withoutCatalog.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
+		Assertions.assertThat(withoutLocation.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
+	}
+
 	@Test
 	void undoShouldSkipMovementAlreadyUndone() {
 		Path source = tempDir.resolve("source/photo.jpg");
@@ -329,6 +368,47 @@ class OrganizationUndoServiceTest {
 
 		Assertions.assertThat(lockedPaths.getValue())
 				.contains(PathUtils.normalizePath(original.toAbsolutePath().normalize().toString()));
+	}
+
+	@Test
+	void undoShouldRejectAnExecutionThatDoesNotExist() {
+		when(executionRepository.findById(99L)).thenReturn(Optional.empty());
+
+		OrganizationUndoService service = serviceWithoutWorkspace();
+
+		Assertions.assertThatThrownBy(() -> service.undo(99L)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Execution not found: 99");
+	}
+
+	/**
+	 * Only organization and duplicate-quarantine moves are plain source-to-target
+	 * movements; anything else has no reversal defined and must be refused instead
+	 * of half-undone.
+	 */
+	@Test
+	void undoShouldRejectAnExecutionTypeThatIsNotUndoable() {
+		Execution inventory = Execution.builder().id(1L).executionType(ExecutionType.INVENTORY)
+				.status(ExecutionStatus.FINISHED).build();
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(inventory));
+
+		OrganizationUndoService service = serviceWithoutWorkspace();
+
+		Assertions.assertThatThrownBy(() -> service.undo(1L)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Execution is not undoable: 1");
+
+		verify(movementRepository, never()).findByExecutionIdAndStatusInOrderByIdDesc(any(), any());
+	}
+
+	/**
+	 * The validation guards bail out before any path is resolved, so this variant
+	 * skips the workspace stubbing that would otherwise go unused.
+	 */
+	private OrganizationUndoService serviceWithoutWorkspace() {
+		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
+				movementRepository, operationLockService, mock(OrganizationPathValidator.class),
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())),
+				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 
 	private Execution execution() {

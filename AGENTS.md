@@ -313,6 +313,18 @@ Classes fora da medição (configuradas no `pom.xml` e espelhadas nas exclusões
 
 Lógica de verdade **nunca** mora nessas classes excluídas — fica no serviço que as usa, que é testado. As metas numéricas de cobertura e o estado atual vivem no README.
 
+## Piso de cobertura (catraca)
+
+A cobertura **nunca regride**: o bloco de qualidade do README registra o **piso vigente** das cinco métricas JaCoCo (instrução, branch, linha, método, classe), e nenhuma tarefa pode encerrar abaixo dele. Os números moram no README — este documento fixa só a política, porque o piso muda a cada avanço e métrica não pertence a um documento permanente.
+
+Como operar a catraca:
+
+- **Antes de encerrar**, rodar a suíte completa e comparar as cinco métricas com o piso do README. Ficou abaixo de qualquer uma → a tarefa **não está pronta**; cobrir o que se perdeu antes de entregar.
+- **Subiu?** Atualizar o piso no README para os valores novos, no mesmo commit. É isso que faz a catraca andar — piso desatualizado permite regredir de graça.
+- **O piso é chão, não meta.** O README também registra a **meta** perseguida; alcançá-la promove a meta a piso e uma nova meta é definida.
+
+A catraca **não** autoriza atalho: continua valendo que teste valida comportamento observável e que **nunca se escreve teste só para mover percentual** (ver a regra base acima). Se a única forma de subir uma métrica for teste artificial — instanciar construtor privado por reflection, exercitar getter, afirmar o óbvio — o certo é **deixar a métrica onde está** e registrar o motivo, não inventar teste. Código legitimamente inalcançável (caminho de erro de I/O dependente de SO, guarda anti-instanciação, override exigido por contrato mas nunca chamado) é resíduo aceito, não dívida.
+
 ---
 
 # Qualidade estática (Sonar)

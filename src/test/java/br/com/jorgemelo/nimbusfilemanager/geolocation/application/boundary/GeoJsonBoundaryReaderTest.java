@@ -108,6 +108,24 @@ class GeoJsonBoundaryReaderTest {
 		Assertions.assertThat(features).hasSize(1);
 	}
 
+	/**
+	 * Without a "features" field the parser runs to the end of the file instead of
+	 * returning early: that must yield nothing rather than fail, and the byte
+	 * listener still sees the whole file.
+	 */
+	@Test
+	void yieldsNothingAndStillCountsBytesForAFileWithoutAFeaturesArray() throws IOException {
+		Path file = write("{\"type\":\"FeatureCollection\"}");
+
+		AtomicLong bytes = new AtomicLong();
+		List<Feature> features = new ArrayList<>();
+
+		reader.read(file, features::add, bytes::addAndGet);
+
+		Assertions.assertThat(features).isEmpty();
+		Assertions.assertThat(bytes.get()).isEqualTo(Files.size(file));
+	}
+
 	@Test
 	void throwsWhenFileCannotBeRead() {
 		Path missing = dir.resolve("does-not-exist.geojson");

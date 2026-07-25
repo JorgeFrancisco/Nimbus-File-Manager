@@ -66,6 +66,45 @@ class OrganizationRuleEngineTest {
 		Assertions.assertThat(result.fileType()).isEqualTo(FileType.PHOTO);
 	}
 
+	/**
+	 * A subcategory already resolved in the catalog short-circuits detection for
+	 * every family, not just WhatsApp - the filename is never even looked at.
+	 */
+	@Test
+	void shouldPreferTheStoredSubcategoryForEveryFamily() {
+		assertClassification(candidate("random.jpg", "C:/media/input", MediaSubcategory.DRONE),
+				OrganizationRuleType.DRONE, OrganizationRuleReason.DATABASE, MediaSubcategory.DRONE);
+
+		assertClassification(candidate("random.jpg", "C:/media/input", MediaSubcategory.GOPRO),
+				OrganizationRuleType.GOPRO, OrganizationRuleReason.DATABASE, MediaSubcategory.GOPRO);
+
+		assertClassification(candidate("random.jpg", "C:/media/input", MediaSubcategory.CAMERA),
+				OrganizationRuleType.CAMERA, OrganizationRuleReason.DATABASE, MediaSubcategory.CAMERA);
+
+		assertClassification(candidate("random.jpg", "C:/media/input", MediaSubcategory.SCREENSHOT),
+				OrganizationRuleType.SCREENSHOT, OrganizationRuleReason.DATABASE, MediaSubcategory.SCREENSHOT);
+	}
+
+	/**
+	 * When neither the catalog nor the filename says anything, the folder the file
+	 * sits in still identifies the family - that is how a renamed export inside a
+	 * "DJI" or "GoPro" folder is still organized correctly.
+	 */
+	@Test
+	void shouldFallBackToTheContainingFolderForEveryFamily() {
+		assertClassification(candidate("random.jpg", "C:/media/DJI", MediaSubcategory.OTHER),
+				OrganizationRuleType.DRONE, OrganizationRuleReason.FOLDER, MediaSubcategory.DRONE);
+
+		assertClassification(candidate("random.jpg", "C:/media/GOPRO", MediaSubcategory.OTHER),
+				OrganizationRuleType.GOPRO, OrganizationRuleReason.FOLDER, MediaSubcategory.GOPRO);
+
+		assertClassification(candidate("random.jpg", "C:/media/CAMERA", MediaSubcategory.OTHER),
+				OrganizationRuleType.CAMERA, OrganizationRuleReason.FOLDER, MediaSubcategory.CAMERA);
+
+		assertClassification(candidate("random.jpg", "C:/media/CAPTURA", MediaSubcategory.OTHER),
+				OrganizationRuleType.SCREENSHOT, OrganizationRuleReason.FOLDER, MediaSubcategory.SCREENSHOT);
+	}
+
 	private void assertClassification(OrganizationCandidate candidate, OrganizationRuleType rule,
 			OrganizationRuleReason reason, MediaSubcategory subcategory) {
 		OrganizationRuleResult result = engine.classify(candidate);

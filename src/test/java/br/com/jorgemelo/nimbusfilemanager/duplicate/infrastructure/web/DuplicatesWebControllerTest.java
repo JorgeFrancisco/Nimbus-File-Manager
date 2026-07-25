@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.PageImpl;
@@ -37,6 +38,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGro
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicatesViewRequest;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogAsyncRunner;
@@ -91,6 +93,53 @@ class DuplicatesWebControllerTest {
 		Assertions.assertThat(model).containsEntry("activeTab", "videos")
 				.containsEntry("rebuildAction", "/app/duplicates/phash-video/rebuild")
 				.containsEntry("retryAction", "/app/duplicates/phash-video/retry");
+	}
+
+	/**
+	 * The video groups get their own wording, separate from the photo tab's: a
+	 * one-file group reads in the singular and anything larger in the plural, and
+	 * the badge carries the similarity plus the recoverable size.
+	 */
+	@Test
+	void videosTabRendersGroupHeadersInSingularAndPluralWithTheirOwnWording() {
+		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
+		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
+		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
+
+		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.mp4", "mp4", "VIDEO",
+				SizeResponse.of(100), "C:/keep.mp4", "C:/", NOW);
+		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(2L, "dup.mp4", "mp4", "VIDEO",
+				SizeResponse.of(100), "C:/dup.mp4", "C:/", NOW);
+
+		var page = new PageImpl<>(
+				List.of(new SimilarVideoGroupResponse("single", 1, 98, SizeResponse.of(0), keep, List.of()),
+						new SimilarVideoGroupResponse("many", 3, 91, SizeResponse.of(200), keep, List.of(candidate))),
+				PageRequest.of(0, 50), 2);
+
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.of(page));
+
+		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
+				videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
+				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
+				mock(DuplicateExclusionService.class), videoWeb)
+				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
+
+		Assertions.assertThat(model.get("groups")).asInstanceOf(InstanceOfAssertFactories.list(DuplicateGroupView.class))
+				.satisfiesExactly(single -> {
+					Assertions.assertThat(single.groupId()).isEqualTo("single");
+					Assertions.assertThat(single.headerText()).contains("1");
+				}, many -> {
+					Assertions.assertThat(many.groupId()).isEqualTo("many");
+					Assertions.assertThat(many.headerText()).contains("3");
+					Assertions.assertThat(many.badgeText()).contains("91");
+				});
 	}
 
 	@Test

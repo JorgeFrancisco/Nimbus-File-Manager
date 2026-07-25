@@ -113,6 +113,50 @@ class PhotoPerceptualHashServiceTest {
 		verify(runner, never()).run(any(), any());
 	}
 
+	/**
+	 * A Lottie/ZIP sticker can carry any of the three ZIP local-header spellings,
+	 * so all of them must be refused before ffmpeg is ever started.
+	 */
+	@Test
+	void computeRejectsEveryZipHeaderSpellingInsideAWebp() throws Exception {
+		byte[][] signatures = { { 'P', 'K', 3, 4 }, { 'P', 'K', 5, 6 }, { 'P', 'K', 7, 8 } };
+
+		for (byte[] signature : signatures) {
+			Path file = Files.write(tempDir.resolve("sticker-" + signature[2] + ".webp"), signature);
+
+			FfmpegRunner runner = mock(FfmpegRunner.class);
+
+			var service = service(runner);
+
+			Assertions.assertThatThrownBy(() -> service.compute(file))
+					.isInstanceOf(UnsupportedPhotoFingerprintException.class).hasMessageContaining("ZIP/Lottie");
+
+			verify(runner, never()).run(any(), any());
+		}
+	}
+
+	@Test
+	void computeShouldHashAGenuineWebpWhoseHeaderIsNotZip() throws Exception {
+		Path file = Files.write(tempDir.resolve("photo.webp"), new byte[] { 'R', 'I', 'F', 'F', 1, 2 });
+
+		PhotoPerceptualFingerprint fingerprint = service((_, _) -> gradient()).compute(file);
+
+		assertThat(fingerprint.hash()).hasSize(32);
+	}
+
+	/**
+	 * Fewer than four readable bytes cannot be a ZIP header, so the file goes to
+	 * ffmpeg and fails (or not) on its own merits instead of being rejected here.
+	 */
+	@Test
+	void computeShouldNotTreatATruncatedWebpAsAZipPackage() throws Exception {
+		Path file = Files.write(tempDir.resolve("tiny.webp"), new byte[] { 'P', 'K' });
+
+		PhotoPerceptualFingerprint fingerprint = service((_, _) -> gradient()).compute(file);
+
+		assertThat(fingerprint.hash()).hasSize(32);
+	}
+
 	private byte[] gradient() {
 		byte[] pixels = new byte[1024];
 

@@ -990,9 +990,50 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1521 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      95.90% instruction, 85.69% branch, 95.30% line, 96.22% method, 99.70% class
+Tests:       1650 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.17% instruction, 88.84% branch, 96.73% line, 97.42% method, 100.00% class
 ```
+
+### Coverage ratchet
+
+Coverage never regresses. The **floor** below is the contract every task has to clear
+before it can be considered done; the **goal** is what the floor is being pushed
+toward. When a run comes in above the floor, the floor is raised to the new values in
+the same commit — that is what makes the ratchet advance. See *Piso de cobertura* in
+`AGENTS.md` for the policy.
+
+```text
+Floor:  97.17% instruction, 88.84% branch, 96.73% line, 97.42% method, 100.00% class
+Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
+```
+
+Instruction, method and class already sit at or above the goal, so for those three
+the floor is what defends them. What is left is 25 lines and about 262 branches.
+Most of it sits in classes already above 90%, which is where the remaining work is
+cheapest per test: each one needs only a handful of cases, and they add up. Roughly 30–50 of those are legitimately unreachable (I/O
+failure paths that depend on OS permissions, utility-class anti-instantiation
+guards, a `FilterInputStream` single-byte override the JSON parser never calls), so
+the goal stays reachable without artificial tests — but the remaining lines are
+error branches that each need a real test, not a percentage chase.
+
+The branch goal was raised from 90% to 95% after sampling what is actually still
+uncovered. The assumption that the tail was mostly unreachable defensive code did
+not survive contact with the data: of 404 uncovered branches in classes already
+above 90%, 84 are plain business conditions (the per-family organization rules, EXIF
+orientation ranges, USN record bounds) and the bulk of the 189 null guards map to
+states the system really produces — a blank path submitted from a form, the first
+library switch with no previous folder, a video with no declared dimensions, an
+entity not yet persisted, a photo with no GPS.
+
+What is genuinely unreachable is a much smaller set, on the order of 15-25 branches:
+I/O failure paths that need OS-level permission denial, utility-class
+anti-instantiation guards, a `FilterInputStream` single-byte override the JSON
+parser never calls. That set is what will eventually cap the metric, somewhere above
+95% rather than below it.
+
+The rule still stands: if the remaining tail turns out to be that unreachable set,
+coverage stops there and the reason is recorded. The goal never justifies
+fabricating a scenario just to flip a branch.
 
 The 9 skipped tests are OS-dependent (symbolic-link / POSIX-permission) cases that
 self-abort via JUnit `Assumptions` on platforms where they cannot run (e.g. Windows).

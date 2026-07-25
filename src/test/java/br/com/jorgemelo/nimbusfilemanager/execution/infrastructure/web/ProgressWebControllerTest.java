@@ -1,39 +1,60 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.web;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import java.util.Map;
+import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ui.ExtendedModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 
 class ProgressWebControllerTest {
 
+	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
+	private final ProgressWebController controller = new ProgressWebController(executionCancellationService,
+			executionQueryService);
+
 	@Test
 	void progressShouldExposeExecutionIdAndKindToTemplate() {
+		UUID executionId = UUID.randomUUID();
 		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
 
-		String view = new ProgressWebController(executionCancellationService).progress(5L, "organization-execute",
-				model);
+		String view = controller.progress(executionId, "organization-execute", model);
 
 		Assertions.assertThat(view).isEqualTo("app/execution-progress");
-		Assertions.assertThat(model).containsEntry("executionId", 5L).containsEntry("kind", "organization-execute");
+		Assertions.assertThat(model).containsEntry("executionId", executionId).containsEntry("kind",
+				"organization-execute");
 	}
 
 	@Test
-	void cancelShouldRequestCancellationWhenExecutionIsRegistered() {
-		ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
-		ProgressWebController controller = new ProgressWebController(executionCancellationService);
+	void cancelShouldRequestCancellationWhenTheExecutionIsStillRunning() {
+		UUID publicId = UUID.randomUUID();
 
+		when(executionQueryService.internalId(publicId)).thenReturn(5L);
 		executionCancellationService.register(5L);
 
-		Map<String, Boolean> notRunning = controller.cancel(99L);
-		Map<String, Boolean> running = controller.cancel(5L);
+		Map<String, Boolean> requested = controller.cancel(publicId);
 
-		Assertions.assertThat(notRunning).isEqualTo(Map.of("requested", false));
-		Assertions.assertThat(running).isEqualTo(Map.of("requested", true));
+		Assertions.assertThat(requested).isEqualTo(Map.of("requested", true));
 		Assertions.assertThat(executionCancellationService.isCancelled(5L)).isTrue();
+	}
+
+	/**
+	 * An execution that already finished has no in-memory flag left, so the JS gets
+	 * "requested": false and treats it as a no-op instead of an error.
+	 */
+	@Test
+	void cancelShouldReportNothingRequestedWhenTheExecutionIsNoLongerRunning() {
+		UUID publicId = UUID.randomUUID();
+
+		when(executionQueryService.internalId(publicId)).thenReturn(99L);
+
+		Assertions.assertThat(controller.cancel(publicId)).isEqualTo(Map.of("requested", false));
 	}
 }

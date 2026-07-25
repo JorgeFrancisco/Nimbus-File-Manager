@@ -96,6 +96,59 @@ class AppSettingServiceTest {
 				.isInstanceOf(IllegalArgumentException.class).hasMessage("Value must be an integer.");
 	}
 
+	/**
+	 * Boolean settings come from a form, so only the two spellings the type admits
+	 * are accepted; anything else is a rejection rather than a silent false.
+	 */
+	@Test
+	void updateShouldAcceptOnlyRealBooleanSpellings() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSettingService service = new AppSettingService(repository, properties());
+
+		when(repository.findBySettingKey(SettingsConstants.WATCH_RECURSIVE)).thenReturn(Optional.empty());
+		when(repository.save(any(AppSetting.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Assertions.assertThat(service.update(SettingsConstants.WATCH_RECURSIVE, " TRUE ", "admin").getSettingValue())
+				.isEqualTo("true");
+		Assertions.assertThat(service.update(SettingsConstants.WATCH_RECURSIVE, "False", "admin").getSettingValue())
+				.isEqualTo("false");
+
+		Assertions.assertThatThrownBy(() -> service.update(SettingsConstants.WATCH_RECURSIVE, "1", "admin"))
+				.isInstanceOf(IllegalArgumentException.class).hasMessage("Value must be true or false.");
+		Assertions.assertThatThrownBy(() -> service.update(SettingsConstants.WATCH_RECURSIVE, null, "admin"))
+				.isInstanceOf(IllegalArgumentException.class).hasMessage("Value must be true or false.");
+	}
+
+	@Test
+	void updateShouldRejectAKeyThatIsNotAKnownSetting() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSettingService service = new AppSettingService(repository, properties());
+
+		Assertions.assertThatThrownBy(() -> service.update("nimbus-file-manager.made.up", "x", "admin"))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unknown setting");
+	}
+
+	/**
+	 * The audit column must never be blank: an unauthenticated or anonymous change
+	 * is recorded as "system" rather than as an empty author.
+	 */
+	@Test
+	void updateShouldRecordAnAbsentUsernameAsSystem() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSettingService service = new AppSettingService(repository, properties());
+
+		when(repository.findBySettingKey(SettingsConstants.WATCH_RECURSIVE)).thenReturn(Optional.empty());
+		when(repository.save(any(AppSetting.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Assertions.assertThat(service.update(SettingsConstants.WATCH_RECURSIVE, "true", "   ").getCreatedByUsername())
+				.isEqualTo("system");
+		Assertions.assertThat(service.update(SettingsConstants.WATCH_RECURSIVE, "true", null).getCreatedByUsername())
+				.isEqualTo("system");
+	}
+
 	@Test
 	void valueMethodsShouldFallbackWhenSettingIsMissingOrInvalid() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);

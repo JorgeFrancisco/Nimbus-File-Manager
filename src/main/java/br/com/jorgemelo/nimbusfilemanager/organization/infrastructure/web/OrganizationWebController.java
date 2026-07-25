@@ -66,14 +66,6 @@ public class OrganizationWebController extends LocalizedComponent {
 		this.executionQueryService = executionQueryService;
 	}
 
-	// Test-only: without the execution query service the missing-preview message
-	// can't tell why the
-	// plan is gone, so it falls back to the neutral "não encontrada" wording.
-	OrganizationWebController(OrganizationService organizationService,
-			UserPagePreferenceService userPagePreferenceService) {
-		this(organizationService, userPagePreferenceService, null);
-	}
-
 	@GetMapping("/app/organization")
 	public String organization(@RequestParam(required = false) String source,
 			@RequestParam(required = false) String target, Authentication authentication, Model model) {
@@ -198,10 +190,6 @@ public class OrganizationWebController extends LocalizedComponent {
 	}
 
 	private String executionStatus(UUID executionId) {
-		if (executionQueryService == null) {
-			return null;
-		}
-
 		try {
 			return executionQueryService.get(executionId).status();
 		} catch (RuntimeException _) {

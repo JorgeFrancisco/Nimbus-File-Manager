@@ -134,6 +134,71 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 		assertThat(first).isEqualTo(second).hasSize(1);
 	}
 
+	/**
+	 * Duration is a recall-safe pre-filter, so a video whose duration was never
+	 * extracted must not be filtered out - it falls through to the frame
+	 * comparison instead of being rejected sight unseen.
+	 */
+	@Test
+	void aMissingDurationNeverRejectsThePairOnItsOwn() {
+		FfmpegLanczosFramesPhashAlgorithm algorithm = algorithm(properties(3, 1));
+
+		VideoSignature unknown = signature(null, 1920, 1080, concordantFrames(5));
+		VideoSignature known = signature(10.0, 1920, 1080, concordantFrames(5));
+
+		assertThat(algorithm.similarityPercent(unknown, known, 70)).isEqualTo(100);
+		assertThat(algorithm.similarityPercent(known, unknown, 70)).isEqualTo(100);
+	}
+
+	/**
+	 * Same for the aspect ratio: absent or nonsensical dimensions mean "cannot
+	 * tell", which must not become "not a match".
+	 */
+	@Test
+	void unusableDimensionsNeverRejectThePairOnTheirOwn() {
+		FfmpegLanczosFramesPhashAlgorithm algorithm = algorithm(properties(3, 1));
+
+		VideoSignature landscape = signature(10.0, 1920, 1080, concordantFrames(5));
+
+		assertThat(algorithm.similarityPercent(signature(10.0, null, 1080, concordantFrames(5)), landscape, 70))
+				.isEqualTo(100);
+		assertThat(algorithm.similarityPercent(signature(10.0, 1920, null, concordantFrames(5)), landscape, 70))
+				.isEqualTo(100);
+		assertThat(algorithm.similarityPercent(signature(10.0, 0, 1080, concordantFrames(5)), landscape, 70))
+				.isEqualTo(100);
+		assertThat(algorithm.similarityPercent(signature(10.0, 1920, -1, concordantFrames(5)), landscape, 70))
+				.isEqualTo(100);
+	}
+
+	/**
+	 * Frames only compare when both videos sampled the same relative position.
+	 * Signatures whose sample indexes do not overlap leave too few aligned frames
+	 * to reach the quorum, so the pair is rejected instead of scored on nothing.
+	 */
+	@Test
+	void rejectsWhenTheSampledPositionsDoNotOverlap() {
+		FfmpegLanczosFramesPhashAlgorithm algorithm = algorithm(properties(3, 1));
+
+		VideoSignature first = signature(10.0, 1920, 1080, framesAt(0, 1, 2, 3, 4));
+		VideoSignature second = signature(10.0, 1920, 1080, framesAt(10, 11, 12, 13, 14));
+
+		assertThat(algorithm.similarityPercent(first, second, 70)).isEqualTo(-1);
+	}
+
+	private List<VideoFrameHash> framesAt(int... sampleIndexes) {
+		List<VideoFrameHash> frames = new ArrayList<>();
+
+		for (int sampleIndex : sampleIndexes) {
+			frames.add(new VideoFrameHash(sampleIndex, HASH_A, LUMA));
+		}
+
+		return frames;
+	}
+
+	private VideoSignature signature(Double duration, Integer width, Integer height, List<VideoFrameHash> frames) {
+		return new VideoSignature(UUID.randomUUID(), frames, duration, width, height);
+	}
+
 	private List<VideoFrameHash> concordantFrames(int count) {
 		List<VideoFrameHash> frames = new ArrayList<>();
 
@@ -163,10 +228,6 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 		}
 
 		return frames;
-	}
-
-	private VideoSignature signature(Double duration, int width, int height, List<VideoFrameHash> frames) {
-		return new VideoSignature(UUID.randomUUID(), frames, duration, width, height);
 	}
 
 	private static byte[] filled(byte value, int length) {

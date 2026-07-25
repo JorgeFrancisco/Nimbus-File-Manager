@@ -290,6 +290,59 @@ class QuarantinePurgeServiceTest {
 		verify(purgePersistence, never()).deleteMovement(anyLong());
 	}
 
+	/**
+	 * The manual tally has to distinguish every purge outcome: a delete that also
+	 * frees a catalog row, one the persistence refused (a race no-op) and one whose
+	 * file could not be removed at all.
+	 */
+	@Test
+	void purgeSelectedShouldCountCatalogsFreedSkippedAndErrorsSeparately(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+
+		Path withCatalog = Files.writeString(exec.resolve("10__a.jpg"), "a");
+		Path raced = Files.writeString(exec.resolve("11__b.jpg"), "b");
+
+		Movement first = quarantined(1L, withCatalog);
+		Movement second = quarantined(2L, raced);
+
+		when(movementRepository.findByPublicId(first.getPublicId())).thenReturn(Optional.of(first));
+		when(movementRepository.findByPublicId(second.getPublicId())).thenReturn(Optional.of(second));
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
+		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.notRemoved());
+		when(purgePersistence.deleteCatalogFileIfOrphan(9L)).thenReturn(true);
+
+		QuarantinePurgeResult result = service
+				.purgeSelected(List.of(first.getPublicId(), second.getPublicId()));
+
+		Assertions.assertThat(result.scanned()).isEqualTo(2);
+		Assertions.assertThat(result.purged()).isEqualTo(1);
+		Assertions.assertThat(result.catalogsFreed()).isEqualTo(1);
+		Assertions.assertThat(result.skipped()).isEqualTo(1);
+	}
+
+	/**
+	 * The record only disappears when the persistence actually removed it; a
+	 * concurrent cleanup that got there first must not be counted again.
+	 */
+	@Test
+	void cleanupAbsentShouldNotCountARecordAnotherRunAlreadyRemoved(@TempDir Path tmp) {
+		Path absent = tmp.resolve("trash").resolve("exec-1").resolve("10__gone.jpg");
+
+		Movement movement = overdueMovement(1L, absent);
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.notRemoved());
+
+		Assertions.assertThat(service.cleanupAbsent()).isZero();
+	}
+
+	private Movement quarantined(long id, Path target) {
+		return Movement.builder().id(id).publicId(UUID.randomUUID()).targetPath(PathUtils.normalize(target))
+				.sourcePath("ignored").status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(LocalDateTime.now()).build();
+	}
+
 	private void overdueReturns(Movement movement) {
 		when(movementRepository.findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
 				eq(MovementReason.DUPLICATE_QUARANTINED), any(), any())).thenReturn(new PageImpl<>(List.of(movement)));

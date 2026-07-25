@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.util.List;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,76 @@ class OrganizationDestinationResolverTest {
 		Assertions.assertThat(destination.file()).isEqualTo(folder.resolve("photo.jpg").normalize());
 		Assertions.assertThat(destination.date()).isSameAs(date);
 		Assertions.assertThat(destination.ruleResult()).isSameAs(rule);
+	}
+
+	/**
+	 * With geographic segments the resolver must reach the segment-aware layout
+	 * overload - the plain one would silently drop the location folders.
+	 */
+	@Test
+	void resolveShouldPassTheLocationSegmentsToTheLayoutResolver() {
+		OrganizationCandidate candidate = candidate();
+
+		OrganizationDate date = new OrganizationDate("202405", "09", false);
+
+		OrganizationRuleResult rule = new OrganizationRuleResult(OrganizationRuleType.CAMERA,
+				OrganizationRuleReason.FILE_NAME, FileCategory.MEDIA, MediaSubcategory.CAMERA, FileType.PHOTO);
+
+		List<String> segments = List.of("Brasil", "Parana", "Curitiba");
+
+		Path folder = Path.of("C:/target/Brasil/Parana/Curitiba/202405/09/CAMERA/IMAGENS");
+
+		when(dateResolver.resolve(candidate)).thenReturn(date);
+		when(ruleEngine.classify(candidate)).thenReturn(rule);
+		when(layoutResolver.resolveFolder(Path.of("C:/target"), "DEFAULT", "202405", "09", "CAMERA", "IMAGENS",
+				segments)).thenReturn(folder);
+
+		var destination = service().resolve(Path.of("C:/target"), "DEFAULT", candidate, segments);
+
+		Assertions.assertThat(destination.folder()).isEqualTo(folder);
+		Assertions.assertThat(destination.file()).isEqualTo(folder.resolve("photo.jpg").normalize());
+	}
+
+	@Test
+	void resolveShouldTreatNullLocationSegmentsAsNoLocation() {
+		OrganizationCandidate candidate = candidate();
+
+		OrganizationDate date = new OrganizationDate("202405", "09", false);
+
+		OrganizationRuleResult rule = new OrganizationRuleResult(OrganizationRuleType.CAMERA,
+				OrganizationRuleReason.FILE_NAME, FileCategory.MEDIA, MediaSubcategory.CAMERA, FileType.PHOTO);
+
+		Path folder = Path.of("C:/target/202405/09/CAMERA/IMAGENS");
+
+		when(dateResolver.resolve(candidate)).thenReturn(date);
+		when(ruleEngine.classify(candidate)).thenReturn(rule);
+		when(layoutResolver.resolveFolder(Path.of("C:/target"), "DEFAULT", "202405", "09", "CAMERA", "IMAGENS"))
+				.thenReturn(folder);
+
+		Assertions.assertThat(service().resolve(Path.of("C:/target"), "DEFAULT", candidate, null).folder())
+				.isEqualTo(folder);
+	}
+
+	@Test
+	void resolveShouldRejectABlankFileName() {
+		OrganizationCandidate candidate = candidate("   ");
+
+		OrganizationDate date = new OrganizationDate("202405", "09", false);
+
+		OrganizationRuleResult rule = new OrganizationRuleResult(OrganizationRuleType.CAMERA,
+				OrganizationRuleReason.FILE_NAME, FileCategory.MEDIA, MediaSubcategory.CAMERA, FileType.PHOTO);
+
+		when(dateResolver.resolve(candidate)).thenReturn(date);
+		when(ruleEngine.classify(candidate)).thenReturn(rule);
+		when(layoutResolver.resolveFolder(Path.of("C:/target"), "DEFAULT", "202405", "09", "CAMERA", "IMAGENS"))
+				.thenReturn(Path.of("C:/target/202405/09/CAMERA/IMAGENS"));
+
+		var resolver = service();
+
+		Path target = Path.of("C:/target");
+
+		Assertions.assertThatThrownBy(() -> resolver.resolve(target, "DEFAULT", candidate))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("é obrigatório");
 	}
 
 	private OrganizationDestinationResolver service() {

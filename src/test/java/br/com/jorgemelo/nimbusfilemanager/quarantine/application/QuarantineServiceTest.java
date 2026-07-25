@@ -428,6 +428,225 @@ class QuarantineServiceTest {
 		Assertions.assertThat(result.restored()).isZero();
 	}
 
+	@Test
+	void nullOptionsShouldFallBackToTheSafeDefaults(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(), null);
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
+		Assertions.assertThat(origin.resolve("a.jpg")).exists();
+	}
+
+	/**
+	 * A movement that was already undone is no longer MOVED, so it is not a
+	 * quarantine item any more even though its reason still says so.
+	 */
+	@Test
+	void shouldRefuseAMovementThatIsNoLongerInTheMovedStatus(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		movement.setStatus(MovementStatus.UNDONE);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
+				QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+	}
+
+	@Test
+	void restoreManyShouldTreatANullSelectionAsEmpty() {
+		QuarantineRestoreBatchResult result = service.restoreMany(null);
+
+		Assertions.assertThat(result.total()).isZero();
+		Assertions.assertThat(result.success()).isTrue();
+	}
+
+	/**
+	 * The batch tally has to account for every outcome kind, not just the happy
+	 * ones - an unknown id lands in errors and flips the batch to unsuccessful.
+	 */
+	@Test
+	void batchRestoreShouldCountOriginMissingAndErrorsSeparately(@TempDir Path tmp) throws Exception {
+		Path quarantine = writeQuarantineCopy(tmp, "10__gone.jpg", "content");
+
+		Movement originGone = quarantineMovement(tmp.resolve("vanished").resolve("gone.jpg"), quarantine);
+
+		UUID unknown = UUID.randomUUID();
+
+		when(movementRepository.findByPublicId(originGone.getPublicId())).thenReturn(Optional.of(originGone));
+		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(originGone.getPublicId(), unknown));
+
+		Assertions.assertThat(result.total()).isEqualTo(2);
+		Assertions.assertThat(result.originMissing()).isEqualTo(1);
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+		Assertions.assertThat(result.success()).isFalse();
+	}
+
+	/**
+	 * An extension-less name must not lose its whole filename to the "(1)" suffix
+	 * logic, which splits on the last dot.
+	 */
+	@Test
+	void renamingOnConflictShouldHandleANameWithoutAnExtension(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+
+		Files.writeString(origin.resolve("README"), "existing");
+
+		Path quarantine = writeQuarantineCopy(tmp, "10__README", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("README"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
+				new QuarantineRestoreOptions(null, ConflictResolution.RENAME));
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
+		Assertions.assertThat(origin.resolve("README (1)")).exists();
+	}
+
+	/**
+	 * Without a catalog record the listing still has to render: the type falls back
+	 * to OTHER, there is no media id to build a preview URL from, and the size is
+	 * read off the quarantine copy.
+	 */
+	@Test
+	void listShouldRenderAnItemWhoseCatalogRecordIsGone(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__orphan.jpg", "1234567");
+
+		Execution execution = mock(Execution.class);
+
+		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+
+		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution)
+				.sourcePath(PathUtils.normalize(origin.resolve("orphan.jpg")))
+				.targetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
+				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+
+		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
+
+		Assertions.assertThat(item.mediaPublicId()).isNull();
+		Assertions.assertThat(item.previewUrl()).isNull();
+		Assertions.assertThat(item.fileType()).isEqualTo("OTHER");
+		Assertions.assertThat(item.sizeBytes()).isEqualTo(7L);
+	}
+
+	/**
+	 * A quarantine copy that vanished leaves nothing to measure, so the screen gets
+	 * a null size and the em-dash placeholder instead of a bogus zero.
+	 */
+	@Test
+	void listShouldReportNoSizeWhenNeitherTheCatalogNorTheDiskCanProvideIt(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+
+		Execution execution = mock(Execution.class);
+
+		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+
+		CatalogFile catalogFile = mock(CatalogFile.class);
+
+		when(catalogFile.getFileType()).thenReturn(FileType.PHOTO);
+		when(catalogFile.getSizeBytes()).thenReturn(null);
+
+		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution)
+				.catalogFile(catalogFile).sourcePath(PathUtils.normalize(origin.resolve("missing.jpg")))
+				.targetPath(PathUtils.normalize(tmp.resolve("trash").resolve("nowhere.jpg")))
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(LocalDateTime.now()).build();
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+
+		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
+
+		Assertions.assertThat(item.sizeBytes()).isNull();
+		Assertions.assertThat(item.sizeLabel()).isEqualTo("—");
+		Assertions.assertThat(item.presentInQuarantine()).isFalse();
+	}
+
+	/**
+	 * The card decides which viewer to open from these flags, so each previewable
+	 * kind has to come back set on its own and nothing else.
+	 */
+	@Test
+	void listShouldFlagEachPreviewableKindOnItsOwn(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+
+		Movement video = typedMovement(tmp, origin, "clip.mp4", FileType.VIDEO);
+		Movement pdf = typedMovement(tmp, origin, "manual.pdf", FileType.PDF);
+		Movement text = typedMovement(tmp, origin, "notes.txt", FileType.TEXT);
+		Movement audio = typedMovement(tmp, origin, "song.mp3", FileType.AUDIO);
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any()))
+				.thenReturn(new PageImpl<>(List.of(video, pdf, text, audio)));
+
+		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
+
+		Assertions.assertThat(items.get(0).video()).isTrue();
+		Assertions.assertThat(items.get(0).image()).isFalse();
+		Assertions.assertThat(items.get(1).pdf()).isTrue();
+		Assertions.assertThat(items.get(2).text()).isTrue();
+		Assertions.assertThat(items.get(3).audio()).isTrue();
+		Assertions.assertThat(items).allSatisfy(item -> Assertions.assertThat(item.previewUrl()).isNotNull());
+	}
+
+	/**
+	 * A kind with no viewer gets no preview URL even though the media is perfectly
+	 * cataloged - the card then falls back to the generic icon.
+	 */
+	@Test
+	void listShouldNotOfferAPreviewForAKindWithNoViewer(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+
+		Movement archive = typedMovement(tmp, origin, "backup.zip", FileType.ZIP);
+
+		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(archive)));
+
+		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
+
+		Assertions.assertThat(item.previewUrl()).isNull();
+		Assertions.assertThat(item.image()).isFalse();
+		Assertions.assertThat(item.video()).isFalse();
+	}
+
+	private Movement typedMovement(Path tmp, Path origin, String fileName, FileType fileType) throws Exception {
+		Path quarantine = writeQuarantineCopy(tmp, "10__" + fileName, "content");
+
+		Execution execution = mock(Execution.class);
+
+		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+
+		CatalogFile catalogFile = mock(CatalogFile.class);
+
+		when(catalogFile.getFileType()).thenReturn(fileType);
+		when(catalogFile.getSizeBytes()).thenReturn(7L);
+		when(catalogFile.getPublicId()).thenReturn(UUID.randomUUID());
+
+		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
+				.sourcePath(PathUtils.normalize(origin.resolve(fileName))).targetPath(PathUtils.normalize(quarantine))
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(LocalDateTime.now()).build();
+	}
+
 	private Movement imageMovement(Path original, Path quarantine, UUID publicId) {
 		Execution execution = mock(Execution.class);
 

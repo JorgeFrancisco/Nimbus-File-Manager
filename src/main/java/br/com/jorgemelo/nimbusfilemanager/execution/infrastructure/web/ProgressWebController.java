@@ -35,11 +35,6 @@ public class ProgressWebController {
 		this.executionQueryService = executionQueryService;
 	}
 
-	public ProgressWebController(ExecutionCancellationService executionCancellationService) {
-		this.executionCancellationService = executionCancellationService;
-		this.executionQueryService = null;
-	}
-
 	@GetMapping("/app/progress/{executionId}")
 	public String progress(@PathVariable UUID executionId, @RequestParam(defaultValue = "inventory") String kind,
 			Model model) {
@@ -60,16 +55,5 @@ public class ProgressWebController {
 	public Map<String, Boolean> cancel(@PathVariable UUID executionId) {
 		return Map.of("requested",
 				executionCancellationService.requestCancellation(executionQueryService.internalId(executionId)));
-	}
-
-	public String progress(Long executionId, String kind, Model model) {
-		model.addAttribute("executionId", executionId);
-		model.addAttribute("kind", kind);
-
-		return "app/execution-progress";
-	}
-
-	public Map<String, Boolean> cancel(Long executionId) {
-		return Map.of("requested", executionCancellationService.requestCancellation(executionId));
 	}
 }

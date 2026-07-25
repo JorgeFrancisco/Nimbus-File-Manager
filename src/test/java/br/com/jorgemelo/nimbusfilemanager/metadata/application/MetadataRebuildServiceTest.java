@@ -272,6 +272,52 @@ class MetadataRebuildServiceTest {
 				transactionManager, Clock.systemDefaultZone());
 	}
 
+	/**
+	 * A catalog row created before the media table existed has no metadata yet, so
+	 * the rebuild has to attach a fresh one instead of failing on the missing
+	 * association.
+	 */
+	@Test
+	void rebuildShouldCreateTheMediaRowWhenTheCatalogFileHasNoneYet() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("photo.jpg"), "photo");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
+
+		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(file.toString()).build());
+
+		prepareSingleRebuild(catalogFile, file, metadata(file));
+
+		service().rebuild(request(false, List.of(MetadataRebuildField.DATE)));
+
+		Assertions.assertThat(catalogFile.getMetadata()).isNotNull();
+		Assertions.assertThat(catalogFile.getMetadata().getSubcategory()).isEqualTo(MediaSubcategory.CAMERA);
+	}
+
+	/**
+	 * A ZIP package wearing a media extension must not keep content hashes: they
+	 * would let it be paired as a visual duplicate of a real image.
+	 */
+	@Test
+	void rebuildShouldClearHashesForAnArchiveMasqueradingAsMedia() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("sticker.webp"), "not really a webp");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		catalogFile.setSha256("sha-before");
+		catalogFile.setMd5("md5-before");
+
+		MetadataResult archive = MetadataResult.builder().fileName("sticker.webp").extension("webp").sizeBytes(10L)
+				.mimeType("application/zip").fileType(FileType.PHOTO).build();
+
+		prepareSingleRebuild(catalogFile, file, archive);
+
+		service().rebuild(request(false, List.of(MetadataRebuildField.MIME)));
+
+		Assertions.assertThat(catalogFile.getSha256()).isNull();
+		Assertions.assertThat(catalogFile.getMd5()).isNull();
+	}
+
 	private void prepareSingleRebuild(CatalogFile catalogFile, Path existingFile, MetadataResult metadata) {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));

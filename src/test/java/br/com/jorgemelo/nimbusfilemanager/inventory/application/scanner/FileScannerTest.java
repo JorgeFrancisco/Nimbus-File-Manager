@@ -139,6 +139,37 @@ class FileScannerTest {
 				.containsExactlyInAnyOrder("photo.JPG");
 	}
 
+	/**
+	 * Null filter lists mean "no filter", not "match nothing" - the request DTO
+	 * lets them through, so the scanner has to normalize them itself.
+	 */
+	@Test
+	void shouldTreatNullExtensionAndFolderFiltersAsNoFilter() throws Exception {
+		Files.writeString(tempDir.resolve("photo.jpg"), "jpg");
+		Files.writeString(tempDir.resolve("notes.txt"), "txt");
+
+		List<Path> files = stream(tempDir, new ScanOptions(true, true, null, null, null));
+
+		Assertions.assertThat(files).extracting(path -> path.getFileName().toString())
+				.containsExactlyInAnyOrder("photo.jpg", "notes.txt");
+	}
+
+	/**
+	 * A source folder that does not exist is a caller error surfaced up front by
+	 * both entry points, not an empty scan that silently reports zero files.
+	 */
+	@Test
+	void shouldRejectASourcePathThatDoesNotExist() {
+		Path missing = tempDir.resolve("does-not-exist");
+
+		ScanOptions options = new ScanOptions(true, true, List.of(), List.of());
+
+		Assertions.assertThatThrownBy(() -> scanner.count(missing, options))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Path does not exist");
+		Assertions.assertThatThrownBy(() -> scanner.stream(missing, options))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Path does not exist");
+	}
+
 	@Test
 	void shouldExcludeHiddenFilesWhenIncludeHiddenIsFalse() throws Exception {
 		Files.writeString(tempDir.resolve("photo.jpg"), "jpg");

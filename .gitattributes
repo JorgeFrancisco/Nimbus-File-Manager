@@ -1,0 +1,20 @@
+# O repositório guarda tudo em LF; o working tree fica por conta do
+# core.autocrlf, que entrega CRLF no Windows (como manda o editor/.editorconfig)
+# e LF no CI Linux. Não usar "eol=lf" aqui: ele sobrepõe o core.autocrlf e
+# forçaria LF no working tree, contrariando a regra de fim de linha do projeto.
+* text=auto
+
+# Script POSIX: precisa de LF mesmo no Windows, senão quebra sob Git Bash/WSL.
+mvnw text eol=lf
+
+# Scripts do Windows: só funcionam com CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Fixtures de teste de imagem. Marcados explicitamente porque uma conversão de
+# fim de linha aqui corromperia o arquivo em silêncio e só apareceria como falha
+# obscura nos testes de decodificação, pHash e thumbnail.
+*.jpg binary
+*.png binary
+*.webp binary
+*.ico binary

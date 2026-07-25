@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.infrastructure.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +69,44 @@ class QuarantineWebControllerTest {
 
 		Assertions.assertThat(result.success()).isFalse();
 		Assertions.assertThat(result.outcome()).isEqualTo("ERROR");
+	}
+
+	/**
+	 * An absent request body deserializes to null, so every write endpoint has to
+	 * answer with its own empty result instead of dereferencing it.
+	 */
+	@Test
+	void rejectsEveryWriteEndpointWhenTheRequestBodyIsMissing() {
+		Assertions.assertThat(controller.restore(null).success()).isFalse();
+		Assertions.assertThat(controller.restoreSelected(null).total()).isZero();
+		Assertions.assertThat(controller.deleteSelected(null).scanned()).isZero();
+
+		verify(quarantineService, never()).restore(any(), any());
+		verify(quarantineService, never()).restoreMany(any());
+		verify(quarantinePurgeService, never()).purgeSelected(any());
+	}
+
+	/**
+	 * The conflict choice arrives as a free string from the screen: anything the
+	 * enum does not know falls back to blocking, which is the safe option because
+	 * it never overwrites a file.
+	 */
+	@Test
+	void fallsBackToBlockingForAnAbsentOrUnknownConflictChoice() {
+		UUID movementId = UUID.randomUUID();
+
+		controller.restore(new QuarantineRestoreRequest(movementId, null, null));
+		controller.restore(new QuarantineRestoreRequest(movementId, "   ", "   "));
+		controller.restore(new QuarantineRestoreRequest(movementId, "overwrite-everything", null));
+
+		ArgumentCaptor<QuarantineRestoreOptions> captor = ArgumentCaptor.forClass(QuarantineRestoreOptions.class);
+
+		verify(quarantineService, times(3)).restore(eq(movementId), captor.capture());
+
+		Assertions.assertThat(captor.getAllValues()).allSatisfy(options -> {
+			Assertions.assertThat(options.conflictResolution()).isEqualTo(ConflictResolution.BLOCK);
+			Assertions.assertThat(options.destinationFolder()).isNull();
+		});
 	}
 
 	@Test

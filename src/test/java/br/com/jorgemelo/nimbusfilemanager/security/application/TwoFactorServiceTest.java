@@ -44,6 +44,27 @@ class TwoFactorServiceTest {
 	}
 
 	@Test
+	void verifyShouldRejectABlankSecret() {
+		Assertions.assertThat(service.verify("   ", "123456")).isFalse();
+	}
+
+	/**
+	 * A stored secret that cannot yield a key at all (nothing decodable in it) must
+	 * fail the login as a plain rejection, never as an error escaping to the
+	 * caller.
+	 */
+	@Test
+	void verifyShouldRejectWhenTheSecretCannotProduceAKey() {
+		Assertions.assertThat(service.verify("!!!!", "123456")).isFalse();
+	}
+
+	@Test
+	void generateShouldFailLoudlyWhenTheSecretCannotProduceAKey() {
+		Assertions.assertThatThrownBy(() -> service.generate("!!!!", 0)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Could not generate two-factor code");
+	}
+
+	@Test
 	void verifyShouldAcceptNextTimeWindow() {
 		// Clock-skew tolerance is symmetric: besides the current and previous 30s
 		// steps, a code from the NEXT step (offset +1) must also verify. This pins the

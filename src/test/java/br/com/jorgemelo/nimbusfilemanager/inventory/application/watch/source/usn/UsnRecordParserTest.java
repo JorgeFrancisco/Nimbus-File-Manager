@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -69,6 +71,45 @@ class UsnRecordParserTest {
 
 		Assertions.assertThat(UsnRecordParser.parse(truncated)).extracting(UsnRecord::fileName)
 				.containsExactly("a.jpg");
+	}
+
+	/**
+	 * A record whose declared length is below the header minimum would make the
+	 * cursor stand still or walk backwards; the parser stops instead of looping
+	 * forever on a corrupt kernel buffer.
+	 */
+	@Test
+	void stopsWhenARecordDeclaresALengthShorterThanItsHeader() {
+		byte[] buffer = UsnRecordBuffers.recordBytes(1L, 100L, 200L, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL, "photo.jpg");
+
+		ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).putInt(0, 10);
+
+		Assertions.assertThat(UsnRecordParser.parse(buffer)).isEmpty();
+	}
+
+	/**
+	 * A name the header describes as empty, or one pointing outside the buffer,
+	 * yields an empty name rather than an exception - the change is still reported
+	 * so the reconcile can pick the path up.
+	 */
+	@Test
+	void readsAnEmptyNameWhenTheHeaderDescribesOneOutOfBounds() {
+		byte[] emptyName = UsnRecordBuffers.recordBytes(1L, 100L, 200L, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL, "photo.jpg");
+
+		ByteBuffer.wrap(emptyName).order(ByteOrder.LITTLE_ENDIAN).putShort(56, (short) 0);
+
+		Assertions.assertThat(UsnRecordParser.parse(emptyName)).singleElement()
+				.satisfies(parsed -> Assertions.assertThat(parsed.fileName()).isEmpty());
+
+		byte[] nameOutside = UsnRecordBuffers.recordBytes(1L, 100L, 200L, UsnReason.FILE_CREATE,
+				UsnRecordBuffers.ATTR_NORMAL, "photo.jpg");
+
+		ByteBuffer.wrap(nameOutside).order(ByteOrder.LITTLE_ENDIAN).putShort(58, (short) 30_000);
+
+		Assertions.assertThat(UsnRecordParser.parse(nameOutside)).singleElement()
+				.satisfies(parsed -> Assertions.assertThat(parsed.fileName()).isEmpty());
 	}
 
 	@Test

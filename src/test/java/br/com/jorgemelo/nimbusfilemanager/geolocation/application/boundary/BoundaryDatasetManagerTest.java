@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -138,6 +139,92 @@ class BoundaryDatasetManagerTest {
 		manager.downloadAndImport();
 
 		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(105);
+	}
+
+	/**
+	 * Metadata left by an interrupted import can carry a record count with no
+	 * import timestamp; both have to be present before the dataset counts as
+	 * usable.
+	 */
+	@Test
+	void statusIsUnavailableWhenMetadataHasRecordsButNoImportTimestamp() {
+		when(metadataStore.read())
+				.thenReturn(Optional.of(BoundaryMetadata.builder().importedRecords(10).version("v1").build()));
+		when(repository.count()).thenReturn(10L);
+
+		Assertions.assertThat(manager.status().available()).isFalse();
+	}
+
+	/**
+	 * Every ISO code already has its own polygon, so there is nothing supplemental
+	 * to fetch and the source is never asked.
+	 */
+	@Test
+	void downloadAndImportSkipsTerritoriesWhenEveryCountryAlreadyHasAPolygon() {
+		when(boundarySource.fetch(any())).thenReturn(List.of());
+		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
+		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
+				.thenReturn(true);
+		when(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY))
+				.thenReturn(List.copyOf(CountryCodes.alpha3ToAlpha2().values()));
+		when(metadataStore.read()).thenReturn(
+				Optional.of(BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).build()));
+		when(repository.count()).thenReturn(100L);
+
+		manager.downloadAndImport();
+
+		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(100);
+
+		verify(boundarySource, never()).fetchMissingCountries(any(), any());
+		verify(importer, never()).importExtra(any(), any(), any());
+	}
+
+	/**
+	 * A source with no per-territory data returns nothing, which must leave the
+	 * import count untouched rather than trigger an empty extra import.
+	 */
+	@Test
+	void downloadAndImportSkipsTheExtraImportWhenTheSourceHasNoTerritoryFiles() {
+		when(boundarySource.fetch(any())).thenReturn(List.of());
+		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
+		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
+				.thenReturn(true);
+		when(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY)).thenReturn(List.of());
+		when(boundarySource.fetchMissingCountries(any(), any())).thenReturn(List.of());
+		when(metadataStore.read()).thenReturn(
+				Optional.of(BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).build()));
+		when(repository.count()).thenReturn(100L);
+
+		manager.downloadAndImport();
+
+		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(100);
+
+		verify(importer, never()).importExtra(any(), any(), any());
+	}
+
+	@Test
+	void removeShouldSucceedWhenThereIsNoDownloadsFolderToClean() {
+		manager.remove();
+
+		verify(repository).deleteAllRows();
+		verify(geometryCache).invalidate();
+		verify(metadataStore).delete();
+	}
+
+	@Test
+	void downloadAndImportShouldReportZeroSizeWhenTheDatasetFolderDoesNotExist() {
+		when(workspaceManager.geodata()).thenReturn(geodata.resolve("absent"));
+		when(boundarySource.fetch(any())).thenReturn(List.of());
+		when(importer.importDataset(any(), any(), any())).thenReturn(1L);
+		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
+				.thenReturn(false);
+		when(metadataStore.read()).thenReturn(
+				Optional.of(BoundaryMetadata.builder().importedRecords(1).importedAt(LocalDateTime.now()).build()));
+		when(repository.count()).thenReturn(1L);
+
+		manager.downloadAndImport();
+
+		Assertions.assertThat(captureWrittenMetadata().getSizeBytes()).isZero();
 	}
 
 	@Test

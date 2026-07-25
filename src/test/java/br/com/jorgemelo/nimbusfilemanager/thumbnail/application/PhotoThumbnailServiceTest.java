@@ -116,6 +116,57 @@ class PhotoThumbnailServiceTest {
 				new PhotoDecoder()).get(id, 320)).isEmpty();
 	}
 
+	/**
+	 * The catalog still points at a file that was moved or deleted outside the app:
+	 * that is a missing thumbnail, not a server error.
+	 */
+	@Test
+	void shouldReturnEmptyWhenTheSourceFileNoLongerExists() throws Exception {
+		UUID id = UUID.randomUUID();
+
+		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+
+		when(repository.findSource(id)).thenReturn(
+				Optional.of(new PhotoThumbnailSource(id, temp.resolve("gone.jpg").toString(), modified, 0)));
+
+		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+
+		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
+				.thenReturn(temp.resolve("cache").resolve(key + ".jpg"));
+
+		Assertions.assertThat(new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder()).get(id, 320))
+				.isEmpty();
+	}
+
+	/**
+	 * A requested width is rounded up to the next offered size so the cache only
+	 * ever holds the fixed ladder; anything above the largest offered width is
+	 * rejected outright rather than silently clamped.
+	 */
+	@Test
+	void shouldRoundTheRequestedWidthUpToTheNextOfferedSize() throws Exception {
+		Path fixture = classpathFixture("photo/webp/lossy.webp");
+
+		UUID id = UUID.randomUUID();
+
+		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+
+		when(repository.findSource(id))
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), modified, 0)));
+
+		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+
+		Path target = temp.resolve("cache").resolve(key + ".jpg");
+
+		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
+				.thenReturn(target);
+
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
+
+		Assertions.assertThat(service.get(id, 200)).isPresent();
+		Assertions.assertThat(target).exists();
+	}
+
 	@Test
 	void shouldGenerateThumbnailForWebpSourceWithSameCacheAndEtag() throws Exception {
 		Path fixture = classpathFixture("photo/webp/lossy.webp");

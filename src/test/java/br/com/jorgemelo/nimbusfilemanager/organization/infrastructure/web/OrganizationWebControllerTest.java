@@ -45,7 +45,7 @@ class OrganizationWebControllerTest {
 	void organizationShouldDispatchPreviewAndExecuteAsyncAndRedirectToProgress() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap previewModel = new ExtendedModelMap();
 		ExtendedModelMap executeModel = new ExtendedModelMap();
 		ExecutionResponse previewStarted = execution();
@@ -75,7 +75,7 @@ class OrganizationWebControllerTest {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		UserPagePreferenceService userPagePreferenceService = mock(UserPagePreferenceService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				userPagePreferenceService);
+				userPagePreferenceService, mock(ExecutionQueryService.class));
 		TestingAuthenticationToken authentication = new TestingAuthenticationToken("admin@example.com", "password");
 		ExtendedModelMap getModel = new ExtendedModelMap();
 		ExtendedModelMap previewModel = new ExtendedModelMap();
@@ -105,7 +105,7 @@ class OrganizationWebControllerTest {
 	void organizationShouldShowErrorWhenServiceRejectsPreview() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 		Path source = Files.createDirectories(tempDir.resolve("same-source"));
 		Path target = tempDir.resolve("target");
@@ -125,7 +125,8 @@ class OrganizationWebControllerTest {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
-		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		controller.organization("D:/SEPARAR/ORGANIZADOS", "D:/SEPARAR/ORGANIZADOS 2", null, model);
@@ -138,7 +139,7 @@ class OrganizationWebControllerTest {
 	void organizationPreviewResultShouldRenderStoredPlanOrErrorWhenMissing() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap foundModel = new ExtendedModelMap();
 		ExtendedModelMap missingModel = new ExtendedModelMap();
 		OrganizationPlan plan = plan();
@@ -159,7 +160,7 @@ class OrganizationWebControllerTest {
 	void organizationPreviewResultByUuidExposesProgressLinkWhenPlanIsMissing() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		UUID executionId = UUID.randomUUID();
 		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(null);
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -198,7 +199,8 @@ class OrganizationWebControllerTest {
 	void organizationPreviewResultShouldRestoreSavedFormChoicesNotDefaults() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		when(organizationService.getPreviewPlan(1L)).thenReturn(plan());
@@ -213,7 +215,8 @@ class OrganizationWebControllerTest {
 	void organizationShouldRestoreAllSavedFieldsIncludingLocationAndLimit() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
 		TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@example.com", "password");
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -236,7 +239,8 @@ class OrganizationWebControllerTest {
 	void organizationShouldFallBackToDefaultsOnInvalidSavedPreferences() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		when(preferences.find(null, "organization")).thenReturn(Map.ofEntries(Map.entry("limit", "not-a-number"),
@@ -256,7 +260,8 @@ class OrganizationWebControllerTest {
 	void executeShouldPersistLocationAndLimitChoices() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
 		TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@example.com", "password");
 		Path source = Files.createDirectories(tempDir.resolve("execute-source"));
 		Path target = tempDir.resolve("execute-target");
@@ -280,7 +285,7 @@ class OrganizationWebControllerTest {
 	void organizationPreviewResultShouldPaginateNonEmptyPlan() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		OrganizationPlan plan = planWithItems(25);
 		ExtendedModelMap firstPageModel = new ExtendedModelMap();
 		ExtendedModelMap lastPageModel = new ExtendedModelMap();
@@ -299,7 +304,7 @@ class OrganizationWebControllerTest {
 	void previewResultWithOnlyConflictsShouldPaginateJustTheConflictedItems() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		List<OrganizationItem> items = new ArrayList<>();
@@ -325,7 +330,7 @@ class OrganizationWebControllerTest {
 	void previewResultShouldExposeLocalizedConflictTypeLabelsByEnumName() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		when(organizationService.getPreviewPlan(1L)).thenReturn(plan());
@@ -344,7 +349,7 @@ class OrganizationWebControllerTest {
 	void previewAndExecuteShouldRejectInvalidSourceAndTargetPaths() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		Path source = Files.createDirectories(tempDir.resolve("valid-source"));
 
 		String blankSource = controller.preview(orgForm("  ", source.toString(), true, null, 100, 0, 50),
@@ -374,7 +379,7 @@ class OrganizationWebControllerTest {
 	void previewAndExecuteShouldDefaultNullLayoutToDefault() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		Path source = Files.createDirectories(tempDir.resolve("layout-source"));
 		Path target = tempDir.resolve("layout-target");
 		ExtendedModelMap previewModel = new ExtendedModelMap();
@@ -394,7 +399,7 @@ class OrganizationWebControllerTest {
 	void organizationShouldLoadDefaultFormWithDefaultPageAndSize() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = controller.organization(model);
@@ -408,7 +413,7 @@ class OrganizationWebControllerTest {
 	void previewShouldNormalizeNullOrNegativePageAndUnsupportedSize() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
-				mock(UserPagePreferenceService.class));
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		Path source = Files.createDirectories(tempDir.resolve("page-source"));
 		Path target = tempDir.resolve("page-target");
 		ExtendedModelMap nullPageModel = new ExtendedModelMap();

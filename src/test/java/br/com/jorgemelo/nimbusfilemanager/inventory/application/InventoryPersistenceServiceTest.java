@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,6 +23,7 @@ import org.springframework.batch.support.transaction.ResourcelessTransactionMana
 import org.springframework.dao.DataIntegrityViolationException;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinates;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.mapper.CatalogFileMapper;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.ProcessResult;
@@ -30,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataRes
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -317,6 +320,102 @@ class InventoryPersistenceServiceTest {
 
 		Assertions.assertThatThrownBy(() -> service.saveOrCacheBatch(files, input, metadataOptions, _ -> metadata))
 				.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@Test
+	void savingMediaWithGpsShouldResolveItsLocationWhenTheFeatureIsEnabled() {
+		Path file = Path.of("C:/input/photo.jpg");
+
+		CatalogFile existing = withCoordinates(1L, -25.43, -49.27);
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(existing));
+		when(mediaLocationService.enabled()).thenReturn(true);
+
+		service().save(file, Path.of("C:/input"), MetadataResult.builder().build(), new MetadataOptions(false, true));
+
+		verify(mediaLocationService).resolveIfAbsent(1L, new Coordinates(-25.43, -49.27));
+	}
+
+	@Test
+	void savingMediaShouldSkipLocationResolutionWhenTheFeatureIsDisabled() {
+		Path file = Path.of("C:/input/photo.jpg");
+
+		CatalogFile existing = withCoordinates(1L, -25.43, -49.27);
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(existing));
+		when(mediaLocationService.enabled()).thenReturn(false);
+
+		service().save(file, Path.of("C:/input"), MetadataResult.builder().build(), new MetadataOptions(false, true));
+
+		verify(mediaLocationService, never()).resolveIfAbsent(any(), any());
+	}
+
+	/**
+	 * Only media that actually carries usable GPS is resolved - no metadata, no id
+	 * yet, or absent coordinates all mean there is nothing to look up.
+	 */
+	@Test
+	void savingMediaWithoutUsableCoordinatesShouldNotReachTheLocationService() {
+		Path file = Path.of("C:/input/photo.jpg");
+
+		CatalogFile withoutMetadata = CatalogFile.builder().id(1L).build();
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(withoutMetadata));
+		when(mediaLocationService.enabled()).thenReturn(true);
+
+		service().save(file, Path.of("C:/input"), MetadataResult.builder().build(), new MetadataOptions(false, true));
+
+		CatalogFile withoutGps = CatalogFile.builder().id(2L).metadata(MediaMetadata.builder().build()).build();
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(withoutGps));
+
+		service().save(file, Path.of("C:/input"), MetadataResult.builder().build(), new MetadataOptions(false, true));
+
+		verify(mediaLocationService, never()).resolveIfAbsent(any(), any());
+	}
+
+	/**
+	 * Resolving a location is a best-effort enrichment: a failure is logged and
+	 * swallowed, because it must never abort an inventory that already persisted.
+	 */
+	@Test
+	void aFailingLocationResolutionShouldNotBreakTheSave() {
+		Path file = Path.of("C:/input/photo.jpg");
+
+		CatalogFile existing = withCoordinates(1L, -25.43, -49.27);
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(existing));
+		when(mediaLocationService.enabled()).thenReturn(true);
+		doThrow(new IllegalStateException("geodata offline")).when(mediaLocationService).resolveIfAbsent(any(), any());
+
+		InventoryPersistenceService service = service();
+
+		Assertions.assertThat(service.save(file, Path.of("C:/input"), MetadataResult.builder().build(),
+				new MetadataOptions(false, true))).isEqualTo(ProcessResult.ANALYZED);
+
+		verify(catalogFileRepository).save(existing);
+	}
+
+	@Test
+	void aFailingEnabledCheckShouldNotBreakTheSave() {
+		Path file = Path.of("C:/input/photo.jpg");
+
+		CatalogFile existing = withCoordinates(1L, -25.43, -49.27);
+
+		when(catalogFileRepository.findByFileKeyWithDetails(fileKey(file))).thenReturn(Optional.of(existing));
+		when(mediaLocationService.enabled()).thenThrow(new IllegalStateException("settings unavailable"));
+
+		InventoryPersistenceService service = service();
+
+		Assertions.assertThat(service.save(file, Path.of("C:/input"), MetadataResult.builder().build(),
+				new MetadataOptions(false, true))).isEqualTo(ProcessResult.ANALYZED);
+
+		verify(mediaLocationService, never()).resolveIfAbsent(any(), any());
+	}
+
+	private CatalogFile withCoordinates(Long id, double latitude, double longitude) {
+		return CatalogFile.builder().id(id)
+				.metadata(MediaMetadata.builder().latitude(latitude).longitude(longitude).build()).build();
 	}
 
 	private InventoryPersistenceService service() {

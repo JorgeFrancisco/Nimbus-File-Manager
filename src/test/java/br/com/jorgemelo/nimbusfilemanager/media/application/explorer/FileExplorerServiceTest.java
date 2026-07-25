@@ -121,6 +121,64 @@ class FileExplorerServiceTest {
 	}
 
 	@Test
+	void browseShouldUseWorkspaceTempWhenThePathIsOnlyWhitespace() throws Exception {
+		Path temp = Files.createDirectory(tempDir.resolve("temp-blank"));
+
+		CatalogFileLocationRepository repository = mock(CatalogFileLocationRepository.class);
+		WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
+
+		when(workspaceManager.temp()).thenReturn(temp);
+		when(repository.findActiveByCurrentFolder(PathUtils.normalize(temp))).thenReturn(List.of());
+
+		FileExplorerView view = new FileExplorerService(workspaceManager, repository, mock(ScanExclusionService.class),
+				mock(FileExplorerReconcileService.class)).browse("   ", null);
+
+		Assertions.assertThat(view.path()).isEqualTo(PathUtils.normalize(temp));
+	}
+
+	/**
+	 * A page size the screen actually offers is honoured as-is; only sizes outside
+	 * the offered set fall back to the default.
+	 */
+	@Test
+	void browseShouldHonourAnOfferedPageSize() throws Exception {
+		Path folder = Files.createDirectory(tempDir.resolve("sized"));
+
+		CatalogFileLocationRepository repository = mock(CatalogFileLocationRepository.class);
+
+		when(repository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of());
+
+		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
+				.browse(folder.toString(), null, 0, 20);
+
+		Assertions.assertThat(view.size()).isEqualTo(20);
+	}
+
+	/**
+	 * A name with no dot, or one whose only dot is the last character, has no
+	 * usable extension and is labelled generically instead of yielding an empty
+	 * type.
+	 */
+	@Test
+	void browseShouldLabelAFileWithoutAnExtensionAsAGenericFile() throws Exception {
+		Path folder = Files.createDirectory(tempDir.resolve("noext"));
+
+		Files.writeString(folder.resolve("README"), "no extension here");
+
+		CatalogFileLocationRepository repository = mock(CatalogFileLocationRepository.class);
+
+		when(repository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of());
+
+		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
+				.browse(folder.toString(), null);
+
+		Assertions.assertThat(view.entries()).singleElement().extracting(FileExplorerEntry::fileType)
+				.isEqualTo("FILE");
+	}
+
+	@Test
 	void browseShouldReturnFileEntryWhenRequestedPathIsNotDirectory() throws Exception {
 		Path file = Files.writeString(tempDir.resolve("movie.mp4"), "video");
 

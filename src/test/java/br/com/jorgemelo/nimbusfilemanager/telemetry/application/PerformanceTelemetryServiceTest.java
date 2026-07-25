@@ -190,6 +190,58 @@ class PerformanceTelemetryServiceTest {
 		verify(executionMetricsRepository, never()).save(any());
 	}
 
+	/**
+	 * Telemetry is fire-and-forget from the callers' point of view: a null id means
+	 * there is nothing to attach metrics to, and it must not even hit the database.
+	 */
+	@Test
+	void ignoresANullExecutionId() {
+		service("v", ZoneId.of("UTC")).recordMetrics(null, null, Map.of());
+
+		verify(executionRepository, never()).findById(any());
+		verify(executionMetricsRepository, never()).save(any());
+	}
+
+	@Test
+	void stampsTheApplicationVersionWhenTheExecutionHasOnlyABlankOne() {
+		Execution execution = Execution.builder().id(41L).applicationVersion("   ")
+				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).build();
+
+		when(executionRepository.findById(41L)).thenReturn(Optional.of(execution));
+
+		service("5.4.0.41", ZoneId.of("UTC")).recordMetrics(41L, null, Map.of());
+
+		Assertions.assertThat(execution.getApplicationVersion()).isEqualTo("5.4.0.41");
+	}
+
+	/**
+	 * An execution that never started or never finished has no elapsed time to
+	 * report, so no duration is stored rather than a bogus zero.
+	 */
+	@Test
+	void storesNoDurationWhenTheExecutionNeverStartedOrNeverFinished() {
+		Execution neverStarted = Execution.builder().id(42L)
+				.finishedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).build();
+
+		when(executionRepository.findById(42L)).thenReturn(Optional.of(neverStarted));
+
+		service("v", ZoneId.of("UTC")).recordMetrics(42L, null, Map.of());
+
+		verify(executionMetricsRepository, never()).save(any());
+	}
+
+	@Test
+	void savesNoPhasesWhenNoneWereMeasured() {
+		Execution execution = Execution.builder().id(43L)
+				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).build();
+
+		when(executionRepository.findById(43L)).thenReturn(Optional.of(execution));
+
+		service("v", ZoneId.of("UTC")).recordMetrics(43L, null, null);
+
+		verify(executionPhaseRepository, never()).saveAll(any());
+	}
+
 	@Test
 	void ignoresAMissingExecution() {
 		when(executionRepository.findById(9L)).thenReturn(Optional.empty());
