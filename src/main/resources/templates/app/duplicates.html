@@ -293,8 +293,8 @@
 	<section class="panel section fingerprint-progress" id="fingerprintProgressRegion"
 			th:if="${phashPending > 0}" role="status"
 			th:attr="data-refresh-ms=${phashBlocking ? 4000 : null}">
-		<h2 th:text="#{duplicates.fingerprint.calculating}">Calculando impressões digitais das fotos…</h2>
-		<p class="muted"><span th:text="#{duplicates.fingerprint.calculating.description}">A comparação por semelhança fica disponível quando todas as fotos tiverem sua impressão digital.</span><span th:if="${phashBlocking}" th:text="#{duplicates.fingerprint.calculating.refresh}"> Este painel se atualiza automaticamente a cada 4 segundos.</span></p>
+		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos} : #{duplicates.fingerprint.calculating}">Calculando impressões digitais das fotos…</h2>
+		<p class="muted"><span th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos.description} : #{duplicates.fingerprint.calculating.description}">A comparação por semelhança fica disponível quando todas as fotos tiverem sua impressão digital.</span><span th:if="${phashBlocking}" th:text="#{duplicates.fingerprint.calculating.refresh}"> Este painel se atualiza automaticamente a cada 4 segundos.</span></p>
 		<p class="progress-text"><strong th:text="|${phashPercent}%|">0%</strong>
 			<span th:if="${phashEtaSeconds >= 60}" th:text="#{duplicates.eta.minutes(${phashEtaSeconds / 60})}">· tempo estimado</span>
 			<span th:if="${phashEtaSeconds >= 0 and phashEtaSeconds < 60}" th:text="#{duplicates.eta.lessThanMinute}">· menos de 1 min restante</span>

@@ -106,7 +106,8 @@ class VideoFingerprintBacklogServiceTest {
 
 	@Test
 	void statusDerivesVideoCountsFromTheTables() {
-		when(mediaFingerprintRepository.countByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM)).thenReturn(6L);
+		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(FingerprintKind.VIDEO_PHASH, ALGORITHM))
+				.thenReturn(6L);
 		when(fingerprintFailureRepository.countExhaustedVideoFailures(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM),
 				anyInt(), any())).thenReturn(1L);
 		when(mediaFingerprintRepository.countPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt()))

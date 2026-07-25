@@ -121,7 +121,7 @@ class PhashBacklogServiceTest {
 
 	@Test
 	void statusDerivesCountsFromTheTables() {
-		when(mediaFingerprintRepository.countByKindAndAlgorithm(PhashBacklogService.KIND,
+		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(PhashBacklogService.KIND,
 				DuplicateConstants.ALGORITHM)).thenReturn(10L);
 		when(fingerprintFailureRepository.countExhaustedFailures(PhashBacklogService.KIND,
 				DuplicateConstants.ALGORITHM, PhashBacklogService.MAX_ATTEMPTS,

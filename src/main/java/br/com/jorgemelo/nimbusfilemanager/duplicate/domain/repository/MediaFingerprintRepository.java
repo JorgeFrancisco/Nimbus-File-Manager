@@ -22,7 +22,19 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection
  */
 public interface MediaFingerprintRepository extends JpaRepository<MediaFingerprint, Long> {
 
-	long countByKindAndAlgorithm(FingerprintKind kind, String algorithm);
+	/**
+	 * Count of distinct catalog files that already have a fingerprint - not the raw
+	 * row count. A video stores one row per sampled frame, so counting rows would
+	 * report frames, not videos (inflating "done" past the video total); counting
+	 * distinct {@code catalogFileId} keeps "done" in the same unit as
+	 * {@code countPendingVideos}/{@code countPendingPhotos} for both kinds.
+	 */
+	@Query("""
+			SELECT count(DISTINCT f.catalogFileId)
+			FROM MediaFingerprint f
+			WHERE f.kind = :kind AND f.algorithm = :algorithm
+			""")
+	long countFingerprintedCatalogFiles(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm);
 
 	long deleteByKindAndAlgorithm(FingerprintKind kind, String algorithm);
 

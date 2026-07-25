@@ -34,8 +34,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
 @StepScope
 public class InventoryItemWriter implements ItemWriter<Path> {
 
-	private static final int PROGRESS_STRIDE = 25;
-
 	private final InventoryPersistenceService inventoryPersistenceService;
 	private final MetadataFacade metadataFacade;
 	private final AnalysisErrorService analysisErrorService;
@@ -77,12 +75,8 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 
 		found.addAndGet(files.size());
 
-		IntConsumer onExtractionProgress = done -> {
-			if (done % PROGRESS_STRIDE == 0) {
-				executionProgressService.updateLiveProgress(execution, baseFound + done, analyzed.get(), cacheHits.get(),
-						errors.get(), ExecutionMessages.extractingMetadata());
-			}
-		};
+		IntConsumer onExtractionProgress = done -> executionProgressService.updateLiveProgress(execution,
+				baseFound + done, analyzed.get(), cacheHits.get(), errors.get(), ExecutionMessages.extractingMetadata());
 
 		List<InventoryBatchItemResult> results = inventoryPersistenceService.saveOrCacheBatch(files, sourcePath,
 				metadataOptions, file -> metadataFacade.extract(file, metadataOptions),

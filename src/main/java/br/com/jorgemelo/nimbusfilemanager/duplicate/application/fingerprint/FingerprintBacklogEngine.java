@@ -70,7 +70,7 @@ class FingerprintBacklogEngine {
 	}
 
 	public FingerprintBacklogStatus status(FingerprintProducer<?, ?> producer) {
-		long done = mediaFingerprintRepository.countByKindAndAlgorithm(producer.kind(), producer.algorithm());
+		long done = mediaFingerprintRepository.countFingerprintedCatalogFiles(producer.kind(), producer.algorithm());
 
 		long failed = producer.countExhaustedFailures();
 

@@ -43,6 +43,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class InventoryPersistenceService {
 
+	private static final int EXTRACTION_PROGRESS_STRIDE = 25;
+
 	private final CatalogFileRepository catalogFileRepository;
 	private final CatalogFileMapper catalogFileMapper;
 	private final MediaLocationService mediaLocationService;
@@ -180,8 +182,8 @@ public class InventoryPersistenceService {
 
 		long extractionStart = System.nanoTime();
 
-		List<Outcome<Path, MetadataResult>> extracted = processingCoordinator.process(toExtract, cancelled,
-				metadataExtractor::apply, onExtractionProgress);
+		List<Outcome<Path, MetadataResult>> extracted = extractInSlices(toExtract, cancelled, metadataExtractor,
+				onExtractionProgress);
 
 		executionPhaseTimings.addNanos(ExecutionPhaseType.EXTRACTION, System.nanoTime() - extractionStart);
 		executionPhaseTimings.addItems(ExecutionPhaseType.EXTRACTION, toExtract.size());
@@ -196,6 +198,30 @@ public class InventoryPersistenceService {
 		processingMetrics.recordWallClock(System.nanoTime() - wallStart);
 
 		return results;
+	}
+
+	/**
+	 * Extracts on the shared coordinator in fixed-size slices, reporting the
+	 * cumulative count after each slice. The report runs on the caller's thread -
+	 * the Spring Batch step thread that owns the transaction context - so the
+	 * per-slice {@code updateLiveProgress} can commit and the progress screen
+	 * advances mid-chunk. A per-item callback from the coordinator's own worker
+	 * threads cannot do this: those threads carry no transaction context, so a
+	 * transactional progress update from them silently fails.
+	 */
+	private List<Outcome<Path, MetadataResult>> extractInSlices(List<Path> toExtract, BooleanSupplier cancelled,
+			Function<Path, MetadataResult> metadataExtractor, IntConsumer onExtractionProgress) {
+		List<Outcome<Path, MetadataResult>> extracted = new ArrayList<>(toExtract.size());
+
+		for (int start = 0; start < toExtract.size(); start += EXTRACTION_PROGRESS_STRIDE) {
+			List<Path> slice = toExtract.subList(start, Math.min(start + EXTRACTION_PROGRESS_STRIDE, toExtract.size()));
+
+			extracted.addAll(processingCoordinator.process(slice, cancelled, metadataExtractor::apply));
+
+			onExtractionProgress.accept(extracted.size());
+		}
+
+		return extracted;
 	}
 
 	private Set<String> existingKeys(List<Path> files, MetadataOptions options) {
