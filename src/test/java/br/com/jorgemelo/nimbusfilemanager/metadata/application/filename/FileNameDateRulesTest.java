@@ -1,8 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application.filename;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.time.ZoneOffset;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.DottedDate
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.GenericMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ImageUuidMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PeachyMediaFamily;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PhotoGridMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ScreenshotMediaFamily;
 
 /**
@@ -31,6 +34,17 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(rule.resolve("Screenshot_20240102_103045.png"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
 		Assertions.assertThat(rule.resolve("Screenshot_20240102.png")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
+	}
+
+	@Test
+	void photoGridShouldResolveDateFromEpochMillis() {
+		// The PhotoGrid_<epochMillis> token carries the creation time (1443567518248 ms
+		// is late September 2015); a fixed UTC clock keeps the conversion deterministic.
+		PhotoGridMediaFamily rule = new PhotoGridMediaFamily(Clock.system(ZoneOffset.UTC));
+
+		Assertions.assertThat(rule.supports("PhotoGrid_1443567518248.jpg")).isTrue();
+		Assertions.assertThat(rule.resolve("PhotoGrid_1443567518248.jpg"))
+				.isEqualTo(LocalDateTime.ofInstant(Instant.ofEpochMilli(1443567518248L), ZoneOffset.UTC));
 	}
 
 	@Test

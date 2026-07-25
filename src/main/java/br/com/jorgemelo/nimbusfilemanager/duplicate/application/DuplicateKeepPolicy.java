@@ -32,15 +32,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
  *
  * <p>
  * "Original" = has camera EXIF (manufacturer/model) AND its subcategory is not
- * a derivative marker. Detectable derivative subcategories today are only
- * {@code WHATSAPP} and {@code AIRBRUSH} (Peachy/other editors currently fall
- * into OTHER - see the media families); expanding those is a follow-up.
+ * a derivative marker. The derivative subcategories are {@code WHATSAPP},
+ * {@code AIRBRUSH}, {@code PHOTOGRID} and {@code SCREENSHOT} - editor/app outputs
+ * and screen captures that are never preferred over a real original (Peachy/other
+ * editors currently fall into OTHER - see the media families).
  */
 @Component
 public class DuplicateKeepPolicy {
 
 	private static final Set<MediaSubcategory> DERIVATIVE_SUBCATEGORIES = EnumSet.of(MediaSubcategory.WHATSAPP,
-			MediaSubcategory.AIRBRUSH);
+			MediaSubcategory.AIRBRUSH, MediaSubcategory.PHOTOGRID, MediaSubcategory.SCREENSHOT);
 
 	/**
 	 * @param files      the whole group (keep + candidates)
@@ -101,7 +102,7 @@ public class DuplicateKeepPolicy {
 			return Reason.WHATSAPP_COPY;
 		}
 
-		if (file.subcategory() == MediaSubcategory.AIRBRUSH) {
+		if (file.subcategory() == MediaSubcategory.AIRBRUSH || file.subcategory() == MediaSubcategory.PHOTOGRID) {
 			return Reason.EDITED_COPY;
 		}
 

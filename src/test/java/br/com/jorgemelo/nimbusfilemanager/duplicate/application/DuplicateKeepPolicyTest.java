@@ -38,6 +38,16 @@ class DuplicateKeepPolicyTest {
 				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
 	}
 
+	private Signals photoGrid(UUID id, int w, int h) {
+		return new Signals(id, false, MediaSubcategory.PHOTOGRID, w, h, DateSource.FILE_NAME,
+				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+	}
+
+	private Signals screenshot(UUID id, int w, int h) {
+		return new Signals(id, false, MediaSubcategory.SCREENSHOT, w, h, DateSource.FILE_NAME,
+				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+	}
+
 	@Test
 	void keepsOriginalAndMarksWhatsAppCopy() {
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), whatsapp(B, 1600, 1200)), false);
@@ -52,6 +62,22 @@ class DuplicateKeepPolicyTest {
 
 		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
 				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
+	}
+
+	@Test
+	void keepsOriginalAndMarksPhotoGridCopyAsEdited() {
+		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), photoGrid(B, 4000, 3000)), false);
+
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
+				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
+	}
+
+	@Test
+	void keepsOriginalAndMarksScreenshotAsDerivative() {
+		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), screenshot(B, 4000, 3000)), false);
+
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
+				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.DERIVATIVE));
 	}
 
 	@Test

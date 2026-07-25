@@ -11,6 +11,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.DroneMedia
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.GoProMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ImageUuidMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PeachyMediaFamily;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PhotoGridMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ScreenshotMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 
@@ -28,6 +29,16 @@ class MediaSubcategoryRulesTest {
 		Assertions.assertThat(rule.supports("photo.jpg", "C:/photos/photo.jpg")).isFalse();
 		Assertions.assertThat(rule.subcategory()).isEqualTo(MediaSubcategory.AIRBRUSH);
 		Assertions.assertThat(rule.name()).isEqualTo("020_AIRBRUSH");
+	}
+
+	@Test
+	void photoGridShouldSupportPrefixOnly() {
+		PhotoGridMediaFamily rule = new PhotoGridMediaFamily(Clock.systemDefaultZone());
+
+		Assertions.assertThat(rule.supports("PhotoGrid_1443567518248.jpg", "C:/photos/PhotoGrid.jpg")).isTrue();
+		Assertions.assertThat(rule.supports("photo.jpg", "C:/photos/photo.jpg")).isFalse();
+		Assertions.assertThat(rule.subcategory()).isEqualTo(MediaSubcategory.PHOTOGRID);
+		Assertions.assertThat(rule.name()).isEqualTo("022_PHOTOGRID");
 	}
 
 	@Test
