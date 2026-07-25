@@ -16,8 +16,8 @@
 	<th:block th:unless="${inventoryActive}">
 	<nav class="tab-strip">
 		<a th:href="@{/app/duplicates(tab='exact', view=${view})}" th:classappend="${activeTab == 'exact'} ? 'active'" th:text="#{duplicates.tab.exact}">Exatos</a>
-		<a th:href="@{/app/duplicates(tab='similar', minSimilarity=${minSimilarity}, view=${view})}" th:classappend="${activeTab == 'similar'} ? 'active'" th:text="#{duplicates.tab.similar}">Fotos semelhantes</a>
-		<a th:href="@{/app/duplicates(tab='videos', minSimilarity=${minSimilarity}, view=${view})}" th:classappend="${activeTab == 'videos'} ? 'active'" th:text="#{duplicates.tab.videos}">Vídeos semelhantes</a>
+		<a th:href="@{/app/duplicates(tab='similar', view=${view})}" th:classappend="${activeTab == 'similar'} ? 'active'" th:text="#{duplicates.tab.similar}">Fotos semelhantes</a>
+		<a th:href="@{/app/duplicates(tab='videos', view=${view})}" th:classappend="${activeTab == 'videos'} ? 'active'" th:text="#{duplicates.tab.videos}">Vídeos semelhantes</a>
 	</nav>
 
 	<p class="muted" th:if="${activeTab == 'exact'}" th:text="#{duplicates.exact.description}">

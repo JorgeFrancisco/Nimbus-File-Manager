@@ -93,6 +93,34 @@ class DuplicatesWebControllerTest {
 	}
 
 	@Test
+	void videosTabReadsItsOwnSavedSimilarityIndependentlyOfPhotos() {
+		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
+		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
+		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
+
+		// Photo threshold 80, video threshold 95: the video tab must read its own key.
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of(
+				DuplicateConstants.MIN_SIMILARITY_KEY, "80", DuplicateConstants.MIN_SIMILARITY_VIDEO_KEY, "95"));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any()))
+				.thenReturn(Optional.of(new PageImpl<>(List.of())));
+
+		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
+				videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
+				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
+				mock(DuplicateExclusionService.class), videoWeb)
+				.duplicates(new DuplicatesViewRequest("videos", 0, null, "details", null, null), null, model);
+
+		Assertions.assertThat(model).containsEntry("minSimilarity", 95);
+		verify(videoSimilarity).cachedPage(95, PageRequest.of(0, 50));
+	}
+
+	@Test
 	void videosTabComputesSimilarityInBackgroundWhenNotCached() {
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);

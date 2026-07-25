@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web;
 
 import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.MIN_SIMILARITY_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.MIN_SIMILARITY_VIDEO_KEY;
 import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.TAB_KEY;
 import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.TYPE_FILTER_KEY;
 import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.VIEW_KEY;
@@ -134,7 +135,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		int pageSize = resolvePageSize(request.size(), authentication);
 
-		int safeMinSimilarity = resolveMinSimilarity(request.minSimilarity(), authentication);
+		int safeMinSimilarity = resolveMinSimilarity(request.minSimilarity(), authentication, videosTab);
 
 		String safeView = resolveView(request.view(), authentication);
 
@@ -500,19 +501,22 @@ public class DuplicatesWebController extends LocalizedComponent {
 	 * fall back to the floor on a link that omits it, because a looser threshold
 	 * would surface (and could delete) less-similar photos than the user intended.
 	 */
-	private int resolveMinSimilarity(Integer requested, Authentication authentication) {
+	private int resolveMinSimilarity(Integer requested, Authentication authentication, boolean videosTab) {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
+
+		// Photos and videos keep independent thresholds - each tab reads and persists its
+		// own preference key.
+		String key = videosTab ? MIN_SIMILARITY_VIDEO_KEY : MIN_SIMILARITY_KEY;
 
 		if (requested != null) {
 			int clamped = SimilarityBounds.clamp(requested);
 
-			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, MIN_SIMILARITY_KEY,
-					String.valueOf(clamped));
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, key, String.valueOf(clamped));
 
 			return clamped;
 		}
 
-		String saved = userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(MIN_SIMILARITY_KEY);
+		String saved = userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(key);
 
 		if (saved != null && !saved.isBlank()) {
 			try {
