@@ -33,7 +33,7 @@ public record ProcessingProperties(Integer workers, Integer queueCapacity, Integ
 	public static final int MAX_QUEUE_CAPACITY = 100_000;
 
 	public static final int DEFAULT_FFMPEG_PHOTO_HASH_LIMIT = 4;
-	public static final int DEFAULT_FFMPEG_VIDEO_FRAME_LIMIT = 2;
+	public static final int DEFAULT_FFMPEG_VIDEO_FRAME_LIMIT = 4;
 	public static final int DEFAULT_FFPROBE_VIDEO_LIMIT = 2;
 	public static final int MIN_EXTERNAL_LIMIT = 1;
 	public static final int MAX_EXTERNAL_LIMIT = 32;
