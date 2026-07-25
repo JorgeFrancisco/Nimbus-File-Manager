@@ -9,7 +9,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 /**
  * Classification is delegated to {@link MediaSubcategoryRuleEngine} (a list of
  * pluggable {@link MediaSubcategoryRule} beans, evaluated in order) instead of
- * an if/else chain - see revisao-projeto.md, "Arquitetura / SOLID".
+ * an if/else chain.
  */
 @Service
 public class MediaSubcategoryResolver {

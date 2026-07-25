@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.security.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -119,12 +118,6 @@ public class AppUserAccountService extends LocalizedComponent {
 		return appUserRepository.save(AppUser.builder().username(normalizedEmail)
 				.passwordHash(passwordEncoder.encode(password)).displayName(normalizedName).role(normalizedRole)
 				.enabled(true).twoFactorEnabled(false).build());
-	}
-
-	@Transactional(readOnly = true)
-	public List<AppUser> listUsers() {
-		return appUserRepository.findAll().stream()
-				.sorted((left, right) -> left.getUsername().compareToIgnoreCase(right.getUsername())).toList();
 	}
 
 	@Transactional(readOnly = true)

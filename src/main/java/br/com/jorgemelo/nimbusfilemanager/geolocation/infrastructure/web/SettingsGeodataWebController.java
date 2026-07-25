@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web;
 
+import static br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants.MESSAGE_BLOCKED;
+import static br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants.MESSAGE_WAIT_REBUILD;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -15,6 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoData
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
@@ -28,12 +32,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
  */
 @Controller
 public class SettingsGeodataWebController extends LocalizedComponent {
-
-	private static final String ATTR_ERROR = "error";
-	private static final String ATTR_SUCCESS = "success";
-	private static final String REDIRECT_SETTINGS = "redirect:/app/settings";
-	private static final String MESSAGE_BLOCKED = "backend.settings.blocked";
-	private static final String MESSAGE_WAIT_REBUILD = "backend.settings.waitGeoRebuild";
 
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final OfflineGeoDataset offlineGeoDataset;
@@ -64,85 +62,85 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 				GeolocationConstants.GEO_REBUILD_SCOPE_KEY, scope.name());
 
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_BLOCKED));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (geoDatasetAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.waitGeoImport"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.waitGeoImport"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (!locationRebuildAsyncRunner.start(scope)) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.rebuildRunning"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.rebuildRunning"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		locationRebuildAsyncRunner.rebuild(scope);
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.rebuildStarted"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.rebuildStarted"));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	@PostMapping("/app/settings/geodata/download")
 	public String downloadGeoDataset(RedirectAttributes redirectAttributes) {
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_BLOCKED));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		// Replacing the boundary dataset mid-rebuild would pull the ground out from
 		// under the running resolution, so the whole geo section waits for it.
 		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (!geoDatasetAsyncRunner.start()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.geoImportRunning"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.geoImportRunning"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		geoDatasetAsyncRunner.downloadAndImport();
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.geoImportStarted"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.geoImportStarted"));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	@PostMapping("/app/settings/geodata/remove")
 	public String removeGeoDataset(RedirectAttributes redirectAttributes) {
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_BLOCKED));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		// Removing the boundaries a rebuild is actively reading would break it.
 		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (geoDatasetAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.waitRunningImport"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.waitRunningImport"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		offlineGeoDataset.remove();
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.geoRemoved"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.geoRemoved"));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	@PostMapping("/app/settings/geodata/clear-cache")
@@ -151,28 +149,28 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 		// clearing it mid-operation would undo work in flight. Block like the rest
 		// of the geo section instead of silently racing.
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_BLOCKED));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		if (geoDatasetAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.waitGeoImport"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.waitGeoImport"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		long removed = mediaLocationService.clearCache();
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.cacheCleared", removed));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.cacheCleared", removed));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	private String username(Authentication authentication) {

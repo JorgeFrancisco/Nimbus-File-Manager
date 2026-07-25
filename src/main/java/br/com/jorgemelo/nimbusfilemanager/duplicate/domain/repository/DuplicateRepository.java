@@ -66,8 +66,7 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 
 	/**
 	 * Bulk variant of {@link #findDuplicateFiles(String)} used to load the files of
-	 * every group in a page with a single query (see revisao-projeto.md,
-	 * "Performance" -&gt; "N+1 em duplicados").
+	 * every group in a page with a single query.
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileWithShaRawResponse(

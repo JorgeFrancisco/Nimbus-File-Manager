@@ -4,9 +4,9 @@ import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionStep;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
@@ -26,9 +26,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 public class ExecutionMapper extends LocalizedComponent {
 
 	private final ExecutionMessageCodec codec;
+	private final ExecutionLabels executionLabels;
 
-	public ExecutionMapper(ExecutionMessageCodec codec) {
+	public ExecutionMapper(ExecutionMessageCodec codec, ExecutionLabels executionLabels) {
 		this.codec = codec;
+		this.executionLabels = executionLabels;
 	}
 
 	public ExecutionResponse toResponse(Execution execution) {
@@ -45,8 +47,8 @@ public class ExecutionMapper extends LocalizedComponent {
 				execution.getFilesMoved(), execution.getSimulatedFiles(), execution.getErrors(),
 				execution.getTotalExpected(), percentComplete(execution),
 				resolve(execution.getStatusMessage()),
-				execution.getExecuteFlag(), statusLabel(status), status.isTerminal(),
-				typeLabel(execution.getExecutionType()), triggerLabel(execution.getTriggerEvent()),
+				execution.getExecuteFlag(), executionLabels.status(status), status.isTerminal(),
+				executionLabels.type(execution.getExecutionType()), triggerLabel(execution.getTriggerEvent()),
 				DateTimeFormatUtils.human(execution.getStartedAt()),
 				DateTimeFormatUtils.human(execution.getFinishedAt()));
 	}
@@ -70,43 +72,6 @@ public class ExecutionMapper extends LocalizedComponent {
 		}
 
 		return message(statusMessage.getCode(), codec.decode(statusMessage.getArgs()));
-	}
-
-	/**
-	 * Resolves the localized label for a status. Uses an exhaustive switch with the
-	 * full bundle keys (rather than a computed prefix + enum name) so every key is a
-	 * literal the i18n key-parity test can see and verify - the same idiom used for
-	 * other enum-to-message mappings in the app.
-	 */
-	private String statusLabel(ExecutionStatus status) {
-		return switch (status) {
-		case STARTED -> message("backend.execution.status.started");
-		case SCANNING_FILES -> message("backend.execution.status.scanning");
-		case PROCESSING_FILES -> message("backend.execution.status.processing");
-		case FINISHED -> message("backend.execution.status.finished");
-		case FINISHED_WITH_ERRORS -> message("backend.execution.status.finishedWithErrors");
-		case INTERRUPTED -> message("backend.execution.status.interrupted");
-		case ERROR -> message("backend.execution.status.error");
-		case CANCELLED -> message("backend.execution.status.cancelled");
-		case REJECTED -> message("backend.execution.status.rejected");
-		};
-	}
-
-	/**
-	 * Localized label for the execution type. Exhaustive switch over literal keys
-	 * (not a computed prefix + enum name) so every key is visible to the i18n
-	 * key-parity test, mirroring {@link #statusLabel(ExecutionStatus)}.
-	 */
-	private String typeLabel(ExecutionType type) {
-		return switch (type) {
-		case INVENTORY -> message("backend.execution.type.INVENTORY");
-		case ORGANIZATION -> message("backend.execution.type.ORGANIZATION");
-		case UNDO -> message("backend.execution.type.UNDO");
-		case EXPORT -> message("backend.execution.type.EXPORT");
-		case SUMMARY -> message("backend.execution.type.SUMMARY");
-		case DEDUP_DELETE -> message("backend.execution.type.DEDUP_DELETE");
-		case RECONCILE -> message("backend.execution.type.RECONCILE");
-		};
 	}
 
 	/**

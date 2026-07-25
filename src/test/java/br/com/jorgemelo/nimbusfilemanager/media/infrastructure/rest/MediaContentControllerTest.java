@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest;
+package br.com.jorgemelo.nimbusfilemanager.media.infrastructure.rest;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -15,10 +15,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import br.com.jorgemelo.nimbusfilemanager.media.application.MediaContentService;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentSource;
 import br.com.jorgemelo.nimbusfilemanager.media.infrastructure.persistence.MediaContentRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.MediaContentService;
 
 class MediaContentControllerTest {
 

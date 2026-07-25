@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.ExecutionProgressService;
 
 class StartupExecutionRecoveryListenerTest {
 

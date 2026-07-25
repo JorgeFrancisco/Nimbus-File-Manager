@@ -41,10 +41,10 @@ public record DuplicateFileView(
 
 		String iconClass, String iconLabel,
 
-		// Recommendation transparency: highlight is the Highlight enum name (or null),
-		// reason is the tooltip text (why it is recommended), resolution is "W × H" or
-		// null.
-		String highlight, String reason, String resolution,
+		// Recommendation transparency: highlight is the Reason enum name (or null), kept
+		// for the CSS tier only; highlightLabel is the localized badge text; reason is
+		// the tooltip text (why it is recommended); resolution is "W × H" or null.
+		String highlight, String highlightLabel, String reason, String resolution,
 
 		// Precomputed presentation: preview support, lightbox CSS class, the localized
 		// "open" tooltip, and the localized date-origin label plus its badge tier.

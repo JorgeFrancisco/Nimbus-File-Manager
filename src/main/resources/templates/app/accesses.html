@@ -31,12 +31,12 @@
 						<tr th:each="access : ${accessLogs}">
 							<td th:text="${#temporals.format(access.createdAt, 'dd/MM/yyyy HH:mm:ss')}">08/07/2026 12:00:00</td>
 							<td th:text="${access.username ?: '-'}">admin@nimbus-file-manager.local</td>
-							<td th:text="${access.eventType}">LOGIN_SUCCESS</td>
+							<td th:text="${access.eventTypeLabel}">Login</td>
 							<td><span class="badge"
-									th:classappend="${#strings.toString(access.status) == 'SUCCESS'} ? 'ok' : 'error'"
-									th:text="${access.status}">SUCCESS</span></td>
+									th:classappend="${#strings.toString(access.statusCode) == 'SUCCESS'} ? 'ok' : 'error'"
+									th:text="${access.statusLabel}">Sucesso</span></td>
 							<td th:text="${access.ipAddress ?: '-'}">127.0.0.1</td>
-							<td th:text="${access.message ?: '-'}">Login completed.</td>
+							<td th:text="${access.messageLabel ?: '-'}">Login concluído.</td>
 						</tr>
 						<tr th:if="${#lists.isEmpty(accessLogs)}">
 							<td colspan="6" th:text="#{accesses.empty}">Nenhum acesso encontrado para este e-mail.</td>

@@ -107,10 +107,6 @@ public class ScanExclusionService {
 		return !extension.isBlank() && excludedExtensions().contains(extension);
 	}
 
-	boolean isExcludedFolder(Path path) {
-		return isExcludedFolder(null, path);
-	}
-
 	boolean isExcludedFolder(Path root, Path path) {
 		List<FolderMatcher> matchers = folderRules().matchers();
 

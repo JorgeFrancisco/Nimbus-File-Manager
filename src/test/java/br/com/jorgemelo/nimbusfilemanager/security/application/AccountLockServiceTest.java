@@ -16,6 +16,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
@@ -69,8 +70,8 @@ class AccountLockServiceTest {
 		service.registerFailure("admin@example.com", "203.0.113.9", "JUnit");
 
 		verify(appUserRepository).incrementFailedAttempts(eq(1L), any(LocalDateTime.class));
-		verify(userAccessLogService).recordAccess(eq("admin@example.com"), eq(SecurityConstants.ACCOUNT_LOCKED),
-				eq("FAILURE"), eq("203.0.113.9"), eq("JUnit"), anyString());
+		verify(userAccessLogService).recordAccess("admin@example.com", SecurityConstants.ACCOUNT_LOCKED, "FAILURE",
+				"203.0.113.9", "JUnit", AccessMessages.ACCOUNT_LOCKED);
 	}
 
 	@Test

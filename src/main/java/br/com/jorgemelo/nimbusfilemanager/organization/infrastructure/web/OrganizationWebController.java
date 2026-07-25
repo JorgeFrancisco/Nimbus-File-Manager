@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.web;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,8 +28,10 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationForm;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
+import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationConflictType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
@@ -44,7 +47,6 @@ public class OrganizationWebController extends LocalizedComponent {
 	private static final String FINISHED_WITH_ERRORS = "FINISHED_WITH_ERRORS";
 	private static final String ERROR = "ERROR";
 	private static final String VIEW = "app/organization";
-	private static final String ATTR_ERROR = "error";
 	static final String LIMIT = "limit";
 	static final String LOCATION_SUBDIVISION = "locationSubdivision";
 	static final String LOCATION_MIN_CONFIDENCE = "locationMinConfidence";
@@ -116,7 +118,7 @@ public class OrganizationWebController extends LocalizedComponent {
 		String validationError = validateOrganizationPaths(form.sourcePath(), form.targetPath());
 
 		if (validationError != null) {
-			model.addAttribute(ATTR_ERROR, validationError);
+			model.addAttribute(SharedConstants.ATTR_ERROR, validationError);
 
 			return VIEW;
 		}
@@ -134,7 +136,7 @@ public class OrganizationWebController extends LocalizedComponent {
 
 			return "redirect:/app/progress/" + started.executionId() + "?kind=organization-preview";
 		} catch (IllegalArgumentException exception) {
-			model.addAttribute(ATTR_ERROR, exception.getMessage());
+			model.addAttribute(SharedConstants.ATTR_ERROR, exception.getMessage());
 
 			return VIEW;
 		}
@@ -155,7 +157,7 @@ public class OrganizationWebController extends LocalizedComponent {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
-			model.addAttribute(ATTR_ERROR, previewMissingMessage(executionId));
+			model.addAttribute(SharedConstants.ATTR_ERROR, previewMissingMessage(executionId));
 			model.addAttribute("errorProgressId", executionId);
 
 			return VIEW;
@@ -216,7 +218,7 @@ public class OrganizationWebController extends LocalizedComponent {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
-			model.addAttribute(ATTR_ERROR, message("backend.organization.previewNotFound", executionId));
+			model.addAttribute(SharedConstants.ATTR_ERROR, message("backend.organization.previewNotFound", executionId));
 
 			return VIEW;
 		}
@@ -248,7 +250,7 @@ public class OrganizationWebController extends LocalizedComponent {
 		String validationError = validateOrganizationPaths(form.sourcePath(), form.targetPath());
 
 		if (validationError != null) {
-			model.addAttribute(ATTR_ERROR, validationError);
+			model.addAttribute(SharedConstants.ATTR_ERROR, validationError);
 
 			return VIEW;
 		}
@@ -263,7 +265,7 @@ public class OrganizationWebController extends LocalizedComponent {
 
 			return "redirect:/app/progress/" + started.executionId() + "?kind=organization-execute";
 		} catch (IllegalArgumentException exception) {
-			model.addAttribute(ATTR_ERROR, exception.getMessage());
+			model.addAttribute(SharedConstants.ATTR_ERROR, exception.getMessage());
 
 			return VIEW;
 		}
@@ -339,6 +341,7 @@ public class OrganizationWebController extends LocalizedComponent {
 
 		model.addAttribute("plan", plan);
 		model.addAttribute("previewItems", pageItems);
+		model.addAttribute("conflictTypeLabels", conflictTypeLabels());
 		model.addAttribute("page", page);
 		model.addAttribute("size", size);
 		model.addAttribute("totalItems", totalItems);
@@ -346,6 +349,29 @@ public class OrganizationWebController extends LocalizedComponent {
 		model.addAttribute("hasPrevious", page > 0);
 		model.addAttribute("hasNext", page + 1 < totalPages);
 		model.addAttribute("onlyConflicts", onlyConflicts);
+	}
+
+	/**
+	 * Localized conflict-type labels by enum name, so the preview table renders the
+	 * raw {@link OrganizationConflictType} name each item carries as text the user
+	 * reads without the front translating anything.
+	 */
+	private Map<String, String> conflictTypeLabels() {
+		Map<String, String> labels = new LinkedHashMap<>();
+
+		for (OrganizationConflictType type : OrganizationConflictType.values()) {
+			labels.put(type.name(), conflictTypeLabel(type));
+		}
+
+		return labels;
+	}
+
+	private String conflictTypeLabel(OrganizationConflictType type) {
+		return switch (type) {
+		case TARGET_EXISTS -> message("enum.organizationConflictType.TARGET_EXISTS");
+		case DUPLICATE_TARGET -> message("enum.organizationConflictType.DUPLICATE_TARGET");
+		case TARGET_EXISTS_AND_DUPLICATE -> message("enum.organizationConflictType.TARGET_EXISTS_AND_DUPLICATE");
+		};
 	}
 
 	private String validateOrganizationPaths(String sourcePath, String targetPath) {

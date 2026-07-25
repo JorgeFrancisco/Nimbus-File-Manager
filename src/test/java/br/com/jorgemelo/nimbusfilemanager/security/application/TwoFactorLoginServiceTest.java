@@ -14,6 +14,7 @@ import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.enums.Role;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
@@ -46,7 +47,7 @@ class TwoFactorLoginServiceTest {
 
 		Assertions.assertThat(result).isEqualTo(TwoFactorLoginResult.LOCKED);
 		verify(userAccessLogService).recordAccess("admin", SecurityConstants.LOGIN_2FA_FAILURE, "FAILURE",
-				"127.0.0.1", "JUnit", "Two-factor code rejected: account temporarily locked.");
+				"127.0.0.1", "JUnit", AccessMessages.TWO_FACTOR_REJECTED_LOCKED);
 		verify(twoFactorService, never()).verify(any(), any());
 		verify(accountLockService, never()).registerFailure(any(), any(), any());
 	}
@@ -62,7 +63,7 @@ class TwoFactorLoginServiceTest {
 		Assertions.assertThat(result).isEqualTo(TwoFactorLoginResult.INVALID);
 		verify(accountLockService).registerFailure("admin", "127.0.0.1", "JUnit");
 		verify(userAccessLogService).recordAccess("admin", SecurityConstants.LOGIN_2FA_FAILURE, "FAILURE",
-				"127.0.0.1", "JUnit", "Invalid two-factor authentication code.");
+				"127.0.0.1", "JUnit", AccessMessages.INVALID_TWO_FACTOR_CODE);
 		verify(accountLockService, never()).registerSuccess(anyString());
 	}
 
@@ -77,7 +78,7 @@ class TwoFactorLoginServiceTest {
 		Assertions.assertThat(result).isEqualTo(TwoFactorLoginResult.SUCCESS);
 		verify(accountLockService).registerSuccess("admin");
 		verify(userAccessLogService).recordAccess("admin", SecurityConstants.LOGIN_2FA_SUCCESS, "SUCCESS",
-				"127.0.0.1", "JUnit", "Two-factor authentication completed.");
+				"127.0.0.1", "JUnit", AccessMessages.TWO_FACTOR_COMPLETED);
 		verify(accountLockService, never()).registerFailure(any(), any(), any());
 	}
 

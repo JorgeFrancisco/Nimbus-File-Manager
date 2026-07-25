@@ -35,7 +35,7 @@ public class UserPagePreferenceService {
 			return;
 		}
 
-		// Preferences are live data owned by a real user (Etapa 3 / C2). Without a
+		// Preferences are live data owned by a real user. Without a
 		// resolvable user there is nothing to own the row, so we no-op instead of
 		// persisting an orphan (e.g. the defensive anonymous path).
 		Optional<Long> userId = resolveUserId(username);

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionRetentionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
@@ -18,10 +19,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
  */
 @Controller
 public class SettingsExecutionRetentionWebController extends LocalizedComponent {
-
-	private static final String ATTR_ERROR = "error";
-	private static final String ATTR_SUCCESS = "success";
-	private static final String REDIRECT_SETTINGS = "redirect:/app/settings";
 
 	private final ExecutionRetentionService executionRetentionService;
 
@@ -39,11 +36,11 @@ public class SettingsExecutionRetentionWebController extends LocalizedComponent 
 
 			String key = removed == 1 ? "backend.settings.executionRemoved" : "backend.settings.executionsRemoved";
 
-			redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message(key, removed));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message(key, removed));
 		} catch (IllegalArgumentException e) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, e.getMessage());
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, e.getMessage());
 		}
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 }

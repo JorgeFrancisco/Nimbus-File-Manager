@@ -39,6 +39,7 @@ public class QuarantinePurgeScheduler {
 
 		return thread;
 	});
+	private volatile boolean shuttingDown;
 
 	public QuarantinePurgeScheduler(AppSettingService appSettingService,
 			QuarantinePurgeService quarantinePurgeService) {
@@ -65,12 +66,18 @@ public class QuarantinePurgeScheduler {
 
 			quarantinePurgeService.purgeOlderThan(days);
 		} catch (Exception e) {
-			log.error("Scheduled quarantine purge failed", e);
+			if (shuttingDown || Thread.currentThread().isInterrupted()) {
+				log.debug("Scheduled quarantine purge interrupted during shutdown", e);
+			} else {
+				log.error("Scheduled quarantine purge failed", e);
+			}
 		}
 	}
 
 	@PreDestroy
 	void shutdown() {
+		shuttingDown = true;
+
 		executor.shutdownNow();
 	}
 }

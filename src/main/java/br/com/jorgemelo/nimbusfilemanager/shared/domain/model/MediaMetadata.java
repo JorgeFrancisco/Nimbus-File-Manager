@@ -2,9 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.model;
 
 import java.time.LocalDateTime;
 
-import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

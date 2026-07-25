@@ -50,6 +50,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.rest.OrganizationController;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.HomeController;
 import br.com.jorgemelo.nimbusfilemanager.statistics.application.StatisticsService;
 import br.com.jorgemelo.nimbusfilemanager.statistics.infrastructure.rest.StatisticsController;
 
@@ -190,8 +191,7 @@ class ControllersTest {
 	/**
 	 * The generic handler must never echo {@code e.getMessage()} - a raw
 	 * JDBC/filesystem exception message routinely leaks internal file paths or
-	 * database details (see revisao-projeto.md, "Mensagens de erro cruas devolvidas
-	 * pela API pública"). Even though {@code /api/**} now requires a logged-in
+	 * database details. Even though {@code /api/**} now requires a logged-in
 	 * session (it was public before), not leaking internals to any API caller stays
 	 * the policy: it should return a fixed, generic message plus a reference id the
 	 * caller can quote to an admin, who correlates it back to the full exception in

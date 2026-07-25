@@ -57,18 +57,25 @@ public class LibrarySwitchService extends LocalizedComponent {
 			inventoryWatchService.reconfigureAndInventory();
 
 			log.info("Library switched from {} to {}. Catalog entries removed={}", oldFolder, newFolder, removed);
+		} catch (InterruptedException exception) {
+			// A cancellation or shutdown interrupting the switch is expected, not a
+			// failure worth an ERROR with a stack trace.
+			log.debug("Library switch from {} to {} was interrupted", oldFolder, newFolder, exception);
+			Thread.currentThread().interrupt();
+
+			recoverInventoryMonitoring();
 		} catch (Exception exception) {
 			log.error("Could not switch monitored library from {} to {}", oldFolder, newFolder, exception);
 
-			if (exception instanceof InterruptedException) {
-				Thread.currentThread().interrupt();
-			}
+			recoverInventoryMonitoring();
+		}
+	}
 
-			try {
-				inventoryWatchService.reconfigureAndInventory();
-			} catch (Exception recoveryException) {
-				log.error("Could not recover inventory monitoring after failed library switch", recoveryException);
-			}
+	private void recoverInventoryMonitoring() {
+		try {
+			inventoryWatchService.reconfigureAndInventory();
+		} catch (Exception recoveryException) {
+			log.error("Could not recover inventory monitoring after failed library switch", recoveryException);
 		}
 	}
 

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
@@ -17,9 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
  * or TOTP code) against an {@link AppUser}: form login
  * ({@code AppUserDetailsService} / {@code LoginFailureHandler}),
  * {@code /login/2fa} ({@code AuthWebController}) and {@code /change-password}
- * ({@code AppUserAccountService}) - see {@code SecurityConfigTest} /
- * {@code revisao-projeto.md} item "Sem limite de tentativas em login/2FA/troca
- * de senha".
+ * ({@code AppUserAccountService}) - see {@code SecurityConfigTest}.
  * <p>
  * Attempts are counted per account (not per surface), so an attacker who
  * already knows the password can't sidestep the lock by moving from
@@ -70,7 +69,7 @@ public class AccountLockService {
 
 			int maxAttempts = maxAttempts();
 
-			// Atomic +1 in the database (Etapa 4 / D5): never loses a concurrent
+			// Atomic +1 in the database: never loses a concurrent
 			// attempt and is a no-op if the account got locked meanwhile.
 			appUserRepository.incrementFailedAttempts(user.getId(), now);
 
@@ -82,9 +81,7 @@ public class AccountLockService {
 			// increment crossed the threshold matches the >= maxAttempts guard.
 			if (appUserRepository.applyLockoutIfThresholdReached(user.getId(), maxAttempts, lockedUntil, now) == 1) {
 				userAccessLogService.recordAccess(user.getUsername(), SecurityConstants.ACCOUNT_LOCKED, "FAILURE",
-						ipAddress, userAgent,
-						"Conta bloqueada após " + maxAttempts + " tentativas inválidas de senha/2FA. "
-								+ "Bloqueada por " + lockoutMinutes + " minuto(s), até " + lockedUntil + ".");
+						ipAddress, userAgent, AccessMessages.ACCOUNT_LOCKED);
 			}
 		});
 	}
@@ -99,7 +96,7 @@ public class AccountLockService {
 			return;
 		}
 
-		// Atomic clear (Etapa 4 / D5): only writes when there is something to clear,
+		// Atomic clear: only writes when there is something to clear,
 		// so a success never races-away a concurrently-registered failure needlessly.
 		appUserRepository.findByUsernameIgnoreCase(username.trim())
 				.ifPresent(user -> appUserRepository.clearFailuresOnSuccess(user.getId(), LocalDateTime.now(clock)));

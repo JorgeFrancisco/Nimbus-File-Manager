@@ -18,11 +18,11 @@ import org.junit.jupiter.api.Test;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCursor;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineDayResponse;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedCursor;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedPageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
 /**

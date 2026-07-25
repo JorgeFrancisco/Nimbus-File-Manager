@@ -5,8 +5,6 @@ import java.nio.file.Path;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
-
 class FileTypeTest {
 
 	@Test
@@ -40,7 +38,6 @@ class FileTypeTest {
 		Assertions.assertThat(FileType.OTHER.isOther()).isTrue();
 		Assertions.assertThat(FileType.valueOfNullable(null)).isEqualTo(FileType.OTHER);
 		Assertions.assertThat(FileType.categoryOf(null)).isEqualTo(FileCategory.OTHER);
-		Assertions.assertThat(FileType.displayNameOf(FileType.PHOTO)).isEqualTo("Foto");
 		Assertions.assertThat(FileType.folderNameOf(FileType.VIDEO)).isEqualTo("VIDEOS");
 	}
 

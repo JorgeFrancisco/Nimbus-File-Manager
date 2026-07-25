@@ -351,21 +351,6 @@ class AppUserAccountServiceTest {
 	}
 
 	@Test
-	void listUsersShouldSortByEmailIgnoringCase() {
-		AppUserRepository repository = mock(AppUserRepository.class);
-
-		AppUserAccountService service = new AppUserAccountService(repository, mock(PasswordEncoder.class),
-				mock(AccountLockService.class), Clock.systemDefaultZone());
-
-		AppUser beta = AppUser.builder().username("beta@example.com").build();
-		AppUser alpha = AppUser.builder().username("Alpha@example.com").build();
-
-		when(repository.findAll()).thenReturn(List.of(beta, alpha));
-
-		Assertions.assertThat(service.listUsers()).containsExactly(alpha, beta);
-	}
-
-	@Test
 	void searchUsersShouldLimitPageSizeAndSearchByEmailOrName() {
 		AppUserRepository repository = mock(AppUserRepository.class);
 

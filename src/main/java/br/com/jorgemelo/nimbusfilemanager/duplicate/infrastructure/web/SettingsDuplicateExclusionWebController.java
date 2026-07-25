@@ -8,6 +8,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityCaches;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
@@ -20,9 +21,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
  */
 @Controller
 public class SettingsDuplicateExclusionWebController extends LocalizedComponent {
-
-	private static final String ATTR_SUCCESS = "success";
-	private static final String REDIRECT_SETTINGS = "redirect:/app/settings";
 
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final SimilarityCaches similarityCaches;
@@ -40,9 +38,9 @@ public class SettingsDuplicateExclusionWebController extends LocalizedComponent 
 		duplicateExclusionService.removeFileExclusion(id);
 		similarityCaches.invalidateAll();
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	/** Restores a whole folder (recursively) to duplicate comparison. */
@@ -51,8 +49,8 @@ public class SettingsDuplicateExclusionWebController extends LocalizedComponent 
 		duplicateExclusionService.removeFolderExclusion(id);
 		similarityCaches.invalidateAll();
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 }

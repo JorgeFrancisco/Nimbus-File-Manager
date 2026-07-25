@@ -33,12 +33,11 @@ import lombok.Setter;
  * the database: the FK {@code fk_media_fingerprint_file} is
  * {@code ON DELETE CASCADE} (same for {@code fingerprint_failure}), so deleting
  * a {@code catalog_file} removes its fingerprints/failures - no orphans (proven
- * by Etapa6PersistenceIntegrationTest).
+ * by FingerprintPersistenceIntegrationTest).
  *
  * <p>
- * Storage of future descriptors (see docs/decisoes-arquiteturais.md, ADR-0003):
- * different algorithms may coexist without sharing the same physical
- * representation.
+ * Storage of future descriptors: different algorithms may coexist without
+ * sharing the same physical representation.
  * <ul>
  * <li><b>Compact bit-hash (&le;64 bits)</b> - dHash/pHash-64: stays in
  * {@link #hash} (BIGINT), keeping the cheap XOR/Hamming path.</li>

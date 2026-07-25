@@ -1,5 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web;
 
+import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.MIN_SIMILARITY_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.TAB_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.TYPE_FILTER_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants.VIEW_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants.PAGE_SIZE_KEY;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -29,6 +35,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusi
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityBounds;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateGroupResponse;
@@ -61,9 +68,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.enums.Kind;
 
 /**
  * Renders the "Duplicados" screen: exact (byte-identical, SHA-256) duplicate
- * candidates and, as a second tab, visually similar photos - see
- * revisao-projeto.md, "Próximas evoluções sugeridas" -&gt; "Fotos visualmente
- * semelhantes". Only one tab's data is loaded per request (whichever the
+ * candidates and, as a second tab, visually similar photos. Only one tab's
+ * data is loaded per request (whichever the
  * {@code tab} query param selects), so switching tabs is a normal link/GET like
  * the rest of the app (see settings.html's own {@code tab-strip}), not a
  * client-side toggle.
@@ -80,17 +86,6 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 	private static final List<Integer> PAGE_SIZES = List.of(50, 100, 200);
 	private static final int DEFAULT_PAGE_SIZE = 50;
-	public static final String PAGE_SIZE_KEY = "pageSize";
-	static final String MIN_SIMILARITY_KEY = "minSimilarity";
-	static final String VIEW_KEY = "view";
-	static final String TAB_KEY = "tab";
-	static final String TYPE_FILTER_KEY = "fileTypes";
-
-	/**
-	 * Preferences page key for the Duplicados screen (see Preferências).
-	 */
-	public static final String PAGE_KEY = "duplicates";
-
 	private static final Set<String> VIEW_MODES = Set.of("details", "small", "large", "xlarge");
 	private static final String DEFAULT_TAB = "exact";
 	private static final String TAB_SIMILAR = "similar";
@@ -99,6 +94,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private static final String PHOTO_ACTION_BASE = "/app/duplicates/phash";
 	private static final String VIDEO_ACTION_BASE = "/app/duplicates/phash-video";
 	private static final String SYSTEM_USERNAME = "system";
+	private static final String ATTR_SIMILARITY_COMPUTING = "similarityComputing";
 
 	private final DuplicateService duplicateService;
 	private final PhotoSimilarityService photoSimilarityService;
@@ -180,7 +176,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 		} else {
 			setBacklogAttributes(model, phashBacklogService.status(), phashBacklogAsyncRunner.etaSeconds(),
 					phashBacklogAsyncRunner.isRunning(), PHOTO_ACTION_BASE, false);
-			model.addAttribute("similarityComputing", false);
+			model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
 
 			Page<DuplicateCandidateGroupResponse> exactPage = duplicateService
 					.candidates(PageRequest.of(page, pageSize), MediaTypeFilter.fileTypesOf(typeFilter));
@@ -328,7 +324,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		setBacklogAttributes(model, status, phashBacklogAsyncRunner.etaSeconds(), phashBacklogAsyncRunner.isRunning(),
 				PHOTO_ACTION_BASE, block);
-		model.addAttribute("similarityComputing", false);
+		model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
 
 		if (block) {
 			// Do not load partial similarity groups while fingerprints are still computing.
@@ -354,7 +350,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		addPageAttributes(model, Page.empty(), List.of());
 
-		model.addAttribute("similarityComputing", true);
+		model.addAttribute(ATTR_SIMILARITY_COMPUTING, true);
 		model.addAttribute("similarityPercent", photoSimilarityAsyncRunner.percent());
 		model.addAttribute("similarityProcessed", photoSimilarityAsyncRunner.processed());
 		model.addAttribute("similarityTotal", photoSimilarityAsyncRunner.total());
@@ -367,7 +363,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		setBacklogAttributes(model, status, videoSimilarityWeb.backlogRunner().etaSeconds(),
 				videoSimilarityWeb.backlogRunner().isRunning(), VIDEO_ACTION_BASE, block);
-		model.addAttribute("similarityComputing", false);
+		model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
 
 		if (block) {
 			addPageAttributes(model, Page.empty(), List.of());
@@ -392,7 +388,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		addPageAttributes(model, Page.empty(), List.of());
 
-		model.addAttribute("similarityComputing", true);
+		model.addAttribute(ATTR_SIMILARITY_COMPUTING, true);
 		model.addAttribute("similarityPercent", videoSimilarityWeb.similarityRunner().percent());
 		model.addAttribute("similarityProcessed", videoSimilarityWeb.similarityRunner().processed());
 		model.addAttribute("similarityTotal", videoSimilarityWeb.similarityRunner().total());
@@ -487,13 +483,14 @@ public class DuplicatesWebController extends LocalizedComponent {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
 
 		if (requested != null && PAGE_SIZES.contains(requested)) {
-			userPagePreferenceService.save(username, PAGE_KEY, PAGE_SIZE_KEY, requested.toString());
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, PAGE_SIZE_KEY, requested.toString());
 
 			return requested;
 		}
 
-		return PageUtils.validSizeOrDefault(userPagePreferenceService.find(username, PAGE_KEY).get(PAGE_SIZE_KEY),
-				PAGE_SIZES, DEFAULT_PAGE_SIZE);
+		return PageUtils.validSizeOrDefault(
+				userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(PAGE_SIZE_KEY), PAGE_SIZES,
+				DEFAULT_PAGE_SIZE);
 	}
 
 	/**
@@ -507,18 +504,19 @@ public class DuplicatesWebController extends LocalizedComponent {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
 
 		if (requested != null) {
-			int clamped = clampSimilarity(requested);
+			int clamped = SimilarityBounds.clamp(requested);
 
-			userPagePreferenceService.save(username, PAGE_KEY, MIN_SIMILARITY_KEY, String.valueOf(clamped));
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, MIN_SIMILARITY_KEY,
+					String.valueOf(clamped));
 
 			return clamped;
 		}
 
-		String saved = userPagePreferenceService.find(username, PAGE_KEY).get(MIN_SIMILARITY_KEY);
+		String saved = userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(MIN_SIMILARITY_KEY);
 
 		if (saved != null && !saved.isBlank()) {
 			try {
-				return clampSimilarity(Integer.parseInt(saved.trim()));
+				return SimilarityBounds.clamp(Integer.parseInt(saved.trim()));
 			} catch (NumberFormatException _) {
 				// fall through to the floor
 			}
@@ -537,12 +535,12 @@ public class DuplicatesWebController extends LocalizedComponent {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
 
 		if (requested != null && VIEW_MODES.contains(requested)) {
-			userPagePreferenceService.save(username, PAGE_KEY, VIEW_KEY, requested);
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, VIEW_KEY, requested);
 
 			return requested;
 		}
 
-		String saved = userPagePreferenceService.find(username, PAGE_KEY).get(VIEW_KEY);
+		String saved = userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(VIEW_KEY);
 
 		return saved != null && VIEW_MODES.contains(saved) ? saved : "details";
 	}
@@ -560,13 +558,14 @@ public class DuplicatesWebController extends LocalizedComponent {
 			Set<MediaTypeFilter> selected = requested.isEmpty() ? EnumSet.allOf(MediaTypeFilter.class)
 					: EnumSet.copyOf(requested);
 
-			userPagePreferenceService.save(username, PAGE_KEY, TYPE_FILTER_KEY,
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, TYPE_FILTER_KEY,
 					selected.stream().map(Enum::name).collect(Collectors.joining(",")));
 
 			return selected;
 		}
 
-		return parseTypeFilter(userPagePreferenceService.find(username, PAGE_KEY).get(TYPE_FILTER_KEY));
+		return parseTypeFilter(
+				userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(TYPE_FILTER_KEY));
 	}
 
 	private Set<MediaTypeFilter> parseTypeFilter(String csv) {
@@ -591,19 +590,14 @@ public class DuplicatesWebController extends LocalizedComponent {
 		String username = SecurityUtils.usernameOr(authentication, SYSTEM_USERNAME);
 
 		if (requested != null && TABS.contains(requested)) {
-			userPagePreferenceService.save(username, PAGE_KEY, TAB_KEY, requested);
+			userPagePreferenceService.save(username, DuplicateConstants.PAGE_KEY, TAB_KEY, requested);
 
 			return requested;
 		}
 
-		String saved = userPagePreferenceService.find(username, PAGE_KEY).get(TAB_KEY);
+		String saved = userPagePreferenceService.find(username, DuplicateConstants.PAGE_KEY).get(TAB_KEY);
 
 		return saved != null && TABS.contains(saved) ? saved : DEFAULT_TAB;
-	}
-
-	private int clampSimilarity(int value) {
-		return Math.clamp(value, DuplicateConstants.MIN_SIMILARITY_PERCENT,
-				DuplicateConstants.MAX_SIMILARITY_PERCENT);
 	}
 
 	private String reasonText(Verdict verdict, Reason reason) {
@@ -637,14 +631,36 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		String resolution = file.width() == null || file.height() == null ? null : file.width() + " × " + file.height();
 		String highlight = file.reason() == null ? null : file.reason().name();
+		String highlightLabel = highlightLabel(file.reason());
 		String reason = reasonText(file.verdict(), file.reason());
 
 		return new DuplicateFileView(file.id(), file.fileName(), file.currentFolder(), file.currentPath(), file.size(),
 				file.modifiedAt(), file.captureDate(), keep, recommendedKeep, image, video, pdf, text, audio, previewUrl,
 				contentUrl, FileTypeIcon.iconClass(file.fileType()), localizedIconLabel(file.fileType()), highlight,
-				reason, resolution, previewable, lightboxClass(pdf, text, audio), openTitle(pdf, text, audio),
-				dateSourceLabel(file.dateSource()), dateSourceBadgeClass(file.dateSource()),
+				highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
+				openTitle(pdf, text, audio), dateSourceLabel(file.dateSource()), dateSourceBadgeClass(file.dateSource()),
 				DateTimeFormatUtils.human(file.captureDate()), DateTimeFormatUtils.human(file.modifiedAt()));
+	}
+
+	/**
+	 * Localized badge text for a recommendation reason, resolved in the backend so
+	 * the template never maps the {@code Reason} enum to text itself. A null reason
+	 * (no clear recommendation) reads as "review", mirroring the badge tier.
+	 */
+	private String highlightLabel(Reason reason) {
+		if (reason == null) {
+			return message("duplicates.highlight.review");
+		}
+
+		return switch (reason) {
+		case ORIGINAL -> message("duplicates.highlight.original");
+		case BEST_IN_GROUP -> message("duplicates.highlight.keep");
+		case WHATSAPP_COPY -> message("duplicates.highlight.whatsapp");
+		case EDITED_COPY -> message("duplicates.highlight.edited");
+		case DERIVATIVE -> message("duplicates.highlight.derivative");
+		case IDENTICAL_COPY -> message("duplicates.highlight.copy");
+		case REVIEW_NO_CLEAR_ORIGINAL -> message("duplicates.highlight.review");
+		};
 	}
 
 	private String lightboxClass(boolean pdf, boolean text, boolean audio) {

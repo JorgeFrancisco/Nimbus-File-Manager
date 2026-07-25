@@ -43,6 +43,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhoto
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.MediaTypeFilter;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.Fixture;
@@ -72,8 +73,8 @@ class DuplicatesWebControllerCoverageTest {
 				.containsExactlyInAnyOrder("PHOTO", "VIDEO");
 
 		verify(fixture.similarity).cachedPage(85, PageRequest.of(2, 100));
-		verify(fixture.preferences).save("system", DuplicatesWebController.PAGE_KEY,
-				DuplicatesWebController.TYPE_FILTER_KEY, "PHOTO,VIDEO");
+		verify(fixture.preferences).save("system", DuplicateConstants.PAGE_KEY,
+				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,VIDEO");
 	}
 
 	@Test
@@ -94,9 +95,9 @@ class DuplicatesWebControllerCoverageTest {
 	void invalidSavedPreferencesFallBackSafelyForAnAuthenticatedUserAndKeepPaginationState() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("alice", DuplicatesWebController.PAGE_KEY)).thenReturn(
-				Map.of(DuplicatesWebController.TAB_KEY, "invalid", DuplicatesWebController.PAGE_SIZE_KEY, "also-invalid",
-						DuplicatesWebController.MIN_SIMILARITY_KEY, "invalid-too", DuplicatesWebController.VIEW_KEY,
+		when(fixture.preferences.find("alice", DuplicateConstants.PAGE_KEY)).thenReturn(
+				Map.of(DuplicateConstants.TAB_KEY, "invalid", SharedConstants.PAGE_SIZE_KEY, "also-invalid",
+						DuplicateConstants.MIN_SIMILARITY_KEY, "invalid-too", DuplicateConstants.VIEW_KEY,
 						"unknown"));
 		when(fixture.duplicates.candidates(eq(PageRequest.of(1, 50)), any()))
 				.thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 50), 101));
@@ -116,9 +117,9 @@ class DuplicatesWebControllerCoverageTest {
 	void invalidNumericPreferenceValuesAreClampedOrIgnoredWithoutChangingTheRequestedScreen() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("system", DuplicatesWebController.PAGE_KEY)).thenReturn(Map.of(
-				DuplicatesWebController.PAGE_SIZE_KEY, "75",
-				DuplicatesWebController.MIN_SIMILARITY_KEY, "999"));
+		when(fixture.preferences.find("system", DuplicateConstants.PAGE_KEY)).thenReturn(Map.of(
+				SharedConstants.PAGE_SIZE_KEY, "75",
+				DuplicateConstants.MIN_SIMILARITY_KEY, "999"));
 		when(fixture.duplicates.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(Page.empty());
 
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -141,8 +142,8 @@ class DuplicatesWebControllerCoverageTest {
 				List.of(MediaTypeFilter.PHOTO, MediaTypeFilter.DOCS)),
 				new TestingAuthenticationToken("alice", "password"), model);
 
-		verify(fixture.preferences).save("alice", DuplicatesWebController.PAGE_KEY,
-				DuplicatesWebController.TYPE_FILTER_KEY, "PHOTO,DOCS");
+		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY,
+				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,DOCS");
 		verify(fixture.duplicates).candidates(PageRequest.of(0, 50),
 				MediaTypeFilter.fileTypesOf(List.of(MediaTypeFilter.PHOTO, MediaTypeFilter.DOCS)));
 		Assertions.assertThat(model.get("selectedTypeFilters"))
@@ -161,8 +162,8 @@ class DuplicatesWebControllerCoverageTest {
 		fixture.controller().duplicates(new DuplicatesViewRequest("exact", 0, null, "details", null, List.of()),
 				new TestingAuthenticationToken("alice", "password"), model);
 
-		verify(fixture.preferences).save("alice", DuplicatesWebController.PAGE_KEY,
-				DuplicatesWebController.TYPE_FILTER_KEY, "PHOTO,VIDEO,AUDIO,DOCS,OTHERS");
+		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY,
+				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,VIDEO,AUDIO,DOCS,OTHERS");
 		Assertions.assertThat(model.get("selectedTypeFilters"))
 				.asInstanceOf(InstanceOfAssertFactories.iterable(String.class))
 				.containsExactlyInAnyOrder("PHOTO", "VIDEO", "AUDIO", "DOCS", "OTHERS");
@@ -172,8 +173,8 @@ class DuplicatesWebControllerCoverageTest {
 	void anInvalidSavedTypeFilterFallsBackToEveryGroup() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("alice", DuplicatesWebController.PAGE_KEY))
-				.thenReturn(Map.of(DuplicatesWebController.TYPE_FILTER_KEY, "BOGUS,,ALSO_BAD"));
+		when(fixture.preferences.find("alice", DuplicateConstants.PAGE_KEY))
+				.thenReturn(Map.of(DuplicateConstants.TYPE_FILTER_KEY, "BOGUS,,ALSO_BAD"));
 		when(fixture.duplicates.candidates(any(), any())).thenReturn(Page.empty());
 
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -190,8 +191,8 @@ class DuplicatesWebControllerCoverageTest {
 	void aSavedTypeFilterIsReadBackWhenTheRequestOmitsIt() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("alice", DuplicatesWebController.PAGE_KEY))
-				.thenReturn(Map.of(DuplicatesWebController.TYPE_FILTER_KEY, "VIDEO,AUDIO"));
+		when(fixture.preferences.find("alice", DuplicateConstants.PAGE_KEY))
+				.thenReturn(Map.of(DuplicateConstants.TYPE_FILTER_KEY, "VIDEO,AUDIO"));
 		when(fixture.duplicates.candidates(any(), any())).thenReturn(Page.empty());
 
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -281,9 +282,9 @@ class DuplicatesWebControllerCoverageTest {
 	void blankSavedPreferencesAndAnInvalidRequestedTabUseDefaults() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("system", DuplicatesWebController.PAGE_KEY))
-				.thenReturn(Map.of(DuplicatesWebController.TAB_KEY, " ", DuplicatesWebController.PAGE_SIZE_KEY,
-						" ", DuplicatesWebController.MIN_SIMILARITY_KEY, " ", DuplicatesWebController.VIEW_KEY, " "));
+		when(fixture.preferences.find("system", DuplicateConstants.PAGE_KEY))
+				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, " ", SharedConstants.PAGE_SIZE_KEY,
+						" ", DuplicateConstants.MIN_SIMILARITY_KEY, " ", DuplicateConstants.VIEW_KEY, " "));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 

@@ -149,7 +149,9 @@ class VideoSimilarityFfmpegIntegrationTest {
 
 		Files.write(corrupted, "this is not a video".getBytes());
 
-		assertThatThrownBy(() -> algorithm().fingerprint(corrupted, 10.0)).isInstanceOf(RuntimeException.class);
+		VideoSimilarityAlgorithm algorithm = algorithm();
+
+		assertThatThrownBy(() -> algorithm.fingerprint(corrupted, 10.0)).isInstanceOf(RuntimeException.class);
 	}
 
 	/**

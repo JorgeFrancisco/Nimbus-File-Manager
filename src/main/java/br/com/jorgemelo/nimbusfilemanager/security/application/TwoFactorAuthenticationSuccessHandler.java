@@ -7,6 +7,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import jakarta.servlet.ServletException;
@@ -48,7 +49,7 @@ public class TwoFactorAuthenticationSuccessHandler extends SavedRequestAwareAuth
 			request.getSession(true).setAttribute(SecurityConstants.PENDING_USERNAME, authentication.getName());
 
 			userAccessLogService.recordAccess(authentication.getName(), SecurityConstants.LOGIN_2FA_REQUIRED,
-					"SUCCESS", client.ipAddress(), client.userAgent(), "Two-factor authentication required.");
+					"SUCCESS", client.ipAddress(), client.userAgent(), AccessMessages.TWO_FACTOR_REQUIRED);
 
 			SecurityContextHolder.clearContext();
 
@@ -60,7 +61,7 @@ public class TwoFactorAuthenticationSuccessHandler extends SavedRequestAwareAuth
 		accountLockService.registerSuccess(authentication.getName());
 
 		userAccessLogService.recordAccess(authentication.getName(), SecurityConstants.LOGIN_SUCCESS, "SUCCESS",
-				client.ipAddress(), client.userAgent(), "Login completed.");
+				client.ipAddress(), client.userAgent(), AccessMessages.LOGIN_COMPLETED);
 
 		super.onAuthenticationSuccess(request, response, authentication);
 	}

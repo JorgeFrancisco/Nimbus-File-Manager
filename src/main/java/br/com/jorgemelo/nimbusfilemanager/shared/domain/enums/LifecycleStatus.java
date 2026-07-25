@@ -3,7 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.enums;
 /**
  * Lifecycle state of a {@code catalog_file}, replacing the former pair of
  * booleans {@code exists_flag} + {@code deleted} with a single,
- * mutually-exclusive status (Etapa 3 / A4). Invariants:
+ * mutually-exclusive status. Invariants:
  *
  * <ul>
  * <li>{@link #ACTIVE} - present on disk and not removed (former

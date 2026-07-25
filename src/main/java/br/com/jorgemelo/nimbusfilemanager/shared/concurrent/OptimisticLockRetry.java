@@ -8,7 +8,7 @@ import jakarta.persistence.OptimisticLockException;
 
 /**
  * Bounded retry for idempotent, re-runnable job steps that may hit an
- * optimistic-lock conflict (Etapa 4 / D5). The policy is deliberately narrow:
+ * optimistic-lock conflict. The policy is deliberately narrow:
  *
  * <ul>
  * <li>Only for <b>idempotent</b> work (inventory, metadata rebuild,

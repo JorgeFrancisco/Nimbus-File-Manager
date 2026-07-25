@@ -21,9 +21,11 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
+import br.com.jorgemelo.nimbusfilemanager.timeline.application.constants.TimelineConstants;
 
 /**
  * Timeline page plus the dismissible "geographic dataset not configured"
@@ -38,10 +40,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 public class TimelineWebController {
 
 	private static final String ALL = "ALL";
-	static final String LAYOUT_PAGE_KEY = "layout";
 	static final String GEO_NOTICE_DISMISSED = "geo-notice-dismissed";
-	static final String TIMELINE_PAGE_KEY = "timeline";
-	static final String TYPE_KEY = "type";
 	static final String SUBCATEGORIES_KEY = "subcategories";
 	private static final Set<String> TIMELINE_TYPES = Set.of(ALL, "PHOTO", "VIDEO");
 
@@ -84,13 +83,15 @@ public class TimelineWebController {
 	public Map<String, String> saveTimelineType(@RequestParam String type, Authentication authentication) {
 		String value = TIMELINE_TYPES.contains(type) ? type : ALL;
 
-		userPagePreferenceService.save(username(authentication), TIMELINE_PAGE_KEY, TYPE_KEY, value);
+		userPagePreferenceService.save(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY,
+				TimelineConstants.TYPE_KEY, value);
 
 		return Map.of("type", value);
 	}
 
 	private String savedTimelineType(Authentication authentication) {
-		String saved = userPagePreferenceService.find(username(authentication), TIMELINE_PAGE_KEY).get(TYPE_KEY);
+		String saved = userPagePreferenceService.find(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY)
+				.get(TimelineConstants.TYPE_KEY);
 
 		return saved != null && TIMELINE_TYPES.contains(saved) ? saved : ALL;
 	}
@@ -108,14 +109,14 @@ public class TimelineWebController {
 			Authentication authentication) {
 		List<String> names = normalize(subcategories).stream().map(MediaSubcategory::name).toList();
 
-		userPagePreferenceService.save(username(authentication), TIMELINE_PAGE_KEY, SUBCATEGORIES_KEY,
+		userPagePreferenceService.save(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY, SUBCATEGORIES_KEY,
 				String.join(",", names));
 
 		return Map.of(SUBCATEGORIES_KEY, names);
 	}
 
 	private Set<String> savedSubcategories(Authentication authentication) {
-		String saved = userPagePreferenceService.find(username(authentication), TIMELINE_PAGE_KEY)
+		String saved = userPagePreferenceService.find(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY)
 				.get(SUBCATEGORIES_KEY);
 
 		return normalize(parse(saved)).stream().map(MediaSubcategory::name)
@@ -156,11 +157,12 @@ public class TimelineWebController {
 
 	private boolean geoNoticeDismissed(Authentication authentication) {
 		return Boolean.parseBoolean(
-				userPagePreferenceService.find(username(authentication), LAYOUT_PAGE_KEY).get(GEO_NOTICE_DISMISSED));
+				userPagePreferenceService.find(username(authentication), SharedConstants.LAYOUT_PAGE_KEY)
+						.get(GEO_NOTICE_DISMISSED));
 	}
 
 	private void setGeoNoticeDismissed(Authentication authentication, boolean dismissed) {
-		userPagePreferenceService.save(username(authentication), LAYOUT_PAGE_KEY, GEO_NOTICE_DISMISSED,
+		userPagePreferenceService.save(username(authentication), SharedConstants.LAYOUT_PAGE_KEY, GEO_NOTICE_DISMISSED,
 				Boolean.toString(dismissed));
 	}
 

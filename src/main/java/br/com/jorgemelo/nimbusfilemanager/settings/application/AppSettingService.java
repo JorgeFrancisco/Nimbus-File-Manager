@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 import org.springframework.boot.ApplicationArguments;
@@ -27,19 +29,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 @Service
 public class AppSettingService implements ApplicationRunner {
 
-	static final String DEFAULT_LAYOUT = "nimbus-file-manager.default-layout";
-	static final String TIMEZONE = "nimbus-file-manager.timezone";
 	private static final String VALUE_TYPE_STRING = "STRING";
 	private static final String VALUE_TYPE_INTEGER = "INTEGER";
 	private static final String VALUE_TYPE_BOOLEAN = "BOOLEAN";
 	private static final String VALUE_TYPE_ZONE_ID = "ZONE_ID";
 	private static final String VALUE_FALSE = "false";
-	static final String TOOL_EXIFTOOL = "nimbus-file-manager.tools.exiftool";
-	static final String INVENTORY_PROGRESS_INTERVAL = "nimbus-file-manager.inventory.progress-interval";
-	static final String METADATA_EXIFTOOL_ENABLED = "nimbus-file-manager.metadata.exiftool.enabled";
-	static final String METADATA_MEDIAINFO_ENABLED = "nimbus-file-manager.metadata.mediainfo.enabled";
-	static final String METADATA_FFPROBE_ENABLED = "nimbus-file-manager.metadata.ffprobe.enabled";
-	static final String DUPLICATES_KEEP_STRATEGY = "nimbus-file-manager.duplicates.keep-strategy";
 
 	private final AppSettingRepository appSettingRepository;
 	private final List<AppSettingDefinition> definitions;
@@ -116,7 +110,7 @@ public class AppSettingService implements ApplicationRunner {
 	 */
 	public ZoneId zoneId() {
 		try {
-			return ZoneId.of(stringValue(TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE));
+			return ZoneId.of(stringValue(SettingsConstants.TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE));
 		} catch (RuntimeException _) {
 			return ZoneId.of(SettingsConstants.DEFAULT_TIMEZONE);
 		}
@@ -207,17 +201,17 @@ public class AppSettingService implements ApplicationRunner {
 
 	private List<AppSettingDefinition> definitions(NimbusFileManagerProperties properties) {
 		return List.of(
-				new AppSettingDefinition(DEFAULT_LAYOUT, value(properties.defaultLayout()), VALUE_TYPE_STRING,
-						"Layout padrão usado na organização."),
-				new AppSettingDefinition(TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE, VALUE_TYPE_ZONE_ID,
+				new AppSettingDefinition(SettingsConstants.DEFAULT_LAYOUT, value(properties.defaultLayout()),
+						VALUE_TYPE_STRING, "Layout padrão usado na organização."),
+				new AppSettingDefinition(SettingsConstants.TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE, VALUE_TYPE_ZONE_ID,
 						"Fuso horário da aplicação, usado para carimbar as datas/horas registradas."),
 				new AppSettingDefinition(SettingsConstants.TOOL_FFPROBE, value(properties.tools(), Tools::ffprobe), VALUE_TYPE_STRING,
 						"Caminho do executável ffprobe."),
 				new AppSettingDefinition(SettingsConstants.TOOL_FFMPEG, value(properties.tools(), Tools::ffmpeg), VALUE_TYPE_STRING,
 						"Caminho do executável ffmpeg."),
-				new AppSettingDefinition(TOOL_EXIFTOOL, value(properties.tools(), Tools::exiftool), VALUE_TYPE_STRING,
-						"Caminho do executável exiftool."),
-				new AppSettingDefinition(INVENTORY_PROGRESS_INTERVAL,
+				new AppSettingDefinition(SettingsConstants.TOOL_EXIFTOOL, value(properties.tools(), Tools::exiftool),
+						VALUE_TYPE_STRING, "Caminho do executável exiftool."),
+				new AppSettingDefinition(SettingsConstants.INVENTORY_PROGRESS_INTERVAL,
 						intDefault(properties.inventory(), Inventory::progressInterval), VALUE_TYPE_INTEGER,
 						"Intervalo de atualização de progresso do inventário."),
 				new AppSettingDefinition(SettingsConstants.API_MAX_PAGE_SIZE, intDefault(properties.api(), Api::maxPageSize),
@@ -227,16 +221,16 @@ public class AppSettingService implements ApplicationRunner {
 						"Limite padrão de pastas nas estatísticas."),
 				new AppSettingDefinition(SettingsConstants.API_MAX_FOLDER_LIMIT, intDefault(properties.api(), Api::maxFolderLimit),
 						VALUE_TYPE_INTEGER, "Limite máximo de pastas nas estatísticas."),
-				new AppSettingDefinition(METADATA_EXIFTOOL_ENABLED,
+				new AppSettingDefinition(SettingsConstants.METADATA_EXIFTOOL_ENABLED,
 						booleanDefault(properties.metadata(), metadata -> metadata.exiftool().enabled()),
 						VALUE_TYPE_BOOLEAN, "Habilita leitura de metadados por exiftool."),
-				new AppSettingDefinition(METADATA_MEDIAINFO_ENABLED,
+				new AppSettingDefinition(SettingsConstants.METADATA_MEDIAINFO_ENABLED,
 						booleanDefault(properties.metadata(), metadata -> metadata.mediainfo().enabled()),
 						VALUE_TYPE_BOOLEAN, "Habilita leitura de metadados por mediainfo."),
-				new AppSettingDefinition(METADATA_FFPROBE_ENABLED,
+				new AppSettingDefinition(SettingsConstants.METADATA_FFPROBE_ENABLED,
 						booleanDefault(properties.metadata(), metadata -> metadata.ffprobe().enabled()),
 						VALUE_TYPE_BOOLEAN, "Habilita leitura de metadados por ffprobe."),
-				new AppSettingDefinition(DUPLICATES_KEEP_STRATEGY,
+				new AppSettingDefinition(SettingsConstants.DUPLICATES_KEEP_STRATEGY,
 						value(properties.duplicates(), Duplicates::keepStrategy), VALUE_TYPE_STRING,
 						"Estratégia padrão para manter duplicatas."),
 				new AppSettingDefinition(SettingsConstants.TRASH_FOLDER, "", VALUE_TYPE_STRING,
@@ -310,11 +304,11 @@ public class AppSettingService implements ApplicationRunner {
 		return object == null ? "" : value(getter.apply(object));
 	}
 
-	private <T> String intDefault(T object, IntGetter<T> getter) {
-		return object == null ? "0" : Integer.toString(getter.get(object));
+	private <T> String intDefault(T object, ToIntFunction<T> getter) {
+		return object == null ? "0" : Integer.toString(getter.applyAsInt(object));
 	}
 
-	private <T> String booleanDefault(T object, BooleanGetter<T> getter) {
-		return object == null ? VALUE_FALSE : Boolean.toString(getter.get(object));
+	private <T> String booleanDefault(T object, Predicate<T> getter) {
+		return object == null ? VALUE_FALSE : Boolean.toString(getter.test(object));
 	}
 }

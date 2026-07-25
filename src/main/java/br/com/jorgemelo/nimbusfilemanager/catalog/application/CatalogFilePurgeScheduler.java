@@ -40,6 +40,7 @@ class CatalogFilePurgeScheduler {
 
 		return thread;
 	});
+	private volatile boolean shuttingDown;
 
 	CatalogFilePurgeScheduler(AppSettingService appSettingService,
 			CatalogFileRetentionService catalogFileRetentionService) {
@@ -66,12 +67,18 @@ class CatalogFilePurgeScheduler {
 
 			catalogFileRetentionService.purgeMissingOlderThan(days);
 		} catch (Exception e) {
-			log.error("Scheduled catalog missing purge failed", e);
+			if (shuttingDown || Thread.currentThread().isInterrupted()) {
+				log.debug("Scheduled catalog missing purge interrupted during shutdown", e);
+			} else {
+				log.error("Scheduled catalog missing purge failed", e);
+			}
 		}
 	}
 
 	@PreDestroy
 	void shutdown() {
+		shuttingDown = true;
+
 		executor.shutdownNow();
 	}
 }

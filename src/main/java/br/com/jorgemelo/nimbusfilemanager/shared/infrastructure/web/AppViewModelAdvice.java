@@ -42,8 +42,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedCon
 		"br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web" })
 public class AppViewModelAdvice {
 
-	private static final String LAYOUT_PAGE_KEY = "layout";
-	private static final String SIDEBAR_PREFERENCE_KEY = "sidebar-collapsed";
 	private static final int DEFAULT_IDLE_TIMEOUT_MINUTES = 5;
 
 	private final String appVersion;
@@ -111,9 +109,10 @@ public class AppViewModelAdvice {
 			return false;
 		}
 
-		Map<String, String> preferences = userPagePreferenceService.find(authentication.getName(), LAYOUT_PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(authentication.getName(),
+				SharedConstants.LAYOUT_PAGE_KEY);
 
-		return Boolean.parseBoolean(preferences.get(SIDEBAR_PREFERENCE_KEY));
+		return Boolean.parseBoolean(preferences.get(SharedConstants.SIDEBAR_KEY));
 	}
 
 	/**
@@ -130,7 +129,8 @@ public class AppViewModelAdvice {
 			return SharedConstants.THEME_LIGHT;
 		}
 
-		Map<String, String> preferences = userPagePreferenceService.find(authentication.getName(), LAYOUT_PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(authentication.getName(),
+				SharedConstants.LAYOUT_PAGE_KEY);
 
 		return SharedConstants.THEME_DARK.equals(preferences.get(SharedConstants.THEME_PREFERENCE_KEY))
 				? SharedConstants.THEME_DARK

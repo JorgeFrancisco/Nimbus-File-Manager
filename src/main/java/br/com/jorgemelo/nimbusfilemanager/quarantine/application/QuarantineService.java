@@ -149,18 +149,6 @@ public class QuarantineService extends LocalizedComponent {
 	}
 
 	/**
-	 * Restores every still-quarantined file of one deletion at once, using safe
-	 * defaults (block on a name collision, no alternate folder). Files that need a
-	 * decision come back as conflicts/origin missing and stay in quarantine for the
-	 * user to resolve individually.
-	 */
-	QuarantineRestoreBatchResult restoreExecution(UUID executionId) {
-		return restoreAll(movementRepository.findByExecutionPublicIdAndStatusAndReasonOrderByIdDesc(executionId,
-				MovementStatus.MOVED, MovementReason.DUPLICATE_QUARANTINED).stream().map(Movement::getPublicId)
-				.toList());
-	}
-
-	/**
 	 * Restores the given selection at once, using safe defaults (block on a name
 	 * collision, no alternate folder). Items that need a decision come back as
 	 * conflicts/origin missing and stay in quarantine for the user to resolve one

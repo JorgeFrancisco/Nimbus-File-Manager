@@ -121,8 +121,7 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 		Set<Long> alsoNear = algorithm.candidateBuckets(signature(12.0, 1920, 1080, concordantFrames(5)));
 		Set<Long> far = algorithm.candidateBuckets(signature(100.0, 1920, 1080, concordantFrames(5)));
 
-		assertThat(near).anyMatch(alsoNear::contains);
-		assertThat(near).noneMatch(far::contains);
+		assertThat(near).anyMatch(alsoNear::contains).noneMatch(far::contains);
 	}
 
 	@Test

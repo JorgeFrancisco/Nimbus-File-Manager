@@ -1,6 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,9 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.GroupParts;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PairKey;
@@ -88,7 +85,7 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	 * so the page never blocks on the heavy grouping.
 	 */
 	public Page<SimilarPhotoGroupResponse> groups(Integer minSimilarityPercent, Pageable pageable) {
-		int minimumSsim = clampSimilarity(minSimilarityPercent);
+		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
 
 		if (!cache.isCached(minimumSsim)) {
 			computeAndCache(minimumSsim, (_, _) -> {
@@ -101,7 +98,7 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	/** Whether the grouping for this threshold is already cached. */
 	@Override
 	public boolean isCached(int minSimilarityPercent) {
-		return cache.isCached(clampSimilarity(minSimilarityPercent));
+		return cache.isCached(SimilarityBounds.clamp(minSimilarityPercent));
 	}
 
 	/**
@@ -109,7 +106,7 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	 * computed yet - no blocking compute happens here.
 	 */
 	public Optional<Page<SimilarPhotoGroupResponse>> cachedPage(int minSimilarityPercent, Pageable pageable) {
-		return cache.cachedPage(clampSimilarity(minSimilarityPercent), pageable);
+		return cache.cachedPage(SimilarityBounds.clamp(minSimilarityPercent), pageable);
 	}
 
 	/**
@@ -118,15 +115,16 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	 */
 	@Override
 	public void computeAndCache(int minSimilarityPercent, SimilarityProgressCallback progress) {
-		int minimumSsim = clampSimilarity(minSimilarityPercent);
+		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
 
 		String signature = cache.currentSignature();
 
-		List<PhotoHashRawResponse> candidates = withoutExcluded(
+		List<PhotoHashRawResponse> candidates = SimilarityGroupSupport.withoutExcluded(
 				mediaFingerprintRepository
 						.findFingerprintedPhotos(FingerprintKind.PHOTO_PHASH,
 								FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1, PageUtils.firstPage(MAX_CANDIDATES))
-						.getContent());
+						.getContent(),
+				duplicateExclusionService, PhotoHashRawResponse::id, PhotoHashRawResponse::currentFolder);
 
 		List<UUID> allIds = candidates.stream().map(PhotoHashRawResponse::id).toList();
 
@@ -134,7 +132,8 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 
 		Map<PairKey, Integer> scores = new HashMap<>();
 
-		List<List<PhotoHashRawResponse>> groups = group(candidates, minimumSsim, scores, progress);
+		List<List<PhotoHashRawResponse>> groups = SimilaritySingleLinkageGrouper.cluster(candidates, minimumSsim,
+				(first, second) -> score(first, second, scores), progress);
 
 		List<SimilarPhotoGroupResponse> responses = groups.stream().map(group -> toResponse(group, scores, quality))
 				.sorted((first, second) -> Long.compare(second.wastedSize().bytes(), first.wastedSize().bytes()))
@@ -155,7 +154,8 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 
 		Set<UUID> removed = new HashSet<>(removedPublicIds);
 
-		cache.evict(group -> retains(group, removed));
+		cache.evict(group -> SimilarityGroupSupport.retains(group.keep().id(), group.deleteCandidates(),
+				group.reviewCandidates(), removed));
 	}
 
 	/**
@@ -166,107 +166,9 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 		cache.invalidate();
 	}
 
-	/**
-	 * Drops candidates that are hidden from comparison - by their own public id or
-	 * because they sit at or under an excluded folder - before the O(n²) grouping,
-	 * so excluded photos never surface in the Fotos Semelhantes tab.
-	 */
-	private List<PhotoHashRawResponse> withoutExcluded(List<PhotoHashRawResponse> candidates) {
-		Set<UUID> excludedIds = new HashSet<>(duplicateExclusionService.excludedFilePublicIds());
-		List<String> excludedFolders = duplicateExclusionService.excludedFolders();
-
-		if (excludedIds.isEmpty() && excludedFolders.isEmpty()) {
-			return candidates;
-		}
-
-		return candidates.stream().filter(candidate -> !excludedIds.contains(candidate.id()))
-				.filter(candidate -> !isUnderExcludedFolder(candidate.currentFolder(), excludedFolders)).toList();
-	}
-
-	private boolean isUnderExcludedFolder(String folder, List<String> excludedFolders) {
-		// Excluded folders are stored separator-agnostic (forward slashes); a
-		// candidate's current folder (NOT NULL in the schema) is OS-native, so
-		// normalize it the same way before matching the folder itself or any subfolder.
-		String normalized = folder.replace('\\', '/');
-
-		for (String excluded : excludedFolders) {
-			if (normalized.equals(excluded) || normalized.startsWith(excluded + "/")) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private boolean retains(SimilarPhotoGroupResponse group, Set<UUID> removed) {
-		if (removed.contains(group.keep().id())) {
-			return false;
-		}
-
-		boolean removedDeleteCandidate = group.deleteCandidates().stream().map(DuplicateCandidateFileResponse::id)
-				.anyMatch(removed::contains);
-
-		boolean removedReviewCandidate = group.reviewCandidates().stream().map(DuplicateCandidateFileResponse::id)
-				.anyMatch(removed::contains);
-
-		return !removedDeleteCandidate && !removedReviewCandidate;
-	}
-
 	private String fingerprintSignature() {
-		List<Object[]> rows = mediaFingerprintRepository.fingerprintSignature(FingerprintKind.PHOTO_PHASH,
-				FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1);
-
-		if (rows.isEmpty()) {
-			return "empty";
-		}
-
-		Object[] row = rows.get(0);
-
-		return row[0] + "-" + row[1] + "-" + row[2];
-	}
-
-	private List<List<PhotoHashRawResponse>> group(List<PhotoHashRawResponse> candidates, int minimumSsim,
-			Map<PairKey, Integer> scores, SimilarityProgressCallback progress) {
-		int total = candidates.size();
-
-		int processed = 0;
-
-		progress.update(0, total);
-
-		List<List<PhotoHashRawResponse>> clusters = new ArrayList<>();
-
-		for (PhotoHashRawResponse candidate : candidates) {
-			List<PhotoHashRawResponse> target = null;
-
-			for (List<PhotoHashRawResponse> cluster : clusters) {
-				if (withinThresholdOfAll(candidate, cluster, minimumSsim, scores)) {
-					target = cluster;
-
-					break;
-				}
-			}
-
-			if (target == null) {
-				target = new ArrayList<>();
-
-				clusters.add(target);
-			}
-
-			target.add(candidate);
-
-			progress.update(++processed, total);
-		}
-		return clusters.stream().filter(cluster -> cluster.size() > 1).toList();
-	}
-
-	private boolean withinThresholdOfAll(PhotoHashRawResponse candidate, List<PhotoHashRawResponse> cluster,
-			int minimumSsim, Map<PairKey, Integer> scores) {
-		for (PhotoHashRawResponse member : cluster) {
-			if (score(candidate, member, scores) < minimumSsim) {
-				return false;
-			}
-		}
-		return true;
+		return SimilarityGroupSupport.signatureOf(mediaFingerprintRepository
+				.fingerprintSignature(FingerprintKind.PHOTO_PHASH, FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1));
 	}
 
 	private int score(PhotoHashRawResponse first, PhotoHashRawResponse second, Map<PairKey, Integer> scores) {
@@ -284,36 +186,14 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 
 		GroupParts parts = duplicateGroupAssembler.assemble(files, quality, false);
 
-		return new SimilarPhotoGroupResponse(String.valueOf(parts.keep().id()), group.size(), worstSsim(group, scores),
+		return new SimilarPhotoGroupResponse(String.valueOf(parts.keep().id()), group.size(),
+				SimilaritySingleLinkageGrouper.worstScore(group, (first, second) -> score(first, second, scores)),
 				SizeResponse.of(parts.wastedBytes()), parts.keep(), parts.deleteCandidates(), parts.reviewCandidates());
-	}
-
-	/**
-	 * Lowest pairwise SSIM in the group, so the displayed percentage is guaranteed.
-	 */
-	private int worstSsim(List<PhotoHashRawResponse> group, Map<PairKey, Integer> scores) {
-		int worst = 100;
-
-		for (int first = 0; first < group.size(); first++) {
-			for (int second = first + 1; second < group.size(); second++) {
-				worst = Math.min(worst, score(group.get(first), group.get(second), scores));
-			}
-		}
-
-		return worst;
 	}
 
 	private DuplicateFileResponse toFileResponse(PhotoHashRawResponse raw) {
 		return new DuplicateFileResponse(raw.id(), raw.fileName(), raw.extension(), "PHOTO",
 				SizeResponse.of(raw.sizeBytes()), raw.currentPath(), raw.currentFolder(), raw.modifiedAt());
-	}
-
-	private int clampSimilarity(Integer requested) {
-		if (requested == null) {
-			return DuplicateConstants.MIN_SIMILARITY_PERCENT;
-		}
-
-		return Math.clamp(requested, DuplicateConstants.MIN_SIMILARITY_PERCENT, DuplicateConstants.MAX_SIMILARITY_PERCENT);
 	}
 
 	private int maxPageSize() {

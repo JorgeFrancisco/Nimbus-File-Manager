@@ -8,8 +8,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 /**
  * Same shape as {@link DuplicateFileRawResponse} plus the group's sha256, used
  * to bulk-fetch the files of several duplicate groups in a single
- * {@code IN (:sha256List)} query instead of one query per group (see
- * revisao-projeto.md, "Performance" -&gt; "N+1 em duplicados").
+ * {@code IN (:sha256List)} query instead of one query per group.
  */
 public record DuplicateFileWithShaRawResponse(
 

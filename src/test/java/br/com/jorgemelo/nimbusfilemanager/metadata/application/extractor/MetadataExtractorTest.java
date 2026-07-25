@@ -29,9 +29,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptio
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
-import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 
 @ExtendWith(MockitoExtension.class)

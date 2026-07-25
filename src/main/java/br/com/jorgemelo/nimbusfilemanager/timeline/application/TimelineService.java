@@ -18,7 +18,6 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCount
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCursor;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineDayResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineIndex;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineMonthCount;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageResponse;
@@ -26,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndat
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedPageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineYearCount;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
 @Service

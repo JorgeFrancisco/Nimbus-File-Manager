@@ -3,11 +3,13 @@ package br.com.jorgemelo.nimbusfilemanager.security.application.constants;
 /**
  * Contract data constants for the security domain: the access-log event-type
  * codes recorded by the authentication handlers and read back by the access
- * screens, plus the session attribute that carries the pending username between
- * the password step and the two-factor step.
+ * screens, the session attribute that carries the pending username between the
+ * password step and the two-factor step, and the preferences page key for the
+ * Usuarios screen.
  */
 public final class SecurityConstants {
 
+	public static final String PAGE_KEY = "users";
 	public static final String LOGIN_SUCCESS = "LOGIN_SUCCESS";
 	public static final String LOGIN_FAILURE = "LOGIN_FAILURE";
 	public static final String LOGIN_2FA_REQUIRED = "LOGIN_2FA_REQUIRED";

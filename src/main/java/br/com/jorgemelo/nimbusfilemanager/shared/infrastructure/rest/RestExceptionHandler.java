@@ -23,8 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 		"br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.statistics.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.thumbnail.infrastructure.rest",
-		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.rest",
-		"br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest" })
+		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.rest" })
 public class RestExceptionHandler extends LocalizedComponent {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(RestExceptionHandler.class);
@@ -60,9 +59,8 @@ public class RestExceptionHandler extends LocalizedComponent {
 	 * JPA/JDBC failures, ...) lands here. {@code /api/**} is public
 	 * ({@code SecurityConfig}), so {@code e.getMessage()} must never go straight to
 	 * the response - a raw JDBC or filesystem exception message routinely contains
-	 * internal file paths, table/column names, or connection details (see
-	 * revisao-projeto.md, "Mensagens de erro cruas devolvidas pela API pública").
-	 * The full exception (with stack trace) is logged server-side with a short
+	 * internal file paths, table/column names, or connection details. The full
+	 * exception (with stack trace) is logged server-side with a short
 	 * reference id; the client only gets that id plus a generic message, so an
 	 * admin can still correlate a support report back to the real cause via the
 	 * logs without the caller ever seeing internal details.

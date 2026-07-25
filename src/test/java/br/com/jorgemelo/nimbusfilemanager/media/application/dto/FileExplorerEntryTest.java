@@ -3,7 +3,6 @@ package br.com.jorgemelo.nimbusfilemanager.media.application.dto;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-
 class FileExplorerEntryTest {
 
 	@Test

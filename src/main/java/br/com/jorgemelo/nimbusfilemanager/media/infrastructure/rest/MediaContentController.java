@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest;
+package br.com.jorgemelo.nimbusfilemanager.media.infrastructure.rest;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -13,9 +13,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.jorgemelo.nimbusfilemanager.media.application.MediaContentService;
+import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ByteRange;
+import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentResponse;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaDetails;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.MediaContentResponse;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.MediaContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -50,8 +51,23 @@ public class MediaContentController {
 
 		MediaContentResponse content = contentOptional.get();
 
-		content.applyTo(response);
+		applyHeaders(response, content);
 
 		contentService.stream(content, response.getOutputStream());
+	}
+
+	private void applyHeaders(HttpServletResponse response, MediaContentResponse content) {
+		ByteRange range = content.byteRange();
+
+		response.setHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
+		response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + content.fileName() + "\"");
+		response.setContentType(content.contentType());
+		response.setStatus(range.partial() ? HttpStatus.PARTIAL_CONTENT.value() : HttpStatus.OK.value());
+		response.setHeader(HttpHeaders.CONTENT_LENGTH, Long.toString(range.length()));
+
+		if (range.partial()) {
+			response.setHeader(HttpHeaders.CONTENT_RANGE,
+					"bytes " + range.start() + "-" + range.end() + "/" + content.totalLength());
+		}
 	}
 }

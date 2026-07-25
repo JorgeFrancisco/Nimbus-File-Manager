@@ -16,7 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationOrgani
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDestination;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
@@ -27,10 +27,10 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.model.Organiz
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationConflictDetector;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationDestinationResolver;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationLayoutResolver;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.OrganizationCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;

@@ -1,5 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.media.infrastructure.web;
 
+import static br.com.jorgemelo.nimbusfilemanager.media.application.constants.MediaConstants.FILES_PATH_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.media.application.constants.MediaConstants.FILES_SIZE_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.media.application.constants.MediaConstants.FILES_SORT_KEY;
+import static br.com.jorgemelo.nimbusfilemanager.media.application.constants.MediaConstants.FILES_VIEW_KEY;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,19 +29,13 @@ import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.FileExplore
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.FileSortOption;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Controller
 public class FileExplorerWebController {
-
-	private static final String PAGE_KEY = "files";
-	private static final String PATH = "path";
-	private static final String VIEW = "view";
-	private static final String SIZE = "size";
-	private static final String SORT = "sort";
-	private static final String SIDEBAR = "sidebar-collapsed";
 
 	private final FileExplorerService fileExplorerService;
 	private final UserPagePreferenceService userPagePreferenceService;
@@ -61,29 +60,29 @@ public class FileExplorerWebController {
 			@RequestParam(required = false) String sort, Authentication authentication, Model model) {
 		String username = username(authentication);
 
-		Map<String, String> preferences = userPagePreferenceService.find(username, PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(username, SharedConstants.FILES_PAGE_KEY);
 
-		String selectedPath = value(path, preferences.get(PATH));
-		String selectedView = value(view, preferences.get(VIEW));
-		Integer selectedSize = value(size, preferences.get(SIZE));
+		String selectedPath = value(path, preferences.get(FILES_PATH_KEY));
+		String selectedView = value(view, preferences.get(FILES_VIEW_KEY));
+		Integer selectedSize = value(size, preferences.get(FILES_SIZE_KEY));
 
 		if (path != null) {
-			userPagePreferenceService.save(username, PAGE_KEY, PATH, path);
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, FILES_PATH_KEY, path);
 		}
 
 		if (view != null) {
-			userPagePreferenceService.save(username, PAGE_KEY, VIEW, view);
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, FILES_VIEW_KEY, view);
 		}
 
 		if (size != null) {
-			userPagePreferenceService.save(username, PAGE_KEY, SIZE, size.toString());
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, FILES_SIZE_KEY, size.toString());
 		}
 
-		String requestedSort = sort == null ? preferences.get(SORT) : sort;
+		String requestedSort = sort == null ? preferences.get(FILES_SORT_KEY) : sort;
 		String selectedSort = normalizeSort(requestedSort);
 
 		if (sort != null) {
-			userPagePreferenceService.save(username, PAGE_KEY, SORT, selectedSort);
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, FILES_SORT_KEY, selectedSort);
 		}
 
 		model.addAttribute("sizes", FileExplorerService.PAGE_SIZES);
@@ -129,11 +128,12 @@ public class FileExplorerWebController {
 	public Map<String, Boolean> toggleSidebar(Authentication authentication) {
 		String username = username(authentication);
 
-		Map<String, String> preferences = userPagePreferenceService.find(username, "layout");
+		Map<String, String> preferences = userPagePreferenceService.find(username, SharedConstants.LAYOUT_PAGE_KEY);
 
-		boolean collapsed = !Boolean.parseBoolean(preferences.get(SIDEBAR));
+		boolean collapsed = !Boolean.parseBoolean(preferences.get(SharedConstants.SIDEBAR_KEY));
 
-		userPagePreferenceService.save(username, "layout", SIDEBAR, Boolean.toString(collapsed));
+		userPagePreferenceService.save(username, SharedConstants.LAYOUT_PAGE_KEY, SharedConstants.SIDEBAR_KEY,
+				Boolean.toString(collapsed));
 
 		return Map.of("collapsed", collapsed);
 	}

@@ -5,6 +5,7 @@ import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
@@ -68,7 +69,7 @@ class LocationOrganizationPolicyTest {
 		Assertions
 				.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.HIGH,
 						LocationFallbackMode.FALLBACK_FOLDER))
-				.containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+				.containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.HIGH,
 				LocationFallbackMode.IGNORE)).isEmpty();
 	}
@@ -100,7 +101,7 @@ class LocationOrganizationPolicyTest {
 		Assertions
 				.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.MEDIUM,
 						LocationFallbackMode.FALLBACK_FOLDER))
-				.containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+				.containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY,
 				LocationConfidence.MEDIUM, LocationFallbackMode.IGNORE)).isEmpty();
 	}
@@ -171,7 +172,7 @@ class LocationOrganizationPolicyTest {
 	@Test
 	void nullOrPlacelessLocationNeverQualifies() {
 		Assertions.assertThat(policy.subdivisionSegments(null, LocationSubdivision.COUNTRY, LocationConfidence.LOW,
-				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 
 		MediaGeoLocation placeless = MediaGeoLocation.builder().build();
 
@@ -185,7 +186,7 @@ class LocationOrganizationPolicyTest {
 				.place(ResolvedPlace.builder().countryName("..").confidence(LocationConfidence.HIGH).build()).build();
 
 		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.MEDIUM,
-				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME);
+				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 	}
 
 	@Test

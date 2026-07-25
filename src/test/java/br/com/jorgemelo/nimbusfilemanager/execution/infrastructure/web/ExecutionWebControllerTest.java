@@ -1,7 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.web;
 
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -12,6 +11,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ui.ExtendedModelMap;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionDetailLabels;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
@@ -30,7 +30,7 @@ class ExecutionWebControllerTest {
 	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 	private final OrganizationService organizationService = mock(OrganizationService.class);
 	private final ExecutionWebController controller = new ExecutionWebController(executionQueryService,
-			organizationService);
+			organizationService, new ExecutionDetailLabels());
 
 	@Test
 	void executionRendersDetailWhenFinished() {
@@ -45,7 +45,9 @@ class ExecutionWebControllerTest {
 
 		Assertions.assertThat(view).isEqualTo("app/execution-detail");
 		Assertions.assertThat(model.get("execution")).isNotNull();
-		Assertions.assertThat(model).containsKeys("steps", "errors", "movements");
+		Assertions.assertThat(model).containsKeys("steps", "errors", "movements")
+				.containsEntry("canUndo", false).containsEntry("canReprocess", false)
+				.containsKeys("movementStatusLabels", "movementReasonLabels", "analysisErrorTypeLabels");
 	}
 
 	@Test
@@ -86,92 +88,25 @@ class ExecutionWebControllerTest {
 
 		Assertions.assertThat(view).isEqualTo("app/execution-detail");
 		Assertions.assertThat(model.get("undo")).isNotNull();
+		Assertions.assertThat(model).containsEntry("canUndo", true).containsEntry("canReprocess", false);
 	}
 
 	@Test
-	void executionShouldRenderDetailWhenFinished() {
+	void executionAllowsUndoAndReprocessForAFailedOrganizationRun() {
+		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "ERROR", true));
+		when(executionQueryService.steps(ID)).thenReturn(List.of());
+		when(executionQueryService.errors(ID)).thenReturn(List.of());
+		when(executionQueryService.movements(ID)).thenReturn(List.of());
+
 		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionResponse execution = execution();
 
-		when(executionQueryService.get(1L)).thenReturn(execution);
-		when(executionQueryService.steps(1L)).thenReturn(List.of());
-		when(executionQueryService.errors(1L)).thenReturn(List.of());
-		when(executionQueryService.movements(1L)).thenReturn(List.of());
+		controller.execution(ID, model);
 
-		String view = controller.execution(1L, model);
-
-		Assertions.assertThat(view).isEqualTo("app/execution-detail");
-		Assertions.assertThat(model).containsEntry("execution", execution);
-	}
-
-	@Test
-	void undoShouldDelegateToOrganizationServiceAndRenderDetail() {
-		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionResponse execution = execution();
-		OrganizationUndoResponse undo = new OrganizationUndoResponse(1L, "FINISHED", 2, 2, 0, 0, "ok", List.of());
-
-		when(executionQueryService.get(1L)).thenReturn(execution);
-		when(organizationService.undo(1L)).thenReturn(undo);
-		when(executionQueryService.steps(1L)).thenReturn(List.of());
-		when(executionQueryService.errors(1L)).thenReturn(List.of());
-		when(executionQueryService.movements(1L)).thenReturn(List.of());
-
-		String view = controller.undo(1L, model);
-
-		Assertions.assertThat(view).isEqualTo("app/execution-detail");
-		Assertions.assertThat(model).containsEntry("execution", execution).containsEntry("undo", undo);
-		verify(organizationService).undo(1L);
-	}
-
-	@Test
-	void executionShouldRedirectToProgressWhenInventoryStillRunning() {
-		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionResponse execution = new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", NOW, null,
-				"C:/media/input", null, 1, 1, 0, 0, 0, 0, null, null, "running", false);
-
-		when(executionQueryService.get(1L)).thenReturn(execution);
-
-		String view = controller.execution(1L, model);
-
-		Assertions.assertThat(view)
-				.isEqualTo("redirect:/app/progress/00000000-0000-7000-8000-000000000001?kind=inventory");
-	}
-
-	@Test
-	void executionShouldRedirectToProgressWithOrganizationExecuteKindWhenStillRunning() {
-		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionResponse execution = new ExecutionResponse(2L, "ORGANIZATION", "SCANNING_FILES", NOW, null,
-				"C:/media/input", "C:/media/output", 1, 1, 0, 0, 0, 0, null, null, "running", true);
-
-		when(executionQueryService.get(2L)).thenReturn(execution);
-
-		String view = controller.execution(2L, model);
-
-		Assertions.assertThat(view)
-				.isEqualTo("redirect:/app/progress/00000000-0000-7000-8000-000000000002?kind=organization-execute");
-	}
-
-	@Test
-	void executionShouldRedirectToProgressWithOrganizationPreviewKindWhenStillRunning() {
-		ExtendedModelMap model = new ExtendedModelMap();
-		ExecutionResponse execution = new ExecutionResponse(3L, "ORGANIZATION", "STARTED", NOW, null, "C:/media/input",
-				"C:/media/output", 0, 0, 0, 0, 0, 0, null, null, "running", false);
-
-		when(executionQueryService.get(3L)).thenReturn(execution);
-
-		String view = controller.execution(3L, model);
-
-		Assertions.assertThat(view)
-				.isEqualTo("redirect:/app/progress/00000000-0000-7000-8000-000000000003?kind=organization-preview");
+		Assertions.assertThat(model).containsEntry("canUndo", true).containsEntry("canReprocess", true);
 	}
 
 	private ExecutionResponse response(String type, String status, Boolean executeFlag) {
 		return new ExecutionResponse(1L, type, status, NOW, NOW, "src", null, 1, 1, 0, 0, 0, 0, null, null, "ok",
 				executeFlag);
-	}
-
-	private ExecutionResponse execution() {
-		return new ExecutionResponse(1L, "INVENTORY", "FINISHED", NOW, NOW, "C:/media/input", null, 1, 1, 0, 0, 0, 0,
-				null, null, "ok", false);
 	}
 }

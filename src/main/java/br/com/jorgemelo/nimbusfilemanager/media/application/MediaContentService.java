@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.timeline.application;
+package br.com.jorgemelo.nimbusfilemanager.media.application;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -12,13 +12,15 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
+import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ByteRange;
+import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentResponse;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentSource;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaDetails;
 import br.com.jorgemelo.nimbusfilemanager.media.infrastructure.persistence.MediaContentRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.MediaContentResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.ByteRange;
 
 @Service
 public class MediaContentService extends LocalizedComponent {
@@ -81,7 +83,7 @@ public class MediaContentService extends LocalizedComponent {
 		}
 	}
 
-	public void stream(Path file, OutputStream output, ByteRange range) throws IOException {
+	private void stream(Path file, OutputStream output, ByteRange range) throws IOException {
 		try (RandomAccessFile input = new RandomAccessFile(file.toFile(), "r")) {
 			input.seek(range.start());
 
@@ -103,7 +105,7 @@ public class MediaContentService extends LocalizedComponent {
 		}
 	}
 
-	public String contentType(MediaContentSource source, Path file) throws IOException {
+	private String contentType(MediaContentSource source, Path file) throws IOException {
 		String value = source.mimeType();
 
 		if (value == null || value.isBlank()) {
@@ -123,7 +125,16 @@ public class MediaContentService extends LocalizedComponent {
 				details.manufacturer(), details.model(), details.latitude(), details.longitude(),
 				details.durationSeconds(), details.currentPath(), details.contentUrl(), details.location(),
 				details.locationDistanceKm(), confidenceLabel(details.locationConfidenceLevel()),
-				details.locationConfidenceLevel(), providerLabel(details.locationSource()));
+				details.locationConfidenceLevel(), providerLabel(details.locationSource()), typeLabel(details.type()),
+				dateSourceLabel(details.dateSource()));
+	}
+
+	private String typeLabel(FileType type) {
+		return type == null ? null : message("enum.fileType." + type.name());
+	}
+
+	private String dateSourceLabel(DateSource dateSource) {
+		return dateSource == null ? null : message("enum.dateSource." + dateSource.name());
 	}
 
 	private String confidenceLabel(String code) {

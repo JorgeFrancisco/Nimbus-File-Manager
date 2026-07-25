@@ -50,6 +50,7 @@ public class ReconcileScheduler {
 
 		return thread;
 	});
+	private volatile boolean shuttingDown;
 
 	public ReconcileScheduler(AppSettingService appSettingService,
 			OrganizationReconcileService organizationReconcileService,
@@ -93,12 +94,18 @@ public class ReconcileScheduler {
 		} catch (Exception e) {
 			// A deferred/lock-contention response is normal (reconcileAndApply returns it,
 			// never throws), so only genuinely unexpected failures reach here.
-			log.error("Scheduled reconcile failed", e);
+			if (shuttingDown || Thread.currentThread().isInterrupted()) {
+				log.debug("Scheduled reconcile interrupted during shutdown", e);
+			} else {
+				log.error("Scheduled reconcile failed", e);
+			}
 		}
 	}
 
 	@PreDestroy
 	void shutdown() {
+		shuttingDown = true;
+
 		executor.shutdownNow();
 	}
 }

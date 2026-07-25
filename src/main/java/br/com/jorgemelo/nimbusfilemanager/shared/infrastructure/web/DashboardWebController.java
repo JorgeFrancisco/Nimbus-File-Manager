@@ -1,7 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
-import java.util.Set;
-
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -12,6 +10,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQuerySe
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.statistics.application.StatisticsService;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -24,15 +23,6 @@ public class DashboardWebController {
 	 * page.
 	 */
 	private static final int EXECUTIONS_PAGE_SIZE = 20;
-
-	/**
-	 * Statuses an execution can still be in while its background thread is running.
-	 * Mirrors ExecutionWebController's own copy of this set for its
-	 * "/app/executions/{id}" redirect - kept separate rather than shared since the
-	 * two controllers use it for unrelated purposes (driving data-refresh-ms here
-	 * vs. redirecting to the live progress screen there).
-	 */
-	private static final Set<String> IN_PROGRESS_STATUSES = Set.of("STARTED", "SCANNING_FILES", "PROCESSING_FILES");
 
 	private final ExecutionQueryService executionQueryService;
 	private final StatisticsService statisticsService;
@@ -80,6 +70,6 @@ public class DashboardWebController {
 
 	private boolean hasRunningExecutions(Page<ExecutionResponse> executionsPage) {
 		return executionsPage.getContent().stream()
-				.anyMatch(execution -> IN_PROGRESS_STATUSES.contains(execution.status()));
+				.anyMatch(execution -> ExecutionStatusNames.IN_PROGRESS_NAMES.contains(execution.status()));
 	}
 }

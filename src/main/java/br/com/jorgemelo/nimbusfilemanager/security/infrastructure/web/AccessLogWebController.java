@@ -7,15 +7,20 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.AccessLogLabels;
 import br.com.jorgemelo.nimbusfilemanager.security.application.UserAccessLogService;
+import br.com.jorgemelo.nimbusfilemanager.security.application.dto.AccessLogView;
+import br.com.jorgemelo.nimbusfilemanager.security.domain.model.UserAccessLog;
 
 @Controller
 public class AccessLogWebController {
 
 	private final UserAccessLogService userAccessLogService;
+	private final AccessLogLabels accessLogLabels;
 
-	public AccessLogWebController(UserAccessLogService userAccessLogService) {
+	public AccessLogWebController(UserAccessLogService userAccessLogService, AccessLogLabels accessLogLabels) {
 		this.userAccessLogService = userAccessLogService;
+		this.accessLogLabels = accessLogLabels;
 	}
 
 	@GetMapping("/app/accesses")
@@ -26,8 +31,18 @@ public class AccessLogWebController {
 
 		model.addAttribute("email", normalizedEmail);
 		model.addAttribute("searched", searched);
-		model.addAttribute("accessLogs", searched ? userAccessLogService.findByEmail(normalizedEmail) : List.of());
+		model.addAttribute("accessLogs", searched ? toViews(userAccessLogService.findByEmail(normalizedEmail)) : List.of());
 
 		return "app/accesses";
+	}
+
+	private List<AccessLogView> toViews(List<UserAccessLog> logs) {
+		return logs.stream().map(this::toView).toList();
+	}
+
+	private AccessLogView toView(UserAccessLog log) {
+		return new AccessLogView(log.getUsername(), accessLogLabels.eventType(log.getEventType()),
+				accessLogLabels.status(log.getStatus()), log.getStatus(),
+				accessLogLabels.messageLabel(log.getMessage()), log.getIpAddress(), log.getCreatedAt());
 	}
 }

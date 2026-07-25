@@ -25,6 +25,7 @@ import org.springframework.ui.Model;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
@@ -33,6 +34,7 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineR
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreSelectedRequest;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.ConflictResolution;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 
 class QuarantineWebControllerTest {
 
@@ -120,7 +122,7 @@ class QuarantineWebControllerTest {
 		Authentication authentication = mock(Authentication.class);
 
 		when(authentication.getName()).thenReturn("tester");
-		when(preferences.find("tester", QuarantineWebController.PAGE_KEY)).thenReturn(Map.of());
+		when(preferences.find("tester", QuarantineConstants.PAGE_KEY)).thenReturn(Map.of());
 		when(quarantineService.list(any())).thenReturn(new PageImpl<>(List.of(item("a.jpg"), item("b.jpg"))));
 
 		Model model = new ExtendedModelMap();
@@ -143,8 +145,8 @@ class QuarantineWebControllerTest {
 		Authentication authentication = mock(Authentication.class);
 
 		when(authentication.getName()).thenReturn("tester");
-		when(preferences.find("tester", QuarantineWebController.PAGE_KEY))
-				.thenReturn(Map.of(QuarantineWebController.PAGE_SIZE_KEY, "200"));
+		when(preferences.find("tester", QuarantineConstants.PAGE_KEY))
+				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
 		when(quarantineService.list(any())).thenReturn(Page.empty());
 
 		Model savedModel = new ExtendedModelMap();
@@ -162,7 +164,7 @@ class QuarantineWebControllerTest {
 
 		controller.quarantine(0, null, 100, authentication, requestedModel);
 
-		verify(preferences).save("tester", QuarantineWebController.PAGE_KEY, QuarantineWebController.PAGE_SIZE_KEY,
+		verify(preferences).save("tester", QuarantineConstants.PAGE_KEY, SharedConstants.PAGE_SIZE_KEY,
 				"100");
 
 		Assertions.assertThat(requestedModel.getAttribute("pageSize")).isEqualTo(100);
@@ -170,7 +172,7 @@ class QuarantineWebControllerTest {
 
 	@Test
 	void fallsBackForInvalidRequestAndNullPreferences() {
-		when(preferences.find(null, QuarantineWebController.PAGE_KEY)).thenReturn(null);
+		when(preferences.find(null, QuarantineConstants.PAGE_KEY)).thenReturn(null);
 		when(quarantineService.list(any()))
 				.thenReturn(new PageImpl<>(List.of(item("missing.jpg", false)), PageRequest.of(0, 50), 101));
 
@@ -195,15 +197,15 @@ class QuarantineWebControllerTest {
 		Authentication authentication = mock(Authentication.class);
 
 		when(authentication.getName()).thenReturn("tester");
-		when(preferences.find("tester", QuarantineWebController.PAGE_KEY))
-				.thenReturn(Map.of(QuarantineWebController.PAGE_SIZE_KEY, "not-a-number"));
+		when(preferences.find("tester", QuarantineConstants.PAGE_KEY))
+				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "not-a-number"));
 		when(quarantineService.list(any())).thenReturn(Page.empty());
 
 		Model model = new ExtendedModelMap();
 
 		controller.quarantine(0, "large", null, authentication, model);
 
-		verify(preferences).save("tester", QuarantineWebController.PAGE_KEY, "view", "large");
+		verify(preferences).save("tester", QuarantineConstants.PAGE_KEY, "view", "large");
 
 		Assertions.assertThat(model.getAttribute("viewMode")).isEqualTo("large");
 		Assertions.assertThat(model.getAttribute("pageSize")).isEqualTo(50);
@@ -211,8 +213,8 @@ class QuarantineWebControllerTest {
 
 	@Test
 	void ignoresBlankSavedPageSize() {
-		when(preferences.find(null, QuarantineWebController.PAGE_KEY))
-				.thenReturn(Map.of(QuarantineWebController.PAGE_SIZE_KEY, " "));
+		when(preferences.find(null, QuarantineConstants.PAGE_KEY))
+				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, " "));
 		when(quarantineService.list(any())).thenReturn(Page.empty());
 
 		Model model = new ExtendedModelMap();

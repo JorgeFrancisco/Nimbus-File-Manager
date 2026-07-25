@@ -48,8 +48,8 @@ public class MediaGeoLocation {
 
 	/**
 	 * A manual location prevails over any automatic resolution. Primitive
-	 * {@code boolean} (Etapa 6 / D7): default {@code false} explicit in Java and in
-	 * the DB ({@code DEFAULT FALSE}); no third (null) state is meaningful.
+	 * {@code boolean}: default {@code false} explicit in Java and in the DB
+	 * ({@code DEFAULT FALSE}); no third (null) state is meaningful.
 	 */
 	@Column(nullable = false)
 	private boolean manual;

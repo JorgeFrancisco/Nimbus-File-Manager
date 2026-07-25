@@ -27,8 +27,8 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCountSummary;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineMonthCount;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 
 @ExtendWith(MockitoExtension.class)
 class TimelineQueryRepositoryTest {

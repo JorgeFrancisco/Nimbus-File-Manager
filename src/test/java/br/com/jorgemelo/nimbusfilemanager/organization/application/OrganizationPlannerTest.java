@@ -26,7 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancell
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationOrganizationPolicy;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDate;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDestination;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPreviewRequest;
@@ -35,12 +35,12 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.filter.Organi
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationConflictDetector;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationDestinationResolver;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.resolver.OrganizationLayoutResolver;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleReason;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.OrganizationCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;

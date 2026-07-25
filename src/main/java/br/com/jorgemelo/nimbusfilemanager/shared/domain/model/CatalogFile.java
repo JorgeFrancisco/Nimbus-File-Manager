@@ -47,7 +47,7 @@ public class CatalogFile {
 	private Long id;
 
 	/**
-	 * Optimistic-lock version (Etapa 4 / D5). CatalogFile is updated by concurrent,
+	 * Optimistic-lock version. CatalogFile is updated by concurrent,
 	 * non-serialized flows (inventory watcher, metadata rebuild, organization,
 	 * rename detection) - none share a global lock - so a lost update is a real
 	 * risk. Bulk updates (e.g. markMissingByIds) bump this column explicitly so
@@ -95,7 +95,7 @@ public class CatalogFile {
 	private FileType fileType;
 
 	/**
-	 * Lifecycle state (Etapa 3 / A4), replacing the former {@code exists_flag} +
+	 * Lifecycle state, replacing the former {@code exists_flag} +
 	 * {@code deleted} booleans. See {@link LifecycleStatus} for the invariants.
 	 */
 	@Enumerated(EnumType.STRING)
@@ -132,8 +132,7 @@ public class CatalogFile {
 	 * JPA's default fetch type for @OneToOne is EAGER (unlike @OneToMany, which
 	 * already defaults to LAZY) - without an explicit fetch = LAZY, any code that
 	 * loads a CatalogFile outside a projection DTO (e.g. repository.findById/findAll)
-	 * pays 3 extra SELECTs it usually doesn't need (see revisao-projeto.md,
-	 * "Performance" -&gt; "@OneToOne sem fetch = LAZY explícito").
+	 * pays 3 extra SELECTs it usually doesn't need.
 	 */
 	@OneToOne(mappedBy = "catalogFile", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
 	@ToString.Exclude

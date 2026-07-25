@@ -13,6 +13,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 
 class LoginFailureHandlerTest {
@@ -65,7 +66,7 @@ class LoginFailureHandlerTest {
 		// The web boundary extracts IP/user-agent from the request and forwards the
 		// primitives, so the services never see the servlet request.
 		verify(userAccessLogService).recordAccess("user@example.com", SecurityConstants.LOGIN_FAILURE, "FAILURE",
-				"203.0.113.7", "JUnit", "Bad credentials");
+				"203.0.113.7", "JUnit", AccessMessages.INVALID_CREDENTIALS);
 		verify(accountLockService).registerFailure("user@example.com", "203.0.113.7", "JUnit");
 	}
 

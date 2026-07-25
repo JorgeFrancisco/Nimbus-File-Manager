@@ -31,6 +31,21 @@ public final class PerceptualHashCodec {
 			throw new IllegalArgumentException("pHash requires a 1024-byte 32x32 luminance sample");
 		}
 
+		double[] coefficients = columnPass(rowPass(pixels));
+
+		double[] ac = Arrays.copyOfRange(coefficients, 1, coefficients.length);
+		Arrays.sort(ac);
+
+		double median = ac[ac.length / 2];
+
+		return pack(coefficients, median);
+	}
+
+	/**
+	 * First separable-DCT pass: transforms each of the 32 rows into its 16
+	 * low-frequency coefficients.
+	 */
+	private static double[][] rowPass(byte[] pixels) {
 		double[][] rowDct = new double[MetadataConstants.SAMPLE_SIDE][LOW_FREQUENCY_SIDE];
 
 		for (int row = 0; row < MetadataConstants.SAMPLE_SIDE; row++) {
@@ -43,6 +58,14 @@ public final class PerceptualHashCodec {
 			}
 		}
 
+		return rowDct;
+	}
+
+	/**
+	 * Second separable-DCT pass: combines the row coefficients into the 16x16
+	 * low-frequency block, flattened into the 256 packed-hash coefficients.
+	 */
+	private static double[] columnPass(double[][] rowDct) {
 		double[] coefficients = new double[HASH_BITS];
 
 		int coefficient = 0;
@@ -59,12 +82,11 @@ public final class PerceptualHashCodec {
 			}
 		}
 
-		double[] ac = Arrays.copyOfRange(coefficients, 1, coefficients.length);
+		return coefficients;
+	}
 
-		Arrays.sort(ac);
-
-		double median = ac[ac.length / 2];
-
+	/** Thresholds each coefficient against the AC median into a packed 256-bit hash. */
+	private static byte[] pack(double[] coefficients, double median) {
 		byte[] hash = new byte[MetadataConstants.HASH_BYTES];
 
 		for (int bit = 0; bit < coefficients.length; bit++) {

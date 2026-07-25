@@ -22,9 +22,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCursor;
-import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
 @ExtendWith(MockitoExtension.class)

@@ -48,7 +48,7 @@ public class EmailService extends LocalizedComponent {
 
 			log.info("Confirmation email sent to {} via {}", to, provider.name());
 		} catch (RuntimeException exception) {
-			log.error("Failed to send confirmation email to {} via {} - logging link instead", to, provider.name(),
+			log.warn("Failed to send confirmation email to {} via {} - logging link instead", to, provider.name(),
 					exception);
 			log.warn("Confirmation link for {}: {}", to, confirmationLink);
 		}

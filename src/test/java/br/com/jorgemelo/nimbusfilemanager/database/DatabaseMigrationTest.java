@@ -72,8 +72,7 @@ class DatabaseMigrationTest {
 	void shouldTypeUserRoleWithACheckConstraint() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		// Etapa 6 / 6.2: role is an enum, persisted as VARCHAR(30) and guarded by a
-		// CHECK.
+		// role is an enum, persisted as VARCHAR(30) and guarded by a CHECK.
 		Assertions.assertThat(migration).contains("role VARCHAR(30) NOT NULL", "ck_app_user_role",
 				"CHECK (role IN ('ADMIN', 'USER'))");
 	}
@@ -82,7 +81,7 @@ class DatabaseMigrationTest {
 	void shouldUseASingleUniqueConstraintPrefix() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		// Etapa 6 / 6.1: unique constraints all use uk_ (the majority prefix); the
+		// unique constraints all use uk_ (the majority prefix); the
 		// former uq_ on the fingerprint tables was aligned.
 		Assertions.assertThat(migration).doesNotContain("CONSTRAINT uq_", " uq_")
 				.contains("uk_media_fingerprint", "uk_fingerprint_failure");

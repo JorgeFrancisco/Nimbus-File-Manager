@@ -10,9 +10,9 @@
 		</div>
 
 		<section class="panel">
-			<h2 th:text="${execution.executionType()} + ' · ' + ${execution.applicationVersion()}">INVENTORY · 3.3.0</h2>
+			<h2 th:text="${executionTypeLabels.get(execution.executionType())} + ' · ' + ${execution.applicationVersion()}">INVENTORY · 3.3.0</h2>
 			<div class="grid">
-				<div class="panel"><div class="metric" th:text="#{common.status}">Status</div><div class="value" th:text="${execution.status()}">FINISHED</div></div>
+				<div class="panel"><div class="metric" th:text="#{common.status}">Status</div><div class="value" th:text="${executionStatusLabels.get(execution.status())}">FINISHED</div></div>
 				<div class="panel"><div class="metric" th:text="#{statistics.duration}">Duração</div><div class="value"
 						th:text="${execution.durationMillis() != null ? #numbers.formatDecimal(execution.durationMillis() / 1000.0, 1, 1, 'COMMA') + ' s' : '—'}">— s</div></div>
 				<div class="panel"><div class="metric" th:text="#{statistics.filesPerSec}">Arquivos/s</div><div class="value"
@@ -37,7 +37,7 @@
 			<h2 th:text="#{statistics.phaseTime}">Tempo por fase</h2>
 			<div class="chart" th:if="${!phases.isEmpty() and maxPhaseMillis > 0}">
 				<div class="chart-row" th:each="phase : ${phases}">
-					<span class="chart-label" th:text="${phase.phase}">EXTRACTION</span>
+					<span class="chart-label" th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</span>
 					<span class="chart-track"><span class="chart-bar" th:style="'width:' + ${phase.durationMillis * 100.0 / maxPhaseMillis} + '%'"></span></span>
 					<span class="chart-value" th:text="${#numbers.formatDecimal(phase.durationMillis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</span>
 				</div>
@@ -47,7 +47,7 @@
 					<thead><tr><th th:text="#{statistics.phase}">Fase</th><th th:text="#{statistics.duration}">Duração</th><th th:text="#{statistics.percentOfTotal}">% do total</th><th th:text="#{statistics.items}">Itens</th></tr></thead>
 					<tbody>
 					<tr th:each="phase : ${phases}">
-						<td th:text="${phase.phase}">EXTRACTION</td>
+						<td th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</td>
 						<td th:text="${#numbers.formatDecimal(phase.durationMillis / 1000.0, 1, 2, 'COMMA')} + ' s'">0 s</td>
 						<td th:text="${totalPhaseMillis > 0 ? #numbers.formatDecimal(phase.durationMillis * 100.0 / totalPhaseMillis, 1, 1, 'COMMA') + '%' : '—'}">—</td>
 						<td th:text="${phase.items}">0</td>

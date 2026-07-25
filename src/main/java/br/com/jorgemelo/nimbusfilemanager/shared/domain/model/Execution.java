@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.AnalysisError;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.ClockHolder;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -110,11 +109,6 @@ public class Execution {
 	@Builder.Default
 	@ToString.Exclude
 	private List<Movement> movements = new ArrayList<>();
-
-	@OneToMany(mappedBy = "execution", cascade = CascadeType.ALL, orphanRemoval = true)
-	@Builder.Default
-	@ToString.Exclude
-	private List<AnalysisError> analysisErrors = new ArrayList<>();
 
 	@PrePersist
 	void prePersist() {

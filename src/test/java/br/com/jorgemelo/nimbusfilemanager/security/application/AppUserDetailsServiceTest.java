@@ -41,8 +41,7 @@ class AppUserDetailsServiceTest {
 	 * {@code DaoAuthenticationProvider}'s default pre-authentication checks throw
 	 * {@link org.springframework.security.authentication.LockedException} as soon
 	 * as {@code isAccountNonLocked()} is false, <i>before</i> comparing the
-	 * password - this is what lets {@link AccountLockService}-driven lockouts (see
-	 * revisao-projeto.md, "Sem limite de tentativas em login/2FA/troca de senha")
+	 * password - this is what lets {@link AccountLockService}-driven lockouts
 	 * block further password guesses without a bespoke check in every login path.
 	 */
 	@Test

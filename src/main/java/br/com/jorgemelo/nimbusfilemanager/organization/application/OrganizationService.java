@@ -149,10 +149,6 @@ public class OrganizationService {
 		return executionRepository.save(execution);
 	}
 
-	public OrganizationUndoResponse undo(Long executionId) {
-		return organizationUndoService.undo(executionId);
-	}
-
 	public OrganizationUndoResponse undoPublic(UUID executionId) {
 		return organizationUndoService.undo(findExecution(executionId).getId());
 	}

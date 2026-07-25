@@ -9,6 +9,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.LocaleResolver;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,7 +32,6 @@ import jakarta.servlet.http.HttpServletResponse;
  */
 public class UserPreferenceLocaleResolver implements LocaleResolver {
 
-	public static final String PAGE_KEY = "app";
 	static final String LANGUAGE_KEY = "language";
 	static final String LOCALE_COOKIE = "MM_LOCALE";
 	static final Locale DEFAULT_LOCALE = Locale.forLanguageTag("pt-BR");
@@ -92,7 +92,8 @@ public class UserPreferenceLocaleResolver implements LocaleResolver {
 		String username = currentUsername();
 
 		if (username != null) {
-			userPagePreferenceService.save(username, PAGE_KEY, LANGUAGE_KEY, supported.toLanguageTag());
+			userPagePreferenceService.save(username, SharedConstants.APP_PAGE_KEY, LANGUAGE_KEY,
+					supported.toLanguageTag());
 		}
 
 		if (response != null) {
@@ -124,7 +125,7 @@ public class UserPreferenceLocaleResolver implements LocaleResolver {
 			return null;
 		}
 
-		Map<String, String> preferences = userPagePreferenceService.find(username, PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(username, SharedConstants.APP_PAGE_KEY);
 
 		String saved = preferences == null ? null : preferences.get(LANGUAGE_KEY);
 

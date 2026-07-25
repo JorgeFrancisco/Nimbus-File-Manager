@@ -34,8 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Best-effort auto-repair, split out of {@link OrganizationReconcileService}
- * (see revisao-projeto.md, "Arquitetura / SOLID" -&gt; "O maior candidato real
- * a God Service") so that class stays focused on diagnostics (disk vs. database
+ * so that class stays focused on diagnostics (disk vs. database
  * comparison) while this one owns the separate concern of pairing up
  * disappearances with new files and relocating the matching record instead of
  * letting it be marked missing.

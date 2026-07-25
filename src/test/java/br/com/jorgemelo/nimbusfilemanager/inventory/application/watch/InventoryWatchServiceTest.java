@@ -201,8 +201,7 @@ class InventoryWatchServiceTest {
 	}
 
 	/**
-	 * Regression test for the race condition documented in revisao-projeto.md
-	 * ("Race condition ao trocar a pasta monitorada"): {@code reconfigure()} -
+	 * Regression test for the race condition where {@code reconfigure()} -
 	 * called from the web request thread when an admin changes the monitored folder
 	 * - could swap/close the {@code PhysicalTreeWatcher} while the scheduled poll
 	 * thread was still mid-read on it. The fix makes the private {@code

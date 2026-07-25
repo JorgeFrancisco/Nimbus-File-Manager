@@ -58,13 +58,13 @@
 			<div class="chart-block" th:if="${latestExecution != null}">
 				<h3 class="chart-title" th:text="#{statistics.phaseTimeTitle}">Tempo por fase — última execução</h3>
 				<p class="chart-caption muted" th:if="${latestExecution.startedAt() != null}"
-						th:text="#{statistics.phaseCaptionDated(${latestExecution.executionType()}, ${#temporals.format(latestExecution.startedAt(), 'dd/MM/yyyy HH:mm')})}">
+						th:text="#{statistics.phaseCaptionDated(${executionTypeLabels.get(latestExecution.executionType())}, ${#temporals.format(latestExecution.startedAt(), 'dd/MM/yyyy HH:mm')})}">
 					Duração de cada etapa da execução mais recente.</p>
 				<p class="chart-caption muted" th:unless="${latestExecution.startedAt() != null}"
-						th:text="#{statistics.phaseCaption(${latestExecution.executionType()})}"></p>
+						th:text="#{statistics.phaseCaption(${executionTypeLabels.get(latestExecution.executionType())})}"></p>
 				<div class="chart" th:if="${!latestPhases.isEmpty() and maxLatestPhaseMillis > 0}">
 					<div class="chart-row" th:each="phase : ${latestPhases}">
-						<span class="chart-label" th:text="${phase.phase}">EXTRACTION</span>
+						<span class="chart-label" th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</span>
 						<span class="chart-track"><span class="chart-bar" th:style="'width:' + ${phase.durationMillis * 100.0 / maxLatestPhaseMillis} + '%'"></span></span>
 						<span class="chart-value" th:text="${#numbers.formatDecimal(phase.durationMillis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</span>
 					</div>
@@ -119,10 +119,10 @@
 							<td><input type="checkbox" name="ids" th:value="${row.id()}"
 									th:attr="aria-label=#{statistics.compareAria(${row.id()})}"></td>
 							<td th:text="${row.applicationVersion()}">3.3.0</td>
-							<td th:text="${row.executionType()}">INVENTORY</td>
+							<td th:text="${executionTypeLabels.get(row.executionType())}">INVENTORY</td>
 							<td><span class="badge"
 									th:classappend="${row.status().name() == 'FINISHED' ? 'ok' : (row.status().name() == 'FINISHED_WITH_ERRORS' ? 'warn' : (row.status().name() == 'CANCELLED' ? 'info' : 'error'))}"
-									th:text="${row.status()}">FINISHED</span></td>
+									th:text="${executionStatusLabels.get(row.status())}">FINISHED</span></td>
 							<td th:text="${row.startedAt() != null ? #temporals.format(row.startedAt(), 'dd/MM/yyyy HH:mm') : '—'}">—</td>
 							<td th:text="${row.durationMillis() != null ? #numbers.formatDecimal(row.durationMillis() / 1000.0, 1, 1, 'COMMA') + ' s' : '—'}">—</td>
 							<td th:text="${row.filesPerSecond() != null ? #numbers.formatDecimal(row.filesPerSecond(), 1, 1, 'COMMA') : '—'}">—</td>

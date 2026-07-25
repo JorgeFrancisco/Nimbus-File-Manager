@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.GroupParts;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PairKey;
@@ -74,7 +73,7 @@ public class VideoSimilarityService implements SimilarityGrouping {
 
 	/** Synchronous read used by tests and as a fallback (blocking on a miss). */
 	public Page<SimilarVideoGroupResponse> groups(Integer minSimilarityPercent, Pageable pageable) {
-		int minimum = clampSimilarity(minSimilarityPercent);
+		int minimum = SimilarityBounds.clamp(minSimilarityPercent);
 
 		if (!cache.isCached(minimum)) {
 			computeAndCache(minimum, (_, _) -> {
@@ -86,21 +85,23 @@ public class VideoSimilarityService implements SimilarityGrouping {
 
 	@Override
 	public boolean isCached(int minSimilarityPercent) {
-		return cache.isCached(clampSimilarity(minSimilarityPercent));
+		return cache.isCached(SimilarityBounds.clamp(minSimilarityPercent));
 	}
 
 	public Optional<Page<SimilarVideoGroupResponse>> cachedPage(int minSimilarityPercent, Pageable pageable) {
-		return cache.cachedPage(clampSimilarity(minSimilarityPercent), pageable);
+		return cache.cachedPage(SimilarityBounds.clamp(minSimilarityPercent), pageable);
 	}
 
 	@Override
 	public void computeAndCache(int minSimilarityPercent, SimilarityProgressCallback progress) {
-		int minimum = clampSimilarity(minSimilarityPercent);
+		int minimum = SimilarityBounds.clamp(minSimilarityPercent);
 
 		String signature = cache.currentSignature();
 
-		List<VideoCandidate> candidates = withoutExcluded(reassemble(mediaFingerprintRepository
-				.findFingerprintedVideoFrames(algorithm.kind(), algorithm.algorithm(), PageUtils.firstPage(rowCap()))));
+		List<VideoCandidate> candidates = SimilarityGroupSupport.withoutExcluded(
+				reassemble(mediaFingerprintRepository.findFingerprintedVideoFrames(algorithm.kind(),
+						algorithm.algorithm(), PageUtils.firstPage(rowCap()))),
+				duplicateExclusionService, candidate -> candidate.signature().id(), VideoCandidate::currentFolder);
 
 		List<UUID> allIds = candidates.stream().map(candidate -> candidate.signature().id()).toList();
 
@@ -110,7 +111,8 @@ public class VideoSimilarityService implements SimilarityGrouping {
 
 		Map<PairKey, Integer> scores = new HashMap<>();
 
-		List<List<VideoCandidate>> groups = group(candidates, minimum, scores, buckets, progress);
+		List<List<VideoCandidate>> groups = SimilaritySingleLinkageGrouper.cluster(candidates, minimum,
+				(first, second) -> score(first, second, minimum, scores, buckets), progress);
 
 		List<SimilarVideoGroupResponse> responses = groups.stream()
 				.map(group -> toResponse(group, scores, buckets, quality))
@@ -127,7 +129,8 @@ public class VideoSimilarityService implements SimilarityGrouping {
 
 		Set<UUID> removed = new HashSet<>(removedPublicIds);
 
-		cache.evict(group -> retains(group, removed));
+		cache.evict(group -> SimilarityGroupSupport.retains(group.keep().id(), group.deleteCandidates(),
+				group.reviewCandidates(), removed));
 	}
 
 	public void invalidateCache() {
@@ -185,102 +188,9 @@ public class VideoSimilarityService implements SimilarityGrouping {
 		return buckets;
 	}
 
-	private List<VideoCandidate> withoutExcluded(List<VideoCandidate> candidates) {
-		Set<UUID> excludedIds = new HashSet<>(duplicateExclusionService.excludedFilePublicIds());
-		List<String> excludedFolders = duplicateExclusionService.excludedFolders();
-
-		if (excludedIds.isEmpty() && excludedFolders.isEmpty()) {
-			return candidates;
-		}
-
-		return candidates.stream().filter(candidate -> !excludedIds.contains(candidate.signature().id()))
-				.filter(candidate -> !isUnderExcludedFolder(candidate.currentFolder(), excludedFolders)).toList();
-	}
-
-	private boolean isUnderExcludedFolder(String folder, List<String> excludedFolders) {
-		if (folder == null) {
-			return false;
-		}
-
-		String normalized = folder.replace('\\', '/');
-
-		for (String excluded : excludedFolders) {
-			if (normalized.equals(excluded) || normalized.startsWith(excluded + "/")) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private boolean retains(SimilarVideoGroupResponse group, Set<UUID> removed) {
-		if (removed.contains(group.keep().id())) {
-			return false;
-		}
-
-		boolean removedDeleteCandidate = group.deleteCandidates().stream().map(DuplicateCandidateFileResponse::id)
-				.anyMatch(removed::contains);
-
-		boolean removedReviewCandidate = group.reviewCandidates().stream().map(DuplicateCandidateFileResponse::id)
-				.anyMatch(removed::contains);
-
-		return !removedDeleteCandidate && !removedReviewCandidate;
-	}
-
 	private String fingerprintSignature() {
-		List<Object[]> rows = mediaFingerprintRepository.fingerprintSignature(algorithm.kind(), algorithm.algorithm());
-
-		if (rows.isEmpty()) {
-			return "empty";
-		}
-
-		Object[] row = rows.get(0);
-
-		return row[0] + "-" + row[1] + "-" + row[2];
-	}
-
-	private List<List<VideoCandidate>> group(List<VideoCandidate> candidates, int minimum, Map<PairKey, Integer> scores,
-			Map<UUID, Set<Long>> buckets, SimilarityProgressCallback progress) {
-		int total = candidates.size();
-
-		int processed = 0;
-
-		progress.update(0, total);
-
-		List<List<VideoCandidate>> clusters = new ArrayList<>();
-
-		for (VideoCandidate candidate : candidates) {
-			List<VideoCandidate> target = null;
-
-			for (List<VideoCandidate> cluster : clusters) {
-				if (withinThresholdOfAll(candidate, cluster, minimum, scores, buckets)) {
-					target = cluster;
-
-					break;
-				}
-			}
-
-			if (target == null) {
-				target = new ArrayList<>();
-
-				clusters.add(target);
-			}
-
-			target.add(candidate);
-
-			progress.update(++processed, total);
-		}
-		return clusters.stream().filter(cluster -> cluster.size() > 1).toList();
-	}
-
-	private boolean withinThresholdOfAll(VideoCandidate candidate, List<VideoCandidate> cluster, int minimum,
-			Map<PairKey, Integer> scores, Map<UUID, Set<Long>> buckets) {
-		for (VideoCandidate member : cluster) {
-			if (score(candidate, member, minimum, scores, buckets) < minimum) {
-				return false;
-			}
-		}
-		return true;
+		return SimilarityGroupSupport
+				.signatureOf(mediaFingerprintRepository.fingerprintSignature(algorithm.kind(), algorithm.algorithm()));
 	}
 
 	/**
@@ -308,23 +218,10 @@ public class VideoSimilarityService implements SimilarityGrouping {
 		GroupParts parts = duplicateGroupAssembler.assemble(files, quality, false);
 
 		return new SimilarVideoGroupResponse(String.valueOf(parts.keep().id()), group.size(),
-				worstScore(group, scores, buckets), SizeResponse.of(parts.wastedBytes()), parts.keep(),
-				parts.deleteCandidates(), parts.reviewCandidates());
-	}
-
-	/** Lowest pairwise similarity in the group, so the displayed floor is honest. */
-	private int worstScore(List<VideoCandidate> group, Map<PairKey, Integer> scores, Map<UUID, Set<Long>> buckets) {
-		int worst = 100;
-
-		for (int first = 0; first < group.size(); first++) {
-			for (int second = first + 1; second < group.size(); second++) {
-				worst = Math.min(worst,
-						score(group.get(first), group.get(second), DuplicateConstants.MIN_SIMILARITY_PERCENT, scores,
-								buckets));
-			}
-		}
-
-		return worst;
+				SimilaritySingleLinkageGrouper.worstScore(group,
+						(first, second) -> score(first, second, DuplicateConstants.MIN_SIMILARITY_PERCENT, scores,
+								buckets)),
+				SizeResponse.of(parts.wastedBytes()), parts.keep(), parts.deleteCandidates(), parts.reviewCandidates());
 	}
 
 	private DuplicateFileResponse toFileResponse(VideoCandidate candidate) {
@@ -335,15 +232,6 @@ public class VideoSimilarityService implements SimilarityGrouping {
 
 	private int rowCap() {
 		return videoSimilarityProperties.maxCandidatesOrDefault() * algorithm.framesPerFingerprint();
-	}
-
-	private int clampSimilarity(Integer requested) {
-		if (requested == null) {
-			return DuplicateConstants.MIN_SIMILARITY_PERCENT;
-		}
-
-		return Math.clamp(requested, DuplicateConstants.MIN_SIMILARITY_PERCENT,
-				DuplicateConstants.MAX_SIMILARITY_PERCENT);
 	}
 
 	private int maxPageSize() {

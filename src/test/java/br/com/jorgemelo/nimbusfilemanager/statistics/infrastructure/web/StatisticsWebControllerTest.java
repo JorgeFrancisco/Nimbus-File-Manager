@@ -17,12 +17,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ui.ExtendedModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 import br.com.jorgemelo.nimbusfilemanager.statistics.application.StatisticsService;
+import br.com.jorgemelo.nimbusfilemanager.statistics.application.constants.StatisticsConstants;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryQueryService;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ExecutionComparison;
 
@@ -40,7 +42,7 @@ class StatisticsWebControllerTest {
 
 	private StatisticsWebController controller() {
 		return new StatisticsWebController(statisticsService, executionTelemetryQueryService,
-				userPagePreferenceService);
+				userPagePreferenceService, new ExecutionLabels());
 	}
 
 	@Test
@@ -67,6 +69,16 @@ class StatisticsWebControllerTest {
 				.containsEntry("maxFilesPerSecond", 10.0).containsEntry("maxDurationMillis", 1_000L)
 				.containsEntry("latestExecution", latest).containsEntry("maxLatestPhaseMillis", 800L);
 		Assertions.assertThat((List<?>) model.get("latestPhases")).hasSize(2);
+		// Localized enum labels the telemetry views render instead of raw enum names.
+		Assertions.assertThat(model.containsAttribute("executionTypeLabels")).isTrue();
+		Assertions.assertThat(model.containsAttribute("executionStatusLabels")).isTrue();
+		Assertions.assertThat(phaseLabels(model)).containsEntry(ExecutionPhaseType.EXTRACTION, "Extração de metadados")
+				.containsEntry(ExecutionPhaseType.SCAN_COUNT, "Contagem de arquivos").hasSize(7);
+	}
+
+	@SuppressWarnings("unchecked")
+	private Map<ExecutionPhaseType, String> phaseLabels(ExtendedModelMap model) {
+		return (Map<ExecutionPhaseType, String>) model.get("phaseLabels");
 	}
 
 	@Test
@@ -94,14 +106,14 @@ class StatisticsWebControllerTest {
 
 		Assertions.assertThat(model).containsEntry("selectedVersion", "3.4.0.14");
 
-		verify(userPagePreferenceService).save("system", StatisticsWebController.PAGE_KEY,
-				StatisticsWebController.VERSION_KEY, "3.4.0.14");
+		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY,
+				StatisticsConstants.VERSION_KEY, "3.4.0.14");
 	}
 
 	@Test
 	void statisticsAppliesTheSavedVersionWhenNoneIsRequested() {
-		when(userPagePreferenceService.find("system", StatisticsWebController.PAGE_KEY))
-				.thenReturn(Map.of(StatisticsWebController.VERSION_KEY, "3.4.0.14"));
+		when(userPagePreferenceService.find("system", StatisticsConstants.PAGE_KEY))
+				.thenReturn(Map.of(StatisticsConstants.VERSION_KEY, "3.4.0.14"));
 		when(executionTelemetryQueryService.recent("3.4.0.14")).thenReturn(List.of());
 
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -121,8 +133,8 @@ class StatisticsWebControllerTest {
 
 		Assertions.assertThat(model.get("selectedVersion")).isNull();
 
-		verify(userPagePreferenceService).save("system", StatisticsWebController.PAGE_KEY,
-				StatisticsWebController.VERSION_KEY, "");
+		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY,
+				StatisticsConstants.VERSION_KEY, "");
 	}
 
 	@Test

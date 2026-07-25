@@ -10,6 +10,7 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,7 +70,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 					user.getUsername());
 
 			userAccessLogService.recordAccess(user.getUsername(), SecurityConstants.LOGIN_2FA_REQUIRED, "SUCCESS",
-					client.ipAddress(), client.userAgent(), "Two-factor authentication required after Google login.");
+					client.ipAddress(), client.userAgent(), AccessMessages.TWO_FACTOR_REQUIRED_GOOGLE);
 
 			SecurityContextHolder.clearContext();
 
@@ -96,7 +97,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 		accountLockService.registerSuccess(userDetails.getUsername());
 
 		userAccessLogService.recordAccess(userDetails.getUsername(), SecurityConstants.LOGIN_SUCCESS, "SUCCESS",
-				client.ipAddress(), client.userAgent(), "Google login completed.");
+				client.ipAddress(), client.userAgent(), AccessMessages.GOOGLE_LOGIN_COMPLETED);
 
 		super.onAuthenticationSuccess(request, response, localAuthentication);
 	}

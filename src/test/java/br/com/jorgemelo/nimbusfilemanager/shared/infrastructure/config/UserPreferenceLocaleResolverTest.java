@@ -16,6 +16,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import jakarta.servlet.http.Cookie;
 
 class UserPreferenceLocaleResolverTest {
@@ -57,7 +58,7 @@ class UserPreferenceLocaleResolverTest {
 	void appliesTheSavedEnglishPreferenceForTheSignedInUser() {
 		authenticate("admin@example.com");
 
-		when(preferences.find("admin@example.com", UserPreferenceLocaleResolver.PAGE_KEY))
+		when(preferences.find("admin@example.com", SharedConstants.APP_PAGE_KEY))
 				.thenReturn(Map.of(UserPreferenceLocaleResolver.LANGUAGE_KEY, "en"));
 
 		Assertions.assertThat(resolver.resolveLocale(new MockHttpServletRequest())).isEqualTo(Locale.ENGLISH);
@@ -67,7 +68,7 @@ class UserPreferenceLocaleResolverTest {
 	void fallsBackToTheDefaultWhenNothingIsSavedOrTheValueIsUnsupported() {
 		authenticate("admin@example.com");
 
-		when(preferences.find("admin@example.com", UserPreferenceLocaleResolver.PAGE_KEY))
+		when(preferences.find("admin@example.com", SharedConstants.APP_PAGE_KEY))
 				.thenReturn(Map.of(UserPreferenceLocaleResolver.LANGUAGE_KEY, "fr"));
 
 		Assertions.assertThat(resolver.resolveLocale(new MockHttpServletRequest()))
@@ -83,7 +84,7 @@ class UserPreferenceLocaleResolverTest {
 
 		resolver.setLocale(request, response, Locale.ENGLISH);
 
-		verify(preferences).save("admin@example.com", UserPreferenceLocaleResolver.PAGE_KEY,
+		verify(preferences).save("admin@example.com", SharedConstants.APP_PAGE_KEY,
 				UserPreferenceLocaleResolver.LANGUAGE_KEY, "en");
 
 		// A cookie remembers the choice for the login page and the next visit.

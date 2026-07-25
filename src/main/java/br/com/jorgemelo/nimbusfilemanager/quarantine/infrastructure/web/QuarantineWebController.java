@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.infrastructure.web;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants.PAGE_SIZE_KEY;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineCleanupResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
@@ -49,9 +52,6 @@ public class QuarantineWebController extends LocalizedComponent {
 
 	private static final List<Integer> PAGE_SIZES = List.of(50, 100, 200);
 	private static final int DEFAULT_PAGE_SIZE = 50;
-
-	public static final String PAGE_KEY = "quarantine";
-	public static final String PAGE_SIZE_KEY = "pageSize";
 	private static final String VIEW = "view";
 	private static final Set<String> VIEW_MODES = Set.of("details", "small", "large", "xlarge");
 
@@ -71,7 +71,7 @@ public class QuarantineWebController extends LocalizedComponent {
 			@RequestParam(required = false) Integer size, Authentication authentication, Model model) {
 		String username = SecurityUtils.usernameOr(authentication, null);
 
-		Map<String, String> preferences = userPagePreferenceService.find(username, PAGE_KEY);
+		Map<String, String> preferences = userPagePreferenceService.find(username, QuarantineConstants.PAGE_KEY);
 
 		if (preferences == null) {
 			preferences = Map.of();
@@ -84,7 +84,7 @@ public class QuarantineWebController extends LocalizedComponent {
 		int pageSize = resolvePageSize(size, username, preferences);
 
 		if (view != null && VIEW_MODES.contains(view)) {
-			userPagePreferenceService.save(username, PAGE_KEY, VIEW, view);
+			userPagePreferenceService.save(username, QuarantineConstants.PAGE_KEY, VIEW, view);
 		}
 
 		Page<QuarantineItemResponse> items = quarantineService.list(PageRequest.of(Math.max(page, 0), pageSize));
@@ -105,7 +105,7 @@ public class QuarantineWebController extends LocalizedComponent {
 
 	private int resolvePageSize(Integer requested, String username, Map<String, String> preferences) {
 		if (requested != null && PAGE_SIZES.contains(requested)) {
-			userPagePreferenceService.save(username, PAGE_KEY, PAGE_SIZE_KEY, requested.toString());
+			userPagePreferenceService.save(username, QuarantineConstants.PAGE_KEY, PAGE_SIZE_KEY, requested.toString());
 
 			return requested;
 		}

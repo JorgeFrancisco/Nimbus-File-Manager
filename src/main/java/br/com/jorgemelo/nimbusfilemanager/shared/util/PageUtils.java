@@ -23,8 +23,7 @@ public final class PageUtils {
 	 * Drops sort (see {@link #withoutSort(Pageable)}) and clamps the page size to
 	 * {@code maxPageSize} - without this, a public /api/** caller could request an
 	 * arbitrarily large {@code size} query param and force a single query to load
-	 * an absurd number of rows at once (see revisao-projeto.md, "Performance" -&gt;
-	 * "Setting \"tamanho máximo de página\" ... não faz nada").
+	 * an absurd number of rows at once.
 	 */
 	public static Pageable capped(Pageable pageable, int maxPageSize) {
 		return PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), maxPageSize));

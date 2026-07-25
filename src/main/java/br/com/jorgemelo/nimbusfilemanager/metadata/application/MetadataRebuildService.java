@@ -38,14 +38,14 @@ public class MetadataRebuildService {
 	private static final int BATCH_SIZE = 500;
 
 	/**
-	 * Bounded retry (Etapa 4 / D5): the rebuild batch is idempotent (it re-reads
+	 * Bounded retry: the rebuild batch is idempotent (it re-reads
 	 * every candidate), so an optimistic-lock conflict with a concurrent flow (e.g.
 	 * the inventory watcher) is retried a few times before propagating.
 	 */
 	private static final int MAX_BATCH_ATTEMPTS = 3;
 
 	/**
-	 * Own REQUIRES_NEW template (Etapa 4 / D5 hardening), mirroring
+	 * Own REQUIRES_NEW template, mirroring
 	 * {@code PhashBacklogService}/{@code InventoryPersistenceService}. Each batch -
 	 * and so each retry attempt - runs in a brand-new physical transaction with a
 	 * clean persistence context, re-reading the current entity versions. This is a
@@ -163,7 +163,7 @@ public class MetadataRebuildService {
 					} catch (Exception e) {
 						counters.errors++;
 
-						log.error("Error rebuilding metadata. file={}", file, e);
+						log.warn("Error rebuilding metadata. file={}", file, e);
 					}
 
 					logProgress(counters, file);

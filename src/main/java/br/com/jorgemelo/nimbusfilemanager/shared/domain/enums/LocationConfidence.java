@@ -6,18 +6,12 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.enums;
  */
 public enum LocationConfidence {
 
-	VERY_HIGH("Muito alta", 5), HIGH("Alta", 4), MEDIUM("Média", 3), LOW("Baixa", 2), VERY_LOW("Muito baixa", 1);
+	VERY_HIGH(5), HIGH(4), MEDIUM(3), LOW(2), VERY_LOW(1);
 
-	private final String displayName;
 	private final int rank;
 
-	LocationConfidence(String displayName, int rank) {
-		this.displayName = displayName;
+	LocationConfidence(int rank) {
 		this.rank = rank;
-	}
-
-	public String displayName() {
-		return displayName;
 	}
 
 	public boolean atLeast(LocationConfidence minimum) {

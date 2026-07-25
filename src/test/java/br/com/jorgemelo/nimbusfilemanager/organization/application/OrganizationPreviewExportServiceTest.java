@@ -23,8 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.Organization
 
 /**
  * Unit coverage for the ZIP-building logic extracted out of
- * OrganizationController (see revisao-projeto.md, "Arquitetura / SOLID" -&gt;
- * "Lógica de negócio dentro de controller"). ControllersTest still exercises
+ * OrganizationController. ControllersTest still exercises
  * the same flow end-to-end through the controller; this class targets the
  * service in isolation.
  */

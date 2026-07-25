@@ -53,10 +53,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 public class SettingsWebController extends LocalizedComponent {
 
 	private static final List<Integer> PAGE_SIZES = List.of(20, 50, 100);
-	private static final String ATTR_ERROR = "error";
-	private static final String ATTR_SUCCESS = "success";
-	private static final String REDIRECT_SETTINGS = "redirect:/app/settings";
-	private static final String FILES_PAGE_KEY = "files";
 
 	private final AppSettingService appSettingService;
 	private final InventoryWatchService inventoryWatchService;
@@ -103,9 +99,9 @@ public class SettingsWebController extends LocalizedComponent {
 			@RequestParam(defaultValue = "false") boolean confirmLibraryChange, Authentication authentication,
 			RedirectAttributes redirectAttributes) {
 		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, message("backend.settings.inventoryBlocked"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.inventoryBlocked"));
 
-			return REDIRECT_SETTINGS;
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
 		try {
@@ -120,10 +116,10 @@ public class SettingsWebController extends LocalizedComponent {
 
 					librarySwitchService.switchLibrary(oldFolder, value.trim(), username(authentication));
 
-					redirectAttributes.addFlashAttribute(ATTR_SUCCESS,
+					redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
 							message("backend.settings.librarySwitchStarted"));
 
-					return REDIRECT_SETTINGS;
+					return SharedConstants.REDIRECT_SETTINGS;
 				}
 			}
 
@@ -133,12 +129,12 @@ public class SettingsWebController extends LocalizedComponent {
 				inventoryWatchService.reconfigureAndInventory();
 			}
 
-			redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.updated"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.updated"));
 		} catch (IllegalArgumentException e) {
-			redirectAttributes.addFlashAttribute(ATTR_ERROR, e.getMessage());
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, e.getMessage());
 		}
 
-		return REDIRECT_SETTINGS;
+		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	@GetMapping("/app/settings/preferences")
@@ -156,14 +152,15 @@ public class SettingsWebController extends LocalizedComponent {
 		String username = username(authentication);
 
 		if (form.filesView() != null) {
-			userPagePreferenceService.save(username, FILES_PAGE_KEY, "view", form.filesView());
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, "view", form.filesView());
 		}
 
 		if (form.filesSize() != null) {
-			userPagePreferenceService.save(username, FILES_PAGE_KEY, "size", form.filesSize().toString());
+			userPagePreferenceService.save(username, SharedConstants.FILES_PAGE_KEY, "size",
+					form.filesSize().toString());
 		}
 
-		userPagePreferenceService.save(username, "layout", SharedConstants.THEME_PREFERENCE_KEY,
+		userPagePreferenceService.save(username, SharedConstants.LAYOUT_PAGE_KEY, SharedConstants.THEME_PREFERENCE_KEY,
 				SharedConstants.THEME_DARK.equals(form.theme()) ? SharedConstants.THEME_DARK
 						: SharedConstants.THEME_LIGHT);
 
@@ -188,7 +185,7 @@ public class SettingsWebController extends LocalizedComponent {
 					form.organizationSize().toString());
 		}
 
-		redirectAttributes.addFlashAttribute(ATTR_SUCCESS, message("backend.settings.preferencesUpdated"));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.preferencesUpdated"));
 
 		return "redirect:/app/settings/preferences";
 	}
@@ -200,10 +197,11 @@ public class SettingsWebController extends LocalizedComponent {
 
 		String username = username(authentication);
 
-		Map<String, String> filesPreferences = userPagePreferenceService.find(username, FILES_PAGE_KEY);
+		Map<String, String> filesPreferences = userPagePreferenceService.find(username, SharedConstants.FILES_PAGE_KEY);
 		Map<String, String> organizationPreferences = userPagePreferenceService.find(username,
 				OrganizationConstants.PAGE_KEY);
-		Map<String, String> layoutPreferences = userPagePreferenceService.find(username, "layout");
+		Map<String, String> layoutPreferences = userPagePreferenceService.find(username,
+				SharedConstants.LAYOUT_PAGE_KEY);
 
 		model.addAttribute("themeValue",
 				SharedConstants.THEME_DARK.equals(layoutPreferences.get(SharedConstants.THEME_PREFERENCE_KEY))

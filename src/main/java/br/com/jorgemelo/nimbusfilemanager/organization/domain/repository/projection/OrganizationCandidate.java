@@ -3,7 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projec
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;

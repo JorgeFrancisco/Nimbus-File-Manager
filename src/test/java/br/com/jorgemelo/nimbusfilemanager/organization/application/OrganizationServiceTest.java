@@ -40,6 +40,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -267,7 +268,8 @@ class OrganizationServiceTest {
 		return new OrganizationService(organizationPlanner, organizationExecutor, metadataRebuildService,
 				operationLockService, organizationPathValidator, organizationUndoService, organizationReconcileService,
 				organizationAsyncRunner, organizationPlanStore, executionRepository,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper())), Clock.systemDefaultZone());
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()),
+				Clock.systemDefaultZone());
 	}
 
 	private OrganizationService serviceWithAsync() {

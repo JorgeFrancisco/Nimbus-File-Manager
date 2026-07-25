@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary;
+package br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto;
 
 import java.time.LocalDateTime;
 

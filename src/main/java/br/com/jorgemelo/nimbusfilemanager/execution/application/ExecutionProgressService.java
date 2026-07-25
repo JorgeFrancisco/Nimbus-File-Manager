@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.inventory.application;
+package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -9,10 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -170,8 +169,8 @@ public class ExecutionProgressService {
 	 */
 	@Transactional
 	public void markInterruptedExecutions() {
-		List<Execution> executions = executionRepository.findByFinishedAtIsNullAndStatusIn(
-				List.of(ExecutionStatus.STARTED, ExecutionStatus.SCANNING_FILES, ExecutionStatus.PROCESSING_FILES));
+		List<Execution> executions = executionRepository
+				.findByFinishedAtIsNullAndStatusIn(ExecutionStatusNames.IN_PROGRESS);
 
 		for (Execution execution : executions) {
 			if (executionCancellationService.isLive(execution.getId())) {

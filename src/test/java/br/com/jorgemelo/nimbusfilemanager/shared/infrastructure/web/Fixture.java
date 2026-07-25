@@ -18,6 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityA
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
@@ -49,7 +50,7 @@ public final class Fixture {
 	public Fixture() {
 		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(preferences.find(any(), eq(DuplicatesWebController.PAGE_KEY))).thenReturn(Map.of());
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(duplicates.candidates(any(), any())).thenReturn(Page.empty());
 		when(similarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));
 		when(videoSimilarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));

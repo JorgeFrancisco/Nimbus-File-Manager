@@ -106,7 +106,7 @@
 				if (!selectedLink || selectedLink.dataset.publicId !== publicId) return;
 				var camera = [data.manufacturer, data.model].filter(Boolean).join(" ");
 				metadata.innerHTML = "<dl>" + metadataRow(t("js.lightbox.capture"), formatDateTime(data.captureDate))
-						+ metadataRow(t("js.lightbox.dateSource"), data.dateSource) + metadataRow(t("js.lightbox.type"), data.type)
+						+ metadataRow(t("js.lightbox.dateSource"), data.dateSourceLabel) + metadataRow(t("js.lightbox.type"), data.typeLabel)
 						+ metadataRow(t("js.lightbox.dimensions"), data.width && data.height ? data.width + " × " + data.height : null)
 						+ metadataRow(t("js.lightbox.camera"), camera) + metadataRow(t("js.lightbox.duration"), formatDuration(data.durationSeconds))
 						+ metadataRow(t("js.lightbox.location"), data.location)

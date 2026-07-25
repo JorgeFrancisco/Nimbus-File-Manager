@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -37,7 +38,7 @@ public class AppLogoutSuccessHandler implements LogoutSuccessHandler {
 		if (authentication != null) {
 			String eventType = idle ? SecurityConstants.LOGOUT_INACTIVITY : SecurityConstants.LOGOUT;
 
-			String message = idle ? "Logout by inactivity." : "Logout completed.";
+			String message = idle ? AccessMessages.LOGOUT_BY_INACTIVITY : AccessMessages.LOGOUT_COMPLETED;
 
 			RequestClientInfo client = RequestClientInfo.from(request);
 

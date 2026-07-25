@@ -114,7 +114,7 @@
 					<td class="path" th:text="${item.targetPath()}">target</td>
 					<td th:text="${item.location()} ?: '—'">-</td>
 					<td th:text="${item.locationConfidence()} ?: '—'">-</td>
-					<td th:text="${item.conflictType()}">-</td>
+					<td th:text="${item.conflictType() != null ? conflictTypeLabels.get(item.conflictType()) : '—'}">-</td>
 				</tr>
 				<tr th:if="${#lists.isEmpty(previewItems)}">
 					<td colspan="6" th:text="${onlyConflicts} ? #{org.noConflicts} : #{org.noItems}">Nenhum item.</td>

@@ -14,10 +14,10 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.rule.impl.Dro
 import br.com.jorgemelo.nimbusfilemanager.organization.application.rule.impl.GoProOrganizationRule;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.rule.impl.ScreenshotOrganizationRule;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.rule.impl.WhatsAppOrganizationRule;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleReason;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 

@@ -7,11 +7,13 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
  * Decides how a resolved location is used during organization: which folder
@@ -20,9 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence
  * about screens or providers.
  */
 @Component
-public class LocationOrganizationPolicy {
-
-	static final String FALLBACK_FOLDER_NAME = "SEM_LOCALIZACAO_CONFIAVEL";
+public class LocationOrganizationPolicy extends LocalizedComponent {
 
 	private static final int MAX_SEGMENT_LENGTH = 100;
 
@@ -46,7 +46,8 @@ public class LocationOrganizationPolicy {
 		LocationFallbackMode fallbackMode = fallback == null ? LocationFallbackMode.IGNORE : fallback;
 
 		if (!qualifies(location, minimumConfidence)) {
-			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(FALLBACK_FOLDER_NAME) : List.of();
+			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
+				: List.of();
 		}
 
 		ResolvedPlace place = location.getPlace();
@@ -66,7 +67,8 @@ public class LocationOrganizationPolicy {
 		}
 
 		if (segments.isEmpty()) {
-			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(FALLBACK_FOLDER_NAME) : List.of();
+			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER ? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
+				: List.of();
 		}
 
 		return segments;
@@ -152,7 +154,7 @@ public class LocationOrganizationPolicy {
 			return null;
 		}
 
-		return location.getPlace().getConfidence().displayName();
+		return message("enum.locationConfidence." + location.getPlace().getConfidence().name());
 	}
 
 	/** pt-BR distance label: "2,4 km". */

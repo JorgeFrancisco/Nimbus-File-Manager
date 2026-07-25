@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.timeline.application.dto;
+package br.com.jorgemelo.nimbusfilemanager.media.application.dto;
 
 public record ByteRange(long start, long end, boolean partial) {
 

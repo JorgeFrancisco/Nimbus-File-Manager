@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -209,9 +210,13 @@ class ExecutionMapperTest {
 	}
 
 	private ExecutionMapper mapper() {
-		ExecutionMapper mapper = new ExecutionMapper(codec);
+		MessageSource source = messageSource();
 
-		mapper.setMessageSource(messageSource());
+		ExecutionLabels labels = new ExecutionLabels();
+		labels.setMessageSource(source);
+
+		ExecutionMapper mapper = new ExecutionMapper(codec, labels);
+		mapper.setMessageSource(source);
 
 		return mapper;
 	}

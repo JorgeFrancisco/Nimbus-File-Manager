@@ -15,10 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDate;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationRuleResult;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.rule.OrganizationRuleEngine;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleReason;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 

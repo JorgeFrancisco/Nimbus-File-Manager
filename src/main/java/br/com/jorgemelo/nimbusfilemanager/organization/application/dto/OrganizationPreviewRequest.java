@@ -6,8 +6,8 @@ import java.util.List;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
@@ -37,8 +37,7 @@ public record OrganizationPreviewRequest(
 	 * Real ceiling for {@link #limit}, independent of the caller-supplied value -
 	 * without it, a public /api/** caller could request an arbitrarily large limit
 	 * and force a single {@code PageRequest.of(0, limit)} to load an absurd number
-	 * of rows at once (see revisao-projeto.md, "Performance" -&gt; "limit sem teto
-	 * real").
+	 * of rows at once.
 	 */
 	private static final int MAX_LIMIT = 100_000;
 

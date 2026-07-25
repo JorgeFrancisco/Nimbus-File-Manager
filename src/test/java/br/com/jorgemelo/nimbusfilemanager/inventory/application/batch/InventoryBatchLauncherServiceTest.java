@@ -20,8 +20,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -42,7 +43,8 @@ class InventoryBatchLauncherServiceTest {
 	@Mock
 	private InventoryBatchAsyncRunner inventoryBatchAsyncRunner;
 
-	private final ExecutionMapper executionMapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()));
+	private final ExecutionMapper executionMapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()),
+			new ExecutionLabels());
 
 	@Test
 	void launchShouldSaveStartedExecutionBuildJobParametersAndDispatchToRunner() {

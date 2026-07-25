@@ -8,8 +8,6 @@ import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
-
 @Service
 public class MimeTypeService {
 
@@ -55,55 +53,5 @@ public class MimeTypeService {
 		} catch (IOException _) {
 			return DEFAULT_MIME_TYPE;
 		}
-	}
-
-	FileType detectFileType(Path file) {
-		FileType typeByMime = FileType.fromMimeType(detect(file));
-
-		if (!typeByMime.isOther()) {
-			return typeByMime;
-		}
-
-		return FileType.fromPath(file);
-	}
-
-	boolean isImage(Path file) {
-		return detectFileType(file).isPhoto();
-	}
-
-	public boolean isVideo(Path file) {
-		return detectFileType(file).isVideo();
-	}
-
-	public boolean isAudio(Path file) {
-		return detectFileType(file).isAudio();
-	}
-
-	public boolean isPdf(Path file) {
-		return detectFileType(file).isPdf();
-	}
-
-	public boolean isWord(Path file) {
-		return detectFileType(file).isWord();
-	}
-
-	public boolean isExcel(Path file) {
-		return detectFileType(file).isExcel();
-	}
-
-	public boolean isPowerPoint(Path file) {
-		return detectFileType(file).isPowerPoint();
-	}
-
-	public boolean isText(Path file) {
-		return detectFileType(file).isText();
-	}
-
-	public boolean isDocument(Path file) {
-		return detectFileType(file).isDocument();
-	}
-
-	public boolean isArchive(Path file) {
-		return detectFileType(file).isArchive();
 	}
 }

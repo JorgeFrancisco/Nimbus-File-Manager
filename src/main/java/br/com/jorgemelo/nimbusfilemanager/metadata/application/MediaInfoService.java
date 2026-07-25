@@ -17,12 +17,12 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinate
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FfprobeResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.GeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
-import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import lombok.extern.slf4j.Slf4j;
 
@@ -56,9 +56,7 @@ public class MediaInfoService {
 	 * Test seam: lets unit tests inject a fake {@link FfprobeRunner} instead of
 	 * spawning the real ffprobe process. {@code appSettingService} is still
 	 * required (not defaulted to {@code null}) so {@link #ffprobePath()} never
-	 * needs a null-check that production code could never actually hit - see
-	 * revisao-projeto.md, "Arquitetura / SOLID" -&gt; "Padrão repetido de
-	 * construtor de conveniência pra teste".
+	 * needs a null-check that production code could never actually hit.
 	 */
 	MediaInfoService(NimbusFileManagerProperties properties, ObjectMapper objectMapper, FfprobeRunner ffprobeRunner,
 			AppSettingService appSettingService) {

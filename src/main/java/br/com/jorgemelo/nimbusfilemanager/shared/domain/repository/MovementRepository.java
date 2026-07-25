@@ -33,14 +33,6 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 	@EntityGraph(attributePaths = { "execution", "catalogFile" })
 	Page<Movement> findByStatusAndReasonOrderByIdDesc(MovementStatus status, MovementReason reason, Pageable pageable);
 
-	/**
-	 * All still-quarantined movements of a single execution, for the "restore this
-	 * whole deletion" action.
-	 */
-	@EntityGraph(attributePaths = { "execution", "catalogFile" })
-	List<Movement> findByExecutionPublicIdAndStatusAndReasonOrderByIdDesc(UUID executionPublicId, MovementStatus status,
-			MovementReason reason);
-
 	@EntityGraph(attributePaths = { "execution", "catalogFile" })
 	Optional<Movement> findByPublicId(UUID publicId);
 

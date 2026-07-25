@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.organization.domain.enums;
+package br.com.jorgemelo.nimbusfilemanager.shared.domain.enums;
 
 public enum FileCategory {
 

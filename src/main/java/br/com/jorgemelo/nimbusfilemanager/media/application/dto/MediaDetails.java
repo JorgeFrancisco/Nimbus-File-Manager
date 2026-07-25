@@ -10,5 +10,5 @@ public record MediaDetails(UUID id, String fileName, FileType type, LocalDateTim
 		LocalDateTime createdAt, LocalDateTime modifiedAt, Integer width, Integer height, String manufacturer,
 		String model, Double latitude, Double longitude, Double durationSeconds, String currentPath, String contentUrl,
 		String location, Double locationDistanceKm, String locationConfidence, String locationConfidenceLevel,
-		String locationSource) {
+		String locationSource, String typeLabel, String dateSourceLabel) {
 }

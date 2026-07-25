@@ -81,6 +81,29 @@ public class DuplicateExclusionService {
 		return folderRepository.findAllFolderPaths();
 	}
 
+	/**
+	 * Whether a candidate's current folder sits at or under one of the excluded
+	 * folders. Excluded folders are stored separator-agnostic (forward slashes) and
+	 * a candidate's current folder is OS-native, so it is normalized the same way
+	 * before matching the folder itself or any subfolder. The folder list is passed
+	 * in (from {@link #excludedFolders()}) so a batch check queries it just once.
+	 */
+	boolean isUnderExcludedFolder(String folder, List<String> excludedFolders) {
+		if (folder == null) {
+			return false;
+		}
+
+		String normalized = folder.replace('\\', '/');
+
+		for (String excluded : excludedFolders) {
+			if (normalized.equals(excluded) || normalized.startsWith(excluded + "/")) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	@Transactional(readOnly = true)
 	public List<DuplicateFileExclusionView> fileExclusions() {
 		return fileRepository.findAllViews();

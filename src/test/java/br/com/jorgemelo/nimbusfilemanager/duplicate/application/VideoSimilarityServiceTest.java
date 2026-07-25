@@ -79,6 +79,7 @@ class VideoSimilarityServiceTest {
 		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFilePublicIds()).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFolders()).thenReturn(List.of());
+		when(duplicateExclusionService.isUnderExcludedFolder(any(), any())).thenCallRealMethod();
 		when(appSettingService.intValue(any(), anyInt())).thenReturn(500);
 		when(properties.api()).thenReturn(new Api(500, 20, 500));
 	}

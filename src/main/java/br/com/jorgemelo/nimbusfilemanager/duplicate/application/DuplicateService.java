@@ -98,8 +98,7 @@ public class DuplicateService {
 	/**
 	 * Loads the files for every group of a page with a single
 	 * {@code IN (:sha256List)} query instead of one query per group - a page of 50
-	 * groups used to mean 51 round trips to the database (see revisao-projeto.md,
-	 * "Performance" -&gt; "N+1 em duplicados").
+	 * groups used to mean 51 round trips to the database.
 	 */
 	private Map<String, List<DuplicateFileResponse>> filesByGroup(List<String> shas, Collection<FileType> types) {
 		if (shas.isEmpty()) {

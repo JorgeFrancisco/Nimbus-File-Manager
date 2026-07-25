@@ -2,12 +2,13 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.Option;
 
 /**
  * Curated list of time zones offered by the settings screen combo, each with a
  * human-friendly pt-BR label mapped to its IANA id (the value actually stored
- * in {@link AppSettingService#TIMEZONE}). Any valid IANA id is accepted on
+ * in {@link SettingsConstants#TIMEZONE}). Any valid IANA id is accepted on
  * save; this list only drives the dropdown, so a stored value outside it still
  * round-trips.
  */

@@ -11,10 +11,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 import br.com.jorgemelo.nimbusfilemanager.statistics.application.StatisticsService;
+import br.com.jorgemelo.nimbusfilemanager.statistics.application.constants.StatisticsConstants;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryQueryService;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ExecutionComparison;
 
@@ -35,24 +37,31 @@ public class StatisticsWebController {
 	 */
 	private static final int PERF_CHART_LIMIT = 12;
 
-	/**
-	 * Preferences page/key so the version filter is remembered per user across
-	 * visits.
-	 */
-	public static final String PAGE_KEY = "statistics";
-	static final String VERSION_KEY = "version";
 	private static final String REDIRECT_STATISTICS = "redirect:/app/statistics";
 
 	private final StatisticsService statisticsService;
 	private final ExecutionTelemetryQueryService executionTelemetryQueryService;
 	private final UserPagePreferenceService userPagePreferenceService;
+	private final ExecutionLabels executionLabels;
 
 	public StatisticsWebController(StatisticsService statisticsService,
 			ExecutionTelemetryQueryService executionTelemetryQueryService,
-			UserPagePreferenceService userPagePreferenceService) {
+			UserPagePreferenceService userPagePreferenceService, ExecutionLabels executionLabels) {
 		this.statisticsService = statisticsService;
 		this.executionTelemetryQueryService = executionTelemetryQueryService;
 		this.userPagePreferenceService = userPagePreferenceService;
+		this.executionLabels = executionLabels;
+	}
+
+	/**
+	 * Localized execution type/status labels by enum, so the telemetry views can
+	 * render the raw {@link ExecutionTelemetryRow} enums as text the user reads
+	 * without the front translating anything.
+	 */
+	private void addExecutionLabels(Model model) {
+		model.addAttribute("executionTypeLabels", executionLabels.types());
+		model.addAttribute("executionStatusLabels", executionLabels.statuses());
+		model.addAttribute("phaseLabels", executionLabels.phases());
 	}
 
 	@GetMapping("/app/statistics")
@@ -91,6 +100,8 @@ public class StatisticsWebController {
 		model.addAttribute("maxLatestPhaseMillis",
 				latestPhases.stream().mapToLong(ExecutionPhase::getDurationMillis).max().orElse(0L));
 
+		addExecutionLabels(model);
+
 		return "app/statistics";
 	}
 
@@ -107,12 +118,14 @@ public class StatisticsWebController {
 		if (requested != null) {
 			String normalized = requested.isBlank() ? "" : requested.trim();
 
-			userPagePreferenceService.save(username, PAGE_KEY, VERSION_KEY, normalized);
+			userPagePreferenceService.save(username, StatisticsConstants.PAGE_KEY, StatisticsConstants.VERSION_KEY,
+					normalized);
 
 			return normalized.isEmpty() ? null : normalized;
 		}
 
-		String saved = userPagePreferenceService.find(username, PAGE_KEY).get(VERSION_KEY);
+		String saved = userPagePreferenceService.find(username, StatisticsConstants.PAGE_KEY)
+				.get(StatisticsConstants.VERSION_KEY);
 
 		return saved == null || saved.isBlank() ? null : saved;
 	}
@@ -126,6 +139,8 @@ public class StatisticsWebController {
 			model.addAttribute("phases", phases);
 			model.addAttribute("maxPhaseMillis",
 					phases.stream().mapToLong(ExecutionPhase::getDurationMillis).max().orElse(0L));
+
+			addExecutionLabels(model);
 
 			return "app/statistics-execution";
 		}).orElse(REDIRECT_STATISTICS);
@@ -148,6 +163,8 @@ public class StatisticsWebController {
 		}
 
 		model.addAttribute("comparison", comparison);
+
+		addExecutionLabels(model);
 
 		return "app/statistics-compare";
 	}

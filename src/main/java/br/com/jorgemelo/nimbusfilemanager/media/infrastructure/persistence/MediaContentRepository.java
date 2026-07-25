@@ -93,9 +93,9 @@ public class MediaContentRepository {
 
 					distanceKm == null ? null : distanceKm.doubleValue(),
 
-					// Location labels are localized in the service layer; the repository only
-					// exposes the raw confidence and provider codes.
-					null, rs.getString("confidence"), rs.getString("provider"));
+					// Location labels and the type/date-source labels are localized in the service
+					// layer; the repository only exposes the raw confidence and provider codes.
+					null, rs.getString("confidence"), rs.getString("provider"), null, null);
 		});
 		return rows.stream().findFirst();
 	}

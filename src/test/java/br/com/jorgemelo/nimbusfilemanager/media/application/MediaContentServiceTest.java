@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.timeline.application;
+package br.com.jorgemelo.nimbusfilemanager.media.application;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaDetails;
 import br.com.jorgemelo.nimbusfilemanager.media.infrastructure.persistence.MediaContentRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 
 /**
@@ -63,8 +64,34 @@ class MediaContentServiceTest {
 		Assertions.assertThat(resolved.locationSource()).isEqualTo("NOT_A_PROVIDER");
 	}
 
+	@Test
+	void findDetailsResolvesTypeAndDateSourceLabelsFromTheRawEnums() {
+		MediaDetails raw = new MediaDetails(id, "f.mp4", FileType.VIDEO, null, DateSource.EXIF, null, null, null, null,
+				null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+		when(repository.findDetails(id)).thenReturn(Optional.of(raw));
+
+		MediaDetails resolved = service.findDetails(id).orElseThrow();
+
+		Assertions.assertThat(resolved.typeLabel()).isEqualTo("Vídeo");
+		Assertions.assertThat(resolved.dateSourceLabel()).isEqualTo("EXIF");
+	}
+
+	@Test
+	void findDetailsLeavesTypeAndDateSourceLabelsNullWhenTheEnumsAreAbsent() {
+		MediaDetails raw = new MediaDetails(id, "f.bin", null, null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null, null, null);
+
+		when(repository.findDetails(id)).thenReturn(Optional.of(raw));
+
+		MediaDetails resolved = service.findDetails(id).orElseThrow();
+
+		Assertions.assertThat(resolved.typeLabel()).isNull();
+		Assertions.assertThat(resolved.dateSourceLabel()).isNull();
+	}
+
 	private MediaDetails details(String confidenceCode, String providerCode) {
 		return new MediaDetails(id, "f.jpg", FileType.PHOTO, null, null, null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, confidenceCode, providerCode);
+				null, null, null, null, null, null, confidenceCode, providerCode, null, null);
 	}
 }

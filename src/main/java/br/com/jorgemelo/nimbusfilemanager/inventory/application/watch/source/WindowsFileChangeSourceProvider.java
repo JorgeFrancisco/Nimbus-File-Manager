@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
-import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsChangeSourceSupport;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UsnJournalProperties;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,8 +36,9 @@ public class WindowsFileChangeSourceProvider implements FileChangeSourceProvider
 	private final WindowsChangeSourceOpener opener;
 
 	@Autowired
-	public WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore) {
-		this(properties, cursorStore, WindowsFileChangeSourceProvider::isWindowsOs, WindowsChangeSourceSupport::open);
+	public WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore,
+			WindowsChangeSourceOpener opener) {
+		this(properties, cursorStore, WindowsFileChangeSourceProvider::isWindowsOs, opener);
 	}
 
 	WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore, BooleanSupplier windows,

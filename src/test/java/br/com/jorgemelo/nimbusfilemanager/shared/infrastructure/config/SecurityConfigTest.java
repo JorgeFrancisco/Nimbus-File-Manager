@@ -92,8 +92,6 @@ class SecurityConfigTest {
 
 	@Test
 	void organizationUndoIsOperationalForAnyUser() throws Exception {
-		when(organizationService.undo(1L)).thenReturn(null);
-
 		// Missing CSRF is rejected; a logged-in USER may undo an organization run.
 		mockMvc.perform(post("/api/organization/execute/00000000-0000-7000-8000-000000000001/undo")
 				.with(user("user").roles("USER"))).andExpect(status().isForbidden());

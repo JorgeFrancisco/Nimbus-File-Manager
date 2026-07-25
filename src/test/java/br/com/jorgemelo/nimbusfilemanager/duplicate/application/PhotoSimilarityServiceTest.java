@@ -97,6 +97,7 @@ class PhotoSimilarityServiceTest {
 						photoIn(3L, "C:/Other", hash(0), sample(100), when),
 						photoIn(4L, "C:/Other", hash(0), sample(100), when))));
 		when(exclusions.excludedFolders()).thenReturn(List.of("C:/Fotos"));
+		when(exclusions.isUnderExcludedFolder(any(), any())).thenCallRealMethod();
 
 		Page<SimilarPhotoGroupResponse> result = service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20));
 

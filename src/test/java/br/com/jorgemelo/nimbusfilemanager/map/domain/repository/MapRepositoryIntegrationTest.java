@@ -25,7 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.MediaGeo
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapAdministrativePinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapExifPinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapMediaItemProjection;
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;

@@ -33,8 +33,7 @@ import lombok.extern.slf4j.Slf4j;
  * registered in the database (missing on disk, missing in database,
  * file_key/current_path mismatches). The auto-repair half (pairing
  * disappearances with new files to detect renames) lives in the separate
- * {@link OrganizationRenameDetectionService} - see revisao-projeto.md,
- * "Arquitetura / SOLID" -&gt; "O maior candidato real a God Service".
+ * {@link OrganizationRenameDetectionService}.
  */
 @Slf4j
 @Service

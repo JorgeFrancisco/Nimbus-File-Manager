@@ -8,6 +8,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,11 +58,11 @@ public class LoginFailureHandler implements AuthenticationFailureHandler {
 		String message;
 
 		if (disabled) {
-			message = "Account not confirmed yet.";
+			message = AccessMessages.ACCOUNT_NOT_CONFIRMED;
 		} else if (locked) {
-			message = "Account temporarily locked after too many failed attempts.";
+			message = AccessMessages.ACCOUNT_TEMPORARILY_LOCKED;
 		} else {
-			message = exception.getMessage();
+			message = AccessMessages.INVALID_CREDENTIALS;
 		}
 
 		userAccessLogService.recordAccess(username, SecurityConstants.LOGIN_FAILURE, "FAILURE", client.ipAddress(),

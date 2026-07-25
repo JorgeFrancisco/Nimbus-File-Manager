@@ -16,8 +16,8 @@
 				<div class="compare-card" th:each="exec : ${comparison.executions()}">
 					<h3 th:text="'#' + ${exec.id()} + ' · ' + ${exec.applicationVersion()}">#1 · 3.4</h3>
 					<dl>
-						<dt th:text="#{common.type}">Tipo</dt><dd th:text="${exec.executionType()}">INVENTORY</dd>
-						<dt th:text="#{common.status}">Status</dt><dd th:text="${exec.status()}">FINISHED</dd>
+						<dt th:text="#{common.type}">Tipo</dt><dd th:text="${executionTypeLabels.get(exec.executionType())}">INVENTORY</dd>
+						<dt th:text="#{common.status}">Status</dt><dd th:text="${executionStatusLabels.get(exec.status())}">FINISHED</dd>
 						<dt th:text="#{common.start}">Início</dt><dd th:text="${exec.startedAt() != null ? #temporals.format(exec.startedAt(), 'dd/MM/yyyy HH:mm') : '—'}">—</dd>
 						<dt th:text="#{statistics.duration}">Duração</dt><dd th:text="${exec.durationMillis() != null ? #numbers.formatDecimal(exec.durationMillis() / 1000.0, 1, 1, 'COMMA') + ' s' : '—'}">—</dd>
 						<dt th:text="#{statistics.filesPerSec}">Arquivos/s</dt><dd th:text="${exec.filesPerSecond() != null ? #numbers.formatDecimal(exec.filesPerSecond(), 1, 1, 'COMMA') : '—'}">—</dd>

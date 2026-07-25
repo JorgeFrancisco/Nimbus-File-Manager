@@ -69,16 +69,16 @@ class AppSettingServiceTest {
 	void updateShouldValidateTypeAndAuditUser() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(AppSettingService.INVENTORY_PROGRESS_INTERVAL)
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL)
 				.settingValue("100").valueType("INTEGER").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.INVENTORY_PROGRESS_INTERVAL))
+		when(repository.findBySettingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL))
 				.thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		service.update(AppSettingService.INVENTORY_PROGRESS_INTERVAL, "250", "admin");
+		service.update(SettingsConstants.INVENTORY_PROGRESS_INTERVAL, "250", "admin");
 
 		Assertions.assertThat(setting.getSettingValue()).isEqualTo("250");
 		Assertions.assertThat(setting.getUpdatedByUsername()).isEqualTo("admin");
@@ -121,24 +121,24 @@ class AppSettingServiceTest {
 	void readsAreCachedUntilTheSettingIsUpdated() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(AppSettingService.DEFAULT_LAYOUT).settingValue("old")
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.DEFAULT_LAYOUT).settingValue("old")
 				.valueType("STRING").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.DEFAULT_LAYOUT)).thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.DEFAULT_LAYOUT)).thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
 		// Second read is served from the cache: the DB is hit only once.
-		Assertions.assertThat(service.stringValue(AppSettingService.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
-		Assertions.assertThat(service.stringValue(AppSettingService.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
+		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
+		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
 
-		verify(repository, times(1)).findBySettingKey(AppSettingService.DEFAULT_LAYOUT);
+		verify(repository, times(1)).findBySettingKey(SettingsConstants.DEFAULT_LAYOUT);
 
 		// update() evicts, so the next read reflects the new committed value.
-		service.update(AppSettingService.DEFAULT_LAYOUT, "new", "admin");
+		service.update(SettingsConstants.DEFAULT_LAYOUT, "new", "admin");
 
-		Assertions.assertThat(service.stringValue(AppSettingService.DEFAULT_LAYOUT, "fb")).isEqualTo("new");
+		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("new");
 	}
 
 	@Test
@@ -166,12 +166,12 @@ class AppSettingServiceTest {
 	void zoneIdShouldReturnTheConfiguredZone() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(AppSettingService.TIMEZONE).settingValue("Europe/Zurich")
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.TIMEZONE).settingValue("Europe/Zurich")
 				.valueType("ZONE_ID").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.TIMEZONE)).thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.TIMEZONE)).thenReturn(Optional.of(setting));
 
 		Assertions.assertThat(service.zoneId()).isEqualTo(ZoneId.of("Europe/Zurich"));
 	}
@@ -182,7 +182,7 @@ class AppSettingServiceTest {
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.TIMEZONE)).thenReturn(Optional.empty());
+		when(repository.findBySettingKey(SettingsConstants.TIMEZONE)).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service.zoneId()).isEqualTo(ZoneId.of(SettingsConstants.DEFAULT_TIMEZONE));
 	}
@@ -195,7 +195,7 @@ class AppSettingServiceTest {
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.TIMEZONE)).thenReturn(Optional.of(invalid));
+		when(repository.findBySettingKey(SettingsConstants.TIMEZONE)).thenReturn(Optional.of(invalid));
 
 		Assertions.assertThat(service.zoneId()).isEqualTo(ZoneId.of(SettingsConstants.DEFAULT_TIMEZONE));
 	}
@@ -204,15 +204,15 @@ class AppSettingServiceTest {
 	void updateShouldAcceptAValidTimeZone() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(AppSettingService.TIMEZONE)
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.TIMEZONE)
 				.settingValue("America/Sao_Paulo").valueType("ZONE_ID").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(AppSettingService.TIMEZONE)).thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.TIMEZONE)).thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		service.update(AppSettingService.TIMEZONE, "Europe/Zurich", "admin");
+		service.update(SettingsConstants.TIMEZONE, "Europe/Zurich", "admin");
 
 		Assertions.assertThat(setting.getSettingValue()).isEqualTo("Europe/Zurich");
 	}
@@ -223,7 +223,7 @@ class AppSettingServiceTest {
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		Assertions.assertThatThrownBy(() -> service.update(AppSettingService.TIMEZONE, "Mars/Olympus", "admin"))
+		Assertions.assertThatThrownBy(() -> service.update(SettingsConstants.TIMEZONE, "Mars/Olympus", "admin"))
 				.isInstanceOf(IllegalArgumentException.class).hasMessage("Value must be a valid IANA time zone id.");
 	}
 

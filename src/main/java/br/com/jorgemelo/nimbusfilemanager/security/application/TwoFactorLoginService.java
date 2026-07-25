@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.security.application;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.AccessMessages;
 import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
@@ -34,7 +35,7 @@ public class TwoFactorLoginService {
 
 		if (user.isCurrentlyLocked()) {
 			userAccessLogService.recordAccess(username, SecurityConstants.LOGIN_2FA_FAILURE, "FAILURE", ipAddress,
-					userAgent, "Two-factor code rejected: account temporarily locked.");
+					userAgent, AccessMessages.TWO_FACTOR_REJECTED_LOCKED);
 
 			return TwoFactorLoginResult.LOCKED;
 		}
@@ -43,7 +44,7 @@ public class TwoFactorLoginService {
 			accountLockService.registerFailure(username, ipAddress, userAgent);
 
 			userAccessLogService.recordAccess(username, SecurityConstants.LOGIN_2FA_FAILURE, "FAILURE", ipAddress,
-					userAgent, "Invalid two-factor authentication code.");
+					userAgent, AccessMessages.INVALID_TWO_FACTOR_CODE);
 
 			return TwoFactorLoginResult.INVALID;
 		}
@@ -51,7 +52,7 @@ public class TwoFactorLoginService {
 		accountLockService.registerSuccess(username);
 
 		userAccessLogService.recordAccess(username, SecurityConstants.LOGIN_2FA_SUCCESS, "SUCCESS", ipAddress,
-				userAgent, "Two-factor authentication completed.");
+				userAgent, AccessMessages.TWO_FACTOR_COMPLETED);
 
 		return TwoFactorLoginResult.SUCCESS;
 	}

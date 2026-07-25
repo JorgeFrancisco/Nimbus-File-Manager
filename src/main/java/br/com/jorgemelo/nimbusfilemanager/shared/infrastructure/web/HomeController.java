@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest;
+package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;

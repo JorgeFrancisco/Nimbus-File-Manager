@@ -69,7 +69,7 @@ class MovementSummaryQueryIntegrationTest {
 		saveMovement(execution, MovementStatus.SKIPPED, MovementReason.ALREADY_MOVED);
 		saveMovement(execution, MovementStatus.ERROR, MovementReason.INTEGRITY_CHECK_FAILED);
 
-		var summary = executionQueryService.movementSummary(execution.getId());
+		var summary = executionQueryService.movementSummary(execution.getPublicId());
 
 		// Ordered by count desc: 2 MOVED (null reason), then the two singletons.
 		Assertions.assertThat(summary)

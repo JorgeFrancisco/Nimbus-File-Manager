@@ -27,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityA
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeleteRequest;
@@ -43,6 +44,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Vide
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
@@ -69,7 +71,7 @@ class DuplicatesWebControllerTest {
 		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
-		when(preferences.find(any(), eq(DuplicatesWebController.PAGE_KEY))).thenReturn(Map.of());
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.of(new PageImpl<>(List.of())));
 
@@ -97,7 +99,7 @@ class DuplicatesWebControllerTest {
 		VideoSimilarityAsyncRunner videoSimilarityRunner = mock(VideoSimilarityAsyncRunner.class);
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
-		when(preferences.find(any(), eq(DuplicatesWebController.PAGE_KEY))).thenReturn(Map.of());
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.empty());
 		when(videoSimilarityRunner.start(70)).thenReturn(true);
@@ -125,7 +127,7 @@ class DuplicatesWebControllerTest {
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
-		when(preferences.find(any(), eq(DuplicatesWebController.PAGE_KEY))).thenReturn(Map.of());
+		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
@@ -316,7 +318,7 @@ class DuplicatesWebControllerTest {
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("activeTab", "exact");
-		verify(preferences).save("system", DuplicatesWebController.PAGE_KEY, DuplicatesWebController.TAB_KEY, "exact");
+		verify(preferences).save("system", DuplicateConstants.PAGE_KEY, DuplicateConstants.TAB_KEY, "exact");
 	}
 
 	@Test
@@ -326,7 +328,7 @@ class DuplicatesWebControllerTest {
 		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicatesWebController.TAB_KEY, "similar"));
+				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, "similar"));
 		var photoSimilarityService = mock(PhotoSimilarityService.class);
 		when(photoSimilarityService.cachedPage(ArgumentMatchers.anyInt(), ArgumentMatchers.any()))
 				.thenReturn(Optional.of(new PageImpl<>(List.of())));
@@ -354,7 +356,7 @@ class DuplicatesWebControllerTest {
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", 100, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("pageSize", 100);
-		verify(preferences).save("system", DuplicatesWebController.PAGE_KEY, DuplicatesWebController.PAGE_SIZE_KEY,
+		verify(preferences).save("system", DuplicateConstants.PAGE_KEY, SharedConstants.PAGE_SIZE_KEY,
 				"100");
 		verify(duplicateService).candidates(eq(PageRequest.of(0, 100)), any());
 	}
@@ -366,7 +368,7 @@ class DuplicatesWebControllerTest {
 		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicatesWebController.PAGE_SIZE_KEY, "200"));
+				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
 		when(duplicateService.candidates(eq(PageRequest.of(0, 200)), any())).thenReturn(new PageImpl<>(List.of()));
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -385,7 +387,7 @@ class DuplicatesWebControllerTest {
 		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicatesWebController.VIEW_KEY, "large"));
+				.thenReturn(Map.of(DuplicateConstants.VIEW_KEY, "large"));
 		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(List.of()));
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -404,7 +406,7 @@ class DuplicatesWebControllerTest {
 		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicatesWebController.MIN_SIMILARITY_KEY, "100"));
+				.thenReturn(Map.of(DuplicateConstants.MIN_SIMILARITY_KEY, "100"));
 		when(photoSimilarityService.cachedPage(100, PageRequest.of(0, 50)))
 				.thenReturn(Optional.of(new PageImpl<>(List.of())));
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -581,11 +583,13 @@ class DuplicatesWebControllerTest {
 		Assertions.assertThat(keepView.resolution()).isEqualTo("4000 × 3000");
 		Assertions.assertThat(keepView.keep()).isTrue();
 		Assertions.assertThat(keepView.highlight()).isEqualTo("ORIGINAL");
+		Assertions.assertThat(keepView.highlightLabel()).isEqualTo("📷 Original");
 		Assertions.assertThat(keepView.reason()).contains("Original");
 
 		DuplicateFileView candidateView = groups.getFirst().files().getLast();
 		Assertions.assertThat(candidateView.keep()).isFalse();
 		Assertions.assertThat(candidateView.highlight()).isEqualTo("WHATSAPP_COPY");
+		Assertions.assertThat(candidateView.highlightLabel()).isEqualTo("📱 WhatsApp");
 	}
 
 	@Test

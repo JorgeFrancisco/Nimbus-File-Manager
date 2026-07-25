@@ -12,6 +12,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.application.AppUserAccountService;
+import br.com.jorgemelo.nimbusfilemanager.security.application.constants.SecurityConstants;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.enums.Role;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
@@ -22,7 +23,6 @@ public class UsersWebController {
 	private static final List<String> ROLES = List.of(Role.USER.name(), Role.ADMIN.name());
 	private static final List<Integer> PAGE_SIZES = List.of(20, 50, 100);
 	private static final int DEFAULT_PAGE_SIZE = 20;
-	public static final String PAGE_KEY = "users";
 	static final String SIZE_KEY = "size";
 
 	private final AppUserAccountService appUserAccountService;
@@ -40,7 +40,7 @@ public class UsersWebController {
 		int pageSize = resolveSize(size, authentication);
 		var usersPage = appUserAccountService.searchUsers(q, page, pageSize);
 
-		model.addAttribute(PAGE_KEY, usersPage.getContent());
+		model.addAttribute(SecurityConstants.PAGE_KEY, usersPage.getContent());
 		model.addAttribute("usersPage", usersPage);
 		model.addAttribute("q", q == null ? "" : q.trim());
 		model.addAttribute("size", usersPage.getSize());
@@ -59,13 +59,14 @@ public class UsersWebController {
 		String username = SecurityUtils.usernameOr(authentication, "system");
 
 		if (requested != null && PAGE_SIZES.contains(requested)) {
-			userPagePreferenceService.save(username, PAGE_KEY, SIZE_KEY, requested.toString());
+			userPagePreferenceService.save(username, SecurityConstants.PAGE_KEY, SIZE_KEY, requested.toString());
 
 			return requested;
 		}
 
-		return PageUtils.validSizeOrDefault(userPagePreferenceService.find(username, PAGE_KEY).get(SIZE_KEY),
-				PAGE_SIZES, DEFAULT_PAGE_SIZE);
+		return PageUtils.validSizeOrDefault(
+				userPagePreferenceService.find(username, SecurityConstants.PAGE_KEY).get(SIZE_KEY), PAGE_SIZES,
+				DEFAULT_PAGE_SIZE);
 	}
 
 	@PostMapping("/app/users")

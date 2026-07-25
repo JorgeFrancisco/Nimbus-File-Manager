@@ -215,17 +215,13 @@ class QuarantineServiceTest {
 		Path freeQuarantine = writeQuarantineCopy(tmp, "10__free.jpg", "one");
 		Path takenQuarantine = writeQuarantineCopy(tmp, "11__taken.jpg", "two");
 
-		UUID executionId = UUID.randomUUID();
-
 		Movement free = quarantineMovement(freeOriginal, freeQuarantine);
 		Movement taken = quarantineMovement(takenOriginal, takenQuarantine);
 
-		when(movementRepository.findByExecutionPublicIdAndStatusAndReasonOrderByIdDesc(executionId,
-				MovementStatus.MOVED, MovementReason.DUPLICATE_QUARANTINED)).thenReturn(List.of(free, taken));
 		when(movementRepository.findByPublicId(free.getPublicId())).thenReturn(Optional.of(free));
 		when(movementRepository.findByPublicId(taken.getPublicId())).thenReturn(Optional.of(taken));
 
-		QuarantineRestoreBatchResult result = service.restoreExecution(executionId);
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(free.getPublicId(), taken.getPublicId()));
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
 		Assertions.assertThat(result.restored()).isEqualTo(1);

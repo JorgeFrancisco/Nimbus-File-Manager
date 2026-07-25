@@ -120,4 +120,18 @@ class DuplicateExclusionServiceTest {
 		Assertions.assertThat(service.fileExclusions()).containsExactly(view);
 		Assertions.assertThat(service.folderExclusions()).containsExactly(folder);
 	}
+
+	@Test
+	void isUnderExcludedFolderMatchesTheFolderItsSubfoldersAndNormalizesSeparators() {
+		DuplicateExclusionService service = service();
+
+		List<String> excluded = List.of("C:/Fotos");
+
+		Assertions.assertThat(service.isUnderExcludedFolder("C:/Fotos", excluded)).isTrue();
+		Assertions.assertThat(service.isUnderExcludedFolder("C:/Fotos/2024", excluded)).isTrue();
+		Assertions.assertThat(service.isUnderExcludedFolder("C:\\Fotos\\2024", excluded)).isTrue();
+		Assertions.assertThat(service.isUnderExcludedFolder("C:/FotosOutras", excluded)).isFalse();
+		Assertions.assertThat(service.isUnderExcludedFolder("D:/Outra", excluded)).isFalse();
+		Assertions.assertThat(service.isUnderExcludedFolder(null, excluded)).isFalse();
+	}
 }

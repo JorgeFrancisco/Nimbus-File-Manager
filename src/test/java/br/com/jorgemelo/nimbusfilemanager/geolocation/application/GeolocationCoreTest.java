@@ -5,6 +5,7 @@ import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinates;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
@@ -63,7 +64,7 @@ class GeolocationCoreTest {
 		Assertions
 				.assertThat(organizationPolicy.subdivisionSegments(location, LocationSubdivision.COUNTRY_STATE_CITY,
 						LocationConfidence.VERY_HIGH, LocationFallbackMode.FALLBACK_FOLDER))
-				.isEqualTo(List.of(LocationOrganizationPolicy.FALLBACK_FOLDER_NAME));
+				.isEqualTo(List.of(GeolocationConstants.FALLBACK_FOLDER_NAME));
 	}
 
 	@Test

@@ -160,7 +160,7 @@
 						<div class="duplicate-selection-cell">
 							<span class="badge" th:with="h=${file.highlight()}" th:title="${file.reason()}"
 									th:classappend="${h == 'ORIGINAL' or h == 'BEST_IN_GROUP'} ? 'ok' : (${h == 'REVIEW_NO_CLEAR_ORIGINAL'} ? 'warn' : 'muted')"
-									th:text="${h == 'ORIGINAL'} ? #{duplicates.highlight.original} : (${h == 'BEST_IN_GROUP'} ? #{duplicates.highlight.keep} : (${h == 'WHATSAPP_COPY'} ? #{duplicates.highlight.whatsapp} : (${h == 'EDITED_COPY'} ? #{duplicates.highlight.edited} : (${h == 'DERIVATIVE'} ? #{duplicates.highlight.derivative} : (${h == 'IDENTICAL_COPY'} ? #{duplicates.highlight.copy} : #{duplicates.highlight.review})))))">Badge</span>
+									th:text="${file.highlightLabel()}">Badge</span>
 							<input type="checkbox" class="js-delete-checkbox"
 									th:title="${file.keep()} ? #{duplicates.select.recommendedKeep} : #{duplicates.select.delete}"
 									th:attr="data-group=${group.groupId()},data-file-id=${file.id()},data-size-bytes=${file.size().bytes()},data-path=${file.currentPath()},data-folder=${file.currentFolder()},data-recommended-keep=${file.recommendedKeep()}">

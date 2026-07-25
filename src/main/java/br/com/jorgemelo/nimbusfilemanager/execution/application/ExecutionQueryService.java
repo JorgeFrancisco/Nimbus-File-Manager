@@ -16,7 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.MovementResp
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.AnalysisError;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.AnalysisErrorRepository;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
@@ -28,9 +28,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 @Service
 @Transactional(readOnly = true)
 public class ExecutionQueryService {
-
-	private static final List<ExecutionStatus> ACTIVE_STATUSES = List.of(ExecutionStatus.STARTED,
-			ExecutionStatus.SCANNING_FILES, ExecutionStatus.PROCESSING_FILES);
 
 	private final ExecutionRepository executionRepository;
 	private final ExecutionStepRepository executionStepRepository;
@@ -63,7 +60,8 @@ public class ExecutionQueryService {
 	}
 
 	public Optional<ExecutionResponse> active() {
-		return executionRepository.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ACTIVE_STATUSES)
+		return executionRepository
+				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.IN_PROGRESS)
 				.map(executionMapper::toResponse);
 	}
 
@@ -96,33 +94,6 @@ public class ExecutionQueryService {
 
 	public Long internalId(UUID publicId) {
 		return findByPublicId(publicId).getId();
-	}
-
-	public ExecutionResponse get(Long id) {
-		return executionRepository.findById(id).map(executionMapper::toResponse)
-				.orElseThrow(() -> new IllegalArgumentException("Execution not found: " + id));
-	}
-
-	public List<ExecutionStepResponse> steps(Long id) {
-		return executionStepRepository.findByExecutionIdOrderByCreatedAtAsc(id).stream()
-				.map(executionMapper::toStepResponse).toList();
-	}
-
-	public List<AnalysisErrorResponse> errors(Long id) {
-		return analysisErrorRepository.findByExecutionIdOrderByCreatedAtAsc(id).stream()
-				.map(this::toAnalysisErrorResponse).toList();
-	}
-
-	public List<AnalysisErrorSummaryResponse> errorSummary(Long id) {
-		return analysisErrorRepository.summarizeByExecutionId(id);
-	}
-
-	public List<MovementResponse> movements(Long id) {
-		return movementRepository.findByExecutionIdOrderByIdAsc(id).stream().map(this::toMovementResponse).toList();
-	}
-
-	public List<MovementSummaryResponse> movementSummary(Long id) {
-		return movementRepository.summarizeByExecutionId(id);
 	}
 
 	private Execution findByPublicId(UUID publicId) {

@@ -322,6 +322,25 @@ class OrganizationWebControllerTest {
 	}
 
 	@Test
+	void previewResultShouldExposeLocalizedConflictTypeLabelsByEnumName() {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		OrganizationWebController controller = new OrganizationWebController(organizationService,
+				mock(UserPagePreferenceService.class));
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		when(organizationService.getPreviewPlan(1L)).thenReturn(plan());
+
+		controller.previewResult(1L, 0, 20, model);
+
+		@SuppressWarnings("unchecked")
+		Map<String, String> labels = (Map<String, String>) model.get("conflictTypeLabels");
+
+		Assertions.assertThat(labels).containsEntry("TARGET_EXISTS", "Já existe no destino")
+				.containsEntry("DUPLICATE_TARGET", "Duplicado no destino")
+				.containsEntry("TARGET_EXISTS_AND_DUPLICATE", "Já existe e duplicado").hasSize(3);
+	}
+
+	@Test
 	void previewAndExecuteShouldRejectInvalidSourceAndTargetPaths() throws Exception {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,

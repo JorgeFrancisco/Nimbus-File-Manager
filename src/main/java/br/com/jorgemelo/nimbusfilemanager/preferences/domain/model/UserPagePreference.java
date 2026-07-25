@@ -36,7 +36,7 @@ public class UserPagePreference {
 	private Long id;
 
 	/**
-	 * Owner (Etapa 3 / C2): live data that belongs to a user, referenced by the
+	 * Owner: live data that belongs to a user, referenced by the
 	 * stable app_user id (FK in the database, ON DELETE CASCADE) instead of the
 	 * former username snapshot - so renaming a user never orphans their prefs.
 	 */

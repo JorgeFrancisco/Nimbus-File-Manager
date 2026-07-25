@@ -4,69 +4,57 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
-import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
 
 public enum FileType {
 
-	PHOTO("Foto", FileCategory.MEDIA, "IMAGENS", List.of("image/"),
+	PHOTO(FileCategory.MEDIA, "IMAGENS", List.of("image/"),
 			List.of("jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tif", "tiff")),
 
-	VIDEO("Vídeo", FileCategory.MEDIA, "VIDEOS", List.of("video/"),
+	VIDEO(FileCategory.MEDIA, "VIDEOS", List.of("video/"),
 			List.of("mp4", "mov", "avi", "mkv", "wmv", "flv", "webm", "mpeg", "mpg", "3gp", "m4v")),
 
-	AUDIO("Áudio", FileCategory.MEDIA, "AUDIOS", List.of("audio/"),
+	AUDIO(FileCategory.MEDIA, "AUDIOS", List.of("audio/"),
 			List.of("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "amr")),
 
-	PDF("PDF", FileCategory.DOCUMENT, "PDFS", List.of("application/pdf"), List.of("pdf")),
+	PDF(FileCategory.DOCUMENT, "PDFS", List.of("application/pdf"), List.of("pdf")),
 
-	WORD("Word", FileCategory.DOCUMENT, "WORD",
+	WORD(FileCategory.DOCUMENT, "WORD",
 			List.of("application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
 			List.of("doc", "docx")),
 
-	EXCEL("Excel", FileCategory.DOCUMENT, "EXCEL",
+	EXCEL(FileCategory.DOCUMENT, "EXCEL",
 			List.of("application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
 			List.of("xls", "xlsx", "csv")),
 
-	POWERPOINT("PowerPoint", FileCategory.DOCUMENT, "POWERPOINT",
+	POWERPOINT(FileCategory.DOCUMENT, "POWERPOINT",
 			List.of("application/vnd.ms-powerpoint",
 					"application/vnd.openxmlformats-officedocument.presentationml.presentation"),
 			List.of("ppt", "pptx")),
 
-	TEXT("Texto", FileCategory.DOCUMENT, "TEXTOS",
+	TEXT(FileCategory.DOCUMENT, "TEXTOS",
 			List.of("text/", "application/json", "application/xml", "application/yaml"),
 			List.of("txt", "md", "log", "json", "xml", "yaml", "yml")),
 
-	ZIP("ZIP", FileCategory.ARCHIVE, "ZIP", List.of("application/zip"), List.of("zip")),
+	ZIP(FileCategory.ARCHIVE, "ZIP", List.of("application/zip"), List.of("zip")),
 
-	RAR("RAR", FileCategory.ARCHIVE, "RAR", List.of("application/vnd.rar", "application/x-rar-compressed"),
+	RAR(FileCategory.ARCHIVE, "RAR", List.of("application/vnd.rar", "application/x-rar-compressed"),
 			List.of("rar")),
 
-	SEVEN_Z("7-Zip", FileCategory.ARCHIVE, "7Z", List.of("application/x-7z-compressed"), List.of("7z")),
+	SEVEN_Z(FileCategory.ARCHIVE, "7Z", List.of("application/x-7z-compressed"), List.of("7z")),
 
-	OTHER("Outro", FileCategory.OTHER, "OUTROS", List.of(), List.of());
+	OTHER(FileCategory.OTHER, "OUTROS", List.of(), List.of());
 
-	private final String displayName;
 	private final FileCategory category;
 	private final String folderName;
 	private final List<String> mimePrefixes;
 	private final List<String> extensions;
 
-	FileType(String displayName, FileCategory category, String folderName, List<String> mimePrefixes,
-			List<String> extensions) {
-		this.displayName = displayName;
+	FileType(FileCategory category, String folderName, List<String> mimePrefixes, List<String> extensions) {
 		this.category = category;
 		this.folderName = folderName;
 		this.mimePrefixes = mimePrefixes;
 		this.extensions = extensions;
-	}
-
-	public String displayName() {
-		return displayName;
-	}
-
-	public static String displayNameOf(FileType fileType) {
-		return valueOfNullable(fileType).displayName();
 	}
 
 	public static FileCategory categoryOf(FileType fileType) {
