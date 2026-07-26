@@ -117,7 +117,7 @@ class ControllersTest {
 		VideoFingerprintBacklogService videoFingerprintBacklogService = mock(VideoFingerprintBacklogService.class);
 		ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 		StatisticsService statisticsService = mock(StatisticsService.class);
-		MetadataRebuildRequest metadataRequest = new MetadataRebuildRequest("C:/input", null, null, null, 100, false);
+		MetadataRebuildRequest metadataRequest = new MetadataRebuildRequest("C:/input", null, null, null, 100, false, null);
 		PageRequest pageable = PageRequest.of(0, 10);
 
 		when(mediaSearchService.search(any(), any())).thenReturn(new PageImpl<>(List.of()));

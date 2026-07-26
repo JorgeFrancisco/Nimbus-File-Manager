@@ -110,6 +110,6 @@ class MetadataRebuildAsyncRunnerTest {
 
 	private MetadataRebuildRequest request(boolean dryRun) {
 		return new MetadataRebuildRequest("D:\\photos", List.of(MetadataRebuildField.SUBCATEGORY), null, null, null,
-				dryRun);
+				dryRun, null);
 	}
 }

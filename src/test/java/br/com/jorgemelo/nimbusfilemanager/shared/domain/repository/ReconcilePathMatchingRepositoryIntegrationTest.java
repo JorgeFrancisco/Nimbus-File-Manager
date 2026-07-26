@@ -16,6 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.OrganizationCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -95,7 +96,8 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 	@Test
 	void findIdsForMetadataRebuildMatchesEveryDescendantOfAFolderButNotASiblingPrefix() {
 		List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild("D:\\Media",
-				PathUtils.descendantLikePattern("D:\\Media", SEPARATOR), null, null, 0L, PAGE);
+				PathUtils.descendantLikePattern("D:\\Media", SEPARATOR), null, null,
+				MetadataRebuildRequest.NO_CUTOFF, 0L, PAGE);
 
 		List<String> matched = ids.stream().map(this::currentPathOf).toList();
 
@@ -106,7 +108,8 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 	@Test
 	void findIdsForMetadataRebuildMatchesEveryFileUnderADriveRoot() {
 		List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild("D:\\",
-				PathUtils.descendantLikePattern("D:\\", SEPARATOR), null, null, 0L, PAGE);
+				PathUtils.descendantLikePattern("D:\\", SEPARATOR), null, null, MetadataRebuildRequest.NO_CUTOFF, 0L,
+				PAGE);
 
 		List<String> matched = ids.stream().map(this::currentPathOf).toList();
 
@@ -151,6 +154,37 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 		return catalogFileRepository.findById(catalogFileId).map(CatalogFile::getLocation)
 				.map(CatalogFileLocation::getCurrentPath)
 				.orElseThrow();
+	}
+
+	/**
+	 * The cutoff a continuing run uses: only files never analysed, or analysed
+	 * before the previous run started, are candidates again. Verified against the
+	 * engine because it is the query that decides what "the rest" means.
+	 */
+	@Test
+	void findIdsForMetadataRebuildSkipsWhatWasAnalysedSinceTheCutoff() {
+		LocalDateTime cutoff = LocalDateTime.now();
+
+		stampAnalysis("D:\\Media\\a.jpg", cutoff.plusMinutes(1));
+		stampAnalysis("D:\\Media\\sub\\x.jpg", cutoff.minusMinutes(1));
+
+		List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild("D:\\Media",
+				PathUtils.descendantLikePattern("D:\\Media", SEPARATOR), null, null, cutoff, 0L, PAGE);
+
+		List<String> matched = ids.stream().map(this::currentPathOf).toList();
+
+		// a.jpg was rebuilt by the previous run and drops out; the one analysed before
+		// it and the one never analysed remain.
+		Assertions.assertThat(matched).containsExactlyInAnyOrder("D:\\Media\\IMG_2026_01.jpg",
+				"D:\\Media\\sub\\x.jpg");
+	}
+
+	private void stampAnalysis(String path, LocalDateTime lastAnalysis) {
+		CatalogFile file = catalogFileRepository.findByFileKey(path).orElseThrow();
+
+		file.setLastAnalysis(lastAnalysis);
+
+		catalogFileRepository.saveAndFlush(file);
 	}
 
 	private void persist(String path) {

@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -12,8 +14,10 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.web.SettingsWebController;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
 /**
@@ -69,6 +73,28 @@ public class MetadataRebuildSettingsAdvice {
 				selectedFields(preferences.get(MetadataRebuildPreferences.FIELDS_KEY)));
 		model.addAttribute("metadataRebuildDryRun",
 				Boolean.parseBoolean(preferences.get(MetadataRebuildPreferences.DRY_RUN_KEY)));
+		model.addAttribute("metadataRebuildScopes", MetadataRebuildScope.values());
+		model.addAttribute("metadataRebuildScope",
+				EnumUtils.valueOfOrDefault(MetadataRebuildScope.class,
+						preferences.get(MetadataRebuildPreferences.SCOPE_KEY), MetadataRebuildScope.CONTINUE).name());
+		model.addAttribute("metadataRebuildLastRunAt",
+				lastRunAt(preferences.get(MetadataRebuildPreferences.LAST_RUN_KEY)));
+	}
+
+	/**
+	 * When the last run started, so the screen can say what a continuing run would
+	 * skip. Unparseable or absent means there is nothing to continue from yet.
+	 */
+	private LocalDateTime lastRunAt(String saved) {
+		if (saved == null || saved.isBlank()) {
+			return null;
+		}
+
+		try {
+			return LocalDateTime.parse(saved);
+		} catch (DateTimeParseException _) {
+			return null;
+		}
 	}
 
 	/**

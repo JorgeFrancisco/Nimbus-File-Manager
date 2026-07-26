@@ -63,7 +63,7 @@ class MetadataRebuildServiceTest {
 	void dryRunShouldOnlyCountCandidateIds() {
 		MetadataRebuildRequest request = request(true, List.of(MetadataRebuildField.ALL));
 
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L));
 
 		var response = service().rebuild(request);
@@ -87,9 +87,9 @@ class MetadataRebuildServiceTest {
 
 		MetadataRebuildRequest request = request(false, List.of(MetadataRebuildField.ALL));
 
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L, 4L));
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(4L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(4L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L, 3L, 4L)))
 				.thenReturn(List.of(success, withoutLocation, missing, error));
@@ -134,9 +134,9 @@ class MetadataRebuildServiceTest {
 
 		MetadataRebuildRequest request = request(false, List.of());
 
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(1L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(1L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
@@ -252,9 +252,9 @@ class MetadataRebuildServiceTest {
 	void batchRetriesInAFreshTransactionOnOptimisticConflictThenSucceeds() {
 		MetadataRebuildRequest request = request(false, List.of(MetadataRebuildField.DATE));
 
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(1L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(1L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L)))
 				.thenThrow(new ObjectOptimisticLockingFailureException(CatalogFile.class, 1L)).thenReturn(List.of());
@@ -326,12 +326,12 @@ class MetadataRebuildServiceTest {
 	 */
 	@Test
 	void countCandidatesShouldNotPromiseMoreFilesThanTheLimitAllows() {
-		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null))).thenReturn(4L);
+		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null), any())).thenReturn(4L);
 
 		Assertions.assertThat(service().countCandidates(request(false, List.of(MetadataRebuildField.DATE))))
 				.isEqualTo(4L);
 
-		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null))).thenReturn(500L);
+		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null), any())).thenReturn(500L);
 
 		Assertions.assertThat(service().countCandidates(request(false, List.of(MetadataRebuildField.DATE))))
 				.isEqualTo(10L);
@@ -353,9 +353,9 @@ class MetadataRebuildServiceTest {
 	}
 
 	private void prepareSingleRebuild(CatalogFile catalogFile, Path existingFile, MetadataResult metadata) {
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(0L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
-		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), eq(1L),
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(1L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
@@ -363,7 +363,7 @@ class MetadataRebuildServiceTest {
 	}
 
 	private MetadataRebuildRequest request(boolean dryRun, List<MetadataRebuildField> refresh) {
-		return new MetadataRebuildRequest(tempDir.toString(), refresh, null, null, 10, dryRun);
+		return new MetadataRebuildRequest(tempDir.toString(), refresh, null, null, 10, dryRun, null);
 	}
 
 	private CatalogFile catalogFile(Long id, Path currentPath) {

@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 
@@ -61,6 +63,48 @@ class MetadataRebuildSettingsAdviceTest {
 				.asInstanceOf(InstanceOfAssertFactories.list(MetadataRebuildField.class))
 				.contains(MetadataRebuildField.DATE, MetadataRebuildField.SUBCATEGORY)
 				.doesNotContain(MetadataRebuildField.ALL);
+	}
+
+	/**
+	 * The panel says when the last run started, because that is what "continue"
+	 * skips by - without it the choice would be blind.
+	 */
+	@Test
+	void publishesTheScopeAndWhenTheLastRunStarted() {
+		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY))
+				.thenReturn(Map.of(MetadataRebuildPreferences.SCOPE_KEY, "ALL",
+						MetadataRebuildPreferences.LAST_RUN_KEY, "2026-07-26T11:16:13"));
+
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildScope")).isEqualTo("ALL");
+		Assertions.assertThat(model.getAttribute("metadataRebuildLastRunAt"))
+				.isEqualTo(LocalDateTime.of(2026, Month.JULY, 26, 11, 16, 13));
+	}
+
+	/**
+	 * An unreadable or absent mark leaves nothing to continue from, and the screen
+	 * has to say so rather than break rendering the panel.
+	 */
+	@Test
+	void reportsNoPreviousRunWhenTheMarkIsMissingOrUnreadable() {
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildScope")).isEqualTo("CONTINUE");
+		Assertions.assertThat(model.getAttribute("metadataRebuildLastRunAt")).isNull();
+
+		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY))
+				.thenReturn(Map.of(MetadataRebuildPreferences.LAST_RUN_KEY, "ontem"));
+
+		Model broken = new ConcurrentModel();
+
+		advice.addTo(broken, null);
+
+		Assertions.assertThat(broken.getAttribute("metadataRebuildLastRunAt")).isNull();
 	}
 
 	@Test

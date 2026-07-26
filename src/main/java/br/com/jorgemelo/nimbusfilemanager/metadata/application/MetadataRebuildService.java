@@ -82,7 +82,7 @@ public class MetadataRebuildService {
 				request.source().getFileSystem().getSeparator());
 
 		long total = catalogFileRepository.countForMetadataRebuild(sourcePathText, descendantPattern,
-				request.captureDateNull(), request.dateSource());
+				request.captureDateNull(), request.dateSource(), request.cutoff());
 
 		return Math.min(total, request.safeLimit());
 	}
@@ -111,7 +111,8 @@ public class MetadataRebuildService {
 
 		if (request.dryRun()) {
 			var ids = catalogFileRepository.findIdsForMetadataRebuild(sourcePathText, descendantPattern,
-					request.captureDateNull(), request.dateSource(), 0L, PageUtils.firstPage(request.safeLimit()));
+					request.captureDateNull(), request.dateSource(), request.cutoff(), 0L,
+					PageUtils.firstPage(request.safeLimit()));
 
 			return new MetadataRebuildResponse(sourcePathText, true, ids.size(), 0, 0, 0, 0, 0);
 		}
@@ -126,7 +127,8 @@ public class MetadataRebuildService {
 			int batchLimit = Math.min(BATCH_SIZE, remaining);
 
 			List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild(sourcePathText, descendantPattern,
-					request.captureDateNull(), request.dateSource(), lastId, PageUtils.firstPage(batchLimit));
+					request.captureDateNull(), request.dateSource(), request.cutoff(), lastId,
+					PageUtils.firstPage(batchLimit));
 
 			if (ids.isEmpty()) {
 				break;

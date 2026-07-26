@@ -167,7 +167,7 @@ public class OrganizationService {
 			metadataRebuildService.rebuild(new MetadataRebuildRequest(request.sourcePath(),
 					request.rebuild() == null || request.rebuild().isEmpty() ? List.of(MetadataRebuildField.DATE)
 							: request.rebuild(),
-					null, null, request.limit(), false));
+					null, null, request.limit(), false, null));
 		}
 	}
 }

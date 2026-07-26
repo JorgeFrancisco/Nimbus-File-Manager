@@ -153,12 +153,17 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			       or (:captureDateNull = false and m is not null and m.captureDate is not null)
 			  )
 			  and (:dateSource is null or m.dateSource = :dateSource)
+			  and (
+			       mf.lastAnalysis is null
+			       or mf.lastAnalysis < :notAnalysedSince
+			  )
 			  and mf.id > :lastId
 			order by mf.id
 			""")
 	List<Long> findIdsForMetadataRebuild(@Param("sourcePath") String sourcePath,
 			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
-			@Param("dateSource") DateSource dateSource, @Param("lastId") Long lastId, Pageable pageable);
+			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") LocalDateTime notAnalysedSince,
+			@Param("lastId") Long lastId, Pageable pageable);
 
 	/**
 	 * Same filter as {@link #findIdsForMetadataRebuild} without the keyset cursor,
@@ -181,10 +186,14 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			       or (:captureDateNull = false and m is not null and m.captureDate is not null)
 			  )
 			  and (:dateSource is null or m.dateSource = :dateSource)
+			  and (
+			       mf.lastAnalysis is null
+			       or mf.lastAnalysis < :notAnalysedSince
+			  )
 			""")
 	long countForMetadataRebuild(@Param("sourcePath") String sourcePath,
 			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
-			@Param("dateSource") DateSource dateSource);
+			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") LocalDateTime notAnalysedSince);
 
 	@Query("""
 			select distinct mf

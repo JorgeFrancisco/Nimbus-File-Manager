@@ -54,9 +54,17 @@
 	// (its identity) and data-operation-running (whether to keep polling), so the
 	// geographic database and the metadata rebuild share one refresh loop instead
 	// of one script each.
+	function blockedByInventory() {
+		var tab = document.querySelector("[data-inventory-running]");
+		return !!tab && tab.dataset.inventoryRunning === "true";
+	}
+
 	function monitorOperationPanels() {
+		// The inventory lock is watched alongside the panels: it disables the whole
+		// tab, and before this the screen stayed blocked until the user reloaded by
+		// hand, long after the inventory had finished.
 		var running = document.querySelector('[data-operation-panel][data-operation-running="true"]');
-		if (!running) return;
+		if (!running && !blockedByInventory()) return;
 		window.setTimeout(refreshOperationPanels, 5000);
 	}
 
@@ -69,6 +77,13 @@
 			return response.text();
 		}).then(function (html) {
 			var document_ = new DOMParser().parseFromString(html, "text/html");
+			var freshTab = document_.querySelector("[data-inventory-running]");
+			// Swapping a panel is not enough when the lock clears: it disabled inputs and
+			// buttons across every panel of the tab, so the page has to come back whole.
+			if (blockedByInventory() && (!freshTab || freshTab.dataset.inventoryRunning !== "true")) {
+				window.location.reload();
+				return;
+			}
 			var panels = document.querySelectorAll("[data-operation-panel]");
 			if (!panels.length) throw new Error();
 			panels.forEach(function (current) {
@@ -83,9 +98,31 @@
 		});
 	}
 
+	// The rebuild choices belong to the user, not to a rebuild, so they are stored
+	// the moment they change - picking a folder and leaving the screen never
+	// discards it, the same contract the conversion screen has.
+	function bindMetadataRebuildPreferences() {
+		var form = document.querySelector('form[action$="/app/settings/metadata/rebuild"]');
+		if (!form) return;
+
+		// Serializing the form carries its hidden _csrf field along, which is how
+		// Spring accepts the token on a form-encoded post.
+		form.addEventListener("change", function () {
+			fetch("/app/settings/metadata/preferences", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams(new FormData(form))
+			}).catch(function () {
+				// A preference that could not be stored is not worth interrupting the
+				// user over: the rebuild still uses what is selected on screen.
+			});
+		});
+	}
+
 	document.addEventListener("DOMContentLoaded", function () {
 		restoreScrollPosition();
 		monitorOperationPanels();
+		bindMetadataRebuildPreferences();
 		// The shared folder picker (js/folder-picker.js) fills #watchFolderInput;
 		// here we only guard the actual library switch on submit.
 		var input = document.getElementById("watchFolderInput");
