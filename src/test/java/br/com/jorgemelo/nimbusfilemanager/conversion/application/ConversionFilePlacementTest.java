@@ -1,0 +1,168 @@
+package br.com.jorgemelo.nimbusfilemanager.conversion.application;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+
+class ConversionFilePlacementTest {
+
+	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming();
+	private final ConversionFilePlacement placement = new ConversionFilePlacement(
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), conversionFileNaming);
+
+	private final ConversionOptions noAffix = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+			OriginalDisposition.KEEP, "", NameAffixPosition.SUFFIX);
+
+	@Test
+	void suffixesTheConvertedFileWhileTheOriginalStillOccupiesTheName(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+		Path converted = convertedFile(tmp, "clip.mp4");
+
+		Path placed = placement.place(converted, source, noAffix);
+
+		Assertions.assertThat(placed).isEqualTo(library.resolve("clip (H.265).mp4")).hasContent("converted");
+		Assertions.assertThat(source).hasContent("original");
+		Assertions.assertThat(converted).doesNotExist();
+	}
+
+	@Test
+	void takesTheSourceNameWhenTheContainerChangedAndTheNameIsFree(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.avi"), "original");
+		Path converted = convertedFile(tmp, "clip_temp.tmp");
+
+		Path placed = placement.place(converted, source, noAffix);
+
+		// The MKV became an MP4, so the name it wants is free and no suffix is needed.
+		Assertions.assertThat(placed).isEqualTo(library.resolve("clip.mp4")).hasContent("converted");
+		Assertions.assertThat(source).exists();
+	}
+
+	@Test
+	void givesTheConvertedFileTheNameTheAffixAsksFor(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+		Path converted = convertedFile(tmp, "clip_H265_temp.tmp");
+
+		ConversionOptions suffixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+				OriginalDisposition.KEEP, "_H265", NameAffixPosition.SUFFIX);
+
+		Assertions.assertThat(placement.place(converted, source, suffixed))
+				.isEqualTo(library.resolve("clip_H265.mp4")).hasContent("converted");
+		Assertions.assertThat(source).hasContent("original");
+	}
+
+	@Test
+	void putsTheAffixInFrontWhenThatIsWhereTheUserWantsIt(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+		Path converted = convertedFile(tmp, "H265_clip_temp.tmp");
+
+		ConversionOptions prefixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+				OriginalDisposition.KEEP, "H265_", NameAffixPosition.PREFIX);
+
+		Assertions.assertThat(placement.place(converted, source, prefixed))
+				.isEqualTo(library.resolve("H265_clip.mp4"));
+	}
+
+	@Test
+	void numbersTheSuffixedNameRatherThanOverwritingAPreviousConversion(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+
+		Files.writeString(library.resolve("clip (H.265).mp4"), "previous");
+
+		Path placed = placement.place(convertedFile(tmp, "clip.mp4"), source, noAffix);
+
+		Assertions.assertThat(placed).isEqualTo(library.resolve("clip (H.265) (1).mp4"));
+		Assertions.assertThat(library.resolve("clip (H.265).mp4")).hasContent("previous");
+	}
+
+	@Test
+	void givesTheConvertedFileTheOriginalNameOnceTheOriginalIsGone(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = library.resolve("clip.mp4");
+		Path placed = Files.writeString(library.resolve("clip (H.265).mp4"), "converted");
+
+		Path renamed = placement.renameToOriginalName(placed, source);
+
+		Assertions.assertThat(renamed).isEqualTo(source).hasContent("converted");
+		Assertions.assertThat(placed).doesNotExist();
+	}
+
+	@Test
+	void keepsTheConvertedNameWhenItAlreadyMatchesTheOriginal(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = library.resolve("clip.avi");
+		Path placed = Files.writeString(library.resolve("clip.mkv"), "converted");
+
+		Assertions.assertThat(placement.renameToOriginalName(placed, source)).isEqualTo(placed);
+	}
+
+	@Test
+	void keepsTheSuffixedNameWhenTheOriginalNameIsStillTaken(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "still here");
+		Path placed = Files.writeString(library.resolve("clip (H.265).mp4"), "converted");
+
+		Assertions.assertThat(placement.renameToOriginalName(placed, source)).isEqualTo(placed);
+		Assertions.assertThat(source).hasContent("still here");
+	}
+
+	@Test
+	void keepsTheConvertedFileWhenTheCosmeticRenameFails(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = library.resolve("clip.mp4");
+		Path placed = Files.writeString(library.resolve("clip (H.265).mp4"), "converted");
+
+		// A rename that physically happens but fails its integrity verify: the file is
+		// still the user's converted video, so the conversion must not be lost over a
+		// naming detail.
+		OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
+
+		when(verifier.capture(any())).thenReturn(new MoveBaseline(9L, "sha"));
+		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
+
+		ConversionFilePlacement failing = new ConversionFilePlacement(new SecureFileMove(verifier),
+				conversionFileNaming);
+
+		Assertions.assertThat(failing.renameToOriginalName(placed, source)).isEqualTo(placed);
+	}
+
+	@Test
+	void reportsAFailedPlacementToTheCaller(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+
+		// Nothing was ever encoded, so the move has no file to work with.
+		Assertions.assertThatThrownBy(() -> placement.place(tmp.resolve("missing.mp4"), source, noAffix))
+				.isInstanceOf(IOException.class);
+	}
+
+	private Path convertedFile(Path tmp, String fileName) throws IOException {
+		Path workspace = Files.createDirectories(tmp.resolve("workspace").resolve("conversion"));
+
+		return Files.writeString(workspace.resolve(fileName), "converted");
+	}
+}

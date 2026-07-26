@@ -7,12 +7,10 @@ package br.com.jorgemelo.nimbusfilemanager.processing.domain.enums;
  * share a single limit.
  *
  * <p>
- * Only the categories actually used today are declared — no dead entries. A
- * future heavy category (for example a video H.265 transcode, whose per-file
- * cost dwarfs a quick frame/hash extraction) can be added here and given its
- * own limit without reworking the gate or the coordinator. EXIF is deliberately
- * absent: it runs in-JVM via the {@code metadata-extractor} library, not as an
- * external process, so it is bounded by the worker pool alone.
+ * Only the categories actually used today are declared — no dead entries. EXIF
+ * is deliberately absent: it runs in-JVM via the {@code metadata-extractor}
+ * library, not as an external process, so it is bounded by the worker pool
+ * alone.
  */
 public enum ExternalToolCategory {
 
@@ -31,5 +29,13 @@ public enum ExternalToolCategory {
 	FFMPEG_VIDEO_FRAME,
 
 	/** ffprobe invoked to read a video's stream/format metadata. */
-	FFPROBE_VIDEO
+	FFPROBE_VIDEO,
+
+	/**
+	 * ffmpeg invoked to re-encode a whole video to H.265. By far the heaviest
+	 * category - minutes of saturated CPU per file instead of a fraction of a
+	 * second - so it gets its own, much smaller limit and cannot be starved by (or
+	 * starve) the quick hash/probe work an inventory runs at the same time.
+	 */
+	FFMPEG_TRANSCODE
 }

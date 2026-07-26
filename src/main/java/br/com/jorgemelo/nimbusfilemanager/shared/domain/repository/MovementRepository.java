@@ -26,12 +26,15 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 	List<Movement> findByExecutionIdOrderByIdAsc(Long executionId);
 
 	/**
-	 * Files still sitting in quarantine (a soft-deleted duplicate that has not been
-	 * restored yet): status {@code MOVED} and reason {@code DUPLICATE_QUARANTINED}.
-	 * Drives the Quarentena screen.
+	 * Files still sitting in quarantine (soft-deleted and not restored yet): status
+	 * {@code MOVED} and any quarantine reason. The reason is a collection because
+	 * more than one feature soft-deletes into the same quarantine (duplicate
+	 * removal and the original of a video conversion), and the Quarentena screen
+	 * they all feed lists them together.
 	 */
 	@EntityGraph(attributePaths = { "execution", "catalogFile" })
-	Page<Movement> findByStatusAndReasonOrderByIdDesc(MovementStatus status, MovementReason reason, Pageable pageable);
+	Page<Movement> findByStatusAndReasonInOrderByIdDesc(MovementStatus status, Collection<MovementReason> reasons,
+			Pageable pageable);
 
 	@EntityGraph(attributePaths = { "execution", "catalogFile" })
 	Optional<Movement> findByPublicId(UUID publicId);
@@ -42,8 +45,8 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 	 * so a capped run always tackles the most overdue items.
 	 */
 	@EntityGraph(attributePaths = { "catalogFile" })
-	Page<Movement> findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(MovementStatus status, MovementReason reason,
-			LocalDateTime cutoff, Pageable pageable);
+	Page<Movement> findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(MovementStatus status,
+			Collection<MovementReason> reasons, LocalDateTime cutoff, Pageable pageable);
 
 	/**
 	 * How many movement rows still reference a given media file - used to know when

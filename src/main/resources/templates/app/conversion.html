@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR" th:lang="${#locale.toLanguageTag()}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: common(#{conversion.title}, 'conversion')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: app(~{::section}, #{conversion.title})}">
+<section>
+	<div class="panel">
+		<h2 th:text="#{conversion.title}">Conversão</h2>
+		<p class="muted" th:text="#{conversion.intro}">Converta seus vídeos para H.265 (HEVC) e recupere espaço em disco.</p>
+		<p class="muted" th:text="#{conversion.count(${totalElements})}">0 vídeo(s) ainda não convertido(s).</p>
+		<p class="muted" th:text="#{conversion.notice}">Um vídeo por vez, do maior para o menor.</p>
+		<p class="muted" th:text="#{conversion.subtitles}">Legendas de texto são convertidas; as de imagem não cabem em MP4.</p>
+	</div>
+
+	<form class="panel section conversion-options" id="conversionOptions"
+			th:attr="data-running=${conversionRunning}">
+		<h3 th:text="#{conversion.options.title}">Como converter</h3>
+		<div class="conversion-option-groups">
+			<fieldset class="conversion-option-group">
+				<legend th:text="#{conversion.quality.label}">Qualidade</legend>
+				<label class="conversion-option">
+					<input type="radio" name="quality" value="HIGH_QUALITY" th:checked="${quality == 'HIGH_QUALITY'}">
+					<span>
+						<strong th:text="#{conversion.quality.high}">Alta qualidade</strong>
+						<small th:text="#{conversion.quality.high.hint}">Praticamente indistinguível do original.</small>
+					</span>
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="quality" value="BALANCED" th:checked="${quality == 'BALANCED'}">
+					<span>
+						<span class="conversion-option-title">
+							<strong th:text="#{conversion.quality.balanced}">Equilibrado</strong>
+							<span class="badge ok" th:text="#{conversion.recommended}">recomendado</span>
+						</span>
+						<small th:text="#{conversion.quality.balanced.hint}">A maior economia de espaço com perda visual mínima.</small>
+					</span>
+				</label>
+			</fieldset>
+
+			<fieldset class="conversion-option-group">
+				<legend th:text="#{conversion.audio.label}">Áudio</legend>
+				<label class="conversion-option">
+					<input type="radio" name="audio" value="COPY" th:checked="${audio == 'COPY'}">
+					<span>
+						<strong th:text="#{conversion.audio.copy}">Preservar áudio original</strong>
+						<small th:text="#{conversion.audio.copy.hint}">O áudio é copiado sem reconversão.</small>
+					</span>
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="audio" value="AAC" th:checked="${audio == 'AAC'}">
+					<span>
+						<strong th:text="#{conversion.audio.aac}">Converter sempre para AAC</strong>
+						<small th:text="#{conversion.audio.aac.hint}">Reconverte o áudio de todos os arquivos.</small>
+					</span>
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="audio" value="AUTO" th:checked="${audio == 'AUTO'}">
+					<span>
+						<span class="conversion-option-title">
+							<strong th:text="#{conversion.audio.auto}">Converter para AAC apenas se necessário</strong>
+							<span class="badge ok" th:text="#{conversion.recommended}">recomendado</span>
+						</span>
+						<small th:text="#{conversion.audio.auto.hint}">Tenta preservar o áudio original e só reconverte se ele não for aceito.</small>
+					</span>
+				</label>
+			</fieldset>
+
+			<fieldset class="conversion-option-group">
+				<legend th:text="#{conversion.after.label}">Depois da conversão</legend>
+				<label class="conversion-option">
+					<input type="radio" name="disposition" value="KEEP" th:checked="${disposition == 'KEEP' or !quarantineConfigured}">
+					<span>
+						<strong th:text="#{conversion.after.keep}">Manter arquivo original</strong>
+						<small th:text="#{conversion.after.keep.hint}">Os dois arquivos ficam lado a lado.</small>
+					</span>
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="disposition" value="QUARANTINE"
+							th:checked="${disposition == 'QUARANTINE' and quarantineConfigured}"
+							th:disabled="${!quarantineConfigured}">
+					<span>
+						<strong th:text="#{conversion.after.quarantine}">Mover original para a quarentena</strong>
+						<small th:text="#{conversion.after.quarantine.hint}">O original sai da biblioteca, mas continua guardado no disco.</small>
+						<small class="conversion-warning" th:if="${quarantineRetentionDays > 0}"
+								th:text="#{conversion.after.quarantine.retention(${quarantineRetentionDays})}">(atenção: o arquivo é apagado de vez depois desse prazo)</small>
+					</span>
+				</label>
+				<p class="muted" th:unless="${quarantineConfigured}" th:text="#{conversion.quarantineMissing}">Configure a pasta de quarentena em Configurações.</p>
+			</fieldset>
+
+			<fieldset class="conversion-option-group">
+				<legend th:text="#{conversion.affix.label}">Nome do arquivo convertido</legend>
+				<label class="conversion-affix">
+					<span th:text="#{conversion.affix.text}">Texto no nome</span>
+					<input type="text" name="nameAffix" maxlength="40" th:value="${nameAffix}"
+							th:placeholder="#{conversion.affix.placeholder}">
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="affixPosition" value="SUFFIX" th:checked="${affixPosition == 'SUFFIX'}">
+					<span>
+						<strong th:text="#{conversion.affix.suffix}">No fim do nome</strong>
+						<small th:text="#{conversion.affix.suffix.hint}">clip.mkv vira clip_H265.mp4</small>
+					</span>
+				</label>
+				<label class="conversion-option">
+					<input type="radio" name="affixPosition" value="PREFIX" th:checked="${affixPosition == 'PREFIX'}">
+					<span>
+						<strong th:text="#{conversion.affix.prefix}">No início do nome</strong>
+						<small th:text="#{conversion.affix.prefix.hint}">clip.mkv vira _H265clip.mp4</small>
+					</span>
+				</label>
+				<small class="muted" th:text="#{conversion.affix.empty}">Deixe em branco para o convertido usar o nome do original.</small>
+			</fieldset>
+		</div>
+	</form>
+
+	<div id="conversionStatus" class="alert section" role="status" th:if="${conversionRunning}" th:text="#{conversion.running}">Já existe uma conversão em andamento.</div>
+	<div id="conversionStatusIdle" class="alert section" role="status" th:unless="${conversionRunning}" hidden></div>
+
+	<p class="progress-text section" id="conversionProgressText" hidden></p>
+
+	<div class="conversion-progress section" id="conversionProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden>
+		<span id="conversionProgressFill"></span>
+	</div>
+
+	<div class="panel section conversion-toolbar pagination-toolbar" th:if="${totalElements > 0}">
+		<div class="conversion-select">
+			<label class="conversion-select-all">
+				<input type="checkbox" id="conversionSelectAll" th:disabled="${conversionRunning}">
+				<span th:text="#{conversion.selectAll}">Selecionar todos desta página</span>
+			</label>
+			<button type="button" class="button small" id="conversionConvert" disabled>
+				<i class="bi bi-film"></i> <span th:text="#{conversion.convertSelected}">Converter selecionados</span> (<span id="conversionSelectedCount">0</span>)
+			</button>
+			<button type="button" class="button secondary small" id="conversionClearSelection" disabled>
+				<i class="bi bi-x-circle"></i> <span th:text="#{conversion.clearSelection}">Limpar seleção</span>
+			</button>
+			<button type="button" class="button danger small" id="conversionCancel" th:hidden="${!conversionRunning}">
+				<i class="bi bi-stop-circle"></i> <span th:text="#{conversion.cancel}">Cancelar conversão</span>
+			</button>
+		</div>
+		<div class="conversion-controls">
+			<nav class="pagination" th:if="${totalPages > 1}" th:aria-label="#{pagination.label}">
+				<a class="button secondary small" th:if="${hasPrevious}"
+						th:href="@{/app/conversion(size=${pageSize}, page=0)}" th:text="#{pagination.first}">Primeira</a>
+				<span class="button secondary small disabled" th:unless="${hasPrevious}" th:text="#{pagination.first}">Primeira</span>
+				<a class="button secondary small" th:if="${hasPrevious}"
+						th:href="@{/app/conversion(size=${pageSize}, page=${pageNumber - 1})}" th:text="#{pagination.previous}">Anterior</a>
+				<span class="button secondary small disabled" th:unless="${hasPrevious}" th:text="#{pagination.previous}">Anterior</span>
+				<span class="pagination-page" th:text="#{pagination.pageInfo(${pageNumber + 1}, ${totalPages})}">Página 1 de 1</span>
+				<a class="button secondary small" th:if="${hasNext}"
+						th:href="@{/app/conversion(size=${pageSize}, page=${pageNumber + 1})}" th:text="#{pagination.next}">Próxima</a>
+				<span class="button secondary small disabled" th:unless="${hasNext}" th:text="#{pagination.next}">Próxima</span>
+				<a class="button secondary small" th:if="${hasNext}"
+						th:href="@{/app/conversion(size=${pageSize}, page=${totalPages - 1})}" th:text="#{pagination.last}">Última</a>
+				<span class="button secondary small disabled" th:unless="${hasNext}" th:text="#{pagination.last}">Última</span>
+			</nav>
+			<form class="explorer-size" th:action="@{/app/conversion}" method="get">
+				<select name="size" onchange="this.form.submit()" th:title="#{files.itemsPerPage}">
+					<option th:each="option : ${pageSizes}" th:value="${option}" th:text="#{files.itemsOption(${option})}"
+							th:selected="${option == pageSize}">25 itens</option>
+				</select>
+			</form>
+		</div>
+	</div>
+
+	<div class="panel section" th:if="${#lists.isEmpty(candidates)}">
+		<p class="muted" th:text="#{conversion.empty}">Nenhum vídeo para converter.</p>
+	</div>
+
+	<div class="panel section" th:unless="${#lists.isEmpty(candidates)}">
+		<div class="table-wrap">
+			<table class="table conversion-table">
+				<thead>
+					<tr><th></th><th th:text="#{conversion.col.file}">Arquivo</th><th th:text="#{conversion.col.folder}">Pasta</th><th th:text="#{conversion.col.codec}">Codec atual</th><th th:text="#{conversion.col.container}">Formato</th><th th:text="#{conversion.col.duration}">Duração</th><th th:text="#{conversion.col.resolution}">Resolução</th><th th:text="#{common.size}">Tamanho</th></tr>
+				</thead>
+				<tbody>
+				<tr th:each="item : ${candidates}" th:attr="data-media-id=${item.mediaPublicId()}">
+					<td>
+						<input type="checkbox" class="js-select" th:disabled="${conversionRunning}"
+								th:attr="data-media-id=${item.mediaPublicId()},data-size-bytes=${item.sizeBytes()}"
+								th:title="#{conversion.selectItem}">
+					</td>
+					<td class="media-cell" th:title="${item.path()}">
+						<th:block th:replace="~{fragments/media-cards :: card(${item}, 320)}"></th:block>
+					</td>
+					<td class="path" th:text="${item.folder()}" th:title="${item.path()}">pasta</td>
+					<td><span class="badge info" th:text="${item.codecLabel()}">H264</span></td>
+					<td th:text="${item.containerLabel()}">MP4</td>
+					<td th:text="${item.durationLabel()}">0:00</td>
+					<td th:text="${item.resolutionLabel()}">—</td>
+					<td th:text="${item.sizeLabel()}">—</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="panel section" id="conversionReport" hidden>
+		<h3 th:text="#{conversion.report.title}">Resultado da conversão</h3>
+		<div class="table-wrap">
+			<table class="table">
+				<thead>
+					<tr><th th:text="#{conversion.report.file}">Arquivo</th><th th:text="#{conversion.report.outcome}">Situação</th><th th:text="#{conversion.report.saved}">Economia</th><th th:text="#{conversion.report.detail}">Detalhe</th></tr>
+				</thead>
+				<tbody id="conversionReportBody"></tbody>
+			</table>
+		</div>
+	</div>
+
+	<dialog id="conversionConfirmDialog" class="quarantine-dialog" aria-labelledby="conversionConfirmTitle">
+		<header class="quarantine-dialog-header">
+			<h2 id="conversionConfirmTitle" th:text="#{conversion.confirm.title}">Converter para H.265</h2>
+		</header>
+		<p><span th:text="#{conversion.confirm.body.before}">Converter</span> <strong id="conversionConfirmCount">0</strong> <span th:text="#{conversion.confirm.body.after}">vídeo(s)? A conversão roda em segundo plano.</span></p>
+		<div class="actions">
+			<button type="button" class="secondary js-conversion-cancel" th:text="#{action.cancel}">Cancelar</button>
+			<button type="button" class="button js-conversion-confirm" th:text="#{conversion.confirm.action}">Converter</button>
+		</div>
+	</dialog>
+
+	<div id="conversionOutcomeLabels" hidden
+			th:attr="data-converted=#{conversion.outcome.CONVERTED},data-skipped=#{conversion.outcome.SKIPPED},data-failed=#{conversion.outcome.FAILED},data-audio-fallback=#{conversion.report.audioFallback},data-subtitles-dropped=#{conversion.report.subtitlesDropped},data-quarantined=#{conversion.report.quarantined}"></div>
+</section>
+</div>
+<script th:src="@{/js/pages/conversion.js}"></script>
+</body>
+</html>

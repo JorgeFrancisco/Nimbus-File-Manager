@@ -141,7 +141,7 @@ Não é expressável no `editor/.editorconfig` nem imposto de forma confiável p
 
 # Arquitetura
 
-O código é **agrupado por domínio** (`catalog`, `inventory`, `organization`, `duplicate`, `metadata`, `geolocation`, `media`, `execution`, `security`, `timeline`, `settings`, `thumbnail`, `processing`, `quarantine`, `map`, `telemetry`, `statistics`, `preferences`, `notification`, `time`) e, **dentro de cada domínio**, separado em **camadas hexagonais** (ports & adapters). O bootstrap (`NimbusFileManagerApplication`) fica na raiz do pacote.
+O código é **agrupado por domínio** (`catalog`, `inventory`, `organization`, `duplicate`, `metadata`, `geolocation`, `media`, `execution`, `security`, `timeline`, `settings`, `thumbnail`, `processing`, `quarantine`, `conversion`, `map`, `telemetry`, `statistics`, `preferences`, `notification`, `time`) e, **dentro de cada domínio**, separado em **camadas hexagonais** (ports & adapters). O bootstrap (`NimbusFileManagerApplication`) fica na raiz do pacote.
 
 ## Camadas por domínio
 

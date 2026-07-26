@@ -61,7 +61,7 @@ class VideoFingerprintBacklogServiceTest {
 		when(algorithm.algorithm()).thenReturn(ALGORITHM);
 
 		return new VideoFingerprintBacklogService(mediaFingerprintRepository, fingerprintFailureRepository, algorithm,
-				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1), new ProcessingMetrics()),
+				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
 				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 

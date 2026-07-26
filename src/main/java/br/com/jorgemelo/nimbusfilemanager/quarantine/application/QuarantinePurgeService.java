@@ -14,11 +14,13 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.Outcome;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
@@ -50,17 +52,34 @@ public class QuarantinePurgeService {
 	 */
 	private static final int MAX_PER_RUN = 5_000;
 
+	/** Fail-safe: an unreadable retention window runs no purge at all. */
+	private static final int DISABLED_RETENTION = -1;
+
 	private final MovementRepository movementRepository;
 	private final QuarantinePurgePersistence purgePersistence;
 	private final OperationLockService operationLockService;
+	private final AppSettingService appSettingService;
 	private final Clock clock;
 
 	public QuarantinePurgeService(MovementRepository movementRepository, QuarantinePurgePersistence purgePersistence,
-			OperationLockService operationLockService, Clock clock) {
+			OperationLockService operationLockService, AppSettingService appSettingService, Clock clock) {
 		this.movementRepository = movementRepository;
 		this.purgePersistence = purgePersistence;
 		this.operationLockService = operationLockService;
+		this.appSettingService = appSettingService;
 		this.clock = clock;
+	}
+
+	/**
+	 * How long a file stays in quarantine before the scheduled purge expunges it,
+	 * or {@code 0} when no purge runs at all. The fallback is deliberately
+	 * non-positive rather than the 90-day product default: a blank or invalid
+	 * setting must disable the destructive purge, and must not promise the user a
+	 * deadline nobody enforces. Read fresh on every call, so a change in Settings
+	 * applies immediately.
+	 */
+	public int retentionDays() {
+		return Math.max(0, appSettingService.intValue(SettingsConstants.TRASH_RETENTION_DAYS, DISABLED_RETENTION));
 	}
 
 	/**
@@ -75,8 +94,8 @@ public class QuarantinePurgeService {
 		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
 
 		List<Movement> overdue = movementRepository
-				.findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(MovementStatus.MOVED,
-						MovementReason.DUPLICATE_QUARANTINED, cutoff, PageRequest.of(0, MAX_PER_RUN))
+				.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(MovementStatus.MOVED,
+						QuarantineConstants.QUARANTINED_REASONS, cutoff, PageRequest.of(0, MAX_PER_RUN))
 				.getContent();
 
 		int purged = 0;
@@ -123,7 +142,7 @@ public class QuarantinePurgeService {
 			Movement movement = movementRepository.findByPublicId(movementId).orElse(null);
 
 			if (movement == null || movement.getStatus() != MovementStatus.MOVED
-					|| movement.getReason() != MovementReason.DUPLICATE_QUARANTINED) {
+					|| !QuarantineConstants.QUARANTINED_REASONS.contains(movement.getReason())) {
 				skipped++;
 				continue;
 			}
@@ -155,8 +174,8 @@ public class QuarantinePurgeService {
 	 * Returns how many were removed.
 	 */
 	public int cleanupAbsent() {
-		List<Movement> quarantined = movementRepository.findByStatusAndReasonOrderByIdDesc(MovementStatus.MOVED,
-				MovementReason.DUPLICATE_QUARANTINED, PageRequest.of(0, MAX_PER_RUN)).getContent();
+		List<Movement> quarantined = movementRepository.findByStatusAndReasonInOrderByIdDesc(MovementStatus.MOVED,
+				QuarantineConstants.QUARANTINED_REASONS, PageRequest.of(0, MAX_PER_RUN)).getContent();
 
 		int removed = 0;
 

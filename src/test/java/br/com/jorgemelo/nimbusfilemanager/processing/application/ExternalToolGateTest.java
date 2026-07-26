@@ -15,7 +15,8 @@ class ExternalToolGateTest {
 
 	@Test
 	void limitsConcurrentRunsPerCategory() throws Exception {
-		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(4, 8, 2, 2, 1), new ProcessingMetrics());
+		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(4, 8, 2, 2, 1, 1),
+				new ProcessingMetrics());
 
 		AtomicInteger current = new AtomicInteger();
 		AtomicInteger maxObserved = new AtomicInteger();
@@ -61,7 +62,8 @@ class ExternalToolGateTest {
 
 	@Test
 	void ffmpegAndFfprobeLimitsAreIndependent() throws Exception {
-		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(4, 8, 1, 2, 1), new ProcessingMetrics());
+		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(4, 8, 1, 2, 1, 1),
+				new ProcessingMetrics());
 
 		CountDownLatch ffmpegHeld = new CountDownLatch(1);
 		CountDownLatch releaseFfmpeg = new CountDownLatch(1);

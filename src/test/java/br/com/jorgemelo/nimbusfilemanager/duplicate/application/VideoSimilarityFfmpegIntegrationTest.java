@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,11 +25,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptu
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 /**
  * End-to-end validation of video similarity against the real ffmpeg binary: it
@@ -59,17 +56,14 @@ class VideoSimilarityFfmpegIntegrationTest {
 	}
 
 	private VideoPerceptualHashService hashService() {
-		NimbusFileManagerProperties properties = mock(NimbusFileManagerProperties.class);
-		Tools tools = mock(Tools.class);
-		AppSettingService appSettingService = mock(AppSettingService.class);
+		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
-		when(properties.tools()).thenReturn(tools);
-		when(tools.ffmpeg()).thenReturn(FFMPEG.toString());
-		when(appSettingService.stringValue(any(), any())).thenReturn(FFMPEG.toString());
+		when(externalToolPaths.ffmpeg()).thenReturn(FFMPEG.toString());
 
-		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2), new ProcessingMetrics());
+		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1),
+				new ProcessingMetrics());
 
-		return new VideoPerceptualHashService(properties, appSettingService, new VideoFrameSampler(), gate,
+		return new VideoPerceptualHashService(externalToolPaths, new VideoFrameSampler(), gate,
 				new FfmpegVideoFrameProcessRunner());
 	}
 

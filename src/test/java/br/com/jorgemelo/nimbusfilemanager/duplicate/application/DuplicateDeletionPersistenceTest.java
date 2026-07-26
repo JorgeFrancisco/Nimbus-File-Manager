@@ -11,8 +11,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
@@ -39,16 +42,23 @@ class DuplicateDeletionPersistenceTest {
 		CatalogFileLocation location = mock(CatalogFileLocation.class);
 		CatalogFile file = mock(CatalogFile.class);
 
+		ArgumentCaptor<Movement> recorded = ArgumentCaptor.forClass(Movement.class);
+
 		when(file.getLocation()).thenReturn(location);
 
-		persistence.persistQuarantine(mock(Execution.class), file, original, quarantine);
+		persistence.persistQuarantine(mock(Execution.class), file, original, quarantine,
+				MovementReason.CONVERTED_QUARANTINED);
 
 		verify(file).markDeleted();
 		verify(file).setFileName("10__a.jpg");
 		verify(location).setCurrentPath(any());
 		verify(catalogFileRepository).save(file);
 		verify(catalogFileLocationRepository).save(location);
-		verify(movementRepository).save(any(Movement.class));
+		verify(movementRepository).save(recorded.capture());
+
+		// The reason is the caller's, not a constant of this class: the same quarantine
+		// serves duplicate removal and video conversion.
+		Assertions.assertThat(recorded.getValue().getReason()).isEqualTo(MovementReason.CONVERTED_QUARANTINED);
 	}
 
 	@Test

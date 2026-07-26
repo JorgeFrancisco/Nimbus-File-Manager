@@ -73,6 +73,10 @@ window.NimbusFileManagerExecutionStatus = (function () {
 	}
 
 	return {
+		// Shared by every screen that shows "time remaining", so the wording stays the same
+		// whether the seconds come from this module or from a backend job (js.eta.* keys).
+		format: humanize,
+
 		estimatedRemaining: function (data) {
 			if (!data || data.status !== "PROCESSING_FILES" || !data.startedAt || !data.totalExpected
 					|| !data.filesFound || data.filesFound < 10 || data.filesFound >= data.totalExpected) return null;

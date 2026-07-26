@@ -162,7 +162,7 @@ class InventoryJobExecutionListenerTest {
 	private InventoryJobExecutionListener listener() {
 		InventoryTelemetryRecorder telemetryRecorder = new InventoryTelemetryRecorder(new ProcessingMetrics(),
 				new ExecutionPhaseTimings(), performanceTelemetryService,
-				new ProcessingProperties(null, null, null, null, null));
+				new ProcessingProperties(null, null, null, null, null, 1));
 
 		return new InventoryJobExecutionListener(executionRepository, executionProgressService,
 				executionCancellationService, fileScanner, scanExclusionService, mock(PhashBacklogAsyncRunner.class),

@@ -15,9 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegPhotoHas
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 /**
@@ -35,21 +33,18 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 @Service
 public class PhotoPerceptualHashService {
 
-	private final NimbusFileManagerProperties properties;
-	private final AppSettingService appSettingService;
+	private final ExternalToolPaths externalToolPaths;
 	private final FfmpegRunner ffmpegRunner;
 
 	@Autowired
-	public PhotoPerceptualHashService(NimbusFileManagerProperties properties, AppSettingService appSettingService,
-			ExternalToolGate externalToolGate, FfmpegPhotoHashProcessRunner processRunner) {
-		this(properties, appSettingService, (ffmpegPath, file) -> externalToolGate
+	public PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, ExternalToolGate externalToolGate,
+			FfmpegPhotoHashProcessRunner processRunner) {
+		this(externalToolPaths, (ffmpegPath, file) -> externalToolGate
 				.run(ExternalToolCategory.FFMPEG_PHOTO_HASH, () -> processRunner.run(ffmpegPath, file)));
 	}
 
-	PhotoPerceptualHashService(NimbusFileManagerProperties properties, AppSettingService appSettingService,
-			FfmpegRunner ffmpegRunner) {
-		this.properties = properties;
-		this.appSettingService = appSettingService;
+	PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, FfmpegRunner ffmpegRunner) {
+		this.externalToolPaths = externalToolPaths;
 		this.ffmpegRunner = ffmpegRunner;
 	}
 
@@ -105,6 +100,6 @@ public class PhotoPerceptualHashService {
 	}
 
 	private String ffmpegPath() {
-		return appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, properties.tools().ffmpeg());
+		return externalToolPaths.ffmpeg();
 	}
 }

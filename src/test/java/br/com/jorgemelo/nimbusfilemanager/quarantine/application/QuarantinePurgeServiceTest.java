@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -23,6 +24,9 @@ import org.springframework.data.domain.PageImpl;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
@@ -35,8 +39,27 @@ class QuarantinePurgeServiceTest {
 
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final QuarantinePurgePersistence purgePersistence = mock(QuarantinePurgePersistence.class);
+	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final QuarantinePurgeService service = new QuarantinePurgeService(movementRepository, purgePersistence,
-			new OperationLockService(), Clock.systemDefaultZone());
+			new OperationLockService(), appSettingService, Clock.systemDefaultZone());
+
+	@Test
+	void reportsTheConfiguredRetentionWindow() {
+		when(appSettingService.intValue(eq(SettingsConstants.TRASH_RETENTION_DAYS), anyInt())).thenReturn(30);
+
+		Assertions.assertThat(service.retentionDays()).isEqualTo(30);
+	}
+
+	@Test
+	void reportsNoRetentionWindowWhenTheSettingIsBlankOrInvalid() {
+		// A blank/invalid setting resolves to the fallback passed in, which is
+		// deliberately non-positive: no purge runs, and no deadline is promised to the
+		// user on the screens that show one.
+		when(appSettingService.intValue(eq(SettingsConstants.TRASH_RETENTION_DAYS), anyInt()))
+				.thenAnswer(invocation -> invocation.getArgument(1));
+
+		Assertions.assertThat(service.retentionDays()).isZero();
+	}
 
 	@Test
 	void isNoOpWhenRetentionDisabled() {
@@ -44,7 +67,7 @@ class QuarantinePurgeServiceTest {
 
 		Assertions.assertThat(result.purged()).isZero();
 
-		verify(movementRepository, never()).findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(any(), any(), any(),
+		verify(movementRepository, never()).findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(any(), any(), any(),
 				any());
 	}
 
@@ -137,7 +160,7 @@ class QuarantinePurgeServiceTest {
 		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
 
 		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
-				Clock.systemDefaultZone());
+				appSettingService, Clock.systemDefaultZone());
 
 		overdueReturns(movement);
 
@@ -193,8 +216,8 @@ class QuarantinePurgeServiceTest {
 		Movement presentMovement = overdueMovement(1L, present);
 		Movement absentMovement = overdueMovement(2L, absent);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any()))
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
 				.thenReturn(new PageImpl<>(List.of(presentMovement, absentMovement)));
 		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.removed(9L));
 
@@ -280,10 +303,10 @@ class QuarantinePurgeServiceTest {
 		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
 
 		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
-				Clock.systemDefaultZone());
+				appSettingService, Clock.systemDefaultZone());
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		Assertions.assertThat(locked.cleanupAbsent()).isZero();
 
@@ -330,8 +353,8 @@ class QuarantinePurgeServiceTest {
 
 		Movement movement = overdueMovement(1L, absent);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.notRemoved());
 
 		Assertions.assertThat(service.cleanupAbsent()).isZero();
@@ -344,8 +367,9 @@ class QuarantinePurgeServiceTest {
 	}
 
 	private void overdueReturns(Movement movement) {
-		when(movementRepository.findByStatusAndReasonAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any(), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any(), any()))
+				.thenReturn(new PageImpl<>(List.of(movement)));
 	}
 
 	private Movement overdueMovement(long id, Path target) {

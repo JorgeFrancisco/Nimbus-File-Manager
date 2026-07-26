@@ -1,26 +1,24 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Outcome;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
@@ -28,7 +26,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,23 +44,17 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 	private final CatalogFileRepository catalogFileRepository;
 	private final ExecutionRepository executionRepository;
-	private final AppSettingService appSettingService;
-	private final DuplicateDeletionPersistence duplicateDeletionPersistence;
-	private final SecureFileMove secureFileMove;
+	private final QuarantineIntakeService quarantineIntakeService;
 	private final SimilarityCaches similarityCaches;
 	private final OperationLockService operationLockService;
 	private final Clock clock;
 
 	public DuplicateDeletionService(CatalogFileRepository catalogFileRepository,
-			ExecutionRepository executionRepository,
-			AppSettingService appSettingService, DuplicateDeletionPersistence duplicateDeletionPersistence,
-			SecureFileMove secureFileMove, SimilarityCaches similarityCaches,
-			OperationLockService operationLockService, Clock clock) {
+			ExecutionRepository executionRepository, QuarantineIntakeService quarantineIntakeService,
+			SimilarityCaches similarityCaches, OperationLockService operationLockService, Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.executionRepository = executionRepository;
-		this.appSettingService = appSettingService;
-		this.duplicateDeletionPersistence = duplicateDeletionPersistence;
-		this.secureFileMove = secureFileMove;
+		this.quarantineIntakeService = quarantineIntakeService;
 		this.similarityCaches = similarityCaches;
 		this.operationLockService = operationLockService;
 		this.clock = clock;
@@ -81,9 +72,9 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	 * secure moves run off the request thread.
 	 */
 	public DuplicateDeletionResult delete(Collection<UUID> publicIds, DeletionProgressCallback progress) {
-		String configured = appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "");
+		Optional<Path> configured = quarantineIntakeService.root();
 
-		if (configured == null || configured.isBlank()) {
+		if (configured.isEmpty()) {
 			return new DuplicateDeletionResult(false, 0, 0, 0, 0, null,
 					message("backend.duplicates.quarantineNotConfigured"));
 		}
@@ -92,7 +83,7 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			return new DuplicateDeletionResult(true, 0, 0, 0, 0, null, message("backend.quarantine.noneSelected"));
 		}
 
-		Path quarantineRoot = Path.of(configured).toAbsolutePath().normalize();
+		Path quarantineRoot = configured.get();
 
 		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds);
 
@@ -137,7 +128,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 		List<UUID> movedIds = new ArrayList<>();
 
 		for (CatalogFile file : files) {
-			switch (quarantineOne(execution, file, quarantineRoot)) {
+			switch (quarantineIntakeService.intake(execution, file, quarantineRoot,
+					MovementReason.DUPLICATE_QUARANTINED)) {
 			case MOVED -> {
 				moved++;
 				movedIds.add(file.getPublicId());
@@ -161,90 +153,6 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 		return new DuplicateDeletionResult(true, total, moved, skipped, errors,
 				UuidV7.orLegacy(execution.getPublicId(), execution.getId()), message);
-	}
-
-	private Outcome quarantineOne(Execution execution, CatalogFile file, Path quarantineRoot) {
-		if (!file.isActive()) {
-			log.warn("Duplicate deletion skipped media file {} because its lifecycle is {}", file.getId(),
-					file.getLifecycleStatus());
-
-			return Outcome.SKIPPED;
-		}
-
-		Path source = PathUtils.normalizePath(file.getFileKey());
-
-		if (source.startsWith(quarantineRoot)) {
-			log.warn("Duplicate deletion skipped media file {} because it is already under quarantine: {}",
-					file.getId(), source);
-
-			return Outcome.SKIPPED;
-		}
-
-		if (!PhysicalFilePolicy.isProcessable(source)) {
-			log.warn("Duplicate deletion skipped a non-physical entry: {}", source);
-
-			return Outcome.SKIPPED;
-		}
-
-		if (!Files.exists(source)) {
-			log.warn("Duplicate deletion skipped a missing file: {}", source);
-
-			return Outcome.SKIPPED;
-		}
-
-		Path target = quarantineTarget(quarantineRoot, execution, file);
-
-		try {
-			// Same secure move as organization: SHA-256 baseline + byte-for-byte verify.
-			secureFileMove.move(source, target, false);
-		} catch (Exception e) {
-			// An integrity failure leaves the file at target; put it back so nothing is
-			// half-moved. If the move never happened (source still there) there is nothing
-			// to
-			// undo; if the roll-back itself fails, the file is orphaned and must be
-			// flagged.
-			boolean orphaned = !Files.exists(source) && Files.exists(target)
-					&& !secureFileMove.rollback(target, source);
-
-			if (orphaned) {
-				log.error("Duplicate deletion could not securely move {} to quarantine and could not roll back from "
-						+ "{}; the file is orphaned and needs manual recovery", source, target, e);
-			} else {
-				log.error("Duplicate deletion could not securely move {} to quarantine", source, e);
-			}
-
-			return Outcome.ERROR;
-		}
-
-		try {
-			duplicateDeletionPersistence.persistQuarantine(execution, file, source, target);
-		} catch (Exception e) {
-			boolean rolledBack = secureFileMove.rollback(target, source);
-
-			if (rolledBack) {
-				log.error("Duplicate deletion moved {} but failed to update the catalog; rolled back", source, e);
-			} else {
-				log.error(
-						"Duplicate deletion moved {} to {} but failed to update the catalog AND could not roll "
-								+ "back; the file is orphaned in quarantine and needs manual recovery",
-						source, target, e);
-			}
-
-			return Outcome.ERROR;
-		}
-
-		return Outcome.MOVED;
-	}
-
-	/**
-	 * Collision-safe placement: duplicates frequently share a file name, so the
-	 * quarantine copy is namespaced by execution and media-file id
-	 * ({@code exec-<id>/<id>__<name>}). The {@code Movement} row keeps the exact
-	 * original and quarantine paths, so undo is a plain move back regardless of
-	 * this layout.
-	 */
-	private Path quarantineTarget(Path quarantineRoot, Execution execution, CatalogFile file) {
-		return quarantineRoot.resolve("exec-" + execution.getId()).resolve(file.getId() + "__" + file.getFileName());
 	}
 
 	private Execution startExecution(Path quarantineRoot) {

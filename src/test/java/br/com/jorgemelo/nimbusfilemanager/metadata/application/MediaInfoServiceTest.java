@@ -1,13 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 
 import org.assertj.core.api.Assertions;
@@ -21,11 +19,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.GeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 class MediaInfoServiceTest {
 
@@ -255,9 +251,9 @@ class MediaInfoServiceTest {
 	 */
 	@Test
 	void extractShouldWrapAFailureToRunFfprobe() {
-		MediaInfoService service = new MediaInfoService(properties(), new ObjectMapper(), (_, _) -> {
+		MediaInfoService service = new MediaInfoService(new ObjectMapper(), (_, _) -> {
 			throw new IllegalStateException("ffprobe binary is missing");
-		}, appSettingService());
+		}, externalToolPaths("ffprobe"));
 
 		Path file = Path.of("C:/video.mp4");
 
@@ -382,8 +378,8 @@ class MediaInfoServiceTest {
 
 		Path ffprobe = writeFakeFfprobe(json);
 
-		var metadata = new MediaInfoService(properties(ffprobe.toString()), new ObjectMapper(), appSettingService(),
-				gate(), new FfprobeProcessRunner()).extract(video);
+		var metadata = new MediaInfoService(new ObjectMapper(), externalToolPaths(ffprobe.toString()), gate(),
+				new FfprobeProcessRunner()).extract(video);
 
 		Assertions.assertThat(metadata.container()).isEqualTo("mp4");
 		Assertions.assertThat(metadata.mediaInfoJson()).contains("\"format_name\": \"mp4\"");
@@ -414,35 +410,23 @@ class MediaInfoServiceTest {
 	}
 
 	private MediaInfoService service(FfprobeResult result) {
-		return new MediaInfoService(properties(), new ObjectMapper(), (_, _) -> result, appSettingService());
+		return new MediaInfoService(new ObjectMapper(), (_, _) -> result, externalToolPaths("ffprobe"));
 	}
 
 	/**
-	 * A mock that behaves like an unconfigured AppSettingService (no override
-	 * stored for any key, so {@code stringValue} always falls back to its second
-	 * argument) - the same real behavior production code sees whenever no admin
-	 * override has been set for a tool path.
+	 * A stub that resolves ffprobe exactly like production does when no admin
+	 * override is stored: straight to the packaged path.
 	 */
-	private AppSettingService appSettingService() {
-		AppSettingService appSettingService = mock(AppSettingService.class);
+	private ExternalToolPaths externalToolPaths(String ffprobe) {
+		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
-		when(appSettingService.stringValue(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+		when(externalToolPaths.ffprobe()).thenReturn(ffprobe);
 
-		return appSettingService;
+		return externalToolPaths;
 	}
 
 	private ExternalToolGate gate() {
-		return new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2), new ProcessingMetrics());
-	}
-
-	private NimbusFileManagerProperties properties() {
-		return properties(null);
-	}
-
-	private NimbusFileManagerProperties properties(String ffprobe) {
-		return new NimbusFileManagerProperties("C:/workspace", List.of(), null, new Tools(ffprobe, null, null), null,
-				null,
-				null, null, null, null);
+		return new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1), new ProcessingMetrics());
 	}
 
 	private String invalidValuesJson() {

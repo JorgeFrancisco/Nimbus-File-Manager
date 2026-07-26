@@ -20,7 +20,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 class ProcessingCoordinatorTest {
 
 	private ProcessingCoordinator coordinator(int workers, int queueCapacity) {
-		return new ProcessingCoordinator(new ProcessingProperties(workers, queueCapacity, 2, 2, 2),
+		return new ProcessingCoordinator(new ProcessingProperties(workers, queueCapacity, 2, 2, 2, 1),
 				new ProcessingMetrics());
 	}
 
@@ -76,7 +76,8 @@ class ProcessingCoordinatorTest {
 	void runsTasksConcurrentlyUpToTheWorkerLimit() {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2), metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
+				metrics);
 
 		try {
 			// A 2-party barrier only trips if two workers run at the same time; if the
@@ -238,7 +239,8 @@ class ProcessingCoordinatorTest {
 	void recordsExecutedCancelledErrorAndTimingMetricsPerOutcome() {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2), metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
+				metrics);
 
 		try {
 			// Three batches with known outcomes over a shared metrics instance: 3 executed,
@@ -277,7 +279,8 @@ class ProcessingCoordinatorTest {
 		// does not depend on real thread-interruption timing.
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2), metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
+				metrics);
 
 		try {
 			List<Outcome<Integer, Integer>> outcomes = coordinator.process(List.of(1), () -> false, _ -> {
@@ -303,7 +306,8 @@ class ProcessingCoordinatorTest {
 	void submissionRejectedByAShutDownExecutorBecomesAnErrorOutcome() {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 1, 2, 2, 2), metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 1, 2, 2, 2, 1),
+				metrics);
 
 		coordinator.shutdown();
 

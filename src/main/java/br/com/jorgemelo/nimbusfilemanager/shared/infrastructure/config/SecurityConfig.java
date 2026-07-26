@@ -49,13 +49,14 @@ public class SecurityConfig {
 				.permitAll().requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
 				// Administrative surfaces (ADMIN only): user/role management and access
 				// auditing, plus the operational screens whose data is admin-scoped (files,
-				// organization, duplicates, quarantine, statistics) together with their
-				// dedicated data/export APIs. The shared read APIs that also feed the
+				// organization, duplicates, quarantine, conversion, statistics) together with
+				// their dedicated data/export APIs. The shared read APIs that also feed the
 				// USER-facing timeline/map lightbox (media, map, timeline) stay operational
 				// under the USER fallback below.
 				.requestMatchers("/app/users/**", "/app/accesses/**").hasRole(Role.ADMIN.name())
 				.requestMatchers("/app/files/**", "/app/organization/**", "/app/duplicates/**",
-						"/app/quarantine/**", "/app/statistics/**").hasRole(Role.ADMIN.name())
+						"/app/quarantine/**", "/app/conversion/**", "/app/statistics/**")
+				.hasRole(Role.ADMIN.name())
 				.requestMatchers("/api/organization/**", "/api/duplicates/**", "/api/statistics/**",
 						"/api/catalog/**").hasRole(Role.ADMIN.name())
 				// Personal preferences and the shared folder picker are operational even though

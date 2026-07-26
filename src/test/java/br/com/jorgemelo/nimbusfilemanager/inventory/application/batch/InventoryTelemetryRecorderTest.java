@@ -43,6 +43,6 @@ class InventoryTelemetryRecorderTest {
 
 	private InventoryTelemetryRecorder recorder() {
 		return new InventoryTelemetryRecorder(processingMetrics, executionPhaseTimings, performanceTelemetryService,
-				new ProcessingProperties(null, null, null, null, null));
+				new ProcessingProperties(null, null, null, null, null, 1));
 	}
 }

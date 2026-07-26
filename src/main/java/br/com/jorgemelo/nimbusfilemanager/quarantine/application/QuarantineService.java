@@ -16,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletio
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
@@ -24,12 +25,12 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.ConflictResolu
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.RestoreOutcome;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.FileNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FilePreviewSupport;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileTypeIcon;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -52,12 +53,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class QuarantineService extends LocalizedComponent {
 
-	/**
-	 * Upper bound on the numbered-rename search, to avoid an unbounded loop on a
-	 * pathological folder.
-	 */
-	private static final int MAX_RENAME_ATTEMPTS = 10_000;
-
 	private final MovementRepository movementRepository;
 	private final DuplicateDeletionPersistence duplicateDeletionPersistence;
 	private final SecureFileMove secureFileMove;
@@ -75,8 +70,8 @@ public class QuarantineService extends LocalizedComponent {
 	/** One page of files currently held in quarantine, newest deletion first. */
 	@Transactional(readOnly = true)
 	public Page<QuarantineItemResponse> list(Pageable pageable) {
-		return movementRepository.findByStatusAndReasonOrderByIdDesc(MovementStatus.MOVED,
-				MovementReason.DUPLICATE_QUARANTINED, pageable).map(this::toItem);
+		return movementRepository.findByStatusAndReasonInOrderByIdDesc(MovementStatus.MOVED,
+				QuarantineConstants.QUARANTINED_REASONS, pageable).map(this::toItem);
 	}
 
 	/**
@@ -98,7 +93,7 @@ public class QuarantineService extends LocalizedComponent {
 		}
 
 		if (movement.getStatus() != MovementStatus.MOVED
-				|| movement.getReason() != MovementReason.DUPLICATE_QUARANTINED) {
+				|| !QuarantineConstants.QUARANTINED_REASONS.contains(movement.getReason())) {
 			return result(movementId, RestoreOutcome.ERROR, message("backend.quarantine.notQuarantined"), null);
 		}
 
@@ -138,7 +133,7 @@ public class QuarantineService extends LocalizedComponent {
 
 		if (Files.exists(destination)) {
 			if (effective.conflictResolution() == ConflictResolution.RENAME) {
-				destination = nextAvailableName(destination);
+				destination = FileNames.nextAvailable(destination);
 			} else {
 				return result(movementId, RestoreOutcome.CONFLICT, message("backend.quarantine.destinationConflict"),
 						null);
@@ -257,34 +252,6 @@ public class QuarantineService extends LocalizedComponent {
 
 			return result(movementId, RestoreOutcome.ERROR, message("backend.quarantine.catalogFailed"), null);
 		}
-	}
-
-	/**
-	 * {@code foo.jpg} -> {@code foo (1).jpg}, {@code foo (2).jpg}, ... first name
-	 * free on disk.
-	 */
-	private Path nextAvailableName(Path desired) {
-		Path folder = desired.getParent();
-
-		String fileName = desired.getFileName().toString();
-
-		int dot = fileName.lastIndexOf('.');
-
-		String base = dot > 0 ? fileName.substring(0, dot) : fileName;
-
-		String extension = dot > 0 ? fileName.substring(dot) : "";
-
-		for (int index = 1; index <= MAX_RENAME_ATTEMPTS; index++) {
-			Path candidate = folder.resolve(base + " (" + index + ")" + extension);
-
-			if (!Files.exists(candidate)) {
-				return candidate;
-			}
-		}
-
-		// Extremely unlikely; fall back to a UUID suffix so the restore can still
-		// proceed.
-		return folder.resolve(base + " (" + UUID.randomUUID() + ")" + extension);
 	}
 
 	private QuarantineItemResponse toItem(Movement movement) {

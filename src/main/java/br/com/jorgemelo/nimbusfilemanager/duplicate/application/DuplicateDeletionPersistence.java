@@ -47,10 +47,13 @@ public class DuplicateDeletionPersistence {
 
 	/**
 	 * Points the catalog at the quarantine copy and marks the file DELETED, in one
-	 * transaction.
+	 * transaction. The {@code reason} says which feature soft-deleted the file
+	 * (duplicate removal or the original of a video conversion); it is what the
+	 * Quarentena screen matches on to list and restore it.
 	 */
 	@Transactional
-	public void persistQuarantine(Execution execution, CatalogFile catalogFile, Path original, Path quarantine) {
+	public void persistQuarantine(Execution execution, CatalogFile catalogFile, Path original, Path quarantine,
+			MovementReason reason) {
 		repoint(catalogFile, quarantine);
 
 		catalogFile.markDeleted();
@@ -59,7 +62,7 @@ public class DuplicateDeletionPersistence {
 
 		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).errorMessage(null).build());
+				.status(MovementStatus.MOVED).reason(reason).errorMessage(null).build());
 	}
 
 	/**

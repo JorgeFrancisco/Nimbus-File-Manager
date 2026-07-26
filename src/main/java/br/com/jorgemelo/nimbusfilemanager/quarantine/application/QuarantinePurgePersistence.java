@@ -3,8 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPurgeResult;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
@@ -53,7 +53,7 @@ public class QuarantinePurgePersistence {
 		Movement movement = movementRepository.findById(movementId).orElse(null);
 
 		if (movement == null || movement.getStatus() != MovementStatus.MOVED
-				|| movement.getReason() != MovementReason.DUPLICATE_QUARANTINED) {
+				|| !QuarantineConstants.QUARANTINED_REASONS.contains(movement.getReason())) {
 			return MovementPurgeResult.notRemoved();
 		}
 

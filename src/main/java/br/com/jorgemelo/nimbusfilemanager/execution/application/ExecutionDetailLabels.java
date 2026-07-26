@@ -38,6 +38,7 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 		case DUPLICATE_TARGET -> message("backend.movement.reason.duplicateTarget");
 		case OVERWRITE_DISABLED -> message("backend.movement.reason.overwriteDisabled");
 		case DUPLICATE_QUARANTINED -> message("backend.movement.reason.duplicateQuarantined");
+		case CONVERTED_QUARANTINED -> message("backend.movement.reason.convertedQuarantined");
 		case SOURCE_NOT_FOUND -> message("backend.movement.reason.sourceNotFound");
 		case SOURCE_NOT_PHYSICAL -> message("backend.movement.reason.sourceNotPhysical");
 		case ALREADY_MOVED -> message("backend.movement.reason.alreadyMoved");

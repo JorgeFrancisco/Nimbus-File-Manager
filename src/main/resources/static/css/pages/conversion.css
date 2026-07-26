@@ -1,0 +1,149 @@
+/* Conversão screen. The listing reuses the shared table/badge components; this file only
+   styles the three option groups, the progress bar and the thumbnail cell. Every color comes
+   from the theme variables, so light and dark keep the same contrast. */
+
+.conversion-option-groups {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	margin-top: 12px;
+}
+
+.conversion-option-group {
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	margin: 0;
+	padding: 12px 14px 14px;
+}
+
+.conversion-option-group legend {
+	color: var(--muted);
+	font-size: 13px;
+	font-weight: 600;
+	padding: 0 6px;
+	text-transform: uppercase;
+}
+
+.conversion-option {
+	align-items: flex-start;
+	display: flex;
+	gap: 10px;
+	padding: 7px 0;
+}
+
+/* Undo the global input { width: 100% } (components.css): a radio has to keep its
+   intrinsic size, otherwise it stretches across the group and pushes its own label
+   to the far side of the card. */
+.conversion-option input {
+	flex: 0 0 auto;
+	margin: 3px 0 0;
+	padding: 0;
+	width: auto;
+}
+
+/* The label's text column, scoped to the direct child on purpose: a generic
+   `.conversion-option span` rule also hits the title row and the badge inside it
+   (same specificity as .badge, but more specific than either), turning the badge
+   into a block and pushing it under the option name. */
+.conversion-option > span {
+	display: block;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Title row: the "recomendado" badge sits beside the option name, not under it. */
+.conversion-option-title {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.conversion-option strong {
+	color: var(--text);
+}
+
+.conversion-option small {
+	color: var(--muted);
+	display: block;
+	line-height: 1.4;
+	margin-top: 2px;
+}
+
+/* The quarantine is not permanent storage: this says when the original is gone
+   for good, and has to be impossible to miss. */
+.conversion-option small.conversion-warning {
+	color: var(--danger);
+	font-weight: 700;
+}
+
+.conversion-option input:disabled + span strong,
+.conversion-option input:disabled + span small {
+	opacity: 0.55;
+}
+
+.conversion-toolbar {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	justify-content: space-between;
+}
+
+.conversion-select {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.conversion-select-all {
+	align-items: center;
+	display: inline-flex;
+	gap: 6px;
+}
+
+.conversion-select-all input,
+.conversion-table input {
+	flex: 0 0 auto;
+	padding: 0;
+	width: auto;
+}
+
+.conversion-controls {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: flex-end;
+	margin-left: auto;
+}
+
+/* The affix input is a real form field, so it keeps the global input styling and
+   only needs its own row. */
+.conversion-affix {
+	display: block;
+	padding: 7px 0;
+}
+
+.conversion-affix span {
+	color: var(--text);
+	display: block;
+	margin-bottom: 4px;
+}
+
+.conversion-progress {
+	background: var(--bg-subtle);
+	border-radius: 999px;
+	height: 18px;
+	overflow: hidden;
+	width: 100%;
+}
+
+.conversion-progress span {
+	background: var(--accent);
+	display: block;
+	height: 100%;
+	transition: width 0.4s ease;
+	width: 0;
+}

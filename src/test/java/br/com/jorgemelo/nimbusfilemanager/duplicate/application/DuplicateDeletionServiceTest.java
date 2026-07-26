@@ -31,6 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrity
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -50,10 +51,11 @@ class DuplicateDeletionServiceTest {
 	private final SimilarityCaches similarityCaches = mock(SimilarityCaches.class);
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
+	private final QuarantineIntakeService quarantineIntakeService = new QuarantineIntakeService(persistence,
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), appSettingService);
 	private final DuplicateDeletionService service = new DuplicateDeletionService(catalogFileRepository,
-			executionRepository, appSettingService, persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), similarityCaches,
-			operationLockService, Clock.systemDefaultZone());
+			executionRepository, quarantineIntakeService, similarityCaches, operationLockService,
+			Clock.systemDefaultZone());
 
 	DuplicateDeletionServiceTest() {
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class))).thenReturn(operationLock);
@@ -103,7 +105,7 @@ class DuplicateDeletionServiceTest {
 				original);
 
 		verify(operationLock).close();
-		verify(persistence).persistQuarantine(any(), any(), any(), any());
+		verify(persistence).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -131,7 +133,8 @@ class DuplicateDeletionServiceTest {
 		CatalogFile file = stubFile(12L, original, "b.jpg");
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
-		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any());
+		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any(),
+				any());
 
 		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
 
@@ -156,7 +159,8 @@ class DuplicateDeletionServiceTest {
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
 		DuplicateDeletionService integrityFailingService = new DuplicateDeletionService(catalogFileRepository,
-				executionRepository, appSettingService, persistence, new SecureFileMove(verifier),
+				executionRepository,
+				new QuarantineIntakeService(persistence, new SecureFileMove(verifier), appSettingService),
 				similarityCaches, operationLockService, Clock.systemDefaultZone());
 
 		configureTrash(trash);
@@ -175,7 +179,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(original).hasContent("payload");
 		Assertions.assertThat(trash.resolve("exec-1").resolve("13__c.jpg")).doesNotExist();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -197,7 +201,7 @@ class DuplicateDeletionServiceTest {
 			Files.writeString(original, "blocker");
 
 			throw new IllegalStateException("db down");
-		}).when(persistence).persistQuarantine(any(), any(), any(), any());
+		}).when(persistence).persistQuarantine(any(), any(), any(), any(), any());
 
 		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
 
@@ -254,7 +258,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -281,7 +285,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(Files.exists(alreadyQuarantined)).isTrue();
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__10__document.pdf")).doesNotExist();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -305,7 +309,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(alreadyQuarantined)).isTrue();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -359,7 +363,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(Files.exists(original)).isTrue();
 
 		verify(executionRepository, never()).save(any());
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 
 	private void configureTrash(Path trash) {

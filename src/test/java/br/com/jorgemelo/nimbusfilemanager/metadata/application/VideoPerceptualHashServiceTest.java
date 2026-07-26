@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -14,9 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameRunner;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 
 class VideoPerceptualHashServiceTest {
 
@@ -24,15 +21,11 @@ class VideoPerceptualHashServiceTest {
 	Path tempDir;
 
 	private VideoPerceptualHashService service(FfmpegVideoFrameRunner runner) {
-		NimbusFileManagerProperties properties = mock(NimbusFileManagerProperties.class);
-		Tools tools = mock(Tools.class);
-		AppSettingService appSettingService = mock(AppSettingService.class);
+		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
-		when(properties.tools()).thenReturn(tools);
-		when(tools.ffmpeg()).thenReturn("ffmpeg");
-		when(appSettingService.stringValue(any(), any())).thenReturn("ffmpeg");
+		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
-		return new VideoPerceptualHashService(properties, appSettingService, new VideoFrameSampler(), runner);
+		return new VideoPerceptualHashService(externalToolPaths, new VideoFrameSampler(), runner);
 	}
 
 	private Path videoFile() throws Exception {

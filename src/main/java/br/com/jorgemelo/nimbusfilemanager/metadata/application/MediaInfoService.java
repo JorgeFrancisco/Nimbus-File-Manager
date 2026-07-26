@@ -20,10 +20,8 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -34,42 +32,38 @@ public class MediaInfoService {
 	private static final Pattern ISO6709_PATTERN = Pattern
 			.compile("^([+-]\\d+(?:\\.\\d+)?)([+-]\\d+(?:\\.\\d+)?)(?:[+-]\\d+(?:\\.\\d+)?)?$");
 
-	private final NimbusFileManagerProperties properties;
 	private final ObjectMapper objectMapper;
 	private final FfprobeRunner ffprobeRunner;
 	private final MediaOrientationResolver mediaOrientationResolver;
-	private final AppSettingService appSettingService;
+	private final ExternalToolPaths externalToolPaths;
 
 	@Autowired
-	public MediaInfoService(NimbusFileManagerProperties properties, ObjectMapper objectMapper,
-			AppSettingService appSettingService, ExternalToolGate externalToolGate,
-			FfprobeProcessRunner processRunner) {
+	public MediaInfoService(ObjectMapper objectMapper, ExternalToolPaths externalToolPaths,
+			ExternalToolGate externalToolGate, FfprobeProcessRunner processRunner) {
 		// The production runner routes every ffprobe invocation through the gate, so
 		// its
 		// concurrency limit is enforced at the single point where the process is
 		// spawned.
-		this(properties, objectMapper, (ffprobePath, file) -> externalToolGate.run(ExternalToolCategory.FFPROBE_VIDEO,
-				() -> processRunner.run(ffprobePath, file)), new MediaOrientationResolver(), appSettingService);
+		this(objectMapper, (ffprobePath, file) -> externalToolGate.run(ExternalToolCategory.FFPROBE_VIDEO,
+				() -> processRunner.run(ffprobePath, file)), new MediaOrientationResolver(), externalToolPaths);
 	}
 
 	/**
 	 * Test seam: lets unit tests inject a fake {@link FfprobeRunner} instead of
-	 * spawning the real ffprobe process. {@code appSettingService} is still
+	 * spawning the real ffprobe process. {@code externalToolPaths} is still
 	 * required (not defaulted to {@code null}) so {@link #ffprobePath()} never
 	 * needs a null-check that production code could never actually hit.
 	 */
-	MediaInfoService(NimbusFileManagerProperties properties, ObjectMapper objectMapper, FfprobeRunner ffprobeRunner,
-			AppSettingService appSettingService) {
-		this(properties, objectMapper, ffprobeRunner, new MediaOrientationResolver(), appSettingService);
+	MediaInfoService(ObjectMapper objectMapper, FfprobeRunner ffprobeRunner, ExternalToolPaths externalToolPaths) {
+		this(objectMapper, ffprobeRunner, new MediaOrientationResolver(), externalToolPaths);
 	}
 
-	MediaInfoService(NimbusFileManagerProperties properties, ObjectMapper objectMapper, FfprobeRunner ffprobeRunner,
-			MediaOrientationResolver mediaOrientationResolver, AppSettingService appSettingService) {
-		this.properties = properties;
+	MediaInfoService(ObjectMapper objectMapper, FfprobeRunner ffprobeRunner,
+			MediaOrientationResolver mediaOrientationResolver, ExternalToolPaths externalToolPaths) {
 		this.objectMapper = objectMapper;
 		this.ffprobeRunner = ffprobeRunner;
 		this.mediaOrientationResolver = mediaOrientationResolver;
-		this.appSettingService = appSettingService;
+		this.externalToolPaths = externalToolPaths;
 	}
 
 	/**
@@ -391,6 +385,6 @@ public class MediaInfoService {
 	}
 
 	private String ffprobePath() {
-		return appSettingService.stringValue(SettingsConstants.TOOL_FFPROBE, properties.tools().ffprobe());
+		return externalToolPaths.ffprobe();
 	}
 }

@@ -40,7 +40,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Metadata extraction from filesystem, EXIF, filename patterns and video streams.
 - Fully offline GPS reverse geocoding based on administrative boundaries (point-in-polygon), persisted as reusable media metadata.
 - Duplicate detection using SHA-256, plus visual similarity for photos and videos (perceptual hashing + SSIM).
-- Quarantine for removed media: files deleted during duplicate resolution are soft-deleted into a quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items.
+- Quarantine for removed media: files soft-deleted by duplicate resolution or left behind by a video conversion are moved into a single quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items.
 - Statistics and paginated media search.
 - Timeline screen for browsing media grouped by date.
 - Map screen plotting geo-referenced media: one aggregated pin per location (EXIF media at their real coordinate rounded to ~11 m, coordinate-less media at their administrative region's representative point), each opening the paginated media captured there.
@@ -56,7 +56,8 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Local web UI with login, optional TOTP 2FA QR code and application version.
 - File explorer screen with breadcrumb navigation, list/grid views, recent-path suggestions and image/video preview.
 - Configurable organization folder layouts (date-only, date+category, category-first, ...), described in [Organization Layouts](#organization-layouts).
-- Role-based web UI: the operational screens (Files, Organization, Duplicates, Quarantine, Statistics) and their data/export APIs, plus Users, Access history and system settings, are restricted to `ADMIN` accounts; Dashboard, Timeline and Map stay open to any authenticated user.
+- Batch video conversion to H.265/HEVC inside MP4 with FFmpeg, described in [Video Conversion](#video-conversion): two quality profiles, three audio options and a choice of keeping or quarantining the original, carrying over audio, chapters, metadata and every subtitle track MP4 can hold.
+- Role-based web UI: the operational screens (Files, Organization, Duplicates, Quarantine, Conversion, Statistics) and their data/export APIs, plus Users, Access history and system settings, are restricted to `ADMIN` accounts; Dashboard, Timeline and Map stay open to any authenticated user.
 - Runtime settings stored in PostgreSQL with creation/update audit fields.
 - User access history for login, 2FA and logout events, searchable by e-mail.
 
@@ -450,6 +451,7 @@ Screens currently available:
 - Map (geo-referenced media on an interactive map; see [Media map](#media-map))
 - Duplicates *(administrators only; byte-identical SHA-256 groups plus visually similar photos and videos)*
 - Quarantine *(administrators only; soft-deleted media, with restore and permanent purge)*
+- Conversion *(administrators only; batch conversion of the videos that are not H.265 MP4 yet)*
 - Statistics *(administrators only; library totals, codecs, extensions and error breakdowns)*
 - Executions (history, live progress, list auto-refreshes while something is running)
 - Account (password, optional TOTP 2FA)
@@ -457,7 +459,7 @@ Screens currently available:
 - Access history *(administrators only)*
 - Settings *(administrators only)*
 
-Files, Organization, Duplicates, Quarantine, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal Preferencias tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
+Files, Organization, Duplicates, Quarantine, Conversion, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal Preferencias tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
 
 Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: `InventoryWatchService` calls `OrganizationReconcileService.reconcileAndApply` automatically - once per debounced batch of file-system changes, and again on a fixed 60-second timer regardless of changes - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Although neither has a screen of its own, both are visible in the execution history: a reconcile is persisted as a distinct `RECONCILE` execution only when it actually repairs the catalog (renames, stale-path fixes or missing marks), while the frequent "nothing changed" checks leave only an in-memory heartbeat in the topbar; each execution (inventory and reconcile alike) also records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`.
 
@@ -856,6 +858,128 @@ Example summary:
 }
 ```
 
+## Video Conversion
+
+The Conversion screen (administrators only) standardises the catalog on **MP4 with
+H.265/HEVC video**, using the bundled FFmpeg, in the background, one file at a time.
+It is deliberately not an FFmpeg front-end: the screen offers three choices and hides
+every encoder knob behind them.
+
+| Choice | Options |
+| --- | --- |
+| Quality | **High quality** or **Balanced** *(recommended)* - CRF and preset are internal and never shown |
+| Audio | **Keep the original**, **Always convert to AAC**, or **Convert to AAC only when needed** *(recommended)* |
+| After the conversion | **Keep the original file** or **Move the original to quarantine** |
+| Converted file name | free text plus where it goes - **at the end** *(default, `_H265`)* or **at the start**; blank keeps the source name |
+
+The three options are stored per user the moment they change, so reopening the screen
+offers what was last used instead of silently resetting - which matters because one of
+them decides whether the original file stays. The file selection is kept in the
+browser and survives pagination and reloads, so a batch can be assembled across pages;
+"Limpar seleção" empties it, and whatever a batch handled leaves it automatically.
+
+Each row uses the same media card as the other screens: a thumbnail that opens the
+video in the shared lightbox player.
+
+The listing shows only videos that are still on disk and are **not an H.265 MP4
+yet**, biggest first, so the files with the most to gain come first. That includes a
+video which is already H.265 but sits in another container: it only needs the MP4
+remux, which takes seconds, copies the video stream untouched and loses no quality
+(the quality profile does not apply to it). A video whose codec was never extracted is
+kept in the list and decided by ffprobe at conversion time.
+
+### What one conversion does
+
+1. Encodes **in the source folder**, into `<final name>_temp.tmp`. Encoding next to the
+   source makes the last step a rename instead of a cross-volume copy of a finished
+   multi-gigabyte file, and the `.tmp` extension is one the inventory skips by default,
+   so a half-written file is never cataloged, fingerprinted or shown.
+2. Carries over everything MP4 can hold: video, audio, subtitles (converted to MP4's
+   own `mov_text`), data streams (timecode, GoPro telemetry), metadata and chapters.
+   Only the video is re-encoded - and not even that when the source is already H.265.
+3. Maps streams by type instead of with a blanket `-map 0`, because the container is
+   fixed: an MKV font attachment has no place in MP4, and `0:v` would hand embedded
+   cover art to the encoder as a second video stream, so `0:V?` takes real video
+   only.
+4. Validates the result with ffprobe before anything else happens: it has to be a
+   readable H.265 file of essentially the same duration as the source.
+5. Gives the validated file its real name (source name plus the affix), through the
+   same `SecureFileMove` (SHA-256 baseline + byte-for-byte verify) every other feature
+   uses. If that name is somehow taken, "(H.265)" keeps the two apart - nothing is ever
+   overwritten.
+6. Only then applies the choice for the original - quarantine or keep. When there is no
+   affix and the original went to quarantine, the converted file inherits its name.
+7. Catalogs the new file immediately, reusing the inventory's own extraction and
+   persistence.
+
+If any step fails, the original stays exactly where it is and the file is counted as
+an error, never as a conversion. The original is never touched before the replacement
+is in place.
+
+The reference command line, as built by `VideoConversionCommandBuilder` (the single
+place encoder arguments are assembled, so a future NVENC/Quick Sync/AMF/AV1 encoder is
+a change to that one class):
+
+```bash
+ffmpeg -y -hide_banner -loglevel error -nostats -progress pipe:1 \
+  -i input.mkv \
+  -map 0:V? -map 0:a? -map 0:s? -map 0:d? -map_metadata 0 -map_chapters 0 \
+  -c:v libx265 -crf 22 -preset medium \
+  -tag:v hvc1 -movflags use_metadata_tags \
+  -c:a copy -c:s mov_text -c:d copy -ignore_unknown \
+  output.mp4
+```
+
+`-tag:v hvc1` is what makes Apple and Windows players accept the file at all, and
+`-movflags use_metadata_tags` keeps the non-standard MP4 tags that `-map_metadata`
+alone drops. `-c:a aac -b:a 192k` replaces `-c:a copy` when AAC was chosen or when the
+automatic fallback kicks in, and `-c:v copy` replaces the whole `libx265` block when
+the source is already H.265 and only the container has to change.
+
+### Retries that give up only what MP4 cannot hold
+
+At most three attempts are made per file, each dropping one demand the container
+refused:
+
+1. The conversion exactly as asked for.
+2. **AAC audio** - with the recommended audio option the original audio is copied as
+   is; if FFmpeg refuses it ("Could not find tag for codec ...", a failed header
+   write), the file is converted again with AAC audio.
+3. **No subtitles** - MP4 only defines `mov_text`, so a text track (SubRip, ASS)
+   survives the move but an image-based one (PGS, VobSub) cannot. When the error
+   blames the subtitle track, the file is converted again without it.
+
+Both are recorded per file in the conversion report, so a track that had to be
+re-encoded or left behind is never lost silently. Failures FFmpeg reports for any
+other reason are **not** retried: another attempt cannot fix them and would only cost
+the user a second full encode.
+
+### Progress, history and limits
+
+Each batch is a `CONVERSION` execution in the history, with the converted, skipped and
+failed counts and the space reclaimed. The screen follows two progress dimensions -
+files done and how far into the current encode FFmpeg is - so a single long video
+never looks frozen; leaving the screen does not stop the batch.
+
+Only one conversion runs at a time, and the transcode has its own concurrency limit in
+the external-tool gate (`nimbus-file-manager.processing.ffmpeg-transcode-limit`,
+default `1`): an H.265 encode already saturates every core, so a second one finishes
+neither sooner and only makes the rest of the application crawl. While a batch is
+running the screen locks the selection and the options - the batch already owns the
+files it was given, and a half-changed screen would only look like it accepted the
+change.
+
+**Cancelling.** The batch can be stopped at any point. ffmpeg is killed between two
+progress lines (not at the end of the current file, which could be hours away), the
+half-written temporary file is deleted, the source is left untouched and no further
+file is started. The execution is recorded as `CANCELLED`, and whatever was not
+converted stays on the list.
+
+Originals sent to quarantine land in the same quarantine as the duplicate removal and
+are restored or purged from the same Quarantine screen - there is no separate
+conversion quarantine. Choosing that option while no quarantine folder is configured
+is refused up front, before anything is encoded.
+
 ## Media Search
 
 ```bash
@@ -990,8 +1114,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1650 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.17% instruction, 88.84% branch, 96.73% line, 97.42% method, 100.00% class
+Tests:       1826 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.29% instruction, 89.29% branch, 96.89% line, 97.46% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1003,7 +1127,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.17% instruction, 88.84% branch, 96.73% line, 97.42% method, 100.00% class
+Floor:  97.28% instruction, 89.29% branch, 96.87% line, 97.46% method, 100.00% class
 Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
 ```
 
@@ -1045,7 +1169,11 @@ single thread, at ~50% of available cores (dynamic factor `0.5`). Execution is t
 `@SpringBootTest` class starts its own throwaway PostgreSQL container
 (Testcontainers + `@ServiceConnection`), so they are fully isolated and run in parallel with
 no shared database - which requires a running Docker engine locally and in CI. The suite was
-run 5× back-to-back with byte-identical JaCoCo metrics (no flaky tests, no coverage jitter).
+run back-to-back with no flaky tests. Coverage does move by about 0.02 percentage point
+between runs, always on the same three lines: the `@PreDestroy` hook of
+`QuarantinePurgeScheduler`, which is only recorded when a `@SpringBootTest` context happens
+to close before the JaCoCo agent dumps. The floor above is set at the lower end of that
+range, so the ratchet never fails on the jitter alone.
 
 Run PIT mutation testing:
 

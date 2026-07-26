@@ -3,7 +3,6 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.List;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -20,10 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegRunner;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 
 class PhotoPerceptualHashServiceTest {
 
@@ -170,13 +165,10 @@ class PhotoPerceptualHashServiceTest {
 	}
 
 	private PhotoPerceptualHashService service(FfmpegRunner runner) {
-		NimbusFileManagerProperties properties = new NimbusFileManagerProperties("C:/workspace", List.of(), null,
-				new Tools("ffprobe", "ffmpeg", "exiftool"), null, null, null, null, null, null);
+		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
-		AppSettingService appSettingService = mock(AppSettingService.class);
+		lenient().when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
-		lenient().when(appSettingService.stringValue(eq(SettingsConstants.TOOL_FFMPEG), any())).thenReturn("ffmpeg");
-
-		return new PhotoPerceptualHashService(properties, appSettingService, runner);
+		return new PhotoPerceptualHashService(externalToolPaths, runner);
 	}
 }

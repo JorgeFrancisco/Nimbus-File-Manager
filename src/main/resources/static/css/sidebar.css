@@ -231,7 +231,10 @@
 .sidebar .nav a .bi-calendar3 { color: #c084fc; }
 .sidebar .nav a .bi-folder2-open { color: #fbbf24; }
 .sidebar .nav a .bi-folder-symlink { color: #34d399; }
+.sidebar .nav a .bi-geo-alt { color: #fb7185; }
 .sidebar .nav a .bi-copy { color: #2dd4bf; }
+.sidebar .nav a .bi-trash3 { color: #f97316; }
+.sidebar .nav a .bi-film { color: #818cf8; }
 .sidebar .nav a .bi-bar-chart { color: #f472b6; }
 .sidebar .nav a .bi-gear { color: #94a3b8; }
 .sidebar .nav a .bi-people { color: #a5b4fc; }

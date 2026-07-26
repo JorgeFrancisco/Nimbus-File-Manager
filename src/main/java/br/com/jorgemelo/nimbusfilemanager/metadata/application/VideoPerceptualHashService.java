@@ -16,9 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFra
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 /**
@@ -33,24 +31,21 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 @Service
 public class VideoPerceptualHashService {
 
-	private final NimbusFileManagerProperties properties;
-	private final AppSettingService appSettingService;
+	private final ExternalToolPaths externalToolPaths;
 	private final VideoFrameSampler videoFrameSampler;
 	private final FfmpegVideoFrameRunner ffmpegRunner;
 
 	@Autowired
-	public VideoPerceptualHashService(NimbusFileManagerProperties properties, AppSettingService appSettingService,
-			VideoFrameSampler videoFrameSampler, ExternalToolGate externalToolGate,
-			FfmpegVideoFrameProcessRunner processRunner) {
-		this(properties, appSettingService, videoFrameSampler,
+	public VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
+			ExternalToolGate externalToolGate, FfmpegVideoFrameProcessRunner processRunner) {
+		this(externalToolPaths, videoFrameSampler,
 				(ffmpegPath, file, plan) -> externalToolGate.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME,
 						() -> processRunner.run(ffmpegPath, file, plan)));
 	}
 
-	VideoPerceptualHashService(NimbusFileManagerProperties properties, AppSettingService appSettingService,
-			VideoFrameSampler videoFrameSampler, FfmpegVideoFrameRunner ffmpegRunner) {
-		this.properties = properties;
-		this.appSettingService = appSettingService;
+	VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
+			FfmpegVideoFrameRunner ffmpegRunner) {
+		this.externalToolPaths = externalToolPaths;
 		this.videoFrameSampler = videoFrameSampler;
 		this.ffmpegRunner = ffmpegRunner;
 	}
@@ -104,6 +99,6 @@ public class VideoPerceptualHashService {
 	}
 
 	private String ffmpegPath() {
-		return appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, properties.tools().ffmpeg());
+		return externalToolPaths.ffmpeg();
 	}
 }

@@ -27,7 +27,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedCon
  * only - REST controllers under {@code *.infrastructure.rest} don't render a
  * Model/View and shouldn't pay for this lookup.
  */
-@ControllerAdvice(basePackages = { "br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web",
+@ControllerAdvice(basePackages = { "br.com.jorgemelo.nimbusfilemanager.conversion.infrastructure.web",
+		"br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.web",

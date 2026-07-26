@@ -30,6 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockSer
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
@@ -60,8 +61,8 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
 
@@ -374,8 +375,8 @@ class QuarantineServiceTest {
 
 		when(movement.getCatalogFile().getSizeBytes()).thenReturn(null);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
 
@@ -394,8 +395,8 @@ class QuarantineServiceTest {
 
 		Movement movement = imageMovement(origin.resolve("a.jpg"), quarantine, publicId);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
 
@@ -537,8 +538,8 @@ class QuarantineServiceTest {
 				.targetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
 				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
 
@@ -571,8 +572,8 @@ class QuarantineServiceTest {
 				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
 				.movedAt(LocalDateTime.now()).build();
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
 
 		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
 
@@ -594,8 +595,8 @@ class QuarantineServiceTest {
 		Movement text = typedMovement(tmp, origin, "notes.txt", FileType.TEXT);
 		Movement audio = typedMovement(tmp, origin, "song.mp3", FileType.AUDIO);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any()))
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
 				.thenReturn(new PageImpl<>(List.of(video, pdf, text, audio)));
 
 		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
@@ -618,8 +619,8 @@ class QuarantineServiceTest {
 
 		Movement archive = typedMovement(tmp, origin, "backup.zip", FileType.ZIP);
 
-		when(movementRepository.findByStatusAndReasonOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(MovementReason.DUPLICATE_QUARANTINED), any())).thenReturn(new PageImpl<>(List.of(archive)));
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(archive)));
 
 		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
 

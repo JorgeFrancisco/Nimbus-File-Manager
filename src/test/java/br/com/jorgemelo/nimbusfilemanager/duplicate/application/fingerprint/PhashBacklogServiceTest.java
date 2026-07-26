@@ -58,7 +58,7 @@ class PhashBacklogServiceTest {
 	private PhashBacklogService service() {
 		return new PhashBacklogService(mediaFingerprintRepository, fingerprintFailureRepository,
 				photoPerceptualHashService,
-				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1), new ProcessingMetrics()),
+				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
 				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 

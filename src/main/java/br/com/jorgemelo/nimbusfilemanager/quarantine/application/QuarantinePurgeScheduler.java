@@ -6,8 +6,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
  * Runs the quarantine retention purge once a day on its own daemon thread,
  * mirroring how the folder watcher schedules its own work (the app has no
  * Spring {@code @EnableScheduling}). The retention window is read fresh from
- * {@link AppSettingService#TRASH_RETENTION_DAYS} each run, so changing it in
+ * {@link QuarantinePurgeService#retentionDays()} each run, so changing it in
  * Settings takes effect on the next pass. Any non-positive, blank or invalid
  * value disables the purge entirely (fail-safe: a destructive purge never runs
  * on an unreadable retention window); only a positive number of days runs it.
@@ -30,7 +28,6 @@ public class QuarantinePurgeScheduler {
 	private static final long INITIAL_DELAY_MINUTES = 5;
 	private static final long PERIOD_MINUTES = 24L * 60;
 
-	private final AppSettingService appSettingService;
 	private final QuarantinePurgeService quarantinePurgeService;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "nimbus-file-manager-quarantine-purge");
@@ -41,9 +38,7 @@ public class QuarantinePurgeScheduler {
 	});
 	private volatile boolean shuttingDown;
 
-	public QuarantinePurgeScheduler(AppSettingService appSettingService,
-			QuarantinePurgeService quarantinePurgeService) {
-		this.appSettingService = appSettingService;
+	public QuarantinePurgeScheduler(QuarantinePurgeService quarantinePurgeService) {
 		this.quarantinePurgeService = quarantinePurgeService;
 
 		executor.scheduleWithFixedDelay(this::runOnce, INITIAL_DELAY_MINUTES, PERIOD_MINUTES, TimeUnit.MINUTES);
@@ -55,10 +50,9 @@ public class QuarantinePurgeScheduler {
 	 */
 	void runOnce() {
 		try {
-			// Fail-safe fallback of -1 (not the 90-day product default): a blank or invalid
-			// retention setting resolves to this fallback, so an unreadable window disables
-			// the destructive purge instead of silently purging with 90 days.
-			int days = appSettingService.intValue(SettingsConstants.TRASH_RETENTION_DAYS, -1);
+			// The window (and its fail-safe for a blank/invalid setting) belongs to the
+			// purge itself; this class only decides when to run.
+			int days = quarantinePurgeService.retentionDays();
 
 			if (days <= 0) {
 				return;
