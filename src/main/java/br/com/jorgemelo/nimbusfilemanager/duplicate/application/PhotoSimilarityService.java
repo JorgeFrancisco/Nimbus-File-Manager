@@ -45,9 +45,9 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	static final int MAX_CANDIDATES = 8000;
 
 	/**
-	 * Generous pHash candidate radius (37.5% of 256 bits). SSIM makes the final
-	 * decision, so this stage is intentionally optimized for recall rather than
-	 * precision.
+	 * Generous pHash candidate radius, a wide fraction of the hash. SSIM makes the
+	 * final decision, so this stage is intentionally optimized for recall rather
+	 * than precision.
 	 */
 	static final int MAX_PHASH_CANDIDATE_DISTANCE = 96;
 

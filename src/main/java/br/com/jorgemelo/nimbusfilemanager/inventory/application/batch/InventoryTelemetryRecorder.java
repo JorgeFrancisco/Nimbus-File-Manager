@@ -29,9 +29,8 @@ public class InventoryTelemetryRecorder {
 	private final PerformanceTelemetryService performanceTelemetryService;
 	private final ProcessingProperties processingProperties;
 
-	public InventoryTelemetryRecorder(ProcessingMetrics processingMetrics,
-			ExecutionPhaseTimings executionPhaseTimings, PerformanceTelemetryService performanceTelemetryService,
-			ProcessingProperties processingProperties) {
+	public InventoryTelemetryRecorder(ProcessingMetrics processingMetrics, ExecutionPhaseTimings executionPhaseTimings,
+			PerformanceTelemetryService performanceTelemetryService, ProcessingProperties processingProperties) {
 		this.processingMetrics = processingMetrics;
 		this.executionPhaseTimings = executionPhaseTimings;
 		this.performanceTelemetryService = performanceTelemetryService;

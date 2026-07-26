@@ -137,10 +137,8 @@ public class QuarantineIntakeService {
 			if (rolledBack) {
 				log.error("Quarantine intake moved {} but failed to update the catalog; rolled back", source, e);
 			} else {
-				log.error(
-						"Quarantine intake moved {} to {} but failed to update the catalog AND could not roll back; "
-								+ "the file is orphaned in quarantine and needs manual recovery",
-						source, target, e);
+				log.error("Quarantine intake moved {} to {} but failed to update the catalog AND could not roll back; "
+						+ "the file is orphaned in quarantine and needs manual recovery", source, target, e);
 			}
 
 			return IntakeOutcome.ERROR;

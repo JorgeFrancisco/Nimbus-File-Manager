@@ -28,9 +28,9 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeEx
  * process itself and stdout reaching EOF means ffmpeg is done. The short wait
  * after EOF only catches a process that closed its pipes but never exited. What
  * does end it early is a cancellation: the process is destroyed as soon as the
- * caller asks, between two progress lines.
- * Isolated in its own {@code *ProcessRunner} (excluded from coverage) because
- * spawning cannot be meaningfully unit-tested; all the decision logic lives in
+ * caller asks, between two progress lines. Isolated in its own
+ * {@code *ProcessRunner} (excluded from coverage) because spawning cannot be
+ * meaningfully unit-tested; all the decision logic lives in
  * {@code VideoTranscoder} and the command in
  * {@code VideoConversionCommandBuilder}.
  */

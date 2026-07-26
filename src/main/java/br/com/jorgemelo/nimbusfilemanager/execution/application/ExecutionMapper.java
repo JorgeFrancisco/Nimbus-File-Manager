@@ -41,30 +41,27 @@ public class ExecutionMapper extends LocalizedComponent {
 		ExecutionStatus status = execution.getStatus();
 
 		return new ExecutionResponse(UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
-				execution.getExecutionType().name(), status.name(), execution.getStartedAt(),
-				execution.getFinishedAt(), execution.getSourcePath(), execution.getTargetPath(),
-				execution.getFilesFound(), execution.getFilesAnalyzed(), execution.getCacheHits(),
-				execution.getFilesMoved(), execution.getSimulatedFiles(), execution.getErrors(),
-				execution.getTotalExpected(), percentComplete(execution),
-				resolve(execution.getStatusMessage()),
-				execution.getExecuteFlag(), executionLabels.status(status), status.isTerminal(),
-				executionLabels.type(execution.getExecutionType()), triggerLabel(execution.getTriggerEvent()),
-				DateTimeFormatUtils.human(execution.getStartedAt()),
+				execution.getExecutionType().name(), status.name(), execution.getStartedAt(), execution.getFinishedAt(),
+				execution.getSourcePath(), execution.getTargetPath(), execution.getFilesFound(),
+				execution.getFilesAnalyzed(), execution.getCacheHits(), execution.getFilesMoved(),
+				execution.getSimulatedFiles(), execution.getErrors(), execution.getTotalExpected(),
+				percentComplete(execution), resolve(execution.getStatusMessage()), execution.getExecuteFlag(),
+				executionLabels.status(status), status.isTerminal(), executionLabels.type(execution.getExecutionType()),
+				triggerLabel(execution.getTriggerEvent()), DateTimeFormatUtils.human(execution.getStartedAt()),
 				DateTimeFormatUtils.human(execution.getFinishedAt()));
 	}
 
 	ExecutionStepResponse toStepResponse(ExecutionStep step) {
 		return new ExecutionStepResponse(UuidV7.orLegacy(step.getPublicId(), step.getId()),
 				UuidV7.orLegacy(step.getExecution().getPublicId(), step.getExecution().getId()),
-				step.getStepType().name(), step.getPath(),
-				resolve(step.getStatusMessage()), step.getFilesFound(),
+				step.getStepType().name(), step.getPath(), resolve(step.getStatusMessage()), step.getFilesFound(),
 				step.getFilesAnalyzed(), step.getCacheHits(), step.getErrors(), step.getCreatedAt());
 	}
 
 	/**
-	 * Resolves a stored message to localized text. When a stable code is present
-	 * it is looked up in the request locale with its typed args; otherwise the
-	 * legacy free-text message is returned verbatim (older rows predate the code).
+	 * Resolves a stored message to localized text. When a stable code is present it
+	 * is looked up in the request locale with its typed args; otherwise the legacy
+	 * free-text message is returned verbatim (older rows predate the code).
 	 */
 	private String resolve(StatusMessage statusMessage) {
 		if (statusMessage == null || statusMessage.getCode() == null) {

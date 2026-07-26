@@ -90,8 +90,7 @@ public class UsnJournalReader {
 				nextUsn = result.nextStartUsn();
 				draining = false;
 			} else {
-				Interpretation interpretation = interpreter
-						.interpret(UsnRecordParser.parse(result.records()));
+				Interpretation interpretation = interpreter.interpret(UsnRecordParser.parse(result.records()));
 
 				changed.addAll(interpretation.changedFiles());
 				overflow |= interpretation.reconcileNeeded();

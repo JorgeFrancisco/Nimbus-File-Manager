@@ -12,8 +12,8 @@ public class MetadataRebuildCounters {
 
 	/**
 	 * Folds a batch's counters into this total. Used so that a batch retried after
-	 * an optimistic-lock conflict is counted once - the batch runs
-	 * on a fresh counter each attempt and only the successful attempt is added.
+	 * an optimistic-lock conflict is counted once - the batch runs on a fresh
+	 * counter each attempt and only the successful attempt is added.
 	 */
 	public void add(MetadataRebuildCounters batch) {
 		this.processed += batch.processed;

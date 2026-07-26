@@ -19,9 +19,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
  */
 public enum MediaTypeFilter {
 
-	PHOTO(type -> type == FileType.PHOTO),
-	VIDEO(type -> type == FileType.VIDEO),
-	AUDIO(type -> type == FileType.AUDIO),
+	PHOTO(type -> type == FileType.PHOTO), VIDEO(type -> type == FileType.VIDEO), AUDIO(type -> type == FileType.AUDIO),
 	DOCS(type -> type.category() == FileCategory.DOCUMENT),
 	OTHERS(type -> type.category() == FileCategory.ARCHIVE || type.category() == FileCategory.OTHER);
 

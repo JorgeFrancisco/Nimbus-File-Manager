@@ -41,7 +41,7 @@ class CatalogFilePurgeSchedulerTest {
 	void purgeIsFailSafeWhenTheRetentionSettingIsBlankOrInvalid() {
 		// A blank/invalid retention resolves to the fallback inside AppSettingService,
 		// so the scheduler must pass a non-positive fallback: an unreadable window
-		// disables the destructive purge instead of silently defaulting to 90 days.
+		// disables the destructive purge instead of silently using the product default.
 		when(appSettingService.intValue(eq(SettingsConstants.CATALOG_MISSING_RETENTION_DAYS), anyInt()))
 				.thenAnswer(invocation -> invocation.getArgument(1));
 

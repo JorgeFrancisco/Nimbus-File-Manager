@@ -73,8 +73,8 @@ public class ConversionWebController extends LocalizedComponent {
 	}
 
 	@GetMapping("/app/conversion")
-	public String conversion(@RequestParam(required = false) Integer page,
-			@RequestParam(required = false) Integer size, Authentication authentication, Model model) {
+	public String conversion(@RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size,
+			Authentication authentication, Model model) {
 		Map<String, String> preferences = preferencesOf(authentication);
 
 		int pageSize = resolvePageSize(size, authentication, preferences);
@@ -158,9 +158,10 @@ public class ConversionWebController extends LocalizedComponent {
 	}
 
 	/**
-	 * Stops the running batch: the file being encoded is abandoned (its half-written
-	 * output deleted, the source untouched) and no further file is started. Answers
-	 * with the progress snapshot so the screen updates immediately.
+	 * Stops the running batch: the file being encoded is abandoned (its
+	 * half-written output deleted, the source untouched) and no further file is
+	 * started. Answers with the progress snapshot so the screen updates
+	 * immediately.
 	 */
 	@PostMapping("/app/conversion/cancel")
 	@ResponseBody

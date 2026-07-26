@@ -48,7 +48,7 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 		if (!qualifies(location, minimumConfidence)) {
 			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER
 					? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
-				: List.of();
+					: List.of();
 		}
 
 		ResolvedPlace place = location.getPlace();
@@ -70,7 +70,7 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 		if (segments.isEmpty()) {
 			return fallbackMode == LocationFallbackMode.FALLBACK_FOLDER
 					? List.of(GeolocationConstants.FALLBACK_FOLDER_NAME)
-				: List.of();
+					: List.of();
 		}
 
 		return segments;

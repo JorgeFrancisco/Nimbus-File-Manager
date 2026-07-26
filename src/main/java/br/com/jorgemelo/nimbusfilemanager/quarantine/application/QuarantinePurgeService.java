@@ -73,10 +73,10 @@ public class QuarantinePurgeService {
 	/**
 	 * How long a file stays in quarantine before the scheduled purge expunges it,
 	 * or {@code 0} when no purge runs at all. The fallback is deliberately
-	 * non-positive rather than the 90-day product default: a blank or invalid
-	 * setting must disable the destructive purge, and must not promise the user a
-	 * deadline nobody enforces. Read fresh on every call, so a change in Settings
-	 * applies immediately.
+	 * non-positive instead of the product default: a blank or invalid setting must
+	 * disable the destructive purge, and must not promise the user a deadline
+	 * nobody enforces. Read fresh on every call, so a change in Settings applies
+	 * immediately.
 	 */
 	public int retentionDays() {
 		return Math.max(0, appSettingService.intValue(SettingsConstants.TRASH_RETENTION_DAYS, DISABLED_RETENTION));

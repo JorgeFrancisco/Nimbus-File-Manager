@@ -19,9 +19,9 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths
  *
  * <p>
  * The target is always H.265 inside MP4. Because the container is fixed, the
- * streams are mapped by type instead of with a blanket {@code -map 0}: MP4 holds
- * video, audio, timed text and data, and mapping anything else (an MKV font
- * attachment, or cover art that {@code 0:v} would hand to the encoder as a
+ * streams are mapped by type instead of with a blanket {@code -map 0}: MP4
+ * holds video, audio, timed text and data, and mapping anything else (an MKV
+ * font attachment, or cover art that {@code 0:v} would hand to the encoder as a
  * second video stream) either fails the mux or produces nonsense. Metadata and
  * chapters are carried over, subtitles are converted to MP4's own
  * {@code mov_text}, and only the video is re-encoded - not even that when the
@@ -56,10 +56,10 @@ public class VideoConversionCommandBuilder {
 		command.add("-i");
 		command.add(input.toAbsolutePath().normalize().toString());
 
-		addStreamSelection(command, options.includeSubtitles());
+		addStreamSelection(command, options);
 		addVideoEncoding(command, options);
-		addAudioEncoding(command, options.encodeAudioAsAac());
-		addSideStreams(command, options.includeSubtitles());
+		addAudioEncoding(command, options);
+		addSideStreams(command, options);
 
 		command.add(output.toAbsolutePath().normalize().toString());
 
@@ -70,13 +70,13 @@ public class VideoConversionCommandBuilder {
 	 * Every selector is optional ({@code ?}) so a file without audio, subtitles or
 	 * data streams is not a failure.
 	 */
-	private void addStreamSelection(List<String> command, boolean includeSubtitles) {
+	private void addStreamSelection(List<String> command, CommandOptions options) {
 		command.add("-map");
 		command.add("0:V?");
 		command.add("-map");
 		command.add("0:a?");
 
-		if (includeSubtitles) {
+		if (options.includeSubtitles()) {
 			command.add("-map");
 			command.add("0:s?");
 		}
@@ -113,10 +113,10 @@ public class VideoConversionCommandBuilder {
 		command.add("use_metadata_tags");
 	}
 
-	private void addAudioEncoding(List<String> command, boolean encodeAudioAsAac) {
+	private void addAudioEncoding(List<String> command, CommandOptions options) {
 		command.add("-c:a");
 
-		if (!encodeAudioAsAac) {
+		if (!options.encodeAudioAsAac()) {
 			command.add("copy");
 
 			return;
@@ -134,8 +134,8 @@ public class VideoConversionCommandBuilder {
 	 * for. Data streams (timecode, GoPro telemetry) are copied, and anything
 	 * unknown is dropped instead of costing the whole conversion.
 	 */
-	private void addSideStreams(List<String> command, boolean includeSubtitles) {
-		if (includeSubtitles) {
+	private void addSideStreams(List<String> command, CommandOptions options) {
+		if (options.includeSubtitles()) {
 			command.add("-c:s");
 			command.add("mov_text");
 		}

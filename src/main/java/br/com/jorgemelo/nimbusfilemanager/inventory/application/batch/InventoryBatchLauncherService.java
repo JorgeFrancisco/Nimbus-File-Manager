@@ -56,8 +56,7 @@ public class InventoryBatchLauncherService {
 				.status(ExecutionStatus.STARTED).triggerEvent(trigger).startedAt(LocalDateTime.now(clock))
 				.sourcePath(request.source().toString()).targetPath(null).recursive(request.recursive())
 				.executeFlag(true).applicationVersion(applicationVersion)
-				.statusMessage(StatusMessage.code(ExecutionMessages.INVENTORY_STARTED))
-				.build();
+				.statusMessage(StatusMessage.code(ExecutionMessages.INVENTORY_STARTED)).build();
 
 		Execution execution = executionRepository.save(startedExecution);
 

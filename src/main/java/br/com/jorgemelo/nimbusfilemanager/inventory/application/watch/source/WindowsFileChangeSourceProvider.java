@@ -42,8 +42,7 @@ public class WindowsFileChangeSourceProvider implements FileChangeSourceProvider
 	}
 
 	WindowsFileChangeSourceProvider(UsnJournalProperties properties, UsnCursorStore cursorStore,
-			BooleanSupplier windows,
-			WindowsChangeSourceOpener opener) {
+			BooleanSupplier windows, WindowsChangeSourceOpener opener) {
 		this.properties = properties;
 		this.cursorStore = cursorStore;
 		this.windows = windows;

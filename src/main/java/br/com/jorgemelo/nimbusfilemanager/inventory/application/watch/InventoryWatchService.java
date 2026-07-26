@@ -234,9 +234,8 @@ public class InventoryWatchService extends LocalizedComponent {
 	 * (running on the scheduled poll thread) was mid-iteration reading from the
 	 * very same watcher, since the previous null-check-then-use on the volatile
 	 * field was not atomic with the read loop below. Serializing the two closes
-	 * that
-	 * window: either a full poll runs to completion before the swap, or it waits
-	 * until the swap (and the old watcher's shutdown) is done.
+	 * that window: either a full poll runs to completion before the swap, or it
+	 * waits until the swap (and the old watcher's shutdown) is done.
 	 */
 	private synchronized void pollEvents() {
 		FileChangeSource currentWatcher = watcher.get();

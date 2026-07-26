@@ -62,8 +62,8 @@ public class AdminBoundaryResolver {
 		if (country.isPresent()) {
 			String countryCode = country.get().getCountryCode();
 
-			Optional<GeoAdminBoundary> municipality = bestContaining(repository.findCandidatesInCountry(
-					AdminBoundaryKind.MUNICIPALITY, countryCode, latitude, longitude), point);
+			Optional<GeoAdminBoundary> municipality = bestContaining(repository
+					.findCandidatesInCountry(AdminBoundaryKind.MUNICIPALITY, countryCode, latitude, longitude), point);
 			Optional<GeoAdminBoundary> state = bestContaining(
 					repository.findCandidatesInCountry(AdminBoundaryKind.STATE, countryCode, latitude, longitude),
 					point);

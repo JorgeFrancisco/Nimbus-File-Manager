@@ -56,9 +56,9 @@ class CatalogFilePurgeScheduler {
 	 */
 	void runOnce() {
 		try {
-			// Fail-safe fallback of -1 (not the 90-day product default): a blank or invalid
-			// retention setting resolves to this fallback, so an unreadable window disables
-			// the destructive purge instead of silently purging with 90 days.
+			// The fallback is deliberately non-positive (never the product default): a
+			// blank or invalid retention setting resolves to it, so an unreadable window
+			// disables the destructive purge instead of silently purging with a guess.
 			int days = appSettingService.intValue(SettingsConstants.CATALOG_MISSING_RETENTION_DAYS, -1);
 
 			if (days <= 0) {

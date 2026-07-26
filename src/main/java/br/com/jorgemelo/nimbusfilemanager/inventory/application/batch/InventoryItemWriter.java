@@ -77,7 +77,7 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 
 		IntConsumer onExtractionProgress = done -> executionProgressService.updateLiveProgress(execution,
 				baseFound + done, analyzed.get(), cacheHits.get(), errors.get(),
-						ExecutionMessages.extractingMetadata());
+				ExecutionMessages.extractingMetadata());
 
 		List<InventoryBatchItemResult> results = inventoryPersistenceService.saveOrCacheBatch(files, sourcePath,
 				metadataOptions, file -> metadataFacade.extract(file, metadataOptions),

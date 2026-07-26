@@ -106,8 +106,7 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	}
 
 	private DuplicateDeletionResult deleteLocked(Collection<UUID> publicIds, List<CatalogFile> files,
-			Path quarantineRoot,
-			DeletionProgressCallback progress) {
+			Path quarantineRoot, DeletionProgressCallback progress) {
 		Execution execution = startExecution(quarantineRoot);
 
 		// Selected ids that map to no active catalog entry never reach the loop below;

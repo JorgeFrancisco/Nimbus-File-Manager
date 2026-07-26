@@ -10,8 +10,8 @@ import java.util.UUID;
  * was asked for without a quarantine folder configured - nothing runs then.
  */
 public record ConversionResult(boolean configured, int total, int converted, int skipped, int errors,
-		long originalBytes, long convertedBytes, long savedBytes, String savedLabel, int savedPercent,
-		UUID executionId, String message, List<ConversionFileResult> items) {
+		long originalBytes, long convertedBytes, long savedBytes, String savedLabel, int savedPercent, UUID executionId,
+		String message, List<ConversionFileResult> items) {
 
 	public static ConversionResult refused(String message) {
 		return new ConversionResult(false, 0, 0, 0, 0, 0, 0, 0, null, 0, null, message, List.of());

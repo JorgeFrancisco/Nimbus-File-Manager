@@ -38,6 +38,7 @@ public class UsersWebController {
 	public String users(@RequestParam(required = false) String q, @RequestParam(defaultValue = "0") int page,
 			@RequestParam(required = false) Integer size, Authentication authentication, Model model) {
 		int pageSize = resolveSize(size, authentication);
+
 		var usersPage = appUserAccountService.searchUsers(q, page, pageSize);
 
 		model.addAttribute(SecurityConstants.PAGE_KEY, usersPage.getContent());

@@ -18,12 +18,12 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>
  * The encode happens <b>in the source folder</b>, which makes the final step a
- * rename instead of a copy - moving a finished 4 GB file from another volume
- * would take as long as part of the encode itself. What makes that safe is the
- * {@code .tmp} extension: it is one of the extensions the inventory skips by
- * default ({@code ScanExclusionService}), so a half-written file is never
- * cataloged, fingerprinted or shown, and the {@code _temp} marker keeps it
- * recognisable if a crash ever leaves one behind.
+ * rename instead of a copy - moving a finished multi-gigabyte file in from
+ * another volume would take as long as part of the encode itself. What makes
+ * that safe is the {@code .tmp} extension: it is one of the extensions the
+ * inventory skips by default ({@code ScanExclusionService}), so a half-written
+ * file is never cataloged, fingerprinted or shown, and the {@code _temp} marker
+ * keeps it recognisable if a crash ever leaves one behind.
  *
  * <p>
  * The converted file only takes its real name once it is validated, so a file

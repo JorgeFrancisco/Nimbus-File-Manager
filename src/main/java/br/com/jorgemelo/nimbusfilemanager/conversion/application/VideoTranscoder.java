@@ -21,11 +21,11 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Turns one video into a validated H.265/MP4 file. Everything that can go wrong
- * stays inside this class: the temporary file, the retries that give up what MP4
- * cannot hold, and the validation that decides whether the output may be kept at
- * all. The caller receives either a validated file (still under its temporary
- * name) or the reason it does not have one - it never has to interpret an ffmpeg
- * exit code.
+ * stays inside this class: the temporary file, the retries that give up what
+ * MP4 cannot hold, and the validation that decides whether the output may be
+ * kept at all. The caller receives either a validated file (still under its
+ * temporary name) or the reason it does not have one - it never has to
+ * interpret an ffmpeg exit code.
  *
  * <p>
  * At most three attempts are made, each dropping one demand the container
@@ -34,8 +34,8 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>
  * A failed or cancelled attempt always deletes its output. That is what makes
- * the whole feature safe to retry: it leaves the library exactly as it was, with
- * nothing half-written anywhere.
+ * the whole feature safe to retry: it leaves the library exactly as it was,
+ * with nothing half-written anywhere.
  */
 @Slf4j
 @Component

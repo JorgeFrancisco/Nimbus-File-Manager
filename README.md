@@ -1127,18 +1127,19 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.28% instruction, 89.29% branch, 96.87% line, 97.46% method, 100.00% class
+Floor:  97.29% instruction, 89.29% branch, 96.89% line, 97.46% method, 100.00% class
 Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
 ```
 
 Instruction, method and class already sit at or above the goal, so for those three
-the floor is what defends them. What is left is 25 lines and about 262 branches.
+the floor is what defends them. What is left is 12 lines and about 258 branches.
 Most of it sits in classes already above 90%, which is where the remaining work is
-cheapest per test: each one needs only a handful of cases, and they add up. Roughly 30–50 of those are legitimately unreachable (I/O
-failure paths that depend on OS permissions, utility-class anti-instantiation
-guards, a `FilterInputStream` single-byte override the JSON parser never calls), so
-the goal stays reachable without artificial tests — but the remaining lines are
-error branches that each need a real test, not a percentage chase.
+cheapest per test: each one needs only a handful of cases, and they add up. Roughly
+30–50 of those are legitimately unreachable (I/O failure paths that depend on OS
+permissions, utility-class anti-instantiation guards, a `FilterInputStream`
+single-byte override the JSON parser never calls), so the goal stays reachable
+without artificial tests — but the remaining lines are error branches that each need
+a real test, not a percentage chase.
 
 The branch goal was raised from 90% to 95% after sampling what is actually still
 uncovered. The assumption that the tail was mostly unreachable defensive code did

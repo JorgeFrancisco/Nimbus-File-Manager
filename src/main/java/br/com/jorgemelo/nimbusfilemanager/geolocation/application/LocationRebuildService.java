@@ -69,6 +69,7 @@ public class LocationRebuildService {
 		log.info("Starting location rebuild. scope={} parallelism={}", scope, parallelism);
 
 		RebuildCounters counters = new RebuildCounters();
+
 		ExecutorService pool = Executors.newFixedThreadPool(parallelism, threadFactory());
 
 		try {

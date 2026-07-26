@@ -50,8 +50,8 @@ public class BoundaryGeometryCache {
 	}
 
 	/**
-	 * Prepared polygon of a boundary, cached by id. Transient boundaries without
-	 * an id (only ever seen in tests) are parsed without being cached. Returns
+	 * Prepared polygon of a boundary, cached by id. Transient boundaries without an
+	 * id (only ever seen in tests) are parsed without being cached. Returns
 	 * {@code null} when the stored WKB cannot be parsed.
 	 */
 	public PreparedGeometry geometry(GeoAdminBoundary boundary) {

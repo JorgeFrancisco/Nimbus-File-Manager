@@ -65,9 +65,10 @@ public record ProcessingProperties(Integer workers, Integer queueCapacity, Integ
 	}
 
 	/**
-	 * Defaults to a single concurrent transcode: an H.265 encode already saturates
-	 * every core on its own, so running two at once finishes neither sooner and
-	 * only makes the rest of the application crawl.
+	 * Kept far lower than the other limits (see
+	 * {@link #DEFAULT_FFMPEG_TRANSCODE_LIMIT}): an H.265 encode already saturates
+	 * every core on its own, so running several at once finishes none of them
+	 * sooner and only makes the rest of the application crawl.
 	 */
 	public int ffmpegTranscodeLimitOrDefault() {
 		return normalize("ffmpegTranscodeLimit", ffmpegTranscodeLimit, DEFAULT_FFMPEG_TRANSCODE_LIMIT,

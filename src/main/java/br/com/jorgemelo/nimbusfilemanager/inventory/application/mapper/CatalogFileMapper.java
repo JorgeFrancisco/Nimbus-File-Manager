@@ -181,21 +181,20 @@ public class CatalogFileMapper {
 
 	public CatalogFile toEntity(Path file, Path sourcePath, MetadataResult metadata) {
 		CatalogFile catalogFile = CatalogFile.builder().fileKey(PathUtils.normalize(file))
-				.fileName(metadata.getFileName())
-				.extension(metadata.getExtension()).sizeBytes(metadata.getSizeBytes()).sha256(metadata.getSha256())
-				.md5(metadata.getMd5()).mimeType(metadata.getMimeType()).createdAt(metadata.getCreatedAt())
-				.modifiedAt(metadata.getModifiedAt()).fileType(metadata.getFileType())
-				.lifecycleStatus(LifecycleStatus.ACTIVE).lastAnalysis(LocalDateTime.now(clock)).analysisVersion("1")
-				.build();
+				.fileName(metadata.getFileName()).extension(metadata.getExtension()).sizeBytes(metadata.getSizeBytes())
+				.sha256(metadata.getSha256()).md5(metadata.getMd5()).mimeType(metadata.getMimeType())
+				.createdAt(metadata.getCreatedAt()).modifiedAt(metadata.getModifiedAt())
+				.fileType(metadata.getFileType()).lifecycleStatus(LifecycleStatus.ACTIVE)
+				.lastAnalysis(LocalDateTime.now(clock)).analysisVersion("1").build();
 
 		Path normalized = PathUtils.normalizePath(file.toString());
 
 		Path parent = requireParent(normalized, "media file");
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(normalized.toString())
-				.currentFolder(PathUtils.normalize(parent)).originalPath(normalized.toString())
-				.originalFolder(PathUtils.normalize(parent)).inventoryPath(PathUtils.normalize(sourcePath)).build();
+				.currentPath(normalized.toString()).currentFolder(PathUtils.normalize(parent))
+				.originalPath(normalized.toString()).originalFolder(PathUtils.normalize(parent))
+				.inventoryPath(PathUtils.normalize(sourcePath)).build();
 
 		catalogFile.setLocation(location);
 

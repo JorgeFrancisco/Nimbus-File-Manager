@@ -11,12 +11,10 @@ import java.util.regex.Pattern;
 public final class FileNameDatePatterns {
 
 	/** {@code yyyyMMdd} then {@code _HHmmss} (underscore separator). */
-	static final Pattern DATE8_UNDERSCORE_TIME6 = Pattern.compile(".*?(\\d{8})_(\\d{6}).*",
-			Pattern.CASE_INSENSITIVE);
+	static final Pattern DATE8_UNDERSCORE_TIME6 = Pattern.compile(".*?(\\d{8})_(\\d{6}).*", Pattern.CASE_INSENSITIVE);
 
 	/** {@code yyyyMMdd} then {@code _}/{@code -} then {@code HHmmss}. */
-	static final Pattern DATE8_SEP_TIME6 = Pattern.compile(".*?(\\d{8})[_-](\\d{6}).*",
-			Pattern.CASE_INSENSITIVE);
+	static final Pattern DATE8_SEP_TIME6 = Pattern.compile(".*?(\\d{8})[_-](\\d{6}).*", Pattern.CASE_INSENSITIVE);
 
 	/** Bare {@code yyyyMMdd} block anywhere in the name. */
 	static final Pattern DATE8 = Pattern.compile(".*?(\\d{8}).*", Pattern.CASE_INSENSITIVE);

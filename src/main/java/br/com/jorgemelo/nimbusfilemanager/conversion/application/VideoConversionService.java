@@ -70,8 +70,8 @@ public class VideoConversionService extends LocalizedComponent {
 
 	public VideoConversionService(CatalogFileRepository catalogFileRepository,
 			ConversionCandidateRepository conversionCandidateRepository, VideoTranscoder videoTranscoder,
-			ConversionCommitService conversionCommitService,
-			ConversionExecutionRecorder conversionExecutionRecorder, OperationLockService operationLockService) {
+			ConversionCommitService conversionCommitService, ConversionExecutionRecorder conversionExecutionRecorder,
+			OperationLockService operationLockService) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.conversionCandidateRepository = conversionCandidateRepository;
 		this.videoTranscoder = videoTranscoder;

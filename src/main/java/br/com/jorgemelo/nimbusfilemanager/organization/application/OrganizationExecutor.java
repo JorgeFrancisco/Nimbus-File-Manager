@@ -102,8 +102,7 @@ public class OrganizationExecutor {
 
 		boolean dryRun = request.dryRunValue();
 
-		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(),
-				request.target())) {
+		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(), request.target())) {
 			OrganizationPlan plan = organizationPlanner.preview(request.toPreviewRequest());
 
 			// Keep the plan available to the result screen in both modes: the preview
@@ -362,8 +361,7 @@ public class OrganizationExecutor {
 
 		if (!Files.exists(source)) {
 			if (isAlreadyMoved(item, target, existing)) {
-				recordMovement(execution, existing, paths, MovementStatus.SKIPPED,
-						MovementReason.ALREADY_MOVED,
+				recordMovement(execution, existing, paths, MovementStatus.SKIPPED, MovementReason.ALREADY_MOVED,
 						"Source file does not exist, but target file is already registered for this media file.",
 						dryRun);
 
@@ -450,8 +448,8 @@ public class OrganizationExecutor {
 	}
 
 	private boolean isAlreadyMoved(OrganizationItem item, Path target, CatalogFile existing) {
-		return existing != null && Objects.equals(existing.getId(),
-				item.internalCatalogFileId()) && Files.exists(target);
+		return existing != null && Objects.equals(existing.getId(), item.internalCatalogFileId())
+				&& Files.exists(target);
 	}
 
 	private MovementReason resolveFailureReason(boolean integrityFailure, boolean movedOnDisk) {
@@ -523,8 +521,7 @@ public class OrganizationExecutor {
 
 		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(paths.source())).targetPath(PathUtils.normalize(paths.target()))
-				.status(status)
-				.reason(reason).errorMessage(errorMessage).build());
+				.status(status).reason(reason).errorMessage(errorMessage).build());
 	}
 
 	private void recordMovementSafely(Execution execution, CatalogFile catalogFile, Long catalogFileId, MovePaths paths,
@@ -537,8 +534,7 @@ public class OrganizationExecutor {
 			}
 		} catch (Exception e) {
 			log.error("Could not record movement error. catalogFileId={} source={} target={}", catalogFileId,
-					paths.source(),
-					paths.target(), e);
+					paths.source(), paths.target(), e);
 		}
 	}
 
@@ -548,8 +544,7 @@ public class OrganizationExecutor {
 				.sourcePath(PathUtils.normalize(request.source())).targetPath(PathUtils.normalize(request.target()))
 				.recursive(request.recursiveValue()).executeFlag(true)
 				.statusMessage(StatusMessage.code(ExecutionMessages.ORGANIZATION_STARTED)).filesFound(0)
-				.filesAnalyzed(0).cacheHits(0)
-				.filesMoved(0).simulatedFiles(0).errors(0).build();
+				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
 
 		return executionRepository.save(execution);
 	}
@@ -575,6 +570,7 @@ public class OrganizationExecutor {
 		// sample.
 		managed.setCacheHits(NumberUtils.toInt(skipped));
 		managed.setErrors(NumberUtils.toInt(errors));
+
 		executionProgressService.applyMessage(managed, message);
 
 		executionRepository.save(managed);

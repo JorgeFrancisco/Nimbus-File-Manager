@@ -11,7 +11,7 @@ Contém apenas regras **permanentes**, derivadas do código real e não de prefe
 Em caso de conflito, prevalece nesta ordem:
 
 1. `editor/.editorconfig` — regras mecânicas de edição.
-2. Formatter do Eclipse (`Formatação Eclipse Java`) — formatação Java.
+2. Formatter do Eclipse (`.settings/org.eclipse.jdt.core.prefs`) — formatação Java.
 3. Este documento — políticas permanentes de desenvolvimento.
 4. ADRs — decisões arquiteturais específicas, em `docs/adr/` (um arquivo por decisão, ex.: `docs/adr/0001-titulo.md`).
 5. README — estado atual do projeto (métricas, cobertura, funcionalidades, stack, requisitos).
@@ -40,7 +40,7 @@ As regras valem igualmente para **produção** (`src/main/java`) e **testes** (`
 
 ## Regras mecânicas (`editor/.editorconfig`)
 
-Os artefatos de configuração do editor vivem na pasta `editor/` (fora da raiz, como referência versionada — por morar num subdiretório, o `.editorconfig` **não é aplicado automaticamente** a `src/`: ele documenta a regra, e quem a torna obrigatória é este documento): `editor/.editorconfig` (regras mecânicas, fonte canônica), `editor/FormatacaoEclipseJava.xml` (profile do formatter Java `Formatação Eclipse Java`, que substituiu o antigo `FormatacaoJorge`) e `editor/eclipsejava.importorder` (ordem de *Organize Imports*). Resumo do `editor/.editorconfig`:
+Os artefatos de configuração do editor vivem na pasta `editor/` (fora da raiz, como referência versionada — por morar num subdiretório, o `.editorconfig` **não é aplicado automaticamente** a `src/`: ele documenta a regra, e quem a torna obrigatória é este documento): `editor/.editorconfig` (regras mecânicas, fonte canônica) e `editor/eclipsejava.importorder` (ordem de *Organize Imports*). Resumo do `editor/.editorconfig`:
 
 - Codificação UTF-8; fim de linha CRLF; **sem newline final** (`insert_final_newline = false`); espaços à direita removidos (exceto em `.md`).
 - Indentação: **tab** em `java`, `xml`, `html`, `css`, `js`; **espaço** em `sql` (4), `json`/`yml`/`yaml` (2) e `md` (2).
@@ -52,18 +52,23 @@ Os artefatos de configuração do editor vivem na pasta `editor/` (fora da raiz,
 
 **Cuidado ao detectar text block por varredura:** um delimitador **fecha e reabre na mesma linha** — `""", countQuery = """` (usado em `MediaFingerprintRepository` e `MapRepository`). Uma varredura que trate "qualquer `"""` na linha" como fim do bloco **inverte a paridade** dali em diante, passando a tratar interior de query como código (e código como interior). O estado correto **alterna a cada ocorrência** de `"""`, não uma vez por linha. Reindentar uma linha de query por engano insere **tab literal** na string e dispara `java:S2479`.
 
-## Formatter (`Formatação Eclipse Java`)
+## Formatter (Eclipse, Ctrl+Shift+F)
 
-A formatação mecânica do Java é responsabilidade **exclusiva** do profile do Eclipse `Formatação Eclipse Java` (Ctrl+Shift+F), consistente com o `editor/.editorconfig`. Especificidades úteis ao escrever:
+A formatação mecânica do Java é responsabilidade **exclusiva** do formatter do Eclipse (Ctrl+Shift+F), configurado no próprio projeto em `.settings/org.eclipse.jdt.core.prefs` (chaves `org.eclipse.jdt.core.formatter.*`, versionadas junto com o código) e consistente com o `editor/.editorconfig`. Especificidades úteis ao escrever:
 
 - **Código em 120 colunas**, contadas **da coluna 0** com **tab = 4**.
 - **Comentários em 80 colunas**, contadas **a partir da coluna em que o comentário começa** — o `/` de `//`, `/*` ou `/**` — e **não** da coluna 0 (é o `count_line_length_from_starting_position` do Eclipse). Ver *Limite de 80 dos comentários* abaixo: as duas larguras usam origens diferentes, e confundi-las é a causa mais comum de varredura errada.
 - Continuação: linhas quebradas indentam **2 níveis** (tabs).
 - Chaves K&R: `{` no fim da linha; `} else {` e `} catch` na mesma linha do `}`.
 - No máximo **1** linha em branco consecutiva; **1** antes de cada método; **nenhuma** entre campos consecutivos; imports em grupos separados por 1 linha em branco.
-- O profile não insere linha ao final do arquivo (casa com o `editor/.editorconfig`).
+- O formatter não insere linha ao final do arquivo (casa com o `editor/.editorconfig`).
+- **Argumentos de anotação são quebrados** (`alignment_for_arguments_in_annotation`). Sem essa chave o Eclipse usa seu default — *não quebrar* — e um `@Operation(summary = …, description = …)` do OpenAPI vira uma linha de 200+ colunas a cada Ctrl+Shift+F, desfazendo qualquer quebra feita à mão.
 
-> **Estado do arquivo do profile:** `editor/FormatacaoEclipseJava.xml` está hoje **vazio** (`<profiles version="23"/>`, sem nenhum profile dentro), então **não dá para importar nem reproduzir o formatter a partir do repositório**. Enquanto ele não for reexportado do Eclipse, as regras escritas abaixo são a única fonte verificável — por isso elas descrevem o comportamento em números, não por referência ao arquivo. Não há plugin de formatação no `pom.xml` (nem `formatter-maven-plugin` nem `spotless`): **nada no build reprova formatação**, o que torna a verificação manual obrigatória.
+> **Onde o formatter é configurado:** no *project scope*, em `.settings/org.eclipse.jdt.core.prefs` — as chaves `org.eclipse.jdt.core.formatter.*` que o Eclipse aplica por cima do profile do workspace, com o conjunto **completo** gravado (via *Properties → Java Code Style → Formatter → Enable project specific settings*), para que nenhuma chave dependa da máquina de quem abre o projeto. Esses arquivos são **versionados por exceção explícita** no `.gitignore` (`.settings/*` ignorado, com `!` para `org.eclipse.jdt.core.prefs`, `org.eclipse.jdt.ui.prefs` — o `formatter_settings_version` — e `org.eclipse.core.resources.prefs`, que fixa o UTF-8 da regra de codificação); o resto de `.settings/` continua fora, por ser gerado pelo m2e. **Chave ausente cai para o profile do workspace** — foi assim que anotações longas passaram a violar as 120 colunas.
+>
+> **Cuidado ao regravar pelo diálogo:** o Eclipse regrava o arquivo inteiro a partir do "Unmanaged profile" e, nesse caminho, devolve `comment.count_line_length_from_starting_position` para o default `false` — o que mudaria o limite dos comentários de 80-a-partir-do-comentário para 80 absolutas e reflowaria todo Javadoc indentado do projeto. Depois de mexer no diálogo, **conferir que ela voltou a `true`** (é o regime em que o código está: comentários com 1 tab chegam a 84 colunas absolutas, com 2 tabs a 88).
+>
+> Não há plugin de formatação no `pom.xml` (nem `formatter-maven-plugin` nem `spotless`): **nada no build reprova formatação**, o que torna a verificação manual (ver *Verificação mecânica*) obrigatória.
 
 ### Limite de 80 dos comentários
 
@@ -215,6 +220,9 @@ Cada classe deve ter uma responsabilidade predominante. Quando responsabilidades
 - **Sem lógica duplicada entre classes.** A mesma regra/conversão/validação/tratamento vive num único lugar. **Reutilizar a implementação existente antes de criar uma nova.**
 - **Classe nova só com responsabilidade própria.** Não criar abstrações artificiais só para poupar poucas linhas; consolidar apenas quando for de fato uma responsabilidade única e coesa (ver [Responsabilidade única](#responsabilidade-única)).
 - **Comentários e Javadocs em inglês, atualizados e corretos.** O comentário explica o *porquê*; mantê-lo em dia com o código. Remover ou corrigir comentários/Javadocs órfãos, desatualizados ou incorretos. Todo comentário/Javadoc novo nasce em inglês.
+- **Comentário não repete informação volátil.** Comentário e Javadoc **nunca reproduzem um valor ou fato que vive em outro lugar e pode mudar sem que ninguém releia o comentário**: default de configuração ("o padrão de 90 dias"), limite/janela editável em Settings, número de itens ou classes, percentual de cobertura, versão de dependência, nome de arquivo gerado, lista de telas/domínios existentes. O valor mora num único lugar (constante, `AppSetting`, `@ConfigurationProperties`, README) e o texto se refere a ele **pelo nome** — "o default documentado na constante", "a janela configurada em Settings" — em vez de reproduzi-lo. *Motivo:* um comentário que repete o valor vira mentira silenciosa na primeira alteração, e quem alterou não tem como saber que precisava atualizar o comentário; a referência pelo nome continua verdadeira para sempre.
+
+  Fica de fora o caso em que o número **é** o assunto daquele trecho e está declarado ali: o CRF de um perfil de qualidade, o valor esperado de uma asserção, um exemplo derivado de uma fórmula documentada logo acima (`para n = 5: 10%, 30%, …`). Nesses casos o valor está no código ao lado, muda junto e o comentário explica a escolha, não o número.
 
 ---
 

@@ -24,9 +24,8 @@ public class DashedDateTimeMediaFamily extends AbstractFileNameDateRule {
 
 	private static final Pattern SUPPORTS = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}.*");
 
-	private static final Pattern EXTRACT =
-			Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})[ _-](\\d{2})[.-](\\d{2})[.-](\\d{2}).*",
-			Pattern.CASE_INSENSITIVE);
+	private static final Pattern EXTRACT = Pattern
+			.compile("^(\\d{4})-(\\d{2})-(\\d{2})[ _-](\\d{2})[.-](\\d{2})[.-](\\d{2}).*", Pattern.CASE_INSENSITIVE);
 
 	@Override
 	public boolean supports(String fileName) {

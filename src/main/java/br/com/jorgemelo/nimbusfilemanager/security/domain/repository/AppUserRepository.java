@@ -26,8 +26,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 			String displayName, Pageable pageable);
 
 	/**
-	 * Atomically increments the failed-login counter, never losing a
-	 * concurrent attempt, and only while the account is not already locked. Bumps
+	 * Atomically increments the failed-login counter, never losing a concurrent
+	 * attempt, and only while the account is not already locked. Bumps
 	 * {@code version} so any entity already loaded elsewhere becomes stale.
 	 */
 	@Modifying(clearAutomatically = true)

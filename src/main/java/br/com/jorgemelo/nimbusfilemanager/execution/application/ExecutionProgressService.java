@@ -45,6 +45,7 @@ public class ExecutionProgressService {
 		Execution managed = findExecution(execution);
 
 		managed.setStatus(status);
+
 		applyMessage(managed, message);
 
 		saveStep(managed, stepType, null, message);
@@ -125,6 +126,7 @@ public class ExecutionProgressService {
 		managed.setFilesAnalyzed(filesAnalyzed);
 		managed.setCacheHits(cacheHits);
 		managed.setErrors(errors);
+
 		applyMessage(managed, message);
 
 		saveStep(managed, ExecutionStepType.FINISHED, null, message);
@@ -136,6 +138,7 @@ public class ExecutionProgressService {
 
 		managed.setStatus(ExecutionStatus.CANCELLED);
 		managed.setFinishedAt(LocalDateTime.now(clock));
+
 		applyMessage(managed, message);
 
 		saveStep(managed, ExecutionStepType.CANCELLED, null, message);
@@ -147,6 +150,7 @@ public class ExecutionProgressService {
 
 		managed.setStatus(ExecutionStatus.ERROR);
 		managed.setFinishedAt(LocalDateTime.now(clock));
+
 		applyMessage(managed, message);
 
 		saveStep(managed, ExecutionStepType.ERROR, null, message);
@@ -203,6 +207,7 @@ public class ExecutionProgressService {
 
 			execution.setStatus(ExecutionStatus.INTERRUPTED);
 			execution.setFinishedAt(LocalDateTime.now(clock));
+
 			applyMessage(execution, message);
 
 			saveStep(execution, ExecutionStepType.INTERRUPTED, null, message);
@@ -235,8 +240,8 @@ public class ExecutionProgressService {
 	private void saveStepRaw(Execution execution, ExecutionStepType stepType, Path path, String rawMessage) {
 		executionStepRepository.save(ExecutionStep.builder().execution(execution).stepType(stepType)
 				.path(path == null ? null : path.toAbsolutePath().normalize().toString())
-				.statusMessage(StatusMessage.raw(rawMessage))
-				.filesFound(execution.getFilesFound()).filesAnalyzed(execution.getFilesAnalyzed())
-				.cacheHits(execution.getCacheHits()).errors(execution.getErrors()).build());
+				.statusMessage(StatusMessage.raw(rawMessage)).filesFound(execution.getFilesFound())
+				.filesAnalyzed(execution.getFilesAnalyzed()).cacheHits(execution.getCacheHits())
+				.errors(execution.getErrors()).build());
 	}
 }

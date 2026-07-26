@@ -206,8 +206,8 @@ public class OrganizationWebController extends LocalizedComponent {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
-			model.addAttribute(SharedConstants.ATTR_ERROR, message("backend.organization.previewNotFound",
-					executionId));
+			model.addAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.organization.previewNotFound", executionId));
 
 			return VIEW;
 		}
@@ -449,8 +449,7 @@ public class OrganizationWebController extends LocalizedComponent {
 		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.ALLOW_CONFLICTS,
 				Boolean.toString(form.allowConflicts()));
 		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
-				OrganizationConstants.OVERWRITE_EXISTING,
-				Boolean.toString(form.overwriteExisting()));
+				OrganizationConstants.OVERWRITE_EXISTING, Boolean.toString(form.overwriteExisting()));
 
 		if (form.size() != null) {
 			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.SIZE,

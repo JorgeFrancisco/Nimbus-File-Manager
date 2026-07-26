@@ -173,8 +173,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 
 		long removed = mediaLocationService.clearCache();
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.cacheCleared",
-				removed));
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.cacheCleared", removed));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}

@@ -61,8 +61,7 @@ public final class WindowsKernel32 {
 	private static final MethodHandle DEVICE_IO_CONTROL = capturing("DeviceIoControl",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
 	// BOOL CloseHandle(object).
-	private static final MethodHandle CLOSE_HANDLE = capturing("CloseHandle",
-			FunctionDescriptor.of(JAVA_INT, ADDRESS));
+	private static final MethodHandle CLOSE_HANDLE = capturing("CloseHandle", FunctionDescriptor.of(JAVA_INT, ADDRESS));
 	// BOOL CancelIo(file) - the failure path never inspects the error, so it is not
 	// captured.
 	private static final MethodHandle CANCEL_IO = plain("CancelIo", FunctionDescriptor.of(JAVA_INT, ADDRESS));

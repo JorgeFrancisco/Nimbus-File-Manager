@@ -117,8 +117,9 @@ public class InventoryJobExecutionListener implements JobExecutionListener {
 		} else {
 			String detail = rootFailureMessage(jobExecution);
 
-			executionProgressService.fail(execution, isLockRejection(jobExecution)
-					? ExecutionMessages.inventoryRejected(detail) : ExecutionMessages.inventoryFailed(detail));
+			executionProgressService.fail(execution,
+					isLockRejection(jobExecution) ? ExecutionMessages.inventoryRejected(detail)
+							: ExecutionMessages.inventoryFailed(detail));
 		}
 
 		telemetryRecorder.persist(executionId, metrics);

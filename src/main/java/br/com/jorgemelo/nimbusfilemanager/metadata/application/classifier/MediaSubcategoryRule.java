@@ -5,9 +5,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 /**
  * One classification rule tried by {@link MediaSubcategoryRuleEngine}. Mirrors
  * the {@code FileNameDateRule}/{@code FileNameDateRuleEngine} pattern in
- * {@code metadata.filename}, so classification is a list
- * of pluggable rules instead of an if/else chain in
- * {@link MediaSubcategoryResolver}.
+ * {@code metadata.filename}, so classification is a list of pluggable rules
+ * instead of an if/else chain in {@link MediaSubcategoryResolver}.
  */
 public interface MediaSubcategoryRule {
 

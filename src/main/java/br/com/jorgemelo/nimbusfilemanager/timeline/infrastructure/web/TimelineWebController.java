@@ -156,9 +156,8 @@ public class TimelineWebController {
 	}
 
 	private boolean geoNoticeDismissed(Authentication authentication) {
-		return Boolean.parseBoolean(
-				userPagePreferenceService.find(username(authentication), SharedConstants.LAYOUT_PAGE_KEY)
-						.get(GEO_NOTICE_DISMISSED));
+		return Boolean.parseBoolean(userPagePreferenceService
+				.find(username(authentication), SharedConstants.LAYOUT_PAGE_KEY).get(GEO_NOTICE_DISMISSED));
 	}
 
 	private void setGeoNoticeDismissed(Authentication authentication, boolean dismissed) {

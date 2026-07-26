@@ -19,7 +19,10 @@ HELP.md
 .classpath
 .factorypath
 .project
-.settings/
+.settings/*
+!.settings/org.eclipse.jdt.core.prefs
+!.settings/org.eclipse.core.resources.prefs
+!.settings/org.eclipse.jdt.ui.prefs
 .springBeans
 .sts4-cache
 

@@ -139,10 +139,8 @@ public class UsnChangeInterpreter {
 			return Optional.ofNullable(directoryCache.get(parentFrn));
 		}
 
-		Path underRoot = resolver.resolveDirectory(parentFrn)
-				.map(path -> path.toAbsolutePath().normalize())
-				.filter(path -> path.startsWith(root))
-				.orElse(null);
+		Path underRoot = resolver.resolveDirectory(parentFrn).map(path -> path.toAbsolutePath().normalize())
+				.filter(path -> path.startsWith(root)).orElse(null);
 
 		directoryCache.put(parentFrn, underRoot);
 

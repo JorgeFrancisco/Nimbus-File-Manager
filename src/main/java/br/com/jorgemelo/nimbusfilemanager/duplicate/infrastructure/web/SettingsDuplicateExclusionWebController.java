@@ -12,11 +12,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedCon
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
- * Restores files or folders to duplicate comparison, undoing an
- * "Excluir da comparação" done from the Duplicados screen. Both duplicate tabs
- * pick the restore up again: the exact queries re-filter on the next visit and
- * both similar caches (photo and video) are cleared so they recompute with the
- * item back in - a restore does not move any fingerprint, so the caches would
+ * Restores files or folders to duplicate comparison, undoing an "Excluir da
+ * comparação" done from the Duplicados screen. Both duplicate tabs pick the
+ * restore up again: the exact queries re-filter on the next visit and both
+ * similar caches (photo and video) are cleared so they recompute with the item
+ * back in - a restore does not move any fingerprint, so the caches would
  * otherwise keep serving the stale, excluded-item-missing grouping.
  */
 @Controller

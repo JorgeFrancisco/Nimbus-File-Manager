@@ -131,7 +131,8 @@ class DuplicatesWebControllerTest {
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
-		Assertions.assertThat(model.get("groups")).asInstanceOf(InstanceOfAssertFactories.list(DuplicateGroupView.class))
+		Assertions.assertThat(model.get("groups"))
+				.asInstanceOf(InstanceOfAssertFactories.list(DuplicateGroupView.class))
 				.satisfiesExactly(single -> {
 					Assertions.assertThat(single.groupId()).isEqualTo("single");
 					Assertions.assertThat(single.headerText()).contains("1");

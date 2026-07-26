@@ -48,8 +48,8 @@ public class TwoFactorAuthenticationSuccessHandler extends SavedRequestAwareAuth
 		if (user.isPresent() && Boolean.TRUE.equals(user.get().getTwoFactorEnabled())) {
 			request.getSession(true).setAttribute(SecurityConstants.PENDING_USERNAME, authentication.getName());
 
-			userAccessLogService.recordAccess(authentication.getName(), SecurityConstants.LOGIN_2FA_REQUIRED,
-					"SUCCESS", client.ipAddress(), client.userAgent(), AccessMessages.TWO_FACTOR_REQUIRED);
+			userAccessLogService.recordAccess(authentication.getName(), SecurityConstants.LOGIN_2FA_REQUIRED, "SUCCESS",
+					client.ipAddress(), client.userAgent(), AccessMessages.TWO_FACTOR_REQUIRED);
 
 			SecurityContextHolder.clearContext();
 

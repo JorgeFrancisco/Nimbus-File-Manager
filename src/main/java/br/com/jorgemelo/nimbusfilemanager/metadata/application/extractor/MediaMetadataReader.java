@@ -10,10 +10,10 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
 
 /**
- * Reads embedded metadata from a media file, grouping the two external
- * probes ({@link ExifToolService} for photos, {@link MediaInfoService} for
- * videos) behind a single collaborator so {@link MetadataExtractor} stays
- * within the constructor-parameter limit.
+ * Reads embedded metadata from a media file, grouping the two external probes
+ * ({@link ExifToolService} for photos, {@link MediaInfoService} for videos)
+ * behind a single collaborator so {@link MetadataExtractor} stays within the
+ * constructor-parameter limit.
  */
 @Service
 public class MediaMetadataReader {

@@ -69,11 +69,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.enums.Kind;
 
 /**
  * Renders the "Duplicados" screen: exact (byte-identical, SHA-256) duplicate
- * candidates and, as a second tab, visually similar photos. Only one tab's
- * data is loaded per request (whichever the
- * {@code tab} query param selects), so switching tabs is a normal link/GET like
- * the rest of the app (see settings.html's own {@code tab-strip}), not a
- * client-side toggle.
+ * candidates and, as a second tab, visually similar photos. Only one tab's data
+ * is loaded per request (whichever the {@code tab} query param selects), so
+ * switching tabs is a normal link/GET like the rest of the app (see
+ * settings.html's own {@code tab-strip}), not a client-side toggle.
  *
  * <p>
  * Both tabs are mapped into the same {@link DuplicateGroupView}/
@@ -145,6 +144,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 		model.addAttribute(MIN_SIMILARITY_KEY, safeMinSimilarity);
 		model.addAttribute("minSimilarityFloor", DuplicateConstants.MIN_SIMILARITY_PERCENT);
 		model.addAttribute("similarityOptions", List.of(70, 75, 80, 85, 90, 95, 100));
+
 		Set<MediaTypeFilter> typeFilter = resolveTypeFilter(request.types(), authentication);
 
 		model.addAttribute("view", safeView);
@@ -364,6 +364,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		setBacklogAttributes(model, status, videoSimilarityWeb.backlogRunner().etaSeconds(),
 				videoSimilarityWeb.backlogRunner().isRunning(), VIDEO_ACTION_BASE, block);
+
 		model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
 
 		if (block) {
@@ -640,12 +641,11 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		return new DuplicateFileView(file.id(), file.fileName(), file.currentFolder(), file.currentPath(), file.size(),
 				file.modifiedAt(), file.captureDate(), keep, recommendedKeep, image, video, pdf, text, audio,
-						previewUrl,
-				contentUrl, FileTypeIcon.iconClass(file.fileType()), localizedIconLabel(file.fileType()), highlight,
-				highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
+				previewUrl, contentUrl, FileTypeIcon.iconClass(file.fileType()), localizedIconLabel(file.fileType()),
+				highlight, highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
 				openTitle(pdf, text, audio), dateSourceLabel(file.dateSource()),
-						dateSourceBadgeClass(file.dateSource()),
-				DateTimeFormatUtils.human(file.captureDate()), DateTimeFormatUtils.human(file.modifiedAt()));
+				dateSourceBadgeClass(file.dateSource()), DateTimeFormatUtils.human(file.captureDate()),
+				DateTimeFormatUtils.human(file.modifiedAt()));
 	}
 
 	/**

@@ -38,8 +38,8 @@ public class AppUser {
 	private Long id;
 
 	/**
-	 * Optimistic-lock version for concurrent read-modify-write of
-	 * mutable fields (password, 2FA, admin edits). The security counter
+	 * Optimistic-lock version for concurrent read-modify-write of mutable fields
+	 * (password, 2FA, admin edits). The security counter
 	 * {@link #failedLoginAttempts} is instead updated atomically in the database
 	 * (see {@code AppUserRepository}), which also bumps this column.
 	 */

@@ -37,8 +37,8 @@ public class StreamCompatibilityPolicy {
 	 * MP4 only defines {@code mov_text}, so an image-based track can never be
 	 * converted into it and the only way forward is to leave it behind.
 	 */
-	private static final List<String> SUBTITLE_MARKERS = List.of("subtitle", "hdmv_pgs", "dvd_sub", "dvb_sub",
-			"vobsub", "mov_text");
+	private static final List<String> SUBTITLE_MARKERS = List.of("subtitle", "hdmv_pgs", "dvd_sub", "dvb_sub", "vobsub",
+			"mov_text");
 
 	public boolean shouldRetryWithAac(AudioHandling handling, String ffmpegError) {
 		return handling == AudioHandling.AUTO && !mentionsSubtitles(ffmpegError)

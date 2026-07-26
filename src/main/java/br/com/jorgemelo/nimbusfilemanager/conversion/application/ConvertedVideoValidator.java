@@ -15,12 +15,12 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Proves a converted file is worth keeping before anything irreversible
- * happens to the original. A zero exit code from ffmpeg is not enough on its
- * own: the output is probed again and must be a readable H.265 video of
- * essentially the same length as the source. Anything else is reported as a
- * failure, which is what keeps a truncated or silently re-muxed file from
- * sending the original to quarantine.
+ * Proves a converted file is worth keeping before anything irreversible happens
+ * to the original. A zero exit code from ffmpeg is not enough on its own: the
+ * output is probed again and must be a readable H.265 video of essentially the
+ * same length as the source. Anything else is reported as a failure, which is
+ * what keeps a truncated or silently re-muxed file from sending the original to
+ * quarantine.
  */
 @Slf4j
 @Component

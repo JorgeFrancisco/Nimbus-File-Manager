@@ -11,9 +11,9 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDispos
  * falls back to the recommended combination, so a request can never convert
  * under an option the user did not pick.
  *
- * @param nameAffix     text the user wants in the converted file's name, or
- *                      empty to keep the source name. Raw here - the naming
- *                      layer is what strips whatever a file name cannot hold
+ * @param nameAffix text the user wants in the converted file's name, or empty
+ *                  to keep the source name. Raw here - the naming layer is what
+ *                  strips whatever a file name cannot hold
  */
 public record ConversionOptions(ConversionQuality quality, AudioHandling audio, OriginalDisposition disposition,
 		String nameAffix, NameAffixPosition affixPosition) {
@@ -23,13 +23,12 @@ public record ConversionOptions(ConversionQuality quality, AudioHandling audio, 
 				ConversionConstants.DEFAULT_NAME_AFFIX, NameAffixPosition.SUFFIX);
 	}
 
-	public static ConversionOptions of(ConversionQuality quality, AudioHandling audio,
-			OriginalDisposition disposition, String nameAffix, NameAffixPosition affixPosition) {
+	public static ConversionOptions of(ConversionQuality quality, AudioHandling audio, OriginalDisposition disposition,
+			String nameAffix, NameAffixPosition affixPosition) {
 		ConversionOptions defaults = defaults();
 
 		return new ConversionOptions(quality == null ? defaults.quality() : quality,
-				audio == null ? defaults.audio() : audio,
-				disposition == null ? defaults.disposition() : disposition,
+				audio == null ? defaults.audio() : audio, disposition == null ? defaults.disposition() : disposition,
 				nameAffix == null ? defaults.nameAffix() : nameAffix,
 				affixPosition == null ? defaults.affixPosition() : affixPosition);
 	}

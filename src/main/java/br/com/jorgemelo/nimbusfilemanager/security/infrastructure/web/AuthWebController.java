@@ -105,22 +105,22 @@ public class AuthWebController extends LocalizedComponent {
 				client.userAgent());
 
 		return switch (result) {
-			case LOCKED -> {
-				request.getSession().removeAttribute(SecurityConstants.PENDING_USERNAME);
+		case LOCKED -> {
+			request.getSession().removeAttribute(SecurityConstants.PENDING_USERNAME);
 
-				yield "redirect:/login?locked";
-			}
-			case INVALID -> {
-				model.addAttribute("username", username);
-				model.addAttribute("error", true);
+			yield "redirect:/login?locked";
+		}
+		case INVALID -> {
+			model.addAttribute("username", username);
+			model.addAttribute("error", true);
 
-				yield "auth/two-factor";
-			}
-			case SUCCESS -> {
-				establishAuthenticatedSession(request, username);
+			yield "auth/two-factor";
+		}
+		case SUCCESS -> {
+			establishAuthenticatedSession(request, username);
 
-				yield "redirect:/app";
-			}
+			yield "redirect:/app";
+		}
 		};
 	}
 

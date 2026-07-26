@@ -12,6 +12,5 @@ import java.nio.file.Path;
 @FunctionalInterface
 public interface FfmpegRunner {
 
-	void run(String ffmpeg, Path source, Path target, int width, double seek)
-			throws IOException, InterruptedException;
+	void run(String ffmpeg, Path source, Path target, int width, double seek) throws IOException, InterruptedException;
 }

@@ -111,6 +111,7 @@ public class ProcessingCoordinator {
 
 		AtomicReferenceArray<Outcome<I, O>> slots = new AtomicReferenceArray<>(size);
 		AtomicInteger completed = new AtomicInteger();
+
 		Runnable onItemDone = () -> onCompleted.accept(completed.incrementAndGet());
 
 		List<Future<?>> futures = new ArrayList<>(size);

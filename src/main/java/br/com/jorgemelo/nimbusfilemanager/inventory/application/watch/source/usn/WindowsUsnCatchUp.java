@@ -39,6 +39,7 @@ public final class WindowsUsnCatchUp {
 				startUsn);
 
 		List<Path> offlineChanges = List.of();
+
 		boolean reconcileNeeded = !canReplay;
 
 		try {
