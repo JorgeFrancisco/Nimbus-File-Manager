@@ -827,7 +827,7 @@ curl -X POST "http://localhost:8088/api/metadata/rebuild" \
   }'
 ```
 
-If `refresh` is empty or omitted, only `DATE` is rebuilt by default. The REST call is synchronous and answers when the pass ends, so it fits scripts and small folders; for a library-wide pass use the **metadata rebuild panel on the settings screen**, which runs it in the background and reports progress, percentage and estimated time. Either way the file has to be reachable on disk - the rebuild re-reads it instead of recomputing from the stored name - and `limit` caps how many files one pass touches.
+If `refresh` is empty or omitted, only `DATE` is rebuilt by default. The REST call is synchronous and answers when the pass ends, so it fits scripts and small folders; for a library-wide pass use the **metadata rebuild panel on the settings screen**, which runs it in the background and reports progress, percentage and estimated time. Either way the file has to be reachable on disk - the rebuild re-reads it instead of recomputing from the stored name - and `limit` caps how many files one pass touches (default 10,000, ceiling 250,000). A folder with more files than the ceiling takes more than one run: the panel states the ceiling on screen and offers **Continue where it stopped**, which skips whatever the previous run already rebuilt (by `last_analysis`) instead of starting over, or **Force all** to redo everything.
 
 ## Duplicates
 
@@ -1115,7 +1115,7 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1873 run, 0 failures, 0 errors, 9 skipped
+Tests:       1877 run, 0 failures, 0 errors, 9 skipped
 JaCoCo:      97.36% instruction, 89.37% branch, 96.98% line, 97.51% method, 100.00% class
 ```
 

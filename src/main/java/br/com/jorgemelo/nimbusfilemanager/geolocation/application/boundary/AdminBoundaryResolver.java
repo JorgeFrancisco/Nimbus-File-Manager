@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Match;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.NearestBoundary;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.NearestMatch;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoAdminBoundary;
@@ -115,23 +116,60 @@ public class AdminBoundaryResolver {
 	 * water in flight, coastal GPS noise): finds the nearest municipality within
 	 * {@code maxKm} and resolves the rest of the hierarchy from it. The state is
 	 * confirmed by containment of the municipality's interior point; the country
-	 * comes denormalized from the boundary row itself.
+	 * comes denormalized from the boundary row itself. Where no municipality exists
+	 * to approximate to, the nearest country answers instead.
 	 */
 	@Transactional(readOnly = true)
 	public Optional<NearestMatch> resolveNearest(double latitude, double longitude, double maxKm) {
+		Optional<NearestBoundary> municipality = closest(AdminBoundaryKind.MUNICIPALITY, latitude, longitude, maxKm);
+
+		if (municipality.isPresent()) {
+			return municipality.map(this::toMunicipalityMatch);
+		}
+
+		// Some small states arrive with only a country outline and no subdivisions at
+		// all. With no municipality to approximate to, a photo taken at the waterline
+		// of such a country would stay unresolved even though its own polygon is metres
+		// away. Approximating to the country is weak but true, and rates LOW like every
+		// other approximation.
+		return closest(AdminBoundaryKind.COUNTRY, latitude, longitude, maxKm)
+				.map(nearest -> new NearestMatch(new Match(AdminBoundaryKind.COUNTRY, null,
+						nearest.boundary().getCountryCode(), nearest.boundary().getCountryName(), null),
+						nearest.distanceKm()));
+	}
+
+	private NearestMatch toMunicipalityMatch(NearestBoundary nearest) {
+		GeoAdminBoundary best = nearest.boundary();
+
+		// The interior point is guaranteed inside the municipality, hence on
+		// land: containment of the state is checked there, not at sea.
+		Point interior = nearest.geometry().getInteriorPoint();
+
+		Optional<GeoAdminBoundary> state = bestContaining(repository.findCandidatesInCountry(AdminBoundaryKind.STATE,
+				best.getCountryCode(), interior.getY(), interior.getX()), interior);
+
+		return new NearestMatch(new Match(AdminBoundaryKind.MUNICIPALITY, best.getName(), best.getCountryCode(),
+				best.getCountryName(), state.map(GeoAdminBoundary::getName).orElse(null)), nearest.distanceKm());
+	}
+
+	/**
+	 * Closest boundary of one level within {@code maxKm}, measured to the polygon
+	 * edge rather than to a centroid, so a wide region does not lose to a small
+	 * neighbour just by being wide.
+	 */
+	private Optional<NearestBoundary> closest(AdminBoundaryKind kind, double latitude, double longitude,
+			double maxKm) {
 		double latMargin = maxKm / KM_PER_DEGREE_LAT;
 		double lonMargin = maxKm / (KM_PER_DEGREE_LAT * Math.max(0.01, Math.cos(Math.toRadians(latitude))));
 
 		Point point = geometryFactory.createPoint(new Coordinate(longitude, latitude));
 
-		GeoAdminBoundary best = null;
-
-		Geometry bestGeometry = null;
+		NearestBoundary best = null;
 
 		double bestKm = maxKm;
 
-		for (GeoAdminBoundary candidate : repository.findCandidatesNear(AdminBoundaryKind.MUNICIPALITY, latitude,
-				longitude, latMargin, lonMargin)) {
+		for (GeoAdminBoundary candidate : repository.findCandidatesNear(kind, latitude, longitude, latMargin,
+				lonMargin)) {
 			PreparedGeometry prepared = geometryCache.geometry(candidate);
 
 			if (prepared == null) {
@@ -145,26 +183,12 @@ public class AdminBoundaryResolver {
 			double km = haversineKm(latitude, longitude, nearest[0].y, nearest[0].x);
 
 			if (km <= bestKm) {
-				best = candidate;
-				bestGeometry = geometry;
+				best = new NearestBoundary(candidate, geometry, km);
 				bestKm = km;
 			}
 		}
 
-		if (best == null) {
-			return Optional.empty();
-		}
-
-		// The interior point is guaranteed inside the municipality, hence on
-		// land: containment of the state is checked there, not at sea.
-		Point interior = bestGeometry.getInteriorPoint();
-
-		Optional<GeoAdminBoundary> state = bestContaining(repository.findCandidatesInCountry(AdminBoundaryKind.STATE,
-				best.getCountryCode(), interior.getY(), interior.getX()), interior);
-
-		return Optional
-				.of(new NearestMatch(new Match(AdminBoundaryKind.MUNICIPALITY, best.getName(), best.getCountryCode(),
-						best.getCountryName(), state.map(GeoAdminBoundary::getName).orElse(null)), bestKm));
+		return Optional.ofNullable(best);
 	}
 
 	/**

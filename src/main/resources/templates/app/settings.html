@@ -217,7 +217,7 @@
 				</label>
 
 				<label class="section"><span th:text="#{settings.metadata.scope}">Abrangência</span>
-					<select name="scope">
+					<select name="scope" th:disabled="${metadataRebuildRunning}">
 						<option th:each="option : ${metadataRebuildScopes}" th:value="${option}"
 								th:selected="${option.name() == metadataRebuildScope}"
 								th:text="#{'settings.metadata.scope.' + ${option}}"></option>
@@ -239,6 +239,8 @@
 							th:disabled="${metadataRebuildRunning}">
 						<span th:text="#{settings.metadata.dryRun}">Apenas simular: conta os arquivos e não grava nada</span></label>
 				</div>
+
+				<small class="muted section" th:text="#{settings.metadata.perRunLimit(${#numbers.formatInteger(metadataRebuildLimit, 1, 'POINT')})}"></small>
 
 				<div class="actions">
 					<button type="submit" th:disabled="${metadataRebuildRunning or inventoryRunning}" th:text="#{settings.metadata.rebuild}">Reconstruir metadados</button>

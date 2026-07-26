@@ -159,6 +159,60 @@ class AdminBoundaryPipStrategyTest {
 		Assertions.assertThat(resolution.get().confidence()).isEqualTo(LocationConfidence.LOW);
 	}
 
+	/**
+	 * A photo taken at the waterline of a country the dataset has no subdivisions
+	 * for: the point is metres outside the country's own polygon and there is no
+	 * municipality anywhere to approximate to. Before this it stayed unresolved, so
+	 * hundreds of files from a single trip had no location at all.
+	 */
+	@Test
+	void shouldApproximateToTheCountryWhenItHasNoMunicipalityToApproximateTo() {
+		GeoAdminBoundary aruba = box(AdminBoundaryKind.COUNTRY, "Aruba", "AW", "Aruba", -70.06, 12.41, -69.87, 12.62);
+
+		when(repository.findCandidatesNear(eq(AdminBoundaryKind.COUNTRY), anyDouble(), anyDouble(), anyDouble(),
+				anyDouble())).thenReturn(List.of(aruba));
+
+		BoundaryGeometryCache cache = cache();
+
+		AdminBoundaryPipStrategy strategy = new AdminBoundaryPipStrategy(new AdminBoundaryResolver(repository, cache),
+				cache, new LocationConfidencePolicy(), Clock.systemDefaultZone());
+
+		// ~2 km south of the island's southern edge (lat 12.41): inside its bounding
+		// box, outside the polygon - which is what the pending files looked like.
+		Optional<LocationResolution> resolution = strategy.resolve(new Coordinates(12.39, -69.95));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().countryCode()).isEqualTo("AW");
+		Assertions.assertThat(resolution.get().countryName()).isEqualTo("Aruba");
+		Assertions.assertThat(resolution.get().cityName()).isNull();
+		Assertions.assertThat(resolution.get().stateName()).isNull();
+		Assertions.assertThat(resolution.get().confidence()).isEqualTo(LocationConfidence.LOW);
+		Assertions.assertThat(resolution.get().distanceKm()).isBetween(0.5, 5.0);
+	}
+
+	/**
+	 * The country approximation is the last resort, never a shortcut: where a
+	 * municipality is within tolerance it still wins, keeping the city name that
+	 * makes the location useful.
+	 */
+	@Test
+	void shouldStillPreferANearbyMunicipalityOverTheCountryApproximation() {
+		when(repository.findCandidatesNear(eq(AdminBoundaryKind.MUNICIPALITY), anyDouble(), anyDouble(), anyDouble(),
+				anyDouble())).thenReturn(List.of(boundary(AdminBoundaryKind.MUNICIPALITY, "Pinhais", PINHAIS)));
+		when(repository.findCandidatesNear(eq(AdminBoundaryKind.COUNTRY), anyDouble(), anyDouble(), anyDouble(),
+				anyDouble())).thenReturn(List.of(boundary(AdminBoundaryKind.COUNTRY, "Brazil", BRAZIL)));
+
+		BoundaryGeometryCache cache = cache();
+
+		AdminBoundaryPipStrategy strategy = new AdminBoundaryPipStrategy(new AdminBoundaryResolver(repository, cache),
+				cache, new LocationConfidencePolicy(), Clock.systemDefaultZone());
+
+		Optional<LocationResolution> resolution = strategy.resolve(new Coordinates(-25.475, -49.055));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().cityName()).isEqualTo("Pinhais");
+	}
+
 	@Test
 	void shouldReturnEmptyWhenOutsideEveryBoundaryAndBeyondFallbackTolerance() {
 		Assertions.assertThat(strategy().resolve(new Coordinates(-10.0, -100.0))).isEmpty();

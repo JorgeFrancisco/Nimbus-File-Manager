@@ -27,9 +27,11 @@ public record MetadataRebuildRequest(
 
 	/**
 	 * Real ceiling for {@link #limit}, independent of the caller-supplied value -
-	 * see {@link OrganizationPreviewRequest#MAX_LIMIT}.
+	 * see {@link OrganizationPreviewRequest#MAX_LIMIT}. Public because the settings
+	 * panel states it on screen: a folder with more files than this needs the run
+	 * repeated, and the screen has to say so from the single place that defines it.
 	 */
-	private static final int MAX_LIMIT = 100_000;
+	public static final int MAX_LIMIT = 250_000;
 
 	/**
 	 * Stands in for "no cutoff" when the caller wants every file. The query compares

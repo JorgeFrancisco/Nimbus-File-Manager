@@ -182,7 +182,7 @@ class SettingsMetadataWebControllerTest {
 	@Test
 	void asksForTheWholeFolderRatherThanTheDefaultSample() {
 		Assertions.assertThat(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, null).safeLimit())
-				.isEqualTo(100_000);
+				.isEqualTo(MetadataRebuildRequest.MAX_LIMIT);
 	}
 
 	/**

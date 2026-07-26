@@ -16,6 +16,7 @@ import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 
@@ -105,6 +106,20 @@ class MetadataRebuildSettingsAdviceTest {
 		advice.addTo(broken, null);
 
 		Assertions.assertThat(broken.getAttribute("metadataRebuildLastRunAt")).isNull();
+	}
+
+	/**
+	 * The screen states the per-run ceiling, so it comes from the single place that
+	 * defines it instead of being retyped into the wording.
+	 */
+	@Test
+	void publishesThePerRunCeilingTheScreenStates() {
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildLimit"))
+				.isEqualTo(MetadataRebuildRequest.MAX_LIMIT);
 	}
 
 	@Test

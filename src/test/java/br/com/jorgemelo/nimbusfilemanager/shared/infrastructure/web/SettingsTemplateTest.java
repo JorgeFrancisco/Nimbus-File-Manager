@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +38,32 @@ class SettingsTemplateTest {
 		assertThat(html).contains("th:attr=\"data-inventory-running=${inventoryRunning}\"");
 		assertThat(javascript).contains("[data-inventory-running]").contains("blockedByInventory()")
 				.contains("window.location.reload()");
+	}
+
+	/**
+	 * Every control of the rebuild form is locked while a rebuild runs. A control
+	 * that still looks editable promises a change the running pass will not honour -
+	 * it already carries the choices it was started with.
+	 */
+	@Test
+	void everyRebuildControlIsDisabledWhileARebuildRuns() throws Exception {
+		String html = Files.readString(Path.of("src/main/resources/templates/app/settings.html"));
+
+		String form = html.substring(html.indexOf("/app/settings/metadata/rebuild}\" method=\"post\""),
+				html.indexOf("</form>", html.indexOf("/app/settings/metadata/rebuild}\" method=\"post\"")));
+
+		List<String> unlocked = Arrays.stream(form.split("<")).filter(SettingsTemplateTest::isFormControl)
+				.filter(tag -> !tag.contains("th:disabled")).toList();
+
+		assertThat(unlocked).isEmpty();
+	}
+
+	private static boolean isFormControl(String tag) {
+		if (tag.startsWith("input") && tag.contains("type=\"hidden\"")) {
+			return false;
+		}
+
+		return tag.startsWith("input") || tag.startsWith("select") || tag.startsWith("button");
 	}
 
 	/**

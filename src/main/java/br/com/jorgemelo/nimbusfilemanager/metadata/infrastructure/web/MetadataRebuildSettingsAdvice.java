@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
@@ -73,6 +74,7 @@ public class MetadataRebuildSettingsAdvice {
 				selectedFields(preferences.get(MetadataRebuildPreferences.FIELDS_KEY)));
 		model.addAttribute("metadataRebuildDryRun",
 				Boolean.parseBoolean(preferences.get(MetadataRebuildPreferences.DRY_RUN_KEY)));
+		model.addAttribute("metadataRebuildLimit", MetadataRebuildRequest.MAX_LIMIT);
 		model.addAttribute("metadataRebuildScopes", MetadataRebuildScope.values());
 		model.addAttribute("metadataRebuildScope",
 				EnumUtils.valueOfOrDefault(MetadataRebuildScope.class,
