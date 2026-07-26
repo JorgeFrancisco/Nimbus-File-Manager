@@ -50,9 +50,10 @@ class HardwareEncoderProbeTest {
 
 	@Test
 	void keepsTheFirstEncoderThatOpensASession() throws Exception {
-		when(transcodeRunner.run(argThat(command -> command != null && command.contains("hevc_nvenc")), any(),
-				any())).thenReturn(refused());
-		when(transcodeRunner.run(argThat(command -> command != null && command.contains("hevc_qsv")), any(), any())).thenReturn(ok());
+		when(transcodeRunner.run(argThat(command -> command != null && command.contains("hevc_nvenc")), any(), any()))
+				.thenReturn(refused());
+		when(transcodeRunner.run(argThat(command -> command != null && command.contains("hevc_qsv")), any(), any()))
+				.thenReturn(ok());
 
 		Assertions.assertThat(probe.hardwareEncoder()).contains(VideoEncoder.QUICK_SYNC);
 		Assertions.assertThat(probe.isAvailable()).isTrue();
@@ -78,8 +79,8 @@ class HardwareEncoderProbeTest {
 	}
 
 	/**
-	 * Hardware does not appear between two conversions, and the screen asks on every
-	 * render: probing once keeps a process spawn off the request path.
+	 * Hardware does not appear between two conversions, and the screen asks on
+	 * every render: probing once keeps a process spawn off the request path.
 	 */
 	@Test
 	void probesOnlyOnceAndReusesTheAnswer() throws Exception {
@@ -108,7 +109,7 @@ class HardwareEncoderProbeTest {
 	 * interrupted probe answers "no encoder" while restoring the interrupt flag
 	 * instead of swallowing it.
 	 */
-	@Test
+	@SuppressWarnings("unchecked") @Test
 	void ignoresProgressAndSurvivesAnInterruptedProbe() throws Exception {
 		when(transcodeRunner.run(any(), any(), any())).thenAnswer(invocation -> {
 			invocation.getArgument(1, Consumer.class).accept("out_time_us=1000");

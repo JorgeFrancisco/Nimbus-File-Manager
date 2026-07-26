@@ -15,7 +15,6 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeEx
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRequest;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  * the whole feature safe to retry: it leaves the library exactly as it was,
  * with nothing half-written anywhere.
  */
-@Slf4j
-@Component
+@Slf4j @Component
 public class VideoTranscoder {
 
 	private final VideoConversionCommandBuilder commandBuilder;
