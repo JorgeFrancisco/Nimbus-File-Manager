@@ -27,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRe
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.VideoEncoder;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
@@ -35,6 +36,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 class VideoTranscoderTest {
 
 	private static final TranscodeExecution SUCCESS = new TranscodeExecution(true, 0, "");
+	private static final TranscodeExecution HARDWARE_REJECTED = new TranscodeExecution(true, 1,
+			"Error initializing output stream: Error while opening encoder");
 	private static final TranscodeExecution AUDIO_REJECTED = new TranscodeExecution(true, 1,
 			"Could not find tag for codec pcm_s16le");
 	private static final TranscodeExecution SUBTITLES_REJECTED = new TranscodeExecution(true, 1,
@@ -43,6 +46,7 @@ class VideoTranscoderTest {
 	private final ConvertedVideoValidator validator = mock(ConvertedVideoValidator.class);
 	private final ConversionFileNaming conversionFileNaming = mock(ConversionFileNaming.class);
 	private final ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
+	private final HardwareEncoderProbe hardwareEncoderProbe = mock(HardwareEncoderProbe.class);
 
 	private final Path source = Path.of("D:", "library", "clip.mkv");
 	private final Path output = Path.of("D:", "workspace", "conversion", "clip.mp4");
@@ -242,6 +246,48 @@ class VideoTranscoderTest {
 		when(conversionFileNaming.temporaryFor(eq(source), any())).thenReturn(output);
 	}
 
+	/**
+	 * A GPU encoder can accept a session and still refuse a particular file, so the
+	 * batch must finish it on the processor instead of failing it. Without this the
+	 * user picks "rápido" once and loses every file the card dislikes.
+	 */
+	@Test
+	void retriesOnTheSoftwareEncoderWhenTheGraphicsCardRefusesTheFile() {
+		stubNaming();
+		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.of(VideoEncoder.QUICK_SYNC));
+
+		TranscodeResult result = transcoder(attempt -> attempt == 1 ? HARDWARE_REJECTED : SUCCESS)
+				.transcode(fastRequest(), _ -> {
+				}, notCancelled());
+
+		Assertions.assertThat(result.successful()).isTrue();
+
+		Assertions.assertThat(commands).hasSize(2);
+		Assertions.assertThat(commands.get(0)).containsSubsequence("-c:v", "hevc_qsv");
+		Assertions.assertThat(commands.get(1)).containsSubsequence("-c:v", "libx265");
+	}
+
+	/**
+	 * Software has nothing slower to fall back to: a failure there is a failure.
+	 */
+	@Test
+	void doesNotRetryWhenTheSoftwareEncoderItselfFailed() {
+		stubNaming();
+
+		TranscodeResult result = transcoder(_ -> HARDWARE_REJECTED).transcode(request(AudioHandling.COPY), _ -> {
+		}, notCancelled());
+
+		Assertions.assertThat(result.successful()).isFalse();
+		Assertions.assertThat(commands).hasSize(1);
+	}
+
+	private TranscodeRequest fastRequest() {
+		return new TranscodeRequest(source, 120.0,
+				new ConversionOptions(ConversionQuality.FAST_BALANCED, AudioHandling.COPY, OriginalDisposition.KEEP, "",
+						NameAffixPosition.SUFFIX),
+				false);
+	}
+
 	private TranscodeRequest request(AudioHandling audio) {
 		return new TranscodeRequest(source, 120.0, new ConversionOptions(ConversionQuality.BALANCED, audio,
 				OriginalDisposition.KEEP, "", NameAffixPosition.SUFFIX), false);
@@ -271,7 +317,8 @@ class VideoTranscoderTest {
 	}
 
 	private VideoTranscoder build(VideoTranscodeRunner runner) {
-		return new VideoTranscoder(new VideoConversionCommandBuilder(externalToolPaths), runner, validator,
+		return new VideoTranscoder(new VideoConversionCommandBuilder(externalToolPaths, hardwareEncoderProbe), runner,
+				validator,
 				new StreamCompatibilityPolicy(), conversionFileNaming, new FfmpegProgressParser(),
 				new ExternalToolGate(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()));
 	}

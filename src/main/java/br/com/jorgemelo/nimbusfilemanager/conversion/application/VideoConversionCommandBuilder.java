@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommandOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.VideoEncoder;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 
 /**
@@ -37,9 +38,12 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths
 public class VideoConversionCommandBuilder {
 
 	private final ExternalToolPaths externalToolPaths;
+	private final HardwareEncoderProbe hardwareEncoderProbe;
 
-	public VideoConversionCommandBuilder(ExternalToolPaths externalToolPaths) {
+	public VideoConversionCommandBuilder(ExternalToolPaths externalToolPaths,
+			HardwareEncoderProbe hardwareEncoderProbe) {
 		this.externalToolPaths = externalToolPaths;
+		this.hardwareEncoderProbe = hardwareEncoderProbe;
 	}
 
 	public List<String> build(Path input, Path output, CommandOptions options) {
@@ -97,11 +101,10 @@ public class VideoConversionCommandBuilder {
 			// so the stream is remuxed into MP4 untouched.
 			command.add("copy");
 		} else {
-			command.add("libx265");
-			command.add("-crf");
-			command.add(String.valueOf(options.quality().crf()));
-			command.add("-preset");
-			command.add(options.quality().preset());
+			VideoEncoder encoder = encoderFor(options.quality());
+
+			command.add(encoder.ffmpegName());
+			command.addAll(encoder.qualityArguments(options.quality().quality(), ConversionQuality.PRESET));
 		}
 
 		// Without the hvc1 tag QuickTime, macOS, iOS and Windows Photos refuse to play
@@ -111,6 +114,20 @@ public class VideoConversionCommandBuilder {
 		command.add("hvc1");
 		command.add("-movflags");
 		command.add("use_metadata_tags");
+	}
+
+	/**
+	 * The profile asks for hardware; which encoder that means is whatever this
+	 * machine proved it can use. Software answers for the software profiles and also
+	 * when a hardware profile survives on a machine that has no card for it - a
+	 * stored preference must never turn into a command ffmpeg cannot run.
+	 */
+	private VideoEncoder encoderFor(ConversionQuality quality) {
+		if (!quality.requiresHardware()) {
+			return VideoEncoder.SOFTWARE;
+		}
+
+		return hardwareEncoderProbe.hardwareEncoder().orElse(VideoEncoder.SOFTWARE);
 	}
 
 	private void addAudioEncoding(List<String> command, CommandOptions options) {

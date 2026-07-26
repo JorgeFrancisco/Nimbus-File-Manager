@@ -198,15 +198,26 @@
 		progressText.textContent = parts.join(' · ');
 	}
 
+	// Read the controls directly instead of serialising the form: every field is
+	// disabled while a batch runs, and a disabled field is left out of FormData, so
+	// the options travelled as nulls and the server replaced each one with its
+	// default - silently turning the user's saved choices back to the recommended
+	// combination the moment they pressed convert.
+	function pickedValue(name) {
+		const option = optionsForm.querySelector('input[name="' + name + '"]:checked');
+
+		return option ? option.value : null;
+	}
+
 	function chosenOptions() {
-		const data = new FormData(optionsForm);
+		const affix = optionsForm.querySelector('input[name="nameAffix"]');
 
 		return {
-			quality: data.get('quality'),
-			audio: data.get('audio'),
-			disposition: data.get('disposition'),
-			nameAffix: data.get('nameAffix') || '',
-			affixPosition: data.get('affixPosition')
+			quality: pickedValue('quality'),
+			audio: pickedValue('audio'),
+			disposition: pickedValue('disposition'),
+			nameAffix: affix ? affix.value : '',
+			affixPosition: pickedValue('affixPosition')
 		};
 	}
 

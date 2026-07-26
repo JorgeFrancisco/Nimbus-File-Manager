@@ -35,6 +35,20 @@
 						<small th:text="#{conversion.quality.balanced.hint}">A maior economia de espaço com perda visual mínima.</small>
 					</span>
 				</label>
+				<label class="conversion-option" th:if="${hardwareEncoder}">
+					<input type="radio" name="quality" value="FAST_HIGH_QUALITY" th:checked="${quality == 'FAST_HIGH_QUALITY'}">
+					<span>
+						<strong th:text="#{conversion.quality.fastHigh}">Rápido — alta qualidade</strong>
+						<small th:text="#{conversion.quality.fastHigh.hint}">A qualidade da opção Alta qualidade, feita na placa de vídeo.</small>
+					</span>
+				</label>
+				<label class="conversion-option" th:if="${hardwareEncoder}">
+					<input type="radio" name="quality" value="FAST_BALANCED" th:checked="${quality == 'FAST_BALANCED'}">
+					<span>
+						<strong th:text="#{conversion.quality.fastBalanced}">Rápido — equilibrado</strong>
+						<small th:text="#{conversion.quality.fastBalanced.hint}">A qualidade da opção Equilibrado, feita na placa de vídeo.</small>
+					</span>
+				</label>
 			</fieldset>
 
 			<fieldset class="conversion-option-group">

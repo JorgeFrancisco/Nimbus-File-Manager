@@ -15,6 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeEx
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRequest;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,19 @@ public class VideoTranscoder {
 			execution = run(request, output, options, onFilePercent, cancelled);
 		}
 
+		if (retriesOnSoftware(options, execution, cancelled)) {
+			log.warn("Retrying {} on the software encoder: the hardware one refused this file", request.source());
+
+			// A GPU encoder can accept a session and still refuse a particular file
+			// (unsupported pixel format, resolution beyond the block's limits). Falling
+			// back to software costs time but keeps the batch moving, exactly like the
+			// audio fallback does.
+			options = new CommandOptions(options.quality().softwareEquivalent(), options.copyVideo(),
+					options.encodeAudioAsAac(), options.includeSubtitles());
+
+			execution = run(request, output, options, onFilePercent, cancelled);
+		}
+
 		if (retriesWithoutSubtitles(execution, cancelled)) {
 			log.info("Retrying {} without subtitles: MP4 cannot hold the subtitle track of this file",
 					request.source());
@@ -112,6 +126,12 @@ public class VideoTranscoder {
 	private boolean retriesWithAac(TranscodeRequest request, TranscodeExecution execution, BooleanSupplier cancelled) {
 		return !cancelled.getAsBoolean() && !execution.successful()
 				&& streamCompatibilityPolicy.shouldRetryWithAac(request.options().audio(), execution.errorOutput());
+	}
+
+	/** Only a hardware attempt has a slower encoder left to fall back to. */
+	private boolean retriesOnSoftware(CommandOptions options, TranscodeExecution execution, BooleanSupplier cancelled) {
+		return !cancelled.getAsBoolean() && !execution.successful() && !options.copyVideo()
+				&& options.quality().requiresHardware();
 	}
 
 	private boolean retriesWithoutSubtitles(TranscodeExecution execution, BooleanSupplier cancelled) {

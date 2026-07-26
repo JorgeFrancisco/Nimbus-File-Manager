@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,12 +14,15 @@ import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommandOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.VideoEncoder;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 
 class VideoConversionCommandBuilderTest {
 
 	private final ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
-	private final VideoConversionCommandBuilder builder = new VideoConversionCommandBuilder(externalToolPaths);
+	private final HardwareEncoderProbe hardwareEncoderProbe = mock(HardwareEncoderProbe.class);
+	private final VideoConversionCommandBuilder builder = new VideoConversionCommandBuilder(externalToolPaths,
+			hardwareEncoderProbe);
 
 	private Path input;
 	private Path output;
@@ -116,5 +120,46 @@ class VideoConversionCommandBuilderTest {
 
 	private CommandOptions options(boolean copyVideo, boolean encodeAudioAsAac, boolean includeSubtitles) {
 		return new CommandOptions(ConversionQuality.BALANCED, copyVideo, encodeAudioAsAac, includeSubtitles);
+	}
+
+	/**
+	 * The user picks "rápido", not a vendor: the command is built for whichever
+	 * encoder this machine proved it has, each with its own quality knob. Naming one
+	 * here would make the feature work on one card and fail on the next.
+	 */
+	@Test
+	void usesWhicheverGraphicsCardEncoderTheMachineHasWithItsOwnQualityScale() {
+		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.of(VideoEncoder.QUICK_SYNC));
+
+		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true);
+
+		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "hevc_qsv")
+				.containsSubsequence("-global_quality", "22").containsSubsequence("-look_ahead", "1")
+				.containsSubsequence("-tag:v", "hvc1").doesNotContain("-crf", "libx265");
+
+		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.of(VideoEncoder.NVENC));
+
+		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "hevc_nvenc")
+				.containsSubsequence("-cq", "22").doesNotContain("-global_quality", "-crf");
+
+		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.of(VideoEncoder.AMF));
+
+		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "hevc_amf")
+				.containsSubsequence("-qp_i", "22").doesNotContain("-global_quality", "-cq");
+	}
+
+	/**
+	 * A preference outlives the machine it was chosen on: the same stored choice
+	 * lands on a computer with no usable card, and must still produce a command
+	 * ffmpeg can run instead of failing every file of the batch.
+	 */
+	@Test
+	void fallsBackToTheSoftwareEncoderWhenTheMachineHasNoUsableCard() {
+		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.empty());
+
+		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true);
+
+		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "libx265")
+				.containsSubsequence("-crf", "22");
 	}
 }

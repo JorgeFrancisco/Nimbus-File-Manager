@@ -27,6 +27,7 @@ import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCommitService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.VideoConversionAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
@@ -49,8 +50,9 @@ class ConversionWebControllerTest {
 	private final ConversionCommitService conversionCommitService = mock(ConversionCommitService.class);
 	private final QuarantinePurgeService quarantinePurgeService = mock(QuarantinePurgeService.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
+	private final HardwareEncoderProbe hardwareEncoderProbe = mock(HardwareEncoderProbe.class);
 	private final ConversionWebController controller = new ConversionWebController(conversionCandidateService, runner,
-			conversionCommitService, quarantinePurgeService, preferences);
+			conversionCommitService, quarantinePurgeService, preferences, hardwareEncoderProbe);
 
 	private final Authentication authentication = mock(Authentication.class);
 

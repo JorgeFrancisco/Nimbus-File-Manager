@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCommitService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.VideoConversionAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCandidateView;
@@ -60,16 +61,19 @@ public class ConversionWebController extends LocalizedComponent {
 	private final ConversionCommitService conversionCommitService;
 	private final QuarantinePurgeService quarantinePurgeService;
 	private final UserPagePreferenceService userPagePreferenceService;
+	private final HardwareEncoderProbe hardwareEncoderProbe;
 
 	@Autowired
 	public ConversionWebController(ConversionCandidateService conversionCandidateService,
 			VideoConversionAsyncRunner videoConversionAsyncRunner, ConversionCommitService conversionCommitService,
-			QuarantinePurgeService quarantinePurgeService, UserPagePreferenceService userPagePreferenceService) {
+			QuarantinePurgeService quarantinePurgeService, UserPagePreferenceService userPagePreferenceService,
+			HardwareEncoderProbe hardwareEncoderProbe) {
 		this.conversionCandidateService = conversionCandidateService;
 		this.videoConversionAsyncRunner = videoConversionAsyncRunner;
 		this.conversionCommitService = conversionCommitService;
 		this.quarantinePurgeService = quarantinePurgeService;
 		this.userPagePreferenceService = userPagePreferenceService;
+		this.hardwareEncoderProbe = hardwareEncoderProbe;
 	}
 
 	@GetMapping("/app/conversion")
@@ -94,6 +98,9 @@ public class ConversionWebController extends LocalizedComponent {
 		model.addAttribute(PAGE_SIZE_KEY, pageSize);
 
 		model.addAttribute("quality", storedQuality(preferences).name());
+		// Only offered where a real encode session opens: an option that fails halfway
+		// through a batch is worse than an option that was never there.
+		model.addAttribute("hardwareEncoder", hardwareEncoderProbe.isAvailable());
 		model.addAttribute("audio", storedAudio(preferences).name());
 		model.addAttribute("disposition", storedDisposition(preferences).name());
 		model.addAttribute("nameAffix", storedAffix(preferences));
