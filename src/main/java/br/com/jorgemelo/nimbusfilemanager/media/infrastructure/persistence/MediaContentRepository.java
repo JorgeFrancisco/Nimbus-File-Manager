@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationDisplay;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentSource;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaDetails;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
@@ -31,9 +32,11 @@ public class MediaContentRepository {
 			""";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
+	private final LocationLabels locationLabels;
 
-	public MediaContentRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+	public MediaContentRepository(NamedParameterJdbcTemplate jdbcTemplate, LocationLabels locationLabels) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.locationLabels = locationLabels;
 	}
 
 	public Optional<MediaContentSource> findContent(UUID publicId) {
@@ -59,7 +62,7 @@ public class MediaContentRepository {
 				       mf.created_at, mf.modified_at, m.display_width, m.display_height,
 				       m.manufacturer, m.model, m.latitude, m.longitude, v.duration_seconds,
 				       location.current_path,
-				       gl.city_name, gl.state_name, gl.country_name, gl.distance_km, gl.confidence, gl.provider
+				       gl.city_name, gl.state_name, gl.country_name, gl.open_sea, gl.distance_km, gl.confidence, gl.provider
 				""" + BASE;
 		List<MediaDetails> rows = jdbcTemplate.query(sql, params(publicId), (rs, _) -> {
 			Number duration = (Number) rs.getObject("duration_seconds");
@@ -89,7 +92,7 @@ public class MediaContentRepository {
 					"/api/media/" + publicId + "/content",
 
 					LocationDisplay.fullLabel(rs.getString("city_name"), rs.getString("state_name"),
-							rs.getString("country_name")),
+							rs.getString("country_name"), rs.getBoolean("open_sea"), locationLabels.openSea()),
 
 					distanceKm == null ? null : distanceKm.doubleValue(),
 

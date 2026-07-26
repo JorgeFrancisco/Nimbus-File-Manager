@@ -160,6 +160,40 @@ class AdminBoundaryPipStrategyTest {
 	}
 
 	/**
+	 * The tolerance is the breadth of the territorial sea, so a coordinate that far
+	 * out is still national water and still resolves; past it there is no coast to
+	 * belong to. Guards the boundary itself, which a single-point test would miss.
+	 */
+	@Test
+	void shouldApproximateWithinTheTerritorialSeaAndCallOpenSeaBeyondIt() {
+		when(repository.findCandidatesNear(eq(AdminBoundaryKind.MUNICIPALITY), anyDouble(), anyDouble(), anyDouble(),
+				anyDouble())).thenReturn(List.of(boundary(AdminBoundaryKind.MUNICIPALITY, "Pinhais", PINHAIS)));
+
+		BoundaryGeometryCache cache = cache();
+
+		AdminBoundaryPipStrategy strategy = new AdminBoundaryPipStrategy(new AdminBoundaryResolver(repository, cache),
+				cache, new LocationConfidencePolicy(), Clock.systemDefaultZone());
+
+		// ~15 km east of Pinhais' eastern edge: beyond the old 10 km tolerance, inside
+		// the territorial sea.
+		Optional<LocationResolution> inside = strategy.resolve(new Coordinates(-25.475, -48.951));
+
+		Assertions.assertThat(inside).isPresent();
+		Assertions.assertThat(inside.get().cityName()).isEqualTo("Pinhais");
+		// Bound to the constant rather than to a number typed here: what matters is
+		// that the point is past the old tolerance and still inside the current one.
+		Assertions.assertThat(inside.get().distanceKm()).isGreaterThan(10.0)
+				.isLessThan(AdminBoundaryPipStrategy.NEAREST_FALLBACK_MAX_KM);
+
+		// ~40 km out: past the territorial sea, nothing to attribute it to.
+		Optional<LocationResolution> beyond = strategy.resolve(new Coordinates(-25.475, -48.700));
+
+		Assertions.assertThat(beyond).isPresent();
+		Assertions.assertThat(beyond.get().openSea()).isTrue();
+		Assertions.assertThat(beyond.get().cityName()).isNull();
+	}
+
+	/**
 	 * A photo taken at the waterline of a country the dataset has no subdivisions
 	 * for: the point is metres outside the country's own polygon and there is no
 	 * municipality anywhere to approximate to. Before this it stayed unresolved, so
@@ -213,9 +247,34 @@ class AdminBoundaryPipStrategyTest {
 		Assertions.assertThat(resolution.get().cityName()).isEqualTo("Pinhais");
 	}
 
+	/**
+	 * Beyond every polygon and beyond the tolerance there is no place to name, but
+	 * there is something true to record: the coordinate is open water. Saying so
+	 * beats leaving it unresolved for a rebuild to retry forever.
+	 */
 	@Test
-	void shouldReturnEmptyWhenOutsideEveryBoundaryAndBeyondFallbackTolerance() {
-		Assertions.assertThat(strategy().resolve(new Coordinates(-10.0, -100.0))).isEmpty();
+	void shouldResolveAsOpenSeaWhenOutsideEveryBoundaryAndBeyondFallbackTolerance() {
+		Optional<LocationResolution> resolution = strategy().resolve(new Coordinates(-10.0, -100.0));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().openSea()).isTrue();
+		Assertions.assertThat(resolution.get().countryName()).isNull();
+		Assertions.assertThat(resolution.get().stateName()).isNull();
+		Assertions.assertThat(resolution.get().cityName()).isNull();
+		Assertions.assertThat(resolution.get().confidence()).isEqualTo(LocationConfidence.VERY_LOW);
+	}
+
+	/**
+	 * The flag is only for water: anything that resolved to a real place must not
+	 * carry it, or the screens would label a city as open sea.
+	 */
+	@Test
+	void shouldNotFlagOpenSeaOnAResolvedPlace() {
+		Optional<LocationResolution> resolution = strategy()
+				.resolve(new Coordinates(-25.388261795043945, -49.228511810302734));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().openSea()).isFalse();
 	}
 
 	@Test

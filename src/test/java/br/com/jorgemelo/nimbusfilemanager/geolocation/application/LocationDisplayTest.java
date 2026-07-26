@@ -33,4 +33,22 @@ class LocationDisplayTest {
 		assertThat(LocationDisplay.shortLabel(null, "  ", "Brasil")).isEqualTo("Brasil");
 		assertThat(LocationDisplay.shortLabel(null, null, null)).isNull();
 	}
+
+	/**
+	 * Open water has no place name, so the caller's translated wording answers - but
+	 * only when there really is nothing else to show.
+	 */
+	@Test
+	void openWaterLabelOnlyAnswersWhenThereIsNoPlaceToName() {
+		assertThat(LocationDisplay.fullLabel(null, null, null, true, "Alto-mar")).isEqualTo("Alto-mar");
+		assertThat(LocationDisplay.shortLabel(null, null, null, true, "Alto-mar")).isEqualTo("Alto-mar");
+
+		assertThat(LocationDisplay.fullLabel("Curitiba", "Paraná", "Brasil", true, "Alto-mar"))
+				.isEqualTo("Curitiba, Paraná, Brasil");
+		assertThat(LocationDisplay.shortLabel("Curitiba", "Paraná", "Brasil", true, "Alto-mar"))
+				.isEqualTo("Curitiba, Paraná");
+
+		assertThat(LocationDisplay.fullLabel(null, null, null, false, "Alto-mar")).isNull();
+		assertThat(LocationDisplay.shortLabel(null, null, null, false, "Alto-mar")).isNull();
+	}
 }

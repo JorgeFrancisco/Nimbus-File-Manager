@@ -102,14 +102,24 @@ class GeoBoundariesPipelineIntegrationTest {
 		Assertions.assertThat(resolution.get().distanceKm()).isBetween(3.0, 7.0);
 	}
 
+	/**
+	 * Open water resolves to the fact itself rather than to nothing: no place names,
+	 * the lowest confidence and the flag the screens label from. It used to stay
+	 * unresolved, which left the coordinate being retried by every rebuild forever.
+	 */
 	@Test
-	void openSeaCoordinateShouldRemainUnresolved() {
+	void openSeaCoordinateShouldResolveAsOpenSea() {
 		BoundaryGeometryCache cache = cache();
 
 		AdminBoundaryPipStrategy strategy = new AdminBoundaryPipStrategy(new AdminBoundaryResolver(repository, cache),
 				cache, new LocationConfidencePolicy(), Clock.systemDefaultZone());
 
-		Assertions.assertThat(strategy.resolve(new Coordinates(-30.0, -20.0))).isEmpty();
+		Optional<LocationResolution> resolution = strategy.resolve(new Coordinates(-30.0, -20.0));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().openSea()).isTrue();
+		Assertions.assertThat(resolution.get().countryName()).isNull();
+		Assertions.assertThat(resolution.get().confidence()).isEqualTo(LocationConfidence.VERY_LOW);
 	}
 
 	/** Reads a GeoJSON fixture through the real reader and builds boundary rows. */

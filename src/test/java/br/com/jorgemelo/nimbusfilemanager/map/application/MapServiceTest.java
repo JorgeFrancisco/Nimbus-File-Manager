@@ -32,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoAdminBoundary;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoAdminBoundaryRepository;
 import br.com.jorgemelo.nimbusfilemanager.map.application.dto.MapBounds;
 import br.com.jorgemelo.nimbusfilemanager.map.application.dto.MapMediaItem;
@@ -49,7 +50,7 @@ class MapServiceTest {
 
 	private final MapRepository mapRepository = mock(MapRepository.class);
 	private final GeoAdminBoundaryRepository boundaryRepository = mock(GeoAdminBoundaryRepository.class);
-	private final MapService service = new MapService(mapRepository, boundaryRepository);
+	private final MapService service = new MapService(mapRepository, boundaryRepository, new LocationLabels());
 
 	@Test
 	void exifMediaPinAtTheRealRoundedCoordinateWithPlaceLabelAndCounts() {
@@ -440,6 +441,25 @@ class MapServiceTest {
 		when(row.getCoverFileName()).thenReturn("cover.jpg");
 
 		return row;
+	}
+
+	/**
+	 * A cell whose media all resolved to open water gets the wording, not the raw
+	 * coordinates it used to fall back to - the pin still sits at the real spot.
+	 */
+	@Test
+	void exifPinOfOpenWaterIsLabelledInsteadOfShowingCoordinates() {
+		MapExifPinProjection row = exifRow(-24.0, -42.8, 2, 2, 0, null, null);
+
+		when(row.getOpenSea()).thenReturn(true);
+		when(mapRepository.exifPins(anyDouble())).thenReturn(List.of(row));
+		when(mapRepository.administrativePins()).thenReturn(List.of());
+
+		List<MapPin> pins = service.pins();
+
+		Assertions.assertThat(pins).hasSize(1);
+		Assertions.assertThat(pins.get(0).label()).isEqualTo("Alto-mar");
+		Assertions.assertThat(pins.get(0).latitude()).isEqualTo(-24.0);
 	}
 
 	private MapAdministrativePinProjection adminRow(String countryCode, String stateName, String cityName, long total,

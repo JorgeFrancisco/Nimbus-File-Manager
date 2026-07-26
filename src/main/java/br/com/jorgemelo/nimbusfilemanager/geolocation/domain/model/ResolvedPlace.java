@@ -49,6 +49,15 @@ public class ResolvedPlace {
 	@Column(name = "distance_km")
 	private Double distanceKm;
 
+	/**
+	 * The coordinate sits outside every administrative boundary and beyond the
+	 * tolerance of the nearest one: open water. Kept as a fact of its own so it
+	 * never has to be spelled into a place name, which would freeze one language
+	 * into the database and pollute the country of every screen that groups by it.
+	 */
+	@Column(name = "open_sea", nullable = false)
+	private boolean openSea;
+
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 30)
 	private LocationConfidence confidence;

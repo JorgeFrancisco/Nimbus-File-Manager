@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCountSummary;
@@ -45,7 +46,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
 
-		new TimelineQueryRepository(jdbcTemplate).findPage(FileType.PHOTO, SUBS, cursorDate, 91L, 121);
+		new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findPage(FileType.PHOTO, SUBS, cursorDate, 91L, 121);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
@@ -93,7 +94,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = new TimelineQueryRepository(jdbcTemplate).findPage(null, SUBS, null, null,
+		List<TimelineItemProjection> page = new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findPage(null, SUBS, null, null,
 				120);
 
 		Assertions.assertThat(page).containsExactly(new TimelineItemProjection(42L, publicId, "IMG_0042.JPG",
@@ -117,7 +118,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = new TimelineQueryRepository(jdbcTemplate).findPage(null, SUBS, null, null,
+		List<TimelineItemProjection> page = new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findPage(null, SUBS, null, null,
 				120);
 
 		Assertions.assertThat(page.getFirst().durationSeconds()).isEqualTo(92.5D);
@@ -125,7 +126,7 @@ class TimelineQueryRepositoryTest {
 
 	@Test
 	void shouldRejectPartialCursorAndInvalidLimit() {
-		TimelineQueryRepository repository = new TimelineQueryRepository(jdbcTemplate);
+		TimelineQueryRepository repository = new TimelineQueryRepository(jdbcTemplate, new LocationLabels());
 
 		Assertions.assertThatIllegalArgumentException()
 				.isThrownBy(() -> repository.findPage(null, SUBS, LocalDateTime.now(), null, 120));
@@ -137,7 +138,7 @@ class TimelineQueryRepositoryTest {
 
 	@Test
 	void shouldRejectAnEmptySubcategoryFilter() {
-		TimelineQueryRepository repository = new TimelineQueryRepository(jdbcTemplate);
+		TimelineQueryRepository repository = new TimelineQueryRepository(jdbcTemplate, new LocationLabels());
 
 		Assertions.assertThatIllegalArgumentException()
 				.isThrownBy(() -> repository.findPage(null, List.of(), null, null, 120))
@@ -149,7 +150,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
 
-		new TimelineQueryRepository(jdbcTemplate).findPage(null, SUBS, null, null, 120);
+		new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findPage(null, SUBS, null, null, 120);
 
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
 
@@ -177,7 +178,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineMonthCount> counts = new TimelineQueryRepository(jdbcTemplate).findMonthCounts(FileType.VIDEO,
+		List<TimelineMonthCount> counts = new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findMonthCounts(FileType.VIDEO,
 				SUBS);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
@@ -209,7 +210,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		TimelineCountSummary summary = new TimelineQueryRepository(jdbcTemplate).findCountSummary(null, SUBS);
+		TimelineCountSummary summary = new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findCountSummary(null, SUBS);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 
@@ -228,7 +229,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineCountSummary>>any())).thenReturn(List.of());
 
-		TimelineCountSummary summary = new TimelineQueryRepository(jdbcTemplate).findCountSummary(FileType.PHOTO, SUBS);
+		TimelineCountSummary summary = new TimelineQueryRepository(jdbcTemplate, new LocationLabels()).findCountSummary(FileType.PHOTO, SUBS);
 
 		Assertions.assertThat(summary).isEqualTo(new TimelineCountSummary(0, 0, 0));
 	}

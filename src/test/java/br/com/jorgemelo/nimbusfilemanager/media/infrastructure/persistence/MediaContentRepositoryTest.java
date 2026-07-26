@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaContentSource;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +32,7 @@ class MediaContentRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<MediaContentSource>>any())).thenReturn(List.of());
 
-		new MediaContentRepository(jdbcTemplate).findContent(UUID.randomUUID());
+		new MediaContentRepository(jdbcTemplate, new LocationLabels()).findContent(UUID.randomUUID());
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 

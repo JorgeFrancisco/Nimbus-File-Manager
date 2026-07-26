@@ -195,7 +195,8 @@ public class MediaLocationService {
 						.countryName(resolution.countryName()).stateName(resolution.stateName())
 						.cityName(resolution.cityName()).distanceKm(resolution.distanceKm())
 						.confidence(resolution.confidence()).provider(resolution.provider())
-						.datasetVersion(resolution.datasetVersion()).resolvedAt(resolution.resolvedAt()).build())
+						.datasetVersion(resolution.datasetVersion()).resolvedAt(resolution.resolvedAt())
+						.openSea(resolution.openSea()).build())
 				.build());
 	}
 
@@ -203,7 +204,7 @@ public class MediaLocationService {
 		entity.setPlace(ResolvedPlace.builder().countryCode(resolution.countryCode())
 				.countryName(resolution.countryName()).stateName(resolution.stateName()).cityName(resolution.cityName())
 				.distanceKm(resolution.distanceKm()).confidence(resolution.confidence()).provider(resolution.provider())
-				.datasetVersion(resolution.datasetVersion())
+				.datasetVersion(resolution.datasetVersion()).openSea(resolution.openSea())
 				.resolvedAt(resolution.resolvedAt() == null ? LocalDateTime.now(clock) : resolution.resolvedAt())
 				.build());
 		entity.setManual(false);
@@ -214,6 +215,6 @@ public class MediaLocationService {
 
 		return new LocationResolution(place.getCountryCode(), place.getCountryName(), place.getStateName(),
 				place.getCityName(), place.getDistanceKm(), place.getConfidence(), place.getProvider(),
-				place.getDatasetVersion(), place.getResolvedAt());
+				place.getDatasetVersion(), place.getResolvedAt(), place.isOpenSea());
 	}
 }

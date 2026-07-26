@@ -216,7 +216,7 @@ class MediaLocationServiceResolveTest {
 
 	private LocationResolution resolution() {
 		return new LocationResolution("BR", "Brasil", "Paraná", "Curitiba", 2.4, LocationConfidence.VERY_HIGH,
-				LocationProvider.ADMIN_BOUNDARIES, "2026-07-11", LocalDateTime.now());
+				LocationProvider.ADMIN_BOUNDARIES, "2026-07-11", LocalDateTime.now(), false);
 	}
 
 	private GeoResolutionCache cacheEntry() {

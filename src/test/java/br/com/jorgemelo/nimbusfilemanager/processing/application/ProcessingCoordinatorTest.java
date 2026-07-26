@@ -106,10 +106,13 @@ class ProcessingCoordinatorTest {
 
 			AtomicInteger started = new AtomicInteger();
 
+			CountDownLatch first = new CountDownLatch(1);
+
 			List<Integer> items = List.of(0, 1, 2);
 
 			Thread runner = new Thread(() -> coordinator.process(items, () -> false, item -> {
 				started.incrementAndGet();
+				first.countDown();
 				gate.await(5, TimeUnit.SECONDS);
 
 				return item;
@@ -117,11 +120,14 @@ class ProcessingCoordinatorTest {
 			runner.setDaemon(true);
 			runner.start();
 
-			// workers(1) + queue(1) = 2 admitted; the 3rd submit must block on
-			// backpressure,
-			// so only one task has actually started and the submit loop is still running.
-			Thread.sleep(300);
+			// Waiting for the task to signal instead of sleeping a guessed delay: on a
+			// loaded machine the worker can take longer to be scheduled, and this test is
+			// about backpressure, not about scheduling latency.
+			assertThat(first.await(5, TimeUnit.SECONDS)).isTrue();
 
+			// workers(1) + queue(1) = 2 admitted; the 3rd submit must block on
+			// backpressure. With a single worker held by the first task, no second task
+			// can have started, and the submit loop is still running.
 			assertThat(started.get()).isEqualTo(1);
 			assertThat(runner.isAlive()).isTrue();
 

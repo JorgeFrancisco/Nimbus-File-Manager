@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationDisplay;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCountSummary;
@@ -33,7 +34,7 @@ public class TimelineQueryRepository {
 			       m.display_width,
 			       m.display_height,
 			       v.duration_seconds,
-			       gl.city_name, gl.state_name, gl.country_name
+			       gl.city_name, gl.state_name, gl.country_name, gl.open_sea
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
@@ -69,7 +70,7 @@ public class TimelineQueryRepository {
 			SELECT mf.id AS internal_id, mf.public_id, mf.file_name, mf.file_type,
 			       m.capture_date, m.date_source, m.display_width, m.display_height,
 			       v.duration_seconds,
-			       gl.city_name, gl.state_name, gl.country_name
+			       gl.city_name, gl.state_name, gl.country_name, gl.open_sea
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
@@ -97,9 +98,11 @@ public class TimelineQueryRepository {
 			""";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
+	private final LocationLabels locationLabels;
 
-	public TimelineQueryRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+	public TimelineQueryRepository(NamedParameterJdbcTemplate jdbcTemplate, LocationLabels locationLabels) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.locationLabels = locationLabels;
 	}
 
 	public List<TimelineItemProjection> findPage(FileType fileType, Collection<String> subcategories,
@@ -156,7 +159,7 @@ public class TimelineQueryRepository {
 				dateSource == null ? null : DateSource.valueOf(dateSource), (Integer) rs.getObject("display_width"),
 				(Integer) rs.getObject("display_height"), duration == null ? null : duration.doubleValue(),
 				LocationDisplay.shortLabel(rs.getString("city_name"), rs.getString("state_name"),
-						rs.getString("country_name")));
+						rs.getString("country_name"), rs.getBoolean("open_sea"), locationLabels.openSea()));
 	}
 
 	private void validateCursor(LocalDateTime cursorDate, Long cursorId) {

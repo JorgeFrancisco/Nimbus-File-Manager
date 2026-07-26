@@ -302,7 +302,7 @@ Resolution works by administrative containment (point-in-polygon): the applicati
 
 Organization can optionally subdivide the selected layout by country, country/state or country/state/city, with a minimum-confidence rule and an optional `SEM_LOCALIZACAO_CONFIAVEL` fallback folder. Manual locations are represented in the model and take precedence over automatic results; editing them through the UI is reserved for a future version.
 
-Confidence reflects the finest administrative level that actually contains the coordinate: containment in a municipality is unambiguous (very high), a state-only match is partial (medium) and a country-only match is weak (low). Coordinates outside every polygon (photos taken at sea near the coast, over water in flight, coastal GPS noise) fall back to the nearest municipality within 10 km, stored with low confidence and the measured distance. The interface shows the resolved location and this confidence level.
+Confidence reflects the finest administrative level that actually contains the coordinate: containment in a municipality is unambiguous (very high), a state-only match is partial (medium) and a country-only match is weak (low). Coordinates outside every polygon (photos taken at sea near the coast, over water in flight, coastal GPS noise) fall back to the nearest boundary within 12 nautical miles (22.2 km), stored with low confidence and the measured distance. That figure is the breadth of the territorial sea under UNCLOS - in Brazil, Lei 8.617/1993 - so the water inside it is national territory and attributing it to the coast it belongs to is defensible. The tolerance is needed because the administrative polygons stop at the shoreline: no state or municipality has a maritime limit of its own (the sea belongs to the federal union), and the only projection of state limits onto the sea is the one used to share oil royalties, which is not jurisdiction. A coordinate farther out than the tolerance resolves as **open sea**: no place names, lowest confidence, and a flag of its own - so it shows as "Alto-mar" on the map, timeline and lightbox without ever being mistaken for a country in the statistics or the organization folders. The interface shows the resolved location and this confidence level.
 
 ## Media map
 
@@ -1115,8 +1115,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1877 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.36% instruction, 89.37% branch, 96.98% line, 97.51% method, 100.00% class
+Tests:       1881 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.36% instruction, 89.39% branch, 96.98% line, 97.52% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1128,7 +1128,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.36% instruction, 89.37% branch, 96.98% line, 97.51% method, 100.00% class
+Floor:  97.36% instruction, 89.39% branch, 96.98% line, 97.52% method, 100.00% class
 Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
 ```
 

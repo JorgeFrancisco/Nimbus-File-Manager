@@ -29,6 +29,7 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			       COUNT(*) FILTER (WHERE mf.file_type = 'PHOTO') AS photos,
 			       COUNT(*) FILTER (WHERE mf.file_type = 'VIDEO') AS videos,
 			       MAX(g.city_name) AS city, MAX(g.state_name) AS state, MAX(g.country_name) AS country,
+			       BOOL_OR(g.open_sea) AS openSea,
 			       (array_agg(mf.public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
 			       (array_agg(mf.file_type ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileType,
 			       (array_agg(mf.file_name ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
@@ -47,6 +48,7 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			       COUNT(*) FILTER (WHERE mf.file_type = 'PHOTO') AS photos,
 			       COUNT(*) FILTER (WHERE mf.file_type = 'VIDEO') AS videos,
 			       MAX(g.city_name) AS city, MAX(g.state_name) AS state, MAX(g.country_name) AS country,
+			       BOOL_OR(g.open_sea) AS openSea,
 			       (array_agg(mf.public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
 			       (array_agg(mf.file_type ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileType,
 			       (array_agg(mf.file_name ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName

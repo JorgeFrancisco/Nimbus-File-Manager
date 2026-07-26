@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationDisplay;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationLabels;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoAdminBoundary;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoAdminBoundaryRepository;
@@ -57,12 +58,15 @@ public class MapService {
 	private static final double FINE_CELL = 0.0001;
 
 	private final MapRepository mapRepository;
+	private final LocationLabels locationLabels;
 	private final GeoAdminBoundaryRepository boundaryRepository;
 	private final GeometryFactory geometryFactory = new GeometryFactory();
 
-	public MapService(MapRepository mapRepository, GeoAdminBoundaryRepository boundaryRepository) {
+	public MapService(MapRepository mapRepository, GeoAdminBoundaryRepository boundaryRepository,
+			LocationLabels locationLabels) {
 		this.mapRepository = mapRepository;
 		this.boundaryRepository = boundaryRepository;
+		this.locationLabels = locationLabels;
 	}
 
 	public List<MapPin> pins() {
@@ -120,7 +124,8 @@ public class MapService {
 		double lat = row.getLat();
 		double lon = row.getLon();
 
-		String place = LocationDisplay.fullLabel(row.getCity(), row.getState(), row.getCountry());
+		String place = LocationDisplay.fullLabel(row.getCity(), row.getState(), row.getCountry(),
+				Boolean.TRUE.equals(row.getOpenSea()), locationLabels.openSea());
 		String label = place != null ? place : coordinateLabel(lat, lon);
 
 		// The pin id carries the grid cell (size + centre) so its media can be fetched

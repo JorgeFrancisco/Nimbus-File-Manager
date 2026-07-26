@@ -20,19 +20,24 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvi
  * contains the coordinate. Correct by construction on metropolitan borders - it
  * never picks a neighbour by centroid distance. Only when the point is outside
  * every polygon (at sea near the coast, over water in flight) does it fall back
- * to the nearest municipality within a small tolerance, marked with LOW
- * confidence and the measured distance. Pure resolver: it knows nothing about
- * timeline, organization or screens.
+ * to the nearest boundary within {@link #NEAREST_FALLBACK_MAX_KM}, marked with
+ * LOW confidence and the measured distance; farther out it answers open sea.
+ * Pure resolver: it knows nothing about timeline, organization or screens.
  */
 @Component
 public class AdminBoundaryPipStrategy implements ReverseGeocodingStrategy {
 
 	/**
-	 * Tolerance for the nearest-boundary fallback. Beyond this distance from any
-	 * municipality the point is genuinely unresolvable (open sea), not coastal GPS
-	 * noise or a boat ride within sight of the shore.
+	 * Tolerance for the nearest-boundary fallback: 12 nautical miles, the breadth of
+	 * the territorial sea under the UN Convention on the Law of the Sea (in Brazil,
+	 * Lei 8.617/1993). Water inside it is national territory, so approximating a
+	 * coordinate there to the coast it belongs to is defensible; beyond it the point
+	 * is genuinely unresolvable, not coastal GPS noise or a boat ride within sight
+	 * of the shore. The administrative polygons themselves stop at the shoreline -
+	 * no state or municipality has a maritime limit of its own - which is why the
+	 * tolerance exists at all.
 	 */
-	static final double NEAREST_FALLBACK_MAX_KM = 10.0;
+	static final double NEAREST_FALLBACK_MAX_KM = 22.2;
 
 	private final AdminBoundaryResolver resolver;
 	private final BoundaryGeometryCache geometryCache;
@@ -60,8 +65,18 @@ public class AdminBoundaryPipStrategy implements ReverseGeocodingStrategy {
 			return contained;
 		}
 
-		return resolver.resolveNearest(coordinates.latitude(), coordinates.longitude(), NEAREST_FALLBACK_MAX_KM)
+		Optional<LocationResolution> approximate = resolver
+				.resolveNearest(coordinates.latitude(), coordinates.longitude(), NEAREST_FALLBACK_MAX_KM)
 				.map(this::toApproximateResolution);
+
+		if (approximate.isPresent()) {
+			return approximate;
+		}
+
+		// Nothing contains the point and nothing is within reach of it: this is open
+		// water, and saying so is more useful than leaving the coordinate unresolved
+		// forever. Recorded as a flag, never as a place name.
+		return Optional.of(LocationResolution.openSea(LocationProvider.ADMIN_BOUNDARIES, LocalDateTime.now(clock)));
 	}
 
 	@Override
@@ -79,7 +94,7 @@ public class AdminBoundaryPipStrategy implements ReverseGeocodingStrategy {
 		// (or outside) a polygon, not at a distance from a centroid.
 		return new LocationResolution(match.countryCode(), match.countryName(), match.stateName(), match.cityName(),
 				null, confidencePolicy.confidenceForKind(match.kind()), LocationProvider.ADMIN_BOUNDARIES, null,
-				LocalDateTime.now(clock));
+				LocalDateTime.now(clock), false);
 	}
 
 	private LocationResolution toApproximateResolution(NearestMatch nearest) {
@@ -89,6 +104,6 @@ public class AdminBoundaryPipStrategy implements ReverseGeocodingStrategy {
 
 		return new LocationResolution(match.countryCode(), match.countryName(), match.stateName(), match.cityName(),
 				nearest.distanceKm(), confidencePolicy.confidenceForNearestFallback(),
-				LocationProvider.ADMIN_BOUNDARIES, null, LocalDateTime.now(clock));
+				LocationProvider.ADMIN_BOUNDARIES, null, LocalDateTime.now(clock), false);
 	}
 }

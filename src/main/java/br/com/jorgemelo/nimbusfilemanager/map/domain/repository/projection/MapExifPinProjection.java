@@ -23,6 +23,9 @@ public interface MapExifPinProjection {
 
 	String getCountry();
 
+	/** True when every media in the cell resolved to open water. */
+	Boolean getOpenSea();
+
 	UUID getCoverId();
 
 	String getCoverFileType();
