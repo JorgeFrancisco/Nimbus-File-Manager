@@ -34,6 +34,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedCon
 		"br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.map.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.media.infrastructure.web",
+		"br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.quarantine.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.security.infrastructure.web",

@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.LongConsumer;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -69,7 +70,34 @@ public class MetadataRebuildService {
 		this.clock = clock;
 	}
 
+	/**
+	 * How many files the request would touch, capped by its own limit. Used by the
+	 * settings screen to turn progress into a percentage and an estimate; the
+	 * rebuild itself does not need it, since it pages by keyset until exhaustion.
+	 */
+	public long countCandidates(MetadataRebuildRequest request) {
+		String sourcePathText = PathUtils.normalize(request.source());
+
+		String descendantPattern = PathUtils.descendantLikePattern(sourcePathText,
+				request.source().getFileSystem().getSeparator());
+
+		long total = catalogFileRepository.countForMetadataRebuild(sourcePathText, descendantPattern,
+				request.captureDateNull(), request.dateSource());
+
+		return Math.min(total, request.safeLimit());
+	}
+
 	public MetadataRebuildResponse rebuild(MetadataRebuildRequest request) {
+		return rebuild(request, _ -> {
+		});
+	}
+
+	/**
+	 * Same as {@link #rebuild(MetadataRebuildRequest)} but reports how many files
+	 * have been processed to {@code progress} after each batch, so a background
+	 * runner can drive the progress bar of the settings screen.
+	 */
+	public MetadataRebuildResponse rebuild(MetadataRebuildRequest request, LongConsumer progress) {
 		Path sourcePath = request.source();
 
 		String separator = sourcePath.getFileSystem().getSeparator();
@@ -120,6 +148,8 @@ public class MetadataRebuildService {
 			});
 
 			counters.add(batchHolder[0]);
+
+			progress.accept(counters.processed);
 		}
 
 		log.info(

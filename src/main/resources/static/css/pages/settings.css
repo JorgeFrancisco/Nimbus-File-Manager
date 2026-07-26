@@ -102,7 +102,7 @@
 	padding-bottom: 16px;
 }
 
-.geo-operation-status {
+.operation-status {
 	background: var(--accent-soft);
 	border: 1px solid var(--accent-soft-line);
 	border-radius: 8px;
@@ -111,27 +111,27 @@
 	padding: 14px;
 }
 
-.geo-operation-heading {
+.operation-heading {
 	align-items: center;
 	display: flex;
 	gap: 9px;
 }
 
-.geo-operation-status p {
+.operation-status p {
 	color: var(--muted);
 	font-size: 12px;
 	margin: 7px 0 10px 25px;
 }
 
-.geo-operation-status progress {
+.operation-status progress {
 	accent-color: var(--accent);
 	display: block;
 	height: 8px;
 	width: 100%;
 }
 
-.geo-operation-spinner {
-	animation: geo-spin .8s linear infinite;
+.operation-spinner {
+	animation: operation-spin .8s linear infinite;
 	border: 2px solid var(--accent-soft-line);
 	border-radius: 50%;
 	border-top-color: var(--accent);
@@ -139,7 +139,7 @@
 	width: 16px;
 }
 
-@keyframes geo-spin {
+@keyframes operation-spin {
 	to { transform: rotate(360deg); }
 }
 

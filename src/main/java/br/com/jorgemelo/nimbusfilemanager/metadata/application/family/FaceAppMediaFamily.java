@@ -12,31 +12,30 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.filename.rule.Abs
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 
 /**
- * PhotoGrid collage editor output ({@code PhotoGrid_<epochMillis>...}, e.g.
- * {@code PhotoGrid_1443567518248.jpg}). Detected by name only (no folder
- * signature); owns subcategory and date extraction. The numeric token is the
- * epoch-millis creation time, so the date is read from it when present, falling
- * back to the shared {@code yyyyMMdd[HHmmss]} patterns otherwise.
+ * FaceApp editor output ({@code FaceApp_<epochMillis>}), the same shape the
+ * other editors use. The export strips the original EXIF, so the epoch token is
+ * the only date left in the file. Classified as OTHER, like the remaining
+ * editors that are not worth a folder of their own.
  */
 @Component
-public class PhotoGridMediaFamily extends AbstractFileNameDateRule implements MediaSubcategoryRule {
+public class FaceAppMediaFamily extends AbstractFileNameDateRule implements MediaSubcategoryRule {
 
-	public PhotoGridMediaFamily(Clock clock) {
-		super(clock);
-	}
-
-	private static final String ORDER = "022_PHOTOGRID";
+	private static final String ORDER = "026_FACEAPP";
 
 	/** Leading digit bounded to a real epoch, as in {@link FacebookMediaFamily}. */
-	private static final Pattern EPOCH_MILLIS = Pattern.compile("PHOTOGRID[-_]([12]\\d{12})",
+	private static final Pattern EPOCH_MILLIS = Pattern.compile("FACEAPP[-_]([12]\\d{12})",
 			Pattern.CASE_INSENSITIVE);
+
+	public FaceAppMediaFamily(Clock clock) {
+		super(clock);
+	}
 
 	public static boolean matchesName(String fileName) {
 		if (fileName == null) {
 			return false;
 		}
 
-		return fileName.toUpperCase(Locale.ROOT).startsWith("PHOTOGRID");
+		return fileName.toUpperCase(Locale.ROOT).startsWith("FACEAPP");
 	}
 
 	@Override
@@ -46,15 +45,7 @@ public class PhotoGridMediaFamily extends AbstractFileNameDateRule implements Me
 
 	@Override
 	public LocalDateTime resolve(String fileName) {
-		LocalDateTime epoch = fromEpochMillis(fileName, EPOCH_MILLIS);
-
-		if (epoch != null) {
-			return epoch;
-		}
-
-		LocalDateTime date = parse(fileName, FileNameDatePatterns.DATE8_SEP_TIME6, "yyyyMMddHHmmss");
-
-		return date != null ? date : parse(fileName, FileNameDatePatterns.DATE8, "yyyyMMdd");
+		return fromEpochMillis(fileName, EPOCH_MILLIS);
 	}
 
 	@Override
@@ -64,7 +55,7 @@ public class PhotoGridMediaFamily extends AbstractFileNameDateRule implements Me
 
 	@Override
 	public MediaSubcategory subcategory() {
-		return MediaSubcategory.PHOTOGRID;
+		return MediaSubcategory.OTHER;
 	}
 
 	@Override

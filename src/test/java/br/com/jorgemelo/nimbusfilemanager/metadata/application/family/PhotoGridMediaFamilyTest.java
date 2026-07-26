@@ -80,6 +80,7 @@ class PhotoGridMediaFamilyTest {
 	@Test
 	void resolveShouldReturnNullWhenTheEpochTokenIsOutsideThePlausibleRange() {
 		Assertions.assertThat(family.resolve("PhotoGrid_9999999999999.jpg")).isNull();
+		Assertions.assertThat(family.resolve("PhotoGrid_0000000000001.jpg")).isNull();
 	}
 
 	@Test

@@ -160,6 +160,32 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
 			@Param("dateSource") DateSource dateSource, @Param("lastId") Long lastId, Pageable pageable);
 
+	/**
+	 * Same filter as {@link #findIdsForMetadataRebuild} without the keyset cursor,
+	 * so the screen can show a total (and therefore a percentage and an estimate)
+	 * before the first batch runs.
+	 */
+	@Query("""
+			select count(mf.id)
+			from CatalogFile mf
+			join mf.location l
+			left join mf.metadata m
+			where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
+			  and (
+			       lower(l.currentPath) = lower(:sourcePath)
+			       or lower(l.currentPath) like lower(:descendantPattern) escape '\\'
+			  )
+			  and (
+			       :captureDateNull is null
+			       or (:captureDateNull = true and (m is null or m.captureDate is null))
+			       or (:captureDateNull = false and m is not null and m.captureDate is not null)
+			  )
+			  and (:dateSource is null or m.dateSource = :dateSource)
+			""")
+	long countForMetadataRebuild(@Param("sourcePath") String sourcePath,
+			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
+			@Param("dateSource") DateSource dateSource);
+
 	@Query("""
 			select distinct mf
 			from CatalogFile mf

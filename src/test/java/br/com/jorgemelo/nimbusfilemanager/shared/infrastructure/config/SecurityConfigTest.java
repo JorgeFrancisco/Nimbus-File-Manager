@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web.MetadataRebuildSettingsAdvice;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationPreviewExportService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
 import br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.rest.OrganizationController;
@@ -34,7 +35,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModel
 @WebMvcTest(controllers = OrganizationController.class,
 		properties = "nimbus-file-manager.security.google-login-enabled=false",
 		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
-		WebMvcConfig.class, LocaleConfig.class, AppViewModelAdvice.class }))
+		WebMvcConfig.class, LocaleConfig.class, AppViewModelAdvice.class,
+		MetadataRebuildSettingsAdvice.class }))
 // The real LogoutAwareAccessDeniedHandler (no dependencies) is imported
 // alongside SecurityConfig so the slice context loads and access-denied still
 // yields a real 403 (a mock handler would swallow it and break the isForbidden

@@ -37,7 +37,8 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 
 - Recursive file inventory with streaming scan.
 - Optional SHA-256 and MD5 calculation in a single file read.
-- Metadata extraction from filesystem, EXIF, filename patterns and video streams.
+- Metadata extraction from filesystem, EXIF, filename patterns and video streams. Filename families cover phone and compact-camera sequences (Sony Cyber-shot, Nikon Coolpix, General Imaging, Pentax, Casio, Samsung Digimax, Panasonic, Olympus and the Kodak/Canon DCIM numbering), GoPro (single shots plus the burst/time-lapse sequence), drones, screenshots, WhatsApp and the editors that stamp epoch millis in the name (PhotoGrid, AirBrush, Facebook, FaceApp).
+- Metadata rebuild from the settings screen: pick a folder and which fields to reprocess (capture date, MIME, GPS, dimensions, camera, family classification), simulate first if you want, and follow progress with percentage and estimated time while it runs in the background. The same rebuild stays available as a synchronous REST call for scripted use.
 - Fully offline GPS reverse geocoding based on administrative boundaries (point-in-polygon), persisted as reusable media metadata.
 - Duplicate detection using SHA-256, plus visual similarity for photos and videos (perceptual hashing + SSIM).
 - Quarantine for removed media: files soft-deleted by duplicate resolution or left behind by a video conversion are moved into a single quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items.
@@ -826,7 +827,7 @@ curl -X POST "http://localhost:8088/api/metadata/rebuild" \
   }'
 ```
 
-If `refresh` is empty or omitted, only `DATE` is rebuilt by default.
+If `refresh` is empty or omitted, only `DATE` is rebuilt by default. The REST call is synchronous and answers when the pass ends, so it fits scripts and small folders; for a library-wide pass use the **metadata rebuild panel on the settings screen**, which runs it in the background and reports progress, percentage and estimated time. Either way the file has to be reachable on disk - the rebuild re-reads it instead of recomputing from the stored name - and `limit` caps how many files one pass touches.
 
 ## Duplicates
 
@@ -1114,8 +1115,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1828 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.32% instruction, 89.36% branch, 96.93% line, 97.46% method, 100.00% class
+Tests:       1859 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.35% instruction, 89.38% branch, 96.97% line, 97.51% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1127,12 +1128,12 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.32% instruction, 89.36% branch, 96.93% line, 97.46% method, 100.00% class
+Floor:  97.35% instruction, 89.38% branch, 96.97% line, 97.51% method, 100.00% class
 Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
 ```
 
 Instruction, method and class already sit at or above the goal, so for those three
-the floor is what defends them. What is left is 7 lines and about 255 branches.
+the floor is what defends them. What is left is 3 lines and about 256 branches.
 Most of it sits in classes already above 90%, which is where the remaining work is
 cheapest per test: each one needs only a handful of cases, and they add up. Roughly
 30–50 of those are legitimately unreachable (I/O failure paths that depend on OS

@@ -34,8 +34,8 @@
 	}
 
 	function preserveScrollOnSubmit() {
-		// Delegated instead of per-form: the geo panel is swapped in place by
-		// refreshGeoPanel(), so listeners attached directly to its forms would
+		// Delegated instead of per-form: the operation panels are swapped in place
+		// by refreshOperationPanels(), so listeners attached directly to their forms would
 		// be lost after the first refresh. Applies to every form on the page (the
 		// script only loads on Settings) — earlier it only matched actions under
 		// /app/settings, so buttons that post elsewhere but still reload Settings
@@ -50,25 +50,32 @@
 		});
 	}
 
-	function monitorGeoOperations() {
-		var panel = document.querySelector('.geo-admin-panel[data-operation-running="true"]');
-		if (!panel) return;
-		window.setTimeout(refreshGeoPanel, 5000);
+	// Any panel that runs a background operation opts in with data-operation-panel
+	// (its identity) and data-operation-running (whether to keep polling), so the
+	// geographic database and the metadata rebuild share one refresh loop instead
+	// of one script each.
+	function monitorOperationPanels() {
+		var running = document.querySelector('[data-operation-panel][data-operation-running="true"]');
+		if (!running) return;
+		window.setTimeout(refreshOperationPanels, 5000);
 	}
 
-	function refreshGeoPanel() {
-		// Refresh only the geo panel in place instead of window.location.reload():
+	function refreshOperationPanels() {
+		// Refresh only the panels in place instead of window.location.reload():
 		// a full reload every 5s made the whole page flash during long
 		// download/import/rebuild operations.
 		fetch(window.location.href, { headers: { "Accept": "text/html" } }).then(function (response) {
 			if (!response.ok || response.redirected) throw new Error();
 			return response.text();
 		}).then(function (html) {
-			var fresh = new DOMParser().parseFromString(html, "text/html").querySelector(".geo-admin-panel");
-			var current = document.querySelector(".geo-admin-panel");
-			if (!fresh || !current) throw new Error();
-			current.replaceWith(fresh);
-			monitorGeoOperations(); // reschedules itself only while an operation is still running
+			var document_ = new DOMParser().parseFromString(html, "text/html");
+			var panels = document.querySelectorAll("[data-operation-panel]");
+			if (!panels.length) throw new Error();
+			panels.forEach(function (current) {
+				var fresh = document_.querySelector('[data-operation-panel="' + current.dataset.operationPanel + '"]');
+				if (fresh) current.replaceWith(fresh);
+			});
+			monitorOperationPanels(); // reschedules itself only while an operation is still running
 		}).catch(function () {
 			// Network error or expired session (redirect to login): fall back to
 			// the old full reload, which lands wherever the server sends us.
@@ -78,7 +85,7 @@
 
 	document.addEventListener("DOMContentLoaded", function () {
 		restoreScrollPosition();
-		monitorGeoOperations();
+		monitorOperationPanels();
 		// The shared folder picker (js/folder-picker.js) fills #watchFolderInput;
 		// here we only guard the actual library switch on submit.
 		var input = document.getElementById("watchFolderInput");

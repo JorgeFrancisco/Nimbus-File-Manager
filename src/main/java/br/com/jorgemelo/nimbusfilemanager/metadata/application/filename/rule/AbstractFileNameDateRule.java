@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application.filename.rule;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -42,6 +43,32 @@ public abstract class AbstractFileNameDateRule implements FileNameDateRule {
 
 			return isReasonable(date) ? date : null;
 		} catch (Exception _) {
+			return null;
+		}
+	}
+
+	/**
+	 * Date carried as epoch milliseconds in the file name, the convention of the
+	 * apps that save with their own timestamp instead of the camera one. The
+	 * pattern must expose the numeric token as its first group.
+	 */
+	protected LocalDateTime fromEpochMillis(String fileName, Pattern pattern) {
+		if (fileName == null) {
+			return null;
+		}
+
+		Matcher matcher = pattern.matcher(fileName);
+
+		if (!matcher.find()) {
+			return null;
+		}
+
+		try {
+			LocalDateTime date = LocalDateTime.ofInstant(Instant.ofEpochMilli(Long.parseLong(matcher.group(1))),
+					clock.getZone());
+
+			return isReasonable(date) ? date : null;
+		} catch (RuntimeException _) {
 			return null;
 		}
 	}

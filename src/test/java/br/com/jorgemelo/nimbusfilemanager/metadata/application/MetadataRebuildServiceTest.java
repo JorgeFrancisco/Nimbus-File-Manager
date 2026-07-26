@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -316,6 +317,39 @@ class MetadataRebuildServiceTest {
 
 		Assertions.assertThat(catalogFile.getSha256()).isNull();
 		Assertions.assertThat(catalogFile.getMd5()).isNull();
+	}
+
+	/**
+	 * The total feeds the progress bar of the settings panel, so it is capped by the
+	 * same limit the rebuild honours - promising more files than it will touch would
+	 * leave the bar short of 100%.
+	 */
+	@Test
+	void countCandidatesShouldNotPromiseMoreFilesThanTheLimitAllows() {
+		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null))).thenReturn(4L);
+
+		Assertions.assertThat(service().countCandidates(request(false, List.of(MetadataRebuildField.DATE))))
+				.isEqualTo(4L);
+
+		when(catalogFileRepository.countForMetadataRebuild(any(), any(), eq(null), eq(null))).thenReturn(500L);
+
+		Assertions.assertThat(service().countCandidates(request(false, List.of(MetadataRebuildField.DATE))))
+				.isEqualTo(10L);
+	}
+
+	@Test
+	void rebuildShouldReportProgressAfterEachBatch() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("photo.jpg"), "content");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		prepareSingleRebuild(catalogFile, file, metadata(file));
+
+		List<Long> reported = new ArrayList<>();
+
+		service().rebuild(request(false, List.of(MetadataRebuildField.DATE)), reported::add);
+
+		Assertions.assertThat(reported).containsExactly(1L);
 	}
 
 	private void prepareSingleRebuild(CatalogFile catalogFile, Path existingFile, MetadataResult metadata) {

@@ -1,0 +1,97 @@
+package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+
+import org.assertj.core.api.Assertions;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.api.Test;
+import org.springframework.ui.ConcurrentModel;
+import org.springframework.ui.Model;
+
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+
+/**
+ * Read side of the metadata rebuild panel: progress attributes and the choices
+ * the form reopens on.
+ */
+class MetadataRebuildSettingsAdviceTest {
+
+	private final MetadataRebuildAsyncRunner runner = mock(MetadataRebuildAsyncRunner.class);
+	private final UserPagePreferenceService userPagePreferenceService = mock(UserPagePreferenceService.class);
+	private final MetadataRebuildSettingsAdvice advice = new MetadataRebuildSettingsAdvice(runner,
+			userPagePreferenceService);
+
+	@Test
+	void publishesTheProgressOfTheRunningRebuild() {
+		when(runner.isRunning()).thenReturn(true);
+		when(runner.processed()).thenReturn(30L);
+		when(runner.total()).thenReturn(100L);
+		when(runner.percent()).thenReturn(30);
+		when(runner.etaSeconds()).thenReturn(90L);
+
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildRunning")).isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("metadataRebuildProcessed")).isEqualTo(30L);
+		Assertions.assertThat(model.getAttribute("metadataRebuildTotal")).isEqualTo(100L);
+		Assertions.assertThat(model.getAttribute("metadataRebuildPercent")).isEqualTo(30);
+		Assertions.assertThat(model.getAttribute("metadataRebuildEta")).isEqualTo(90L);
+	}
+
+	/**
+	 * ALL means the same as ticking every box, so offering it would let the admin
+	 * pick two spellings of one choice.
+	 */
+	@Test
+	void offersEverySelectableFieldExceptTheAllShortcut() {
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildFields"))
+				.asInstanceOf(InstanceOfAssertFactories.list(MetadataRebuildField.class))
+				.contains(MetadataRebuildField.DATE, MetadataRebuildField.SUBCATEGORY)
+				.doesNotContain(MetadataRebuildField.ALL);
+	}
+
+	@Test
+	void reopensTheFormOnTheSavedChoices() {
+		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY))
+				.thenReturn(Map.of(MetadataRebuildPreferences.SOURCE_PATH_KEY, "D:\\photos",
+						MetadataRebuildPreferences.FIELDS_KEY, "GPS,CAMERA",
+						MetadataRebuildPreferences.DRY_RUN_KEY, "true"));
+
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildSourcePath")).isEqualTo("D:\\photos");
+		Assertions.assertThat(model.getAttribute("metadataRebuildSelectedFields")).isEqualTo(List.of("GPS", "CAMERA"));
+		Assertions.assertThat(model.getAttribute("metadataRebuildDryRun")).isEqualTo(true);
+	}
+
+	/**
+	 * With nothing saved yet the form opens on the two fields that answer the reason
+	 * the panel exists, instead of on an empty selection that would rebuild nothing.
+	 */
+	@Test
+	void defaultsToReclassifyingAndRereadingTheDate() {
+		Model model = new ConcurrentModel();
+
+		advice.addTo(model, null);
+
+		Assertions.assertThat(model.getAttribute("metadataRebuildSelectedFields")).isEqualTo(List.of("SUBCATEGORY",
+				"DATE"));
+		Assertions.assertThat(model.getAttribute("metadataRebuildSourcePath")).isEqualTo("");
+		Assertions.assertThat(model.getAttribute("metadataRebuildDryRun")).isEqualTo(false);
+	}
+}

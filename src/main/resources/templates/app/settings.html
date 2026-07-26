@@ -89,25 +89,25 @@
 			</th:block>
 		</section>
 
-		<section id="geo-admin" class="panel section geo-admin-panel"
+		<section id="geo-admin" class="panel section geo-admin-panel" data-operation-panel="geo"
 				th:attr="data-operation-running=${geoImportRunning or geoRebuildRunning}">
 			<h2 th:text="#{settings.geo.title}">Administração da base geográfica</h2>
 			<p class="muted"><span th:text="#{settings.geo.intro.before}">Base offline de limites administrativos usada na resolução de localização (país, estado e município) por contenção geográfica. Dados de</span> <a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a> <span th:text="#{settings.geo.intro.after}">(CC BY 4.0); a atribuição é obrigatória.</span></p>
 
 			<div th:if="${inventoryRunning}" class="alert" role="status" th:text="#{settings.geo.inventoryBlocked}">Inventário em andamento — as ações da base geográfica ficam bloqueadas até ele terminar.</div>
 
-			<div th:if="${geoImportRunning}" class="geo-operation-status" role="status"
+			<div th:if="${geoImportRunning}" class="operation-status" role="status"
 					th:with="downloading=${geoProgress != null and geoProgress.downloading()},importing=${geoProgress != null and geoProgress.importing()}">
-				<div class="geo-operation-heading"><span class="geo-operation-spinner" aria-hidden="true"></span>
+				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span>
 					<strong th:with="step=${#messages.msg(geoProgress.stepLabel())}"
 							th:text="${downloading} ? #{settings.geo.downloading(${step})}
 							: (${importing} ? #{settings.geo.importing(${step})}
 							: #{settings.geo.downloadingAndImporting})"></strong>
 				</div>
-				<p th:if="${downloading and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.downloadProgress(${geoProgress.percent()}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.geo.etaMinutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.geo.etaSeconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${downloading and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.downloadProgress(${geoProgress.percent()}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${downloading and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.downloadedSoFar(${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')})}"></p>
-				<p th:if="${importing and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.importProgress(${geoProgress.percent()}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.geo.etaMinutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.geo.etaSeconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${importing and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.importProgress(${geoProgress.percent()}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${importing and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.importedSoFar(${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></p>
 				<p th:unless="${downloading or importing}" th:text="#{settings.geo.autoRefresh}">Esta página será atualizada automaticamente até a operação terminar.</p>
@@ -135,9 +135,9 @@
 				<div><dt th:text="#{settings.geo.pending}">Pendentes (GPS sem localização)</dt><dd th:text="${#numbers.formatInteger(geoPendingCount, 1, 'POINT')}"></dd></div>
 			</dl>
 
-			<div th:if="${geoRebuildRunning}" class="geo-operation-status" role="status">
-				<div class="geo-operation-heading"><span class="geo-operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.geo.rebuildRunning}">Reconstrução de localizações em andamento</strong></div>
-				<p th:if="${geoRebuildPercent >= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:if="${geoRebuildEta >= 60}" th:text="#{settings.geo.etaMinutes(${geoRebuildEta / 60})}"></span><span th:if="${geoRebuildEta >= 0 and geoRebuildEta < 60}" th:text="#{settings.geo.etaSeconds(${geoRebuildEta})}"></span></p>
+			<div th:if="${geoRebuildRunning}" class="operation-status" role="status">
+				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.geo.rebuildRunning}">Reconstrução de localizações em andamento</strong></div>
+				<p th:if="${geoRebuildPercent >= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:if="${geoRebuildEta >= 60}" th:text="#{settings.eta.minutes(${geoRebuildEta / 60})}"></span><span th:if="${geoRebuildEta >= 0 and geoRebuildEta < 60}" th:text="#{settings.eta.seconds(${geoRebuildEta})}"></span></p>
 				<p th:unless="${geoRebuildPercent >= 0}"
 						th:text="#{settings.geo.rebuildProcessed(${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')})}"></p>
 				<progress th:if="${geoRebuildTotal > 0}" th:value="${geoRebuildProcessed}" th:max="${geoRebuildTotal}"
@@ -178,6 +178,59 @@
 					</form>
 				</div>
 			</div>
+		</section>
+
+		<section id="metadata-admin" class="panel section" data-operation-panel="metadata"
+				th:attr="data-operation-running=${metadataRebuildRunning}">
+			<h2 th:text="#{settings.metadata.title}">Reconstrução de metadados</h2>
+			<p class="muted" th:text="#{settings.metadata.intro}">Reprocessa os metadados dos arquivos já catalogados, relendo cada arquivo em disco. Use depois de mudar regras de classificação ou de data.</p>
+
+			<div th:if="${inventoryRunning}" class="alert" role="status" th:text="#{settings.metadata.inventoryBlocked}">Inventário em andamento — a reconstrução de metadados fica bloqueada até ele terminar.</div>
+
+			<div th:if="${metadataRebuildRunning}" class="operation-status" role="status">
+				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.metadata.rebuildRunning}">Reconstrução de metadados em andamento</strong></div>
+				<p th:if="${metadataRebuildPercent >= 0}"><span th:text="#{settings.metadata.rebuildProgress(${metadataRebuildPercent}, ${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildTotal, 1, 'POINT')})}"></span><span th:if="${metadataRebuildEta >= 60}" th:text="#{settings.eta.minutes(${metadataRebuildEta / 60})}"></span><span th:if="${metadataRebuildEta >= 0 and metadataRebuildEta < 60}" th:text="#{settings.eta.seconds(${metadataRebuildEta})}"></span></p>
+				<p th:unless="${metadataRebuildPercent >= 0}"
+						th:text="#{settings.metadata.rebuildProcessed(${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')})}"></p>
+				<progress th:if="${metadataRebuildTotal > 0}" th:value="${metadataRebuildProcessed}" th:max="${metadataRebuildTotal}"
+						th:aria-label="#{settings.metadata.rebuildAria(${metadataRebuildProcessed}, ${metadataRebuildTotal})}"></progress>
+				<progress th:unless="${metadataRebuildTotal > 0}" th:aria-label="#{settings.metadata.rebuildRunning}"></progress>
+			</div>
+			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and metadataRebuildResult.dryRun()}" class="alert" role="status"
+					th:text="#{settings.metadata.rebuildSimulated(${#numbers.formatInteger(metadataRebuildResult.candidates(), 1, 'POINT')})}"></div>
+			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and !metadataRebuildResult.dryRun()}" class="alert ok" role="status"
+					th:text="#{settings.metadata.rebuildSuccess(${#numbers.formatInteger(metadataRebuildResult.candidates(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.rebuilt(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.skippedMissing(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.errors(), 1, 'POINT')})}"></div>
+			<div th:if="${metadataRebuildError != null}" class="alert error" th:text="#{settings.metadata.rebuildFailure(${metadataRebuildError})}"></div>
+
+			<form th:action="@{/app/settings/metadata/rebuild}" method="post" class="metadata-rebuild-form">
+				<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+				<label for="metadataRebuildSourcePath" th:text="#{settings.metadata.folder}">Pasta a reconstruir</label>
+				<div class="metadata-rebuild-folder">
+					<input type="text" id="metadataRebuildSourcePath" name="sourcePath" th:value="${metadataRebuildSourcePath}"
+							th:placeholder="#{settings.metadata.folderPlaceholder}" th:disabled="${metadataRebuildRunning}">
+					<button type="button" class="secondary folder-picker-open" data-target="#metadataRebuildSourcePath"
+							th:disabled="${metadataRebuildRunning}"><i class="bi bi-folder2" aria-hidden="true"></i> <span th:text="#{quarantine.origin.chooseFolder}">Escolher pasta</span></button>
+				</div>
+
+				<fieldset class="metadata-rebuild-fields">
+					<legend th:text="#{settings.metadata.fields}">O que reconstruir</legend>
+					<label th:each="field : ${metadataRebuildFields}">
+						<input type="checkbox" name="refresh" th:value="${field}"
+								th:checked="${metadataRebuildSelectedFields.contains(field.name())}" th:disabled="${metadataRebuildRunning}">
+						<span th:text="#{'settings.metadata.field.' + ${field}}"></span>
+					</label>
+				</fieldset>
+
+				<label class="metadata-rebuild-dry-run">
+					<input type="checkbox" name="dryRun" value="true" th:checked="${metadataRebuildDryRun}" th:disabled="${metadataRebuildRunning}">
+					<span th:text="#{settings.metadata.dryRun}">Apenas simular: conta os arquivos e não grava nada</span>
+				</label>
+
+				<div class="actions">
+					<button type="submit" th:disabled="${metadataRebuildRunning or inventoryRunning}" th:text="#{settings.metadata.rebuild}">Reconstruir metadados</button>
+				</div>
+			</form>
 		</section>
 
 		<section class="panel section">

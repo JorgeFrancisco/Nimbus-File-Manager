@@ -96,6 +96,55 @@ class MediaSubcategoryRulesTest {
 		Assertions.assertThat(rule.name()).isEqualTo("060_CAMERA");
 	}
 
+	/**
+	 * Burst and time-lapse frames belong to the same camera as the GOPR shots, and
+	 * the rule runs before the camera family so they are not classified as generic
+	 * camera output.
+	 */
+	@Test
+	void goProShouldRecognizeTheBurstSequenceWithoutSweepingInOtherG0Names() {
+		GoProMediaFamily rule = new GoProMediaFamily();
+
+		Assertions.assertThat(rule.supports("G0010042.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("g0010042 (1).jpg", "C:/x")).isTrue();
+
+		Assertions.assertThat(rule.supports("G001004.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("G00100425.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("G0 relatorio.jpg", "C:/x")).isFalse();
+	}
+
+	@Test
+	void cameraShouldRecognizeTheCompactCameraSequences() {
+		CameraMediaFamily rule = new CameraMediaFamily();
+
+		Assertions.assertThat(rule.supports("DSC00021.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("DSCN0001.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("GEDC0002.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("IMGP4319.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("CIMG3726.jpg", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("S2020029.jpg", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("P1010033.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("100_1086.JPG", "C:/x")).isTrue();
+		Assertions.assertThat(rule.supports("GEDC0002 (1).JPG", "C:/x")).isTrue();
+	}
+
+	/**
+	 * The digit count is what separates a device sequence from any other numeric
+	 * name, so a longer run - a social-network id, an epoch timestamp - must not be
+	 * read as camera output.
+	 */
+	@Test
+	void cameraShouldRejectSequencesWithTheWrongDigitCount() {
+		CameraMediaFamily rule = new CameraMediaFamily();
+
+		Assertions.assertThat(rule.supports("DSC0002.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("DSC000210.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("S20200290.jpg", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("P101003.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("1000_1086.JPG", "C:/x")).isFalse();
+		Assertions.assertThat(rule.supports("Suellen 01.jpg", "C:/x")).isFalse();
+	}
+
 	@Test
 	void peachyShouldMapToOther() {
 		PeachyMediaFamily rule = new PeachyMediaFamily(Clock.systemDefaultZone());
