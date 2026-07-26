@@ -30,7 +30,7 @@
 					<span>
 						<span class="conversion-option-title">
 							<strong th:text="#{conversion.quality.balanced}">Equilibrado</strong>
-							<span class="badge ok" th:text="#{conversion.recommended}">recomendado</span>
+							<span class="badge ok" th:if="${recommendedQuality == 'BALANCED'}" th:text="#{conversion.recommended}">recomendado</span>
 						</span>
 						<small th:text="#{conversion.quality.balanced.hint}">A maior economia de espaço com perda visual mínima.</small>
 					</span>
@@ -45,7 +45,10 @@
 				<label class="conversion-option" th:if="${hardwareEncoder}">
 					<input type="radio" name="quality" value="FAST_BALANCED" th:checked="${quality == 'FAST_BALANCED'}">
 					<span>
-						<strong th:text="#{conversion.quality.fastBalanced}">Rápido — equilibrado</strong>
+						<span class="conversion-option-title">
+							<strong th:text="#{conversion.quality.fastBalanced}">Rápido — equilibrado</strong>
+							<span class="badge ok" th:if="${recommendedQuality == 'FAST_BALANCED'}" th:text="#{conversion.recommended}">recomendado</span>
+						</span>
 						<small th:text="#{conversion.quality.fastBalanced.hint}">A qualidade da opção Equilibrado, feita na placa de vídeo.</small>
 					</span>
 				</label>

@@ -354,4 +354,48 @@ class ConversionWebControllerTest {
 		Assertions.assertThat(model.getAttribute("candidates")).isEqualTo(List.of(candidate));
 		Assertions.assertThat(model.getAttribute("totalElements")).isEqualTo(1L);
 	}
+
+	/**
+	 * The hardware balanced profile matches the software one in size and perceived
+	 * quality and finishes in a fraction of the time, so it is the recommendation
+	 * wherever the machine can run it - and only there.
+	 */
+	@Test
+	void recommendsTheHardwareProfileOnlyWhenTheMachineHasAnEncoder() {
+		when(hardwareEncoderProbe.isAvailable()).thenReturn(true);
+
+		Model withCard = new ExtendedModelMap();
+
+		controller.conversion(null, null, authentication, withCard);
+
+		Assertions.assertThat(withCard.getAttribute("recommendedQuality")).isEqualTo("FAST_BALANCED");
+		Assertions.assertThat(withCard.getAttribute("quality")).isEqualTo("FAST_BALANCED");
+
+		when(hardwareEncoderProbe.isAvailable()).thenReturn(false);
+
+		Model withoutCard = new ExtendedModelMap();
+
+		controller.conversion(null, null, authentication, withoutCard);
+
+		Assertions.assertThat(withoutCard.getAttribute("recommendedQuality")).isEqualTo("BALANCED");
+		Assertions.assertThat(withoutCard.getAttribute("quality")).isEqualTo("BALANCED");
+	}
+
+	/**
+	 * A preference outlives the machine it was chosen on: opening the screen where
+	 * there is no card must select the software profile of the same level, not leave
+	 * the form with nothing marked.
+	 */
+	@Test
+	void downgradesAStoredHardwareChoiceWhereThereIsNoEncoder() {
+		when(hardwareEncoderProbe.isAvailable()).thenReturn(false);
+		when(preferences.find("jorge", ConversionConstants.PAGE_KEY))
+				.thenReturn(Map.of(ConversionConstants.QUALITY_KEY, "FAST_HIGH_QUALITY"));
+
+		Model model = new ExtendedModelMap();
+
+		controller.conversion(null, null, authentication, model);
+
+		Assertions.assertThat(model.getAttribute("quality")).isEqualTo("HIGH_QUALITY");
+	}
 }

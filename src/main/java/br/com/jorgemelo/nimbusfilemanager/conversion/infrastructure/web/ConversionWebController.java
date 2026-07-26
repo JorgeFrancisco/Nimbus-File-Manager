@@ -101,6 +101,7 @@ public class ConversionWebController extends LocalizedComponent {
 		// Only offered where a real encode session opens: an option that fails halfway
 		// through a batch is worse than an option that was never there.
 		model.addAttribute("hardwareEncoder", hardwareEncoderProbe.isAvailable());
+		model.addAttribute("recommendedQuality", recommendedQuality().name());
 		model.addAttribute("audio", storedAudio(preferences).name());
 		model.addAttribute("disposition", storedDisposition(preferences).name());
 		model.addAttribute("nameAffix", storedAffix(preferences));
@@ -235,11 +236,31 @@ public class ConversionWebController extends LocalizedComponent {
 				ConversionConstants.PAGE_KEY);
 	}
 
+	/**
+	 * The profile the screen opens on. A stored choice wins, except when it asks for
+	 * a GPU this machine does not have - the equivalent software profile takes over,
+	 * so the form never opens with nothing selected and the batch never silently
+	 * changes quality level.
+	 */
 	private ConversionQuality storedQuality(Map<String, String> preferences) {
 		ConversionQuality stored = EnumUtils.valueOfOrNull(ConversionQuality.class,
 				preferences.get(ConversionConstants.QUALITY_KEY));
 
-		return stored == null ? ConversionOptions.defaults().quality() : stored;
+		if (stored == null) {
+			return recommendedQuality();
+		}
+
+		return stored.requiresHardware() && !hardwareEncoderProbe.isAvailable() ? stored.softwareEquivalent() : stored;
+	}
+
+	/**
+	 * Measured on real footage, the hardware balanced profile matches the software
+	 * one in size and in perceived quality while finishing in a fraction of the
+	 * time, so it is the better deal wherever the machine can run it. Where it
+	 * cannot, the software profile is the recommendation.
+	 */
+	private ConversionQuality recommendedQuality() {
+		return hardwareEncoderProbe.isAvailable() ? ConversionQuality.FAST_BALANCED : ConversionQuality.BALANCED;
 	}
 
 	private AudioHandling storedAudio(Map<String, String> preferences) {
