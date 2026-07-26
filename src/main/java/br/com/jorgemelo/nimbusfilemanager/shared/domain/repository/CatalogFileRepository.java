@@ -100,7 +100,7 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 
 	Optional<CatalogFile> findByFileKey(String fileKey);
 
-	@EntityGraph(attributePaths = { "location", "media", "photo", "video" })
+	@EntityGraph(attributePaths = { "location", "metadata", "photo", "video" })
 	@Query("select mf from CatalogFile mf where mf.fileKey = :fileKey")
 	Optional<CatalogFile> findByFileKeyWithDetails(@Param("fileKey") String fileKey);
 
