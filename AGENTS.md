@@ -308,6 +308,7 @@ Níveis de log:
 - **Regra base:** toda funcionalidade nova ou alteração vem acompanhada de teste (unitário; e de integração quando envolver banco, HTTP ou processo externo). Nenhuma mudança pode baixar a cobertura.
 - Toda lógica condicional nova testa os caminhos **positivo, negativo e limite**.
 - Os testes validam **comportamento observável**. Nunca escrever teste apenas para aumentar percentual de cobertura.
+- **Caminho de teste que passa por normalização é absoluto e real (`@TempDir`).** Quando o código sob teste chama `toAbsolutePath()`/`normalize()` (ou compara `Path` com o que o serviço devolve), o teste **não** pode montar o caminho com literal de unidade Windows (`Path.of("D:", "library")`, `"D:\\trash"`): no **CI Linux** isso é um caminho *relativo* de um único segmento, que a normalização prefixa com o diretório de trabalho do runner — o teste passa no Windows e quebra no CI. Usar `@TempDir` (parâmetro do método ou do `@BeforeEach`) e derivar tudo dele com `resolve`: sendo absoluto de verdade, a normalização é identidade e a asserção vale nos dois SOs. Literal com letra de unidade só é aceitável quando o caminho **não** passa por normalização — quando ele é apenas repassado (`String`/`Path` opaco) ou casado por `eq(...)` contra o mesmo objeto.
 
 ## Exclusões legítimas de cobertura
 

@@ -39,10 +39,10 @@ class QuarantineIntakeServiceTest {
 	private final Execution execution = Execution.builder().id(1L).build();
 
 	@Test
-	void reportsTheConfiguredQuarantineRoot() {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn("D:\\trash");
+	void reportsTheConfiguredQuarantineRoot(@TempDir Path trash) {
+		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn(trash.toString());
 
-		Assertions.assertThat(service.root()).contains(Path.of("D:", "trash").toAbsolutePath().normalize());
+		Assertions.assertThat(service.root()).contains(trash);
 	}
 
 	@Test

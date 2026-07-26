@@ -1114,8 +1114,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1826 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.29% instruction, 89.29% branch, 96.89% line, 97.46% method, 100.00% class
+Tests:       1828 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.32% instruction, 89.36% branch, 96.93% line, 97.46% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1127,12 +1127,12 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.29% instruction, 89.29% branch, 96.89% line, 97.46% method, 100.00% class
+Floor:  97.32% instruction, 89.36% branch, 96.93% line, 97.46% method, 100.00% class
 Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
 ```
 
 Instruction, method and class already sit at or above the goal, so for those three
-the floor is what defends them. What is left is 12 lines and about 258 branches.
+the floor is what defends them. What is left is 7 lines and about 255 branches.
 Most of it sits in classes already above 90%, which is where the remaining work is
 cheapest per test: each one needs only a handful of cases, and they add up. Roughly
 30–50 of those are legitimately unreachable (I/O failure paths that depend on OS
@@ -1170,11 +1170,11 @@ single thread, at ~50% of available cores (dynamic factor `0.5`). Execution is t
 `@SpringBootTest` class starts its own throwaway PostgreSQL container
 (Testcontainers + `@ServiceConnection`), so they are fully isolated and run in parallel with
 no shared database - which requires a running Docker engine locally and in CI. The suite was
-run back-to-back with no flaky tests. Coverage does move by about 0.02 percentage point
-between runs, always on the same three lines: the `@PreDestroy` hook of
-`QuarantinePurgeScheduler`, which is only recorded when a `@SpringBootTest` context happens
-to close before the JaCoCo agent dumps. The floor above is set at the lower end of that
-range, so the ratchet never fails on the jitter alone.
+run back-to-back with no flaky tests, and coverage is reproducible run to run. It used to
+move by about 0.02 percentage point on the `@PreDestroy` hook of `QuarantinePurgeScheduler`,
+recorded only when a `@SpringBootTest` context happened to close before the JaCoCo agent
+dumped; that hook is now covered by its own test, so the numbers no longer depend on
+shutdown timing and the floor can sit exactly on the measured values.
 
 Run PIT mutation testing:
 

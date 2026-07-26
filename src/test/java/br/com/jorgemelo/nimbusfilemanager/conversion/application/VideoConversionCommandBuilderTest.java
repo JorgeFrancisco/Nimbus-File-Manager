@@ -7,7 +7,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommandOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
@@ -18,11 +20,18 @@ class VideoConversionCommandBuilderTest {
 	private final ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 	private final VideoConversionCommandBuilder builder = new VideoConversionCommandBuilder(externalToolPaths);
 
-	private final Path input = Path.of("D:", "library", "clip.mkv");
-	private final Path output = Path.of("D:", "workspace", "conversion", "clip.mp4");
+	private Path input;
+	private Path output;
 
-	VideoConversionCommandBuilderTest() {
+	@BeforeEach
+	void setUp(@TempDir Path library) {
 		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
+
+		// Absolute paths, because the command carries the input and output resolved
+		// against the working directory: a relative one would render differently on
+		// Windows and on the Linux CI.
+		input = library.resolve("clip.mkv");
+		output = library.resolve("conversion").resolve("clip.mp4");
 	}
 
 	@Test
