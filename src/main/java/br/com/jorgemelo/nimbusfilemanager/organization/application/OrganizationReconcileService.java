@@ -22,6 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Scan;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.MediaLocationReconcileProjection;
@@ -215,6 +216,7 @@ public class OrganizationReconcileService {
 				}
 
 				@Override
+				@CoverageGenerated("Only the operating system denying an entry reaches this")
 				public FileVisitResult visitFileFailed(Path file, IOException exception) {
 					// Access-denied on system/protected folders is expected during a full-disk
 					// scan and must not spam the log with stack traces on every reconcile cycle;

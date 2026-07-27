@@ -1115,8 +1115,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1953 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.68% instruction, 89.97% branch, 97.17% line, 97.91% method, 100.00% class
+Tests:       1954 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.78% instruction, 90.05% branch, 97.25% line, 98.00% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1128,15 +1128,16 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.68% instruction, 89.97% branch, 97.17% line, 97.91% method, 100.00% class
+Floor:  97.78% instruction, 90.05% branch, 97.25% line, 98.00% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 
-Class coverage is at the goal; the other four are below it, and the distance is
-measured rather than guessed: **169 instructions, 86 lines, 2 methods and 1 branch**.
-The branch goal was lowered from 95% to 90% because 95% never oriented anything — it
-sat more than five points from the real number, and a goal nobody can reach is a
-goal nobody works toward. Once 90% lands, the next step gets defined from data.
+Branch, method and class are **at the goal**; instruction and line are **118
+instructions and 78 lines** away from theirs. Branch and method need a new target
+set from here — the ratchet promotes a reached goal to floor and asks for the next
+step. The branch goal had been lowered from 95% to 90% because 95% never oriented
+anything: it sat more than five points from the real number, and a goal nobody can
+reach is a goal nobody works toward. 90% landed two passes later.
 
 Where the remaining work is: the classes furthest from the goal are the ones that
 touch the file system and the delivery layer, and each needs a handful of real cases

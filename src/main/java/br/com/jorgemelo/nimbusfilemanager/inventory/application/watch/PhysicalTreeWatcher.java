@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -169,6 +170,7 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 				}
 
 				@Override
+				@CoverageGenerated("Only the operating system denying an entry reaches this")
 				public FileVisitResult visitFileFailed(Path file, IOException exception) {
 					// Unreadable/protected entry (e.g. System Volume Information):
 					// skip it and keep registering the rest of the tree.

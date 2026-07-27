@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,10 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationS
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDate;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationDestination;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPreviewRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationRuleResult;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.filter.OrganizationCandidateFilter;
@@ -40,6 +46,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.Organization
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationRuleType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.OrganizationCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
@@ -240,6 +247,54 @@ class OrganizationPlannerTest {
 		// so this
 		// confirms cleanup happened instead of leaving a stale entry behind.
 		Assertions.assertThat(executionCancellationService.isCancelled(execution.getId())).isFalse();
+	}
+
+	/**
+	 * Organizing by place: the planner has to fetch the locations of the candidates
+	 * it is about to plan and hand the country/state/city segments to the resolver,
+	 * or the photos land in date folders while the user asked for places.
+	 */
+	@Test
+	void previewShouldResolveDestinationsWithLocationSegmentsWhenSubdivisionIsRequested() {
+		Path source = Path.of("C:/input");
+		Path target = Path.of("C:/organized");
+
+		OrganizationCandidate candidate = candidate(1L, "photo.jpg", source.resolve("photo.jpg"), 100L);
+
+		OrganizationDestination destination = destination(target.resolve("Brasil/RJ/photo.jpg"), false);
+
+		MediaLocationService mediaLocationService = mock(MediaLocationService.class);
+
+		MediaGeoLocation location = MediaGeoLocation.builder().manual(false)
+				.place(ResolvedPlace.builder().countryName("Brasil").stateName("Rio de Janeiro").cityName("Niterói")
+						.confidence(LocationConfidence.HIGH).build())
+				.build();
+
+		when(mediaLocationService.locationsOf(List.of(1L))).thenReturn(Map.of(1L, location));
+		when(layoutResolver.normalize(OrganizationLayout.DEFAULT)).thenReturn("LOCATION");
+		when(organizationCandidateRepository.findCandidates(eq(PathUtils.normalize(source)), any(), any()))
+				.thenReturn(new PageImpl<>(List.of(candidate)));
+		when(candidateFilter.matches(eq(candidate), any(), eq(PathUtils.normalize(source)))).thenReturn(true);
+		when(destinationResolver.resolve(eq(target.toAbsolutePath().normalize()), eq("LOCATION"), eq(candidate),
+				anyList())).thenReturn(destination);
+		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		OrganizationPlanner planner = new OrganizationPlanner(organizationCandidateRepository, destinationResolver,
+				layoutResolver, conflictDetector, candidateFilter, executionProgressService,
+				executionCancellationService, mediaLocationService, new LocationOrganizationPolicy());
+
+		var plan = planner.preview(new OrganizationPreviewRequest(source.toString(), target.toString(), true,
+				OrganizationLayout.DEFAULT, 100, null, null, true, null, null, null, null,
+				LocationSubdivision.COUNTRY_STATE_CITY, LocationConfidence.LOW, LocationFallbackMode.IGNORE));
+
+		Assertions.assertThat(plan.items()).singleElement().satisfies(item -> {
+			Assertions.assertThat(item.targetPath()).contains("Brasil");
+			Assertions.assertThat(item.location()).contains("Brasil");
+		});
+
+		verify(mediaLocationService).locationsOf(List.of(1L));
+		verify(destinationResolver).resolve(eq(target.toAbsolutePath().normalize()), eq("LOCATION"), eq(candidate),
+				anyList());
 	}
 
 	private OrganizationPlanner planner() {

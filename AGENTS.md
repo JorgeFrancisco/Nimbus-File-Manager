@@ -333,6 +333,14 @@ Como operar a catraca:
 - **Subiu?** Atualizar o piso no README para os valores novos, no mesmo commit. É isso que faz a catraca andar — piso desatualizado permite regredir de graça.
 - **O piso é chão, não meta.** O README também registra a **meta** perseguida; alcançá-la promove a meta a piso e uma nova meta é definida.
 
+### Código inalcançável e `@CoverageGenerated`
+
+Código que **nenhum teste honesto alcança** pode sair da medição, anotado com `@CoverageGenerated("motivo")` (em `shared/application`). O nome carrega "Generated" porque esse é o único gancho que o JaCoCo oferece — ele filtra membros anotados com anotação cujo nome simples contenha `Generated` e retenção `CLASS`/`RUNTIME`, o mesmo mecanismo do `lombok.Generated`. Nada ali é gerado.
+
+**Cabe em dois casos, e o motivo vai no argumento:** fiação de framework que existe só para o contêiner construir o objeto (construtor `@Autowired` que apenas repassa para outro que o teste chama direto), e caminho de falha de I/O que exige o sistema operacional negar algo — permissão, volume ilegível, handle que morre no meio de uma varredura.
+
+**Não cabe** em delegação de uma linha, em ramo apenas trabalhoso de montar, nem em nada que uma reestruturação tornaria alcançável. Entre anotar e reestruturar, **reestruture**: perseguir cobertura já encontrou `return` inalcançável e guarda redundante neste projeto, e apagar isso valeu mais que esconder. A anotação também **não alcança bloco** — `catch` e `if` só saem da medição se o método inteiro sair, o que esconderia o caminho coberto junto; nesses casos, ou o caminho vira alcançável, ou fica como resíduo declarado.
+
 A catraca **não** autoriza atalho: continua valendo que teste valida comportamento observável e que **nunca se escreve teste só para mover percentual** (ver a regra base acima). Se a única forma de subir uma métrica for teste artificial — instanciar construtor privado por reflection, exercitar getter, afirmar o óbvio — o certo é **deixar a métrica onde está** e registrar o motivo, não inventar teste. Código legitimamente inalcançável (caminho de erro de I/O dependente de SO, guarda anti-instanciação, override exigido por contrato mas nunca chamado) é resíduo aceito, não dívida.
 
 ---
