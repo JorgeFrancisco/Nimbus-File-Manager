@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,9 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Limit;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
@@ -79,8 +77,8 @@ class OrganizationReconcileServiceTest {
 				Month.JANUARY, 1, 10, 0));
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, oldPath, oldPath))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, oldPath, oldPath)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(fileHashService.hashes(newPath.toAbsolutePath().normalize())).thenReturn(new FileHashes("sha-a", "md5-a"));
 
@@ -105,8 +103,8 @@ class OrganizationReconcileServiceTest {
 				Month.JANUARY, 1, 10, 0));
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, oldPath, oldPath))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, oldPath, oldPath)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 
 		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
@@ -129,8 +127,8 @@ class OrganizationReconcileServiceTest {
 		CatalogFile catalogFileB = catalogFileWithLocation(2L, oldB, 0L, "sha-empty", null);
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L)))
 				.thenReturn(List.of(catalogFileA, catalogFileB));
 		when(fileHashService.hashes(any())).thenReturn(new FileHashes("sha-empty", "md5-empty"));
@@ -158,8 +156,8 @@ class OrganizationReconcileServiceTest {
 		CatalogFile catalogFileB = catalogFileWithLocation(2L, oldB, 0L, "sha-empty", createdAtB);
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L)))
 				.thenReturn(List.of(catalogFileA, catalogFileB));
 		when(fileHashService.hashes(any())).thenReturn(new FileHashes("sha-empty", "md5-empty"));
@@ -185,8 +183,8 @@ class OrganizationReconcileServiceTest {
 		// catalog_file 3: file_key already points at the real (moved) file on disk, but
 		// current_path still lags on the stale phantom path that no longer exists.
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(3L, organized, phantom))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(3L, organized, phantom)));
 		// Different size -> rename detection cannot content-match, so the
 		// file_key-based
 		// repair (not the rename merge) is what must fix it.
@@ -214,9 +212,9 @@ class OrganizationReconcileServiceTest {
 		Path missingDisk = source.resolve("missing.jpg");
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, ok, ok), row(2L, missingDisk, missingDisk),
-						row(3L, source.resolve("different-key.jpg"), ok))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, ok, ok), row(2L, missingDisk, missingDisk),
+						row(3L, source.resolve("different-key.jpg"), ok)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -238,8 +236,8 @@ class OrganizationReconcileServiceTest {
 		Path missingB = source.resolve("b.jpg");
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, missingA, missingA), row(2L, missingB, missingB))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, missingA, missingA), row(2L, missingB, missingB)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 1));
 
@@ -263,8 +261,8 @@ class OrganizationReconcileServiceTest {
 					&& candidate.toAbsolutePath().normalize().startsWith(git.toAbsolutePath().normalize());
 		});
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class))).thenReturn(
-						new SliceImpl<>(List.of(row(1L, visible, visible), row(2L, ignoredDatabase, ignoredDatabase))));
+				any(), eq(0L), any(Limit.class))).thenReturn(
+						List.of(row(1L, visible, visible), row(2L, ignoredDatabase, ignoredDatabase)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -283,8 +281,8 @@ class OrganizationReconcileServiceTest {
 		markHidden(hidden);
 
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, visible, visible))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, visible, visible)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -303,8 +301,8 @@ class OrganizationReconcileServiceTest {
 				.getArgument(0, Path.class).toAbsolutePath().normalize()
 				.startsWith(quarantine.toAbsolutePath().normalize()));
 		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), any(Pageable.class)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, visible, visible))));
+				any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, visible, visible)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -338,19 +336,22 @@ class OrganizationReconcileServiceTest {
 		Mockito.verifyNoInteractions(catalogFileLocationRepository);
 	}
 
+	/**
+	 * The walk is keyed rather than numbered: every round asks for what comes after
+	 * the last id it read, and an empty round is what ends it. Two rounds carrying
+	 * the same path still count as one file in the database.
+	 */
 	@Test
-	void reconcileShouldReadAllDatabasePagesAndDeduplicatePaths() throws Exception {
+	void reconcileShouldReadEveryKeyedPageAndDeduplicatePaths() throws Exception {
 		Path source = Files.createDirectory(tempDir.resolve("paged"));
 		Path missing = source.resolve("missing.jpg");
 
 		String normalized = source.toAbsolutePath().normalize().toString();
 
-		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(),
-				argThat(page -> page.getPageNumber() == 0)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, missing, missing)), PageRequest.of(0, 1000), true));
-		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(),
-				argThat(page -> page.getPageNumber() == 1)))
-				.thenReturn(new SliceImpl<>(List.of(row(1L, missing, missing)), PageRequest.of(1, 1000), false));
+		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(), eq(0L), any(Limit.class)))
+				.thenReturn(List.of(row(1L, missing, missing)));
+		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(), eq(1L), any(Limit.class)))
+				.thenReturn(List.of(row(2L, missing, missing)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), false, false, 10));
 
@@ -378,7 +379,7 @@ class OrganizationReconcileServiceTest {
 		Assertions.assertThat(response.missingOnDisk()).isZero();
 
 		verify(catalogFileRepository, never()).markMissingByIds(any(), any());
-		verify(catalogFileLocationRepository, never()).findForReconcile(any(), any(), any());
+		verify(catalogFileLocationRepository, never()).findForReconcile(any(), any(), anyLong(), any());
 	}
 
 	private void markHidden(Path directory) {

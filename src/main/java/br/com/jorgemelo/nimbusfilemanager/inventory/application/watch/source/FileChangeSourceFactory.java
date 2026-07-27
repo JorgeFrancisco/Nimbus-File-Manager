@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.PhysicalTreeWatcher;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
  * Chooses the change source for a monitored root: the platform provider's
@@ -19,9 +20,12 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.PhysicalTr
 public class FileChangeSourceFactory {
 
 	private final FileChangeSourceProvider provider;
+	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
 
-	public FileChangeSourceFactory(FileChangeSourceProvider provider) {
+	public FileChangeSourceFactory(FileChangeSourceProvider provider,
+			SelfWrittenPathRegistry selfWrittenPathRegistry) {
 		this.provider = provider;
+		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
 	}
 
 	/**
@@ -32,10 +36,12 @@ public class FileChangeSourceFactory {
 	public FileChangeSource create(Path root, boolean recursive) throws IOException {
 		Optional<FileChangeSource> provided = provider.open(root);
 
+		// Every source is wrapped, whichever one it is: the application's own writes
+		// are uninteresting to the watcher regardless of how they were detected.
 		if (provided.isPresent()) {
-			return provided.get();
+			return new SelfWriteAwareFileChangeSource(provided.get(), selfWrittenPathRegistry);
 		}
 
-		return new PhysicalTreeWatcher(root, recursive);
+		return new SelfWriteAwareFileChangeSource(new PhysicalTreeWatcher(root, recursive), selfWrittenPathRegistry);
 	}
 }

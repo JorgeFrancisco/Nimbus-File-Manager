@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
@@ -44,6 +45,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 class DuplicateDeletionServiceTest {
 
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
@@ -52,7 +54,7 @@ class DuplicateDeletionServiceTest {
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
 	private final QuarantineIntakeService quarantineIntakeService = new QuarantineIntakeService(persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), appSettingService);
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
 	private final DuplicateDeletionService service = new DuplicateDeletionService(catalogFileRepository,
 			executionRepository, quarantineIntakeService, similarityCaches, operationLockService,
 			Clock.systemDefaultZone());
@@ -160,7 +162,7 @@ class DuplicateDeletionServiceTest {
 
 		DuplicateDeletionService integrityFailingService = new DuplicateDeletionService(catalogFileRepository,
 				executionRepository,
-				new QuarantineIntakeService(persistence, new SecureFileMove(verifier), appSettingService),
+				new QuarantineIntakeService(persistence, new SecureFileMove(verifier, pathRegistry), appSettingService),
 				similarityCaches, operationLockService, Clock.systemDefaultZone());
 
 		configureTrash(trash);

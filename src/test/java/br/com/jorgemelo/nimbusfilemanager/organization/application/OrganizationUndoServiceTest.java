@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
@@ -47,6 +48,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationUndoServiceTest {
+
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 
 	@TempDir
 	Path tempDir;
@@ -320,7 +323,7 @@ class OrganizationUndoServiceTest {
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
 				movementRepository, operationLockService,
 				new OrganizationPathValidator(mock(AppSettingService.class), workspace),
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())),
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 
@@ -352,7 +355,7 @@ class OrganizationUndoServiceTest {
 
 		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
 				catalogFileLocationRepository, movementRepository, lockService, mock(OrganizationPathValidator.class),
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())),
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(dedup));
@@ -407,7 +410,7 @@ class OrganizationUndoServiceTest {
 	private OrganizationUndoService serviceWithoutWorkspace() {
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
 				movementRepository, operationLockService, mock(OrganizationPathValidator.class),
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())),
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 

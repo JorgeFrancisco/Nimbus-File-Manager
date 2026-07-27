@@ -8,6 +8,7 @@ import java.nio.file.StandardCopyOption;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -30,9 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 public class SecureFileMove {
 
 	private final OrganizationMoveVerifier verifier;
+	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
 
-	public SecureFileMove(OrganizationMoveVerifier verifier) {
+	public SecureFileMove(OrganizationMoveVerifier verifier, SelfWrittenPathRegistry selfWrittenPathRegistry) {
 		this.verifier = verifier;
+		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
 	}
 
 	/**
@@ -44,6 +47,13 @@ public class SecureFileMove {
 	 */
 	public void move(Path source, Path target, boolean overwrite) throws IOException {
 		MoveBaseline baseline = verifier.capture(source);
+
+		// Announced before the file actually moves, because the folder watcher can
+		// poll the event milliseconds later: every move through here is the
+		// application rearranging its own library, and it updates the catalog itself,
+		// so the watcher has nothing to discover and no reason to re-scan the tree.
+		selfWrittenPathRegistry.announce(source);
+		selfWrittenPathRegistry.announce(target);
 
 		Path parent = target.getParent();
 

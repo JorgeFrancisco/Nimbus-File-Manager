@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
@@ -65,6 +66,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationExecutorTest {
+
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 
 	@TempDir
 	Path tempDir;
@@ -964,8 +967,8 @@ class OrganizationExecutorTest {
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier, OrganizationMovePersistence persistence) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
 				catalogFileLocationRepository, movementRepository, operationLockService, executionProgressService,
-				executionCancellationService, new SecureFileMove(verifier), persistence, new OrganizationPlanStore(),
-				new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
+				executionCancellationService, new SecureFileMove(verifier, pathRegistry), persistence,
+				new OrganizationPlanStore(), new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
 	}
 
 	private OrganizationExecuteRequest dryRunRequest(Path source, Path target, boolean allowConflicts) {
@@ -977,7 +980,7 @@ class OrganizationExecutorTest {
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
 				catalogFileLocationRepository, movementRepository, operationLockService, executionProgressService,
-				executionCancellationService, new SecureFileMove(verifier),
+				executionCancellationService, new SecureFileMove(verifier, pathRegistry),
 				new OrganizationMovePersistence(catalogFileRepository, catalogFileLocationRepository,
 						movementRepository,
 						Clock.systemDefaultZone()),

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
@@ -49,10 +51,12 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 class QuarantineServiceTest {
 
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
 	private final QuarantineService service = new QuarantineService(movementRepository, persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), new OperationLockService());
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+			new OperationLockService());
 
 	@Test
 	void listsQuarantinedFilesWithLiveOriginAndConflictFlags(@TempDir Path tmp) throws Exception {
@@ -336,7 +340,7 @@ class QuarantineServiceTest {
 				.thenThrow(new OperationLockException("busy"));
 
 		QuarantineService locked = new QuarantineService(movementRepository, persistence,
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), lockService);
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService);
 
 		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 

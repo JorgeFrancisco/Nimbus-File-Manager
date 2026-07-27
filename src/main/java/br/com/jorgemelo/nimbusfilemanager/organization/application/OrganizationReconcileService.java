@@ -8,11 +8,12 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
@@ -119,24 +120,21 @@ public class OrganizationReconcileService {
 
 		String descendantPattern = PathUtils.descendantLikePattern(sourcePath, source.getFileSystem().getSeparator());
 
-		int page = 0;
-
-		var slice = catalogFileLocationRepository.findForReconcile(sourcePath, descendantPattern,
-				PageRequest.of(page, PAGE_SIZE));
+		long afterId = 0;
 
 		while (true) {
-			for (MediaLocationReconcileProjection row : slice.getContent()) {
-				processReconcileRow(source, accumulator, diskPaths, row);
-			}
+			List<MediaLocationReconcileProjection> rows = catalogFileLocationRepository.findForReconcile(sourcePath,
+					descendantPattern, afterId, Limit.of(PAGE_SIZE));
 
-			if (!slice.hasNext()) {
+			if (rows.isEmpty()) {
 				return;
 			}
 
-			page++;
+			for (MediaLocationReconcileProjection row : rows) {
+				processReconcileRow(source, accumulator, diskPaths, row);
+			}
 
-			slice = catalogFileLocationRepository.findForReconcile(sourcePath, descendantPattern,
-					PageRequest.of(page, PAGE_SIZE));
+			afterId = rows.getLast().getCatalogFileId();
 		}
 	}
 

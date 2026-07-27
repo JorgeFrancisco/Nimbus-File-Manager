@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 class ReconcilePathMatchingRepositoryIntegrationTest {
 
 	private static final Pageable PAGE = PageRequest.of(0, 50);
+	private static final Limit LIMIT = Limit.of(50);
 	private static final String SEPARATOR = "\\";
 
 	@Container
@@ -78,6 +81,35 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 		List<String> matched = reconcilePaths("D:\\");
 
 		Assertions.assertThat(matched).containsExactlyInAnyOrder("D:\\Media\\a.jpg", "D:\\Media\\IMG_2026_01.jpg",
+				"D:\\Media\\sub\\x.jpg", "D:\\top.jpg", "D:\\MediaOther\\a.jpg");
+	}
+
+	/**
+	 * The reconcile reads its candidates in rounds keyed by the last id it saw,
+	 * because paging by number made the engine skip every earlier row to serve the
+	 * next page. Walked here in rounds smaller than the data: every row has to come
+	 * back exactly once, and an empty round is what ends the walk.
+	 */
+	@Test
+	void findForReconcileWalksEveryRowInSmallKeyedRoundsWithoutRepeatingOrSkipping() {
+		List<String> walked = new ArrayList<>();
+
+		long afterId = 0;
+
+		for (int round = 0; round < 10; round++) {
+			List<MediaLocationReconcileProjection> rows = catalogFileLocationRepository.findForReconcile("D:\\",
+					PathUtils.descendantLikePattern("D:\\", SEPARATOR), afterId, Limit.of(2));
+
+			if (rows.isEmpty()) {
+				break;
+			}
+
+			rows.forEach(row -> walked.add(row.getCurrentPath()));
+
+			afterId = rows.getLast().getCatalogFileId();
+		}
+
+		Assertions.assertThat(walked).containsExactlyInAnyOrder("D:\\Media\\a.jpg", "D:\\Media\\IMG_2026_01.jpg",
 				"D:\\Media\\sub\\x.jpg", "D:\\top.jpg", "D:\\MediaOther\\a.jpg");
 	}
 
@@ -139,8 +171,7 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 
 	private List<String> reconcilePaths(String folder) {
 		return catalogFileLocationRepository
-				.findForReconcile(folder, PathUtils.descendantLikePattern(folder, SEPARATOR), PAGE).getContent()
-						.stream()
+				.findForReconcile(folder, PathUtils.descendantLikePattern(folder, SEPARATOR), 0L, LIMIT).stream()
 				.map(MediaLocationReconcileProjection::getCurrentPath).toList();
 	}
 

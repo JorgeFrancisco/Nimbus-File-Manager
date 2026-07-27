@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -15,6 +16,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
@@ -31,10 +33,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 
 class QuarantineIntakeServiceTest {
 
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final QuarantineIntakeService service = new QuarantineIntakeService(persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), appSettingService);
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
 
 	private final Execution execution = Execution.builder().id(1L).build();
 
@@ -163,8 +166,8 @@ class QuarantineIntakeServiceTest {
 		when(verifier.capture(any())).thenReturn(new MoveBaseline(7L, "sha"));
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
-		QuarantineIntakeService failing = new QuarantineIntakeService(persistence, new SecureFileMove(verifier),
-				appSettingService);
+		QuarantineIntakeService failing = new QuarantineIntakeService(persistence,
+				new SecureFileMove(verifier, pathRegistry), appSettingService);
 
 		Assertions.assertThat(failing.intake(execution, file(original), trash, MovementReason.DUPLICATE_QUARANTINED))
 				.isEqualTo(IntakeOutcome.ERROR);

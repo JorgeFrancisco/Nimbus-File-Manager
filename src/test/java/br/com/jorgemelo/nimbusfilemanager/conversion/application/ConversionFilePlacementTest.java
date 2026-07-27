@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +14,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
@@ -26,9 +28,11 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBasel
 
 class ConversionFilePlacementTest {
 
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming();
 	private final ConversionFilePlacement placement = new ConversionFilePlacement(
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService())), conversionFileNaming);
+			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+			conversionFileNaming);
 
 	private final ConversionOptions noAffix = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 			OriginalDisposition.KEEP, "", NameAffixPosition.SUFFIX);
@@ -144,7 +148,7 @@ class ConversionFilePlacementTest {
 		when(verifier.capture(any())).thenReturn(new MoveBaseline(9L, "sha"));
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
-		ConversionFilePlacement failing = new ConversionFilePlacement(new SecureFileMove(verifier),
+		ConversionFilePlacement failing = new ConversionFilePlacement(new SecureFileMove(verifier, pathRegistry),
 				conversionFileNaming);
 
 		Assertions.assertThat(failing.renameToOriginalName(placed, source)).isEqualTo(placed);

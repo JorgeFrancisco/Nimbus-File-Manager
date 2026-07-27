@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 
 /**
@@ -28,8 +30,9 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBasel
  */
 class SecureFileMoveTest {
 
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
-	private final SecureFileMove secureFileMove = new SecureFileMove(verifier);
+	private final SecureFileMove secureFileMove = new SecureFileMove(verifier, pathRegistry);
 
 	@Test
 	void moveRelocatesFileCreatingParentsAndVerifiesAgainstTheBaseline(@TempDir Path dir) throws IOException {
@@ -44,6 +47,26 @@ class SecureFileMoveTest {
 		assertThat(target).hasContent("payload");
 
 		verify(verifier).verify(source, target, new MoveBaseline(7L, "sha"));
+	}
+
+	/**
+	 * Both ends of the move are announced to the watcher: the file leaving one
+	 * folder and arriving in the other are the application rearranging its own
+	 * library, and it updates the catalog itself. Without this the watcher answered
+	 * each move with a full recursive inventory that could only rediscover what was
+	 * already recorded.
+	 */
+	@Test
+	void announcesBothEndsOfTheMoveSoTheWatcherDoesNotRescanTheLibrary(@TempDir Path dir) throws IOException {
+		Path source = Files.writeString(dir.resolve("source.txt"), "payload");
+		Path target = dir.resolve("target.txt");
+
+		when(verifier.capture(source)).thenReturn(new MoveBaseline(7L, "sha"));
+
+		secureFileMove.move(source, target, false);
+
+		assertThat(pathRegistry.consume(source)).isTrue();
+		assertThat(pathRegistry.consume(target)).isTrue();
 	}
 
 	@Test

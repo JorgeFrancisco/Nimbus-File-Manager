@@ -44,6 +44,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationR
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
 import ch.qos.logback.classic.Level;
@@ -56,6 +57,8 @@ import ch.qos.logback.core.read.ListAppender;
 // immune to interference from concurrently-scheduled test classes.
 @Isolated
 class InventoryWatchServiceTest {
+
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 
 	@TempDir
 	Path tempDir;
@@ -664,7 +667,7 @@ class InventoryWatchServiceTest {
 	void aFailureToOpenTheWatcherShouldSurfaceOnTheStatusInsteadOfPropagating() {
 		FileChangeSourceFactory failing = new FileChangeSourceFactory(_ -> {
 			throw new IllegalStateException("no watcher available on this volume");
-		});
+		}, pathRegistry);
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
 				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
@@ -680,7 +683,7 @@ class InventoryWatchServiceTest {
 	}
 
 	private FileChangeSourceFactory watchOnlyFactory() {
-		return new FileChangeSourceFactory(_ -> Optional.empty());
+		return new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry);
 	}
 
 	private AppSettingService configuredSettings() {
@@ -775,7 +778,16 @@ class InventoryWatchServiceTest {
 
 		field.setAccessible(true);
 
-		return (PhysicalTreeWatcher) ((AtomicReference<?>) field.get(service)).get();
+		Object source = ((AtomicReference<?>) field.get(service)).get();
+
+		// The factory hands the service a wrapper that filters out the changes the
+		// application wrote itself; the events these tests inject belong to the real
+		// watcher underneath it.
+		Field delegate = source.getClass().getDeclaredField("delegate");
+
+		delegate.setAccessible(true);
+
+		return (PhysicalTreeWatcher) delegate.get(source);
 	}
 
 	private void setField(String name, Object value) throws Exception {
