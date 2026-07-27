@@ -16,6 +16,8 @@ class BackendI18nTest {
 	@Test
 	void controllersAndServicesResolveDisplayedMessagesByKey() throws Exception {
 		assertThat(read("src/main/java/br/com/jorgemelo/nimbusfilemanager/settings/infrastructure/web/SettingsWebController.java"))
+				.contains("extends LocalizedComponent", "backend.settings.preferencesUpdated");
+		assertThat(read("src/main/java/br/com/jorgemelo/nimbusfilemanager/settings/infrastructure/web/SettingsParameterWebController.java"))
 				.contains("extends LocalizedComponent", "backend.settings.updated");
 		assertThat(read("src/main/java/br/com/jorgemelo/nimbusfilemanager/geolocation/infrastructure/web/SettingsGeodataWebController.java"))
 				.contains("extends LocalizedComponent", "backend.settings.cacheCleared");

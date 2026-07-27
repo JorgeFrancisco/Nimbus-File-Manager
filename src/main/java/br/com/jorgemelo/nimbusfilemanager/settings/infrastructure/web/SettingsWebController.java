@@ -11,21 +11,17 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoDatasetSettingsModel;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.FileExplorerService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationConstants;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppTimeZones;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.LibrarySwitchService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.UpdatePreferencesForm;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -42,12 +38,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
  * admin and non-admin views.
  *
  * <p>
- * The section-specific write actions of the Sistema tab live in sibling
- * controllers ({@link SettingsGeodataWebController},
+ * The write actions of the Sistema tab live in sibling controllers
+ * ({@link SettingsParameterWebController} for the parameters themselves,
+ * {@link SettingsGeodataWebController},
  * {@link SettingsDuplicateExclusionWebController},
  * {@link SettingsExecutionRetentionWebController}) and the geo read model in
  * {@link GeoDatasetSettingsModel}, keeping this controller focused on the page
- * render, the system-parameter update and the personal preferences.
+ * render and the personal preferences.
  */
 @Controller
 public class SettingsWebController extends LocalizedComponent {
@@ -55,22 +52,17 @@ public class SettingsWebController extends LocalizedComponent {
 	private static final List<Integer> PAGE_SIZES = List.of(20, 50, 100);
 
 	private final AppSettingService appSettingService;
-	private final InventoryWatchService inventoryWatchService;
-	private final LibrarySwitchService librarySwitchService;
-	private final InventoryRunningState inventoryRunningState;
+	private final QuarantineFolderPolicy quarantineFolderPolicy;
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final GeoDatasetSettingsModel geoDatasetSettingsModel;
 
 	@Autowired
-	public SettingsWebController(AppSettingService appSettingService, InventoryWatchService inventoryWatchService,
-			LibrarySwitchService librarySwitchService, InventoryRunningState inventoryRunningState,
+	public SettingsWebController(AppSettingService appSettingService, QuarantineFolderPolicy quarantineFolderPolicy,
 			DuplicateExclusionService duplicateExclusionService, UserPagePreferenceService userPagePreferenceService,
 			GeoDatasetSettingsModel geoDatasetSettingsModel) {
 		this.appSettingService = appSettingService;
-		this.inventoryWatchService = inventoryWatchService;
-		this.librarySwitchService = librarySwitchService;
-		this.inventoryRunningState = inventoryRunningState;
+		this.quarantineFolderPolicy = quarantineFolderPolicy;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.geoDatasetSettingsModel = geoDatasetSettingsModel;
@@ -83,6 +75,7 @@ public class SettingsWebController extends LocalizedComponent {
 		model.addAttribute("activeTab", "system");
 		model.addAttribute("duplicateFileExclusions", duplicateExclusionService.fileExclusions());
 		model.addAttribute("duplicateFolderExclusions", duplicateExclusionService.folderExclusions());
+		model.addAttribute("quarantineWarning", quarantineFolderPolicy.warning().orElse(null));
 
 		geoDatasetSettingsModel.addTo(model, authentication);
 		addPreferencesModel(model, authentication);
@@ -92,50 +85,6 @@ public class SettingsWebController extends LocalizedComponent {
 
 	public String settings(Model model) {
 		return settings(null, model);
-	}
-
-	@PostMapping("/app/settings")
-	public String update(@RequestParam String key, @RequestParam String value,
-			@RequestParam(defaultValue = "false") boolean confirmLibraryChange, Authentication authentication,
-			RedirectAttributes redirectAttributes) {
-		if (inventoryRunningState.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.inventoryBlocked"));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		try {
-			if (SettingsConstants.WATCH_FOLDER.equals(key)) {
-				String oldFolder = appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "");
-				if (!oldFolder.equalsIgnoreCase(value.trim())) {
-					if (!confirmLibraryChange) {
-						throw new IllegalArgumentException(message("backend.settings.confirmLibrarySwitch"));
-					}
-
-					librarySwitchService.validateNewFolder(value);
-
-					librarySwitchService.switchLibrary(oldFolder, value.trim(), username(authentication));
-
-					redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
-							message("backend.settings.librarySwitchStarted"));
-
-					return SharedConstants.REDIRECT_SETTINGS;
-				}
-			}
-
-			appSettingService.update(key, value, username(authentication));
-
-			if (key.startsWith("nimbus-file-manager.inventory.watch-")) {
-				inventoryWatchService.reconfigureAndInventory();
-			}
-
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.updated"));
-		} catch (IllegalArgumentException e) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, e.getMessage());
-		}
-
-		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
 	@GetMapping("/app/settings/preferences")

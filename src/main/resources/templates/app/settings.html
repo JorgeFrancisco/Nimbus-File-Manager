@@ -30,6 +30,7 @@
 		<section class="panel section">
 			<h2 th:text="#{settings.sys.organization}">Organização</h2>
 			<p class="muted" th:text="#{settings.sys.organizationHint}">Layout padrão usado para organizar arquivos e critério de duplicados.</p>
+			<div th:if="${quarantineWarning}" class="alert" role="status" th:text="${quarantineWarning}"></div>
 			<th:block th:each="setting : ${settings}"
 					th:if="${#strings.startsWith(setting.settingKey, DUPLICATES) or setting.settingKey == LAYOUT}">
 				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
