@@ -46,7 +46,11 @@ class FingerprintBacklogEngine {
 	static final int BATCH_SIZE = 200;
 	static final String UNSUPPORTED_PREFIX = "[unsupported] ";
 	private static final int MAX_ERROR_LENGTH = 500;
-	private static final int PROGRESS_STRIDE = 25;
+	/**
+	 * How many items are written at a time. Small on purpose: it is the amount of
+	 * finished work a stop can still throw away.
+	 */
+	private static final int PERSIST_SIZE = 25;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
@@ -128,9 +132,17 @@ class FingerprintBacklogEngine {
 	}
 
 	/**
-	 * Drains the pending queue until empty, cancelled, or an inventory takes
-	 * priority. The heavy hashing runs off-transaction on the coordinator; only the
-	 * per-batch persistence is transactional.
+	 * Drains the pending queue until empty, cancelled, or higher-priority work
+	 * takes over. The heavy hashing runs off-transaction on the coordinator; only
+	 * the persistence is transactional.
+	 *
+	 * <p>
+	 * Rows are fetched in large batches, because that query is cheap, and written
+	 * in small ones, because that write is the only thing standing between minutes
+	 * of ffmpeg and losing it: whatever a run computed but had not yet stored dies
+	 * with the process. A restart used to throw away up to a whole batch - one run
+	 * hashed for thirty-nine minutes and left nothing behind. Now at most
+	 * {@code PERSIST_SIZE} items are ever at risk.
 	 */
 	public <P, R> DrainResult drain(FingerprintProducer<P, R> producer, BooleanSupplier stop,
 			ProgressListener progress) {
@@ -150,23 +162,24 @@ class FingerprintBacklogEngine {
 				break;
 			}
 
-			long baseProcessed = processed;
-			long baseFailed = failed;
+			for (int start = 0; start < batch.size() && !halt.getAsBoolean(); start += PERSIST_SIZE) {
+				List<P> chunk = batch.subList(start, Math.min(start + PERSIST_SIZE, batch.size()));
 
-			List<Outcome<P, R>> outcomes = processingCoordinator.process(batch, halt, producer::compute, done -> {
-				if (done % PROGRESS_STRIDE == 0) {
-					progress.onProgress(baseProcessed + done, baseFailed);
-				}
-			});
+				long baseProcessed = processed;
+				long baseFailed = failed;
 
-			BatchCounts counts = Objects
-					.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
+				List<Outcome<P, R>> outcomes = processingCoordinator.process(chunk, halt, producer::compute,
+						done -> progress.onProgress(baseProcessed + done, baseFailed));
 
-			processed += counts.done();
+				BatchCounts counts = Objects
+						.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
 
-			failed += counts.failed();
+				processed += counts.done();
 
-			progress.onProgress(processed, failed);
+				failed += counts.failed();
+
+				progress.onProgress(processed, failed);
+			}
 		}
 
 		return new DrainResult(processed, failed);

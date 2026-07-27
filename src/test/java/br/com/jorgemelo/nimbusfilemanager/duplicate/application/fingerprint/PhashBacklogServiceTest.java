@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -55,11 +57,39 @@ class PhashBacklogServiceTest {
 	@Mock
 	private ExecutionQueryService executionQueryService;
 
+	private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+
 	private PhashBacklogService service() {
 		return new PhashBacklogService(mediaFingerprintRepository, fingerprintFailureRepository,
 				photoPerceptualHashService,
 				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
-				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
+				executionQueryService, transactionManager, Clock.systemDefaultZone());
+	}
+
+	/**
+	 * Whatever a run computed but had not written dies with the process, and a
+	 * fetched batch is two hundred items of ffmpeg. Writing in small units is what
+	 * keeps a restart from throwing away a run's whole afternoon, so the batch has
+	 * to reach the database in more than one transaction.
+	 */
+	@SuppressWarnings("unchecked")
+	@Test
+	void aFetchedBatchIsWrittenInSeveralSmallTransactions() {
+		List<PendingPhoto> sixty = IntStream.rangeClosed(1, 60)
+				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg")).toList();
+
+		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
+				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
+				.thenReturn(sixty, List.of());
+		when(photoPerceptualHashService.compute(any()))
+				.thenReturn(new PhotoPerceptualFingerprint(new byte[32], new byte[1024]));
+		when(executionQueryService.active()).thenReturn(Optional.empty());
+
+		service().drainPending(() -> false, (_, _) -> {
+		});
+
+		// 60 items in units of 25: three writes, never one of sixty.
+		verify(transactionManager, times(3)).getTransaction(any());
 	}
 
 	@SuppressWarnings("unchecked")
