@@ -30,7 +30,9 @@ class QuarantineFolderPolicyTest {
 
 		configure(library, null);
 
-		Assertions.assertThatThrownBy(() -> policy.validateQuarantineFolder(library.resolve("trash").toString()))
+		String nested = library.resolve("trash").toString();
+
+		Assertions.assertThatThrownBy(() -> policy.validateQuarantineFolder(nested))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("não pode ficar dentro da biblioteca monitorada");
 	}
@@ -42,7 +44,9 @@ class QuarantineFolderPolicyTest {
 
 		configure(library, null);
 
-		Assertions.assertThatThrownBy(() -> policy.validateQuarantineFolder(library.toString()))
+		String sameFolder = library.toString();
+
+		Assertions.assertThatThrownBy(() -> policy.validateQuarantineFolder(sameFolder))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
@@ -67,7 +71,9 @@ class QuarantineFolderPolicyTest {
 	void refusesALibraryThatWouldContainTheQuarantine(@TempDir Path tmp) {
 		configure(null, tmp.resolve("library").resolve("trash"));
 
-		Assertions.assertThatThrownBy(() -> policy.validateLibraryFolder(tmp.resolve("library").toString()))
+		String library = tmp.resolve("library").toString();
+
+		Assertions.assertThatThrownBy(() -> policy.validateLibraryFolder(library))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("não pode ficar dentro da biblioteca monitorada");
 	}
@@ -79,7 +85,9 @@ class QuarantineFolderPolicyTest {
 
 		configure(null, quarantine);
 
-		Assertions.assertThatThrownBy(() -> policy.validateLibraryFolder(quarantine.resolve("library").toString()))
+		String nestedLibrary = quarantine.resolve("library").toString();
+
+		Assertions.assertThatThrownBy(() -> policy.validateLibraryFolder(nestedLibrary))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("não pode ficar dentro da pasta de quarentena");
 	}

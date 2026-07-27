@@ -30,6 +30,8 @@
 	const reportBody = document.getElementById('conversionReportBody');
 	const labels = document.getElementById('conversionOutcomeLabels');
 	const status = document.getElementById('conversionStatus') || document.getElementById('conversionStatusIdle');
+	const pagination = document.getElementById('conversionPagination');
+	const pageSize = document.getElementById('conversionPageSize');
 
 	const checkboxes = Array.prototype.slice.call(document.querySelectorAll('.js-select'));
 
@@ -101,7 +103,30 @@
 			cancelButton.disabled = false;
 		}
 
+		setPagingBlocked(value);
+
 		updateSelection();
+	}
+
+	// Leaving the page mid-batch loses the progress and the final report, and the
+	// list itself is about to change under the user - every converted file stops
+	// being a candidate. The server re-renders the page blocked when a batch is
+	// already running; this keeps it blocked when the batch starts right here.
+	function setPagingBlocked(value) {
+		if (pageSize) {
+			pageSize.disabled = value;
+		}
+
+		if (!pagination) {
+			return;
+		}
+
+		pagination.title = value ? pagination.dataset.blockedTitle || '' : '';
+
+		Array.prototype.slice.call(pagination.querySelectorAll('a')).forEach((link) => {
+			link.classList.toggle('disabled', value);
+			link.setAttribute('aria-disabled', String(value));
+		});
 	}
 
 	function updateSelection() {
@@ -493,6 +518,16 @@
 
 	if (optionsForm) {
 		optionsForm.addEventListener('change', rememberOptions);
+	}
+
+	if (pagination) {
+		// The disabled class stops the mouse (pointer-events), not a focused link
+		// activated with the keyboard, so the click itself is refused here too.
+		pagination.addEventListener('click', (event) => {
+			if (running) {
+				event.preventDefault();
+			}
+		});
 	}
 
 	if (cancelButton) {

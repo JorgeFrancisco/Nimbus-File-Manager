@@ -157,23 +157,27 @@
 			</button>
 		</div>
 		<div class="conversion-controls">
-			<nav class="pagination" th:if="${totalPages > 1}" th:aria-label="#{pagination.label}">
-				<a class="button secondary small" th:if="${hasPrevious}"
+			<nav class="pagination" id="conversionPagination" th:if="${totalPages > 1}" th:aria-label="#{pagination.label}"
+					th:title="${conversionRunning} ? #{conversion.pagingBlocked} : null"
+					th:attr="data-blocked-title=#{conversion.pagingBlocked}"
+					th:with="canGoBack=${hasPrevious and !conversionRunning}, canGoForward=${hasNext and !conversionRunning}">
+				<a class="button secondary small" th:if="${canGoBack}"
 						th:href="@{/app/conversion(size=${pageSize}, page=0)}" th:text="#{pagination.first}">Primeira</a>
-				<span class="button secondary small disabled" th:unless="${hasPrevious}" th:text="#{pagination.first}">Primeira</span>
-				<a class="button secondary small" th:if="${hasPrevious}"
+				<span class="button secondary small disabled" th:unless="${canGoBack}" th:text="#{pagination.first}">Primeira</span>
+				<a class="button secondary small" th:if="${canGoBack}"
 						th:href="@{/app/conversion(size=${pageSize}, page=${pageNumber - 1})}" th:text="#{pagination.previous}">Anterior</a>
-				<span class="button secondary small disabled" th:unless="${hasPrevious}" th:text="#{pagination.previous}">Anterior</span>
+				<span class="button secondary small disabled" th:unless="${canGoBack}" th:text="#{pagination.previous}">Anterior</span>
 				<span class="pagination-page" th:text="#{pagination.pageInfo(${pageNumber + 1}, ${totalPages})}">Página 1 de 1</span>
-				<a class="button secondary small" th:if="${hasNext}"
+				<a class="button secondary small" th:if="${canGoForward}"
 						th:href="@{/app/conversion(size=${pageSize}, page=${pageNumber + 1})}" th:text="#{pagination.next}">Próxima</a>
-				<span class="button secondary small disabled" th:unless="${hasNext}" th:text="#{pagination.next}">Próxima</span>
-				<a class="button secondary small" th:if="${hasNext}"
+				<span class="button secondary small disabled" th:unless="${canGoForward}" th:text="#{pagination.next}">Próxima</span>
+				<a class="button secondary small" th:if="${canGoForward}"
 						th:href="@{/app/conversion(size=${pageSize}, page=${totalPages - 1})}" th:text="#{pagination.last}">Última</a>
-				<span class="button secondary small disabled" th:unless="${hasNext}" th:text="#{pagination.last}">Última</span>
+				<span class="button secondary small disabled" th:unless="${canGoForward}" th:text="#{pagination.last}">Última</span>
 			</nav>
 			<form class="explorer-size" th:action="@{/app/conversion}" method="get">
-				<select name="size" onchange="this.form.submit()" th:title="#{files.itemsPerPage}">
+				<select name="size" id="conversionPageSize" onchange="this.form.submit()" th:disabled="${conversionRunning}"
+						th:title="${conversionRunning} ? #{conversion.pagingBlocked} : #{files.itemsPerPage}">
 					<option th:each="option : ${pageSizes}" th:value="${option}" th:text="#{files.itemsOption(${option})}"
 							th:selected="${option == pageSize}">25 itens</option>
 				</select>

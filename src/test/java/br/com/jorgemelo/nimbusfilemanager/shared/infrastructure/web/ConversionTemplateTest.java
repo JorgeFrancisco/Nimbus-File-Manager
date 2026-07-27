@@ -54,6 +54,30 @@ class ConversionTemplateTest {
 	}
 
 	/**
+	 * Paging away mid-batch loses the progress and the final report, and the list is
+	 * about to change anyway - every converted file stops being a candidate. The
+	 * server renders the controls blocked when a batch is already running, so a
+	 * reload during one comes back blocked instead of inviting the click.
+	 */
+	@Test
+	void pagingAndThePageSizeAreBlockedWhileABatchRuns() throws Exception {
+		String html = Files.readString(Path.of("src/main/resources/templates/app/conversion.html"));
+
+		assertThat(html).contains("canGoBack=${hasPrevious and !conversionRunning}")
+				.contains("canGoForward=${hasNext and !conversionRunning}")
+				.contains("th:disabled=\"${conversionRunning}\"").contains("#{conversion.pagingBlocked}");
+	}
+
+	/** The same block has to happen when the batch starts without a reload. */
+	@Test
+	void pagingIsBlockedWhenTheBatchStartsOnThisScreen() throws Exception {
+		String javascript = Files.readString(SCRIPT);
+
+		assertThat(javascript).contains("function setPagingBlocked").contains("setPagingBlocked(value)")
+				.contains("event.preventDefault()");
+	}
+
+	/**
 	 * The hardware profile only exists where the machine proved it can encode with
 	 * it, so the screen offers it conditionally and the value must match the enum
 	 * the server binds.
