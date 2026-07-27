@@ -33,6 +33,7 @@ public class AppSettingService implements ApplicationRunner {
 	private static final String VALUE_TYPE_INTEGER = "INTEGER";
 	private static final String VALUE_TYPE_BOOLEAN = "BOOLEAN";
 	private static final String VALUE_TYPE_ZONE_ID = "ZONE_ID";
+	private static final String VALUE_TRUE = "true";
 	private static final String VALUE_FALSE = "false";
 
 	private final AppSettingRepository appSettingRepository;
@@ -180,7 +181,7 @@ public class AppSettingService implements ApplicationRunner {
 	}
 
 	private boolean parseRequiredBoolean(String value) {
-		if ("true".equalsIgnoreCase(value) || VALUE_FALSE.equalsIgnoreCase(value)) {
+		if (VALUE_TRUE.equalsIgnoreCase(value) || VALUE_FALSE.equalsIgnoreCase(value)) {
 			return Boolean.parseBoolean(value);
 		}
 
@@ -266,11 +267,11 @@ public class AppSettingService implements ApplicationRunner {
 						"Inventário automático: incluir subpastas."),
 				new AppSettingDefinition(SettingsConstants.WATCH_INCLUDE_HIDDEN, VALUE_FALSE, VALUE_TYPE_BOOLEAN,
 						"Inventário automático: incluir arquivos/pastas ocultos."),
-				new AppSettingDefinition(SettingsConstants.WATCH_CALCULATE_HASHES, "true", VALUE_TYPE_BOOLEAN,
+				new AppSettingDefinition(SettingsConstants.WATCH_CALCULATE_HASHES, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Inventário automático: calcular hashes dos arquivos."),
 				new AppSettingDefinition(SettingsConstants.WATCH_FORCE_ANALYSIS, VALUE_FALSE, VALUE_TYPE_BOOLEAN,
 						"Inventário automático: forçar reanálise de arquivos já catalogados."),
-				new AppSettingDefinition(SettingsConstants.LOCATION_ENABLED, VALUE_FALSE, VALUE_TYPE_BOOLEAN,
+				new AppSettingDefinition(SettingsConstants.LOCATION_ENABLED, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Localização offline: resolver país/estado/cidade a partir do GPS durante o inventário."),
 				new AppSettingDefinition(SettingsConstants.LOCATION_PROVIDER, "ADMIN_BOUNDARIES", VALUE_TYPE_STRING,
 						"Localização offline: provedor de resolução (ADMIN_BOUNDARIES; futuros: GOOGLE_MAPS, OPENSTREETMAP)."),
@@ -290,9 +291,9 @@ public class AppSettingService implements ApplicationRunner {
 						"https://www.geoboundaries.org/api/current/gbOpen/",
 						VALUE_TYPE_STRING,
 						"Base geográfica: URL da API usada para completar territórios sem polígono próprio (ex.: Aruba). Vazio desativa a consulta."),
-				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_TERRITORIES, "true", VALUE_TYPE_BOOLEAN,
+				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_TERRITORIES, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Base geográfica: após importar, buscar automaticamente o polígono de cada país ISO ausente (territórios dissolvidos no soberano)."),
-				new AppSettingDefinition(SettingsConstants.MAP_ENABLED, "true", VALUE_TYPE_BOOLEAN,
+				new AppSettingDefinition(SettingsConstants.MAP_ENABLED, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Mapa: habilita a tela de mapa das mídias georreferenciadas."),
 				new AppSettingDefinition(SettingsConstants.MAP_TILE_URL,
 						"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",

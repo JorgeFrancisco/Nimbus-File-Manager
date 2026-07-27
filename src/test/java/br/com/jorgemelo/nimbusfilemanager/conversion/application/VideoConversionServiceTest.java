@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,14 +11,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
 import org.assertj.core.api.Assertions;
@@ -43,6 +43,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosit
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.ConversionCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
@@ -63,10 +64,11 @@ class VideoConversionServiceTest {
 	private final ConversionExecutionRecorder conversionExecutionRecorder = mock(ConversionExecutionRecorder.class);
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
+	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
 
 	private final VideoConversionService service = new VideoConversionService(catalogFileRepository,
 			conversionCandidateRepository, videoTranscoder, conversionCommitService, conversionExecutionRecorder,
-			operationLockService);
+			operationLockService, executionCancellationService);
 
 	private final Execution execution = mock(Execution.class);
 	private final UUID mediaId = UUID.randomUUID();
@@ -553,6 +555,67 @@ class VideoConversionServiceTest {
 
 		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), () -> true);
 
+		verify(conversionExecutionRecorder).finish(eq(execution), any(), any(), eq(true));
+	}
+
+	/**
+	 * Declaring the execution alive is what keeps the inventory's orphan sweep from
+	 * treating a running batch as one left behind by a crash. When that happened
+	 * the history showed INTERRUPTED mid-run and, worse, the folder watcher read
+	 * the same status and launched a full inventory over the tree being converted.
+	 */
+	@Test
+	void staysRegisteredAsLiveWhileConvertingAndReleasesTheIdWhenItEnds(@TempDir Path tmp) throws Exception {
+		Path source = Files.writeString(tmp.resolve("clip.mp4"), "0123456789");
+
+		when(execution.getId()).thenReturn(4242L);
+
+		stubFile(source, 10L);
+		stubSource("h264", 120.0);
+
+		AtomicBoolean liveWhileConverting = new AtomicBoolean();
+
+		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
+			liveWhileConverting.set(executionCancellationService.isLive(4242L));
+
+			return TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, 10);
+		});
+
+		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), notCancelled());
+
+		Assertions.assertThat(liveWhileConverting).isTrue();
+		Assertions.assertThat(executionCancellationService.isLive(4242L)).isFalse();
+	}
+
+	/**
+	 * Being registered means a stop asked for by execution id has to be obeyed:
+	 * acknowledging the request and then converting the rest of the batch anyway
+	 * would be worse than never accepting it.
+	 */
+	@Test
+	void stopsBeforeTheNextFileWhenTheCancellationComesByExecutionId(@TempDir Path tmp) throws Exception {
+		Path first = Files.writeString(tmp.resolve("first.mp4"), "0123456789");
+
+		CatalogFile other = file(Files.writeString(tmp.resolve("second.mp4"), "0123456789"), 10L);
+
+		when(execution.getId()).thenReturn(4242L);
+		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file(first, 10L), other));
+
+		stubSource("h264", 120.0);
+
+		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
+			executionCancellationService.requestCancellation(4242L);
+
+			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, 10);
+		});
+
+		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
+				progress(), notCancelled());
+
+		Assertions.assertThat(result.items()).singleElement().extracting(ConversionFileResult::outcome)
+				.isEqualTo(ConversionOutcome.CANCELLED);
+
+		verify(videoTranscoder).transcode(any(), any(), any());
 		verify(conversionExecutionRecorder).finish(eq(execution), any(), any(), eq(true));
 	}
 

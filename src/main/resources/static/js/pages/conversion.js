@@ -35,9 +35,15 @@
 
 	// The batch runs for minutes, so the screen polls instead of waiting on the POST.
 	const POLL_INTERVAL_MILLIS = 1500;
+	const POLL_RETRY_MILLIS = 3000;
+	const MAX_POLL_FAILURES = 10;
+	const RELOAD_DELAY_MILLIS = 1200;
+
+	let pollFailures = 0;
 
 	// ---- Cross-page selection store (localStorage) -----------------------------
 	const SELECTION_KEY = 'mm-conversion-selection';
+	const REPORT_KEY = 'mm-conversion-report';
 
 	function loadSelection() {
 		try {
@@ -296,6 +302,48 @@
 		report.hidden = (result.items || []).length === 0;
 	}
 
+	function showOutcome(result) {
+		renderReport(result);
+
+		if (!result.configured || result.errors > 0) {
+			setStatus(result.message, true);
+			return;
+		}
+
+		setStatus(t('js.conversion.done', result.converted, result.savedLabel || '0 B'), false);
+	}
+
+	// The report has to outlive the reload below, so it travels in session storage
+	// and is shown again as soon as the fresh page comes up.
+	function rememberReport(result) {
+		try {
+			window.sessionStorage.setItem(REPORT_KEY, JSON.stringify(result));
+		} catch (error) {
+			// Storage unavailable: the page simply comes back without the report.
+		}
+	}
+
+	function restoreReport() {
+		let stored = null;
+
+		try {
+			stored = window.sessionStorage.getItem(REPORT_KEY);
+			window.sessionStorage.removeItem(REPORT_KEY);
+		} catch (error) {
+			return;
+		}
+
+		if (!stored) {
+			return;
+		}
+
+		try {
+			showOutcome(JSON.parse(stored));
+		} catch (error) {
+			// Leftover from an older format: there is nothing worth showing.
+		}
+	}
+
 	function finish(result) {
 		setProgress(null);
 		setRunning(false);
@@ -306,23 +354,25 @@
 			return;
 		}
 
-		renderReport(result);
-
 		// Whatever the batch dealt with is no longer pending, so it leaves the stored
 		// selection - a failed file included, since retrying it is a fresh decision.
 		forgetHandled((result.items || []).map((item) => item.mediaId));
 		applyStoredSelection();
 		updateSelection();
 
-		if (!result.configured || result.errors > 0) {
-			setStatus(result.message, true);
-			return;
-		}
+		showOutcome(result);
 
-		setStatus(t('js.conversion.done', result.converted, result.savedLabel || '0 B'), false);
+		// A converted file stops being a candidate, and the count, the pages and the
+		// rows around it all change with it. Reloading is what makes the whole screen
+		// agree again - before this, the files just converted stayed on the list until
+		// the user reloaded by hand.
+		rememberReport(result);
+		window.setTimeout(() => window.location.reload(), RELOAD_DELAY_MILLIS);
 	}
 
 	function handleProgress(progress) {
+		pollFailures = 0;
+
 		if (progress && progress.running) {
 			setRunning(true);
 			setStatus(t('js.conversion.progress', progress.processed, progress.total, progress.percent || 0), false);
@@ -347,6 +397,17 @@
 			})
 			.then(handleProgress)
 			.catch(() => {
+				pollFailures += 1;
+
+				// One failed poll is not the batch failing - it keeps converting on the
+				// server. Giving up here froze the screen for the rest of the run: no final
+				// report and no refreshed list, which is exactly what happened while five
+				// full inventories were competing with a 48-minute batch.
+				if (pollFailures <= MAX_POLL_FAILURES) {
+					window.setTimeout(pollProgress, POLL_RETRY_MILLIS);
+					return;
+				}
+
 				setStatus(t('js.conversion.progressError'), true);
 				setProgress(null);
 				setRunning(false);
@@ -460,6 +521,7 @@
 
 	applyStoredSelection();
 	setRunning(running);
+	restoreReport();
 
 	// A conversion started before this page was opened (or on another tab) keeps
 	// being followed here instead of looking finished.

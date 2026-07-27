@@ -42,9 +42,29 @@ public final class OperationLock implements AutoCloseable {
 				.anyMatch(current -> requestedPaths.stream().anyMatch(requested -> overlaps(current, requested)));
 	}
 
+	/**
+	 * Two paths conflict when they are the same, or when either one contains the
+	 * other.
+	 */
 	private boolean overlaps(String first, String second) {
-		return first.equals(second) || first.startsWith(second + "\\") || second.startsWith(first + "\\")
-				|| first.startsWith(second + "/") || second.startsWith(first + "/");
+		return first.equals(second) || contains(first, second) || contains(second, first);
+	}
+
+	/**
+	 * Whether {@code candidate} lives inside {@code ancestor}. The prefix comes
+	 * from {@link #asPrefix} rather than from appending a separator, because a
+	 * drive root is the one path whose normalised form already ends in one:
+	 * {@code D:\} plus a separator is a prefix nothing can match, so a lock held on
+	 * a file used to be invisible to a request for the drive containing it - and a
+	 * library that sits on a whole drive lost the mutual exclusion this class
+	 * exists to provide.
+	 */
+	private boolean contains(String ancestor, String candidate) {
+		return candidate.startsWith(asPrefix(ancestor, "\\")) || candidate.startsWith(asPrefix(ancestor, "/"));
+	}
+
+	private String asPrefix(String path, String separator) {
+		return path.endsWith(separator) ? path : path + separator;
 	}
 
 	@Override

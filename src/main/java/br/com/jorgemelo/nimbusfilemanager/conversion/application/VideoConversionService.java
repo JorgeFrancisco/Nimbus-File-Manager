@@ -29,6 +29,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFail
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionOutcome;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.ConversionCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -67,17 +68,19 @@ public class VideoConversionService extends LocalizedComponent {
 	private final ConversionCommitService conversionCommitService;
 	private final ConversionExecutionRecorder conversionExecutionRecorder;
 	private final OperationLockService operationLockService;
+	private final ExecutionCancellationService executionCancellationService;
 
 	public VideoConversionService(CatalogFileRepository catalogFileRepository,
 			ConversionCandidateRepository conversionCandidateRepository, VideoTranscoder videoTranscoder,
 			ConversionCommitService conversionCommitService, ConversionExecutionRecorder conversionExecutionRecorder,
-			OperationLockService operationLockService) {
+			OperationLockService operationLockService, ExecutionCancellationService executionCancellationService) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.conversionCandidateRepository = conversionCandidateRepository;
 		this.videoTranscoder = videoTranscoder;
 		this.conversionCommitService = conversionCommitService;
 		this.conversionExecutionRecorder = conversionExecutionRecorder;
 		this.operationLockService = operationLockService;
+		this.executionCancellationService = executionCancellationService;
 	}
 
 	public ConversionResult convert(Collection<UUID> publicIds, ConversionOptions options,
@@ -117,9 +120,31 @@ public class VideoConversionService extends LocalizedComponent {
 	private ConversionResult convertLocked(Collection<UUID> publicIds, List<CatalogFile> files,
 			ConversionOptions options, Path quarantineRoot, ConversionProgressCallback progress,
 			BooleanSupplier cancelled) {
-		int total = publicIds.size();
+		Execution execution = conversionExecutionRecorder.start(folderOf(files), publicIds.size());
 
-		Execution execution = conversionExecutionRecorder.start(folderOf(files), total);
+		// Declaring the id is how the rest of the application learns this batch is
+		// alive: the orphan sweep that cleans executions left behind by a crash reads
+		// exactly this, and without it a running conversion was swept as INTERRUPTED -
+		// which in turn told the folder watcher nothing was running and let it start a
+		// full inventory over the very tree being converted. Registering also means a
+		// cancellation asked for by execution id now reaches the loop below, so the
+		// request can never be acknowledged and then ignored.
+		executionCancellationService.register(execution.getId());
+
+		BooleanSupplier stopRequested = () -> cancelled.getAsBoolean()
+				|| executionCancellationService.isCancelled(execution.getId());
+
+		try {
+			return convertRegistered(execution, publicIds, files, options, quarantineRoot, progress, stopRequested);
+		} finally {
+			executionCancellationService.unregister(execution.getId());
+		}
+	}
+
+	private ConversionResult convertRegistered(Execution execution, Collection<UUID> publicIds,
+			List<CatalogFile> files, ConversionOptions options, Path quarantineRoot,
+			ConversionProgressCallback progress, BooleanSupplier cancelled) {
+		int total = publicIds.size();
 
 		Map<UUID, ConversionSource> sources = sourcesById(publicIds);
 
