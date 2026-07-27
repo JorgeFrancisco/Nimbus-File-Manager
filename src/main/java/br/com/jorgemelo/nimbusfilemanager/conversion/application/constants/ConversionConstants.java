@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application.constants;
 
+import java.time.Duration;
 import java.util.Set;
 
 /**
@@ -58,6 +59,16 @@ public final class ConversionConstants {
 	 * against a trimmed codec name.
 	 */
 	public static final Set<String> HEVC_CODECS = Set.of("hevc", "h265", "h.265", "x265");
+
+	/**
+	 * How long a batch waits for a conflicting operation before giving up. Sized
+	 * for what it actually collides with: the scheduled reconcile, which finishes
+	 * in seconds, and an inventory triggered by an external file event, which on a
+	 * large library takes a few minutes. Waiting costs the user nothing - the
+	 * batch already runs in the background - while refusing costs a click that
+	 * looks like a broken screen.
+	 */
+	public static final Duration LOCK_WAIT = Duration.ofMinutes(5);
 
 	private ConversionConstants() {
 	}

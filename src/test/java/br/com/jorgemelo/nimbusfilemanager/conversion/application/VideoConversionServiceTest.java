@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionTotals;
@@ -74,7 +75,8 @@ class VideoConversionServiceTest {
 	private final UUID mediaId = UUID.randomUUID();
 
 	VideoConversionServiceTest() {
-		when(operationLockService.acquire(eq(ExecutionType.CONVERSION), any(Path[].class))).thenReturn(operationLock);
+		when(operationLockService.acquireWithin(eq(ConversionConstants.LOCK_WAIT), eq(ExecutionType.CONVERSION),
+				any(Path[].class))).thenReturn(operationLock);
 		when(conversionExecutionRecorder.start(any(), anyInt())).thenReturn(execution);
 	}
 
@@ -300,7 +302,8 @@ class VideoConversionServiceTest {
 
 		ArgumentCaptor<Path[]> locked = ArgumentCaptor.forClass(Path[].class);
 
-		verify(operationLockService).acquire(eq(ExecutionType.CONVERSION), locked.capture());
+		verify(operationLockService).acquireWithin(eq(ConversionConstants.LOCK_WAIT), eq(ExecutionType.CONVERSION),
+				locked.capture());
 
 		Assertions.assertThat(locked.getValue()).containsExactlyInAnyOrder(quarantineRoot, source);
 	}
@@ -311,8 +314,8 @@ class VideoConversionServiceTest {
 
 		stubFile(source, 4L);
 
-		when(operationLockService.acquire(eq(ExecutionType.CONVERSION), any(Path[].class)))
-				.thenThrow(new OperationLockException("busy"));
+		when(operationLockService.acquireWithin(eq(ConversionConstants.LOCK_WAIT), eq(ExecutionType.CONVERSION),
+				any(Path[].class))).thenThrow(new OperationLockException("busy"));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
 				notCancelled());

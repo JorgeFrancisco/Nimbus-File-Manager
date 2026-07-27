@@ -108,11 +108,15 @@ public class VideoConversionService extends LocalizedComponent {
 
 		progress.update(0, publicIds.size(), 0, null);
 
-		try (var _ = operationLockService.acquire(ExecutionType.CONVERSION, lockedPaths(files, quarantineRoot))) {
+		// The batch waits rather than refusing on the spot: what it collides with is
+		// almost always background maintenance that finishes on its own, and the user
+		// has no way to see it - being told "busy" for that reads as a broken button.
+		try (var _ = operationLockService.acquireWithin(ConversionConstants.LOCK_WAIT, ExecutionType.CONVERSION,
+				lockedPaths(files, quarantineRoot))) {
 			return convertLocked(publicIds, files, effective, quarantineRoot, progress, cancelled);
 		} catch (OperationLockException lockError) {
-			log.warn("Conversion blocked because another operation is using one of its paths: {}",
-					lockError.getMessage());
+			log.warn("Conversion blocked after waiting {}: another operation is using one of its paths: {}",
+					ConversionConstants.LOCK_WAIT, lockError.getMessage());
 
 			return ConversionResult.empty(message("backend.conversion.locked"));
 		}

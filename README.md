@@ -1115,8 +1115,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1974 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.78% instruction, 90.10% branch, 97.26% line, 98.01% method, 100.00% class
+Tests:       1978 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.79% instruction, 90.11% branch, 97.27% line, 98.01% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1128,11 +1128,11 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.78% instruction, 90.10% branch, 97.26% line, 98.01% method, 100.00% class
+Floor:  97.79% instruction, 90.11% branch, 97.27% line, 98.01% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 
-Branch, method and class are **at the goal**; instruction and line are **114
+Branch, method and class are **at the goal**; instruction and line are **113
 instructions and 77 lines** away from theirs. Branch and method need a new target
 set from here — the ratchet promotes a reached goal to floor and asks for the next
 step. The branch goal had been lowered from 95% to 90% because 95% never oriented

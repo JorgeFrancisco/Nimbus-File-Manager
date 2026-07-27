@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -111,6 +112,103 @@ class OperationLockServiceTest {
 		whileLockedOnAnotherThread(folder, () -> Assertions.assertThat(operationLockService.isBusy(root)).isTrue());
 
 		whileLockedOnAnotherThread(root, () -> Assertions.assertThat(operationLockService.isBusy(folder)).isTrue());
+	}
+
+	/**
+	 * A batch the user started has nobody to retry it, so it waits for background
+	 * maintenance to finish instead of refusing the click. Here the holder releases
+	 * while the waiter is already waiting, which is the case that used to fail.
+	 */
+	@Test
+	void acquireWithinWaitsForTheHolderToReleaseAndThenTakesTheLock(@TempDir Path tmp) throws Exception {
+		Path locked = tmp.resolve("library");
+
+		AtomicReference<OperationLock> taken = new AtomicReference<>();
+
+		Thread waiter = new Thread(() -> {
+			try (var lock = operationLockService.acquireWithin(Duration.ofSeconds(10), ExecutionType.CONVERSION,
+					locked)) {
+				taken.set(lock);
+			}
+		});
+
+		whileLockedOnAnotherThread(locked, () -> {
+			waiter.start();
+
+			awaitWaitingOnTheLock(waiter);
+		});
+
+		waiter.join();
+
+		Assertions.assertThat(taken.get()).isNotNull();
+	}
+
+	/** The wait is bounded: a holder that never lets go still gets a refusal. */
+	@Test
+	void acquireWithinGivesUpOnceTheTimeoutPasses(@TempDir Path tmp) throws Exception {
+		Path locked = tmp.resolve("library");
+		Duration shortWait = Duration.ofMillis(120);
+
+		whileLockedOnAnotherThread(locked,
+				() -> Assertions
+						.assertThatThrownBy(
+								() -> operationLockService.acquireWithin(shortWait, ExecutionType.CONVERSION, locked))
+						.isInstanceOf(OperationLockException.class).hasMessageContaining("already running"));
+	}
+
+	/**
+	 * A shutdown interrupts whoever is waiting. The wait has to end as a refusal
+	 * with the interrupt flag preserved, never as a thread stuck until its own
+	 * deadline.
+	 */
+	@Test
+	void acquireWithinStopsWaitingWhenTheThreadIsInterrupted(@TempDir Path tmp) throws Exception {
+		Path locked = tmp.resolve("library");
+
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		AtomicReference<Boolean> interrupted = new AtomicReference<>();
+
+		Thread waiter = new Thread(() -> {
+			try (var _ = operationLockService.acquireWithin(Duration.ofMinutes(5), ExecutionType.CONVERSION, locked)) {
+				failure.set(new AssertionError("the lock should never have been granted"));
+			} catch (OperationLockException _) {
+				failure.set(null);
+				interrupted.set(Thread.currentThread().isInterrupted());
+			}
+		});
+
+		whileLockedOnAnotherThread(locked, () -> {
+			waiter.start();
+
+			awaitWaitingOnTheLock(waiter);
+
+			waiter.interrupt();
+		});
+
+		waiter.join();
+
+		Assertions.assertThat(failure.get()).isNull();
+		Assertions.assertThat(interrupted.get()).isTrue();
+	}
+
+	/**
+	 * Spins until the thread is parked inside the timed wait, so the release (or
+	 * the interrupt) that follows lands while it is genuinely waiting. Sleeping
+	 * would only guess at it.
+	 */
+	private static void awaitWaitingOnTheLock(Thread waiter) {
+		while (waiter.getState() != Thread.State.TIMED_WAITING) {
+			Thread.onSpinWait();
+		}
+	}
+
+	/** A free path is granted immediately, with no wait at all. */
+	@Test
+	void acquireWithinDoesNotWaitWhenNothingConflicts(@TempDir Path tmp) {
+		try (var lock = operationLockService.acquireWithin(Duration.ofMinutes(5), ExecutionType.CONVERSION,
+				tmp.resolve("library"))) {
+			Assertions.assertThat(lock).isNotNull();
+		}
 	}
 
 	/**
