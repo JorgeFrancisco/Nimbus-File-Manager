@@ -1115,7 +1115,7 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2001 run, 0 failures, 0 errors, 9 skipped
+Tests:       2002 run, 0 failures, 0 errors, 9 skipped
 JaCoCo:      97.85% instruction, 90.15% branch, 97.32% line, 98.19% method, 100.00% class
 ```
 

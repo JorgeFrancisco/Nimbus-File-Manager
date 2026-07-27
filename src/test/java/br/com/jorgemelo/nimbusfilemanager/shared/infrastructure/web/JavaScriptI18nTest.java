@@ -4,6 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +18,10 @@ import org.junit.jupiter.api.Test;
  * Guards the server-rendered message catalog used by browser-side UI updates.
  */
 class JavaScriptI18nTest {
+
+	private static final String CATALOG = "src/main/resources/templates/fragments/i18n-messages.html";
+
+	private static final Pattern KEY = Pattern.compile("[\"'](js[.][A-Za-z0-9_.]*)[\"']");
 
 	@Test
 	void layoutLoadsCatalogAndTranslatorBeforeApplicationScripts() throws Exception {
@@ -61,6 +72,51 @@ class JavaScriptI18nTest {
 		assertThat(quarantine).contains("nimbus-file-manager.quarantine.selection.v1",
 				"window.localStorage.getItem(selectionStorageKey)", "window.localStorage.setItem(selectionStorageKey",
 				"return Object.keys(selection)");
+	}
+
+	/**
+	 * The catalog is a hand-written list, so a key added to the bundles but not to
+	 * it resolves to its own name and the user reads "js.backgroundJob.count" on
+	 * the screen - which is exactly what shipped once. A key ending in a dot is a
+	 * prefix the script completes at runtime, and matches any catalog key under it.
+	 */
+	@Test
+	void everyKeyTheScriptsAskForExistsInTheCatalog() throws Exception {
+		Set<String> registered = keysIn(read(CATALOG));
+
+		List<String> missing = new ArrayList<>();
+
+		for (Path script : scripts()) {
+			for (String key : keysIn(Files.readString(script))) {
+				if (!isKnown(key, registered)) {
+					missing.add(key + " (" + script.getFileName() + ")");
+				}
+			}
+		}
+
+		assertThat(missing).isEmpty();
+	}
+
+	private static boolean isKnown(String key, Set<String> registered) {
+		return key.endsWith(".") ? registered.stream().anyMatch(known -> known.startsWith(key))
+				: registered.contains(key);
+	}
+
+	private static Set<String> keysIn(String source) {
+		Set<String> keys = new LinkedHashSet<>();
+		Matcher matcher = KEY.matcher(source);
+
+		while (matcher.find()) {
+			keys.add(matcher.group(1));
+		}
+
+		return keys;
+	}
+
+	private static List<Path> scripts() throws Exception {
+		try (Stream<Path> files = Files.walk(Path.of("src/main/resources/static/js"))) {
+			return files.filter(path -> path.toString().endsWith(".js")).toList();
+		}
 	}
 
 	private String read(String path) throws Exception {
