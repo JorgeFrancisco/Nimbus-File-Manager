@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.core.task.TaskRejectedException;
@@ -142,6 +143,22 @@ class ConversionWebControllerTest {
 
 		Assertions.assertThat(other.getAttribute(SharedConstants.PAGE_SIZE_KEY)).isEqualTo(25);
 		Assertions.assertThat(other.getAttribute("pageNumber")).isEqualTo(0);
+	}
+
+	/**
+	 * The page is also the selection unit here - the user picks a whole page and
+	 * converts it - so the larger sizes have to be offered and accepted, not
+	 * clamped back to the default like an arbitrary number.
+	 */
+	@Test
+	void offersAndAcceptsTheLargeSelectionPageSizes() {
+		Model model = new ExtendedModelMap();
+
+		controller.conversion(null, 300, authentication, model);
+
+		Assertions.assertThat(model.getAttribute("pageSizes")).asInstanceOf(InstanceOfAssertFactories.LIST)
+				.contains(150, 200, 250, 300);
+		Assertions.assertThat(model.getAttribute(SharedConstants.PAGE_SIZE_KEY)).isEqualTo(300);
 	}
 
 	@Test

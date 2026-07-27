@@ -178,9 +178,17 @@ public class VideoConversionAsyncRunner extends LocalizedComponent {
 			return 0;
 		}
 
+		if (processed.get() >= count) {
+			return 100;
+		}
+
 		double done = processed.get() + Math.min(100, filePercent.get()) / 100.0;
 
-		return Math.clamp(Math.round(done * 100 / count), 0, 100);
+		// Floored, and held below 100 while any file is still being written: rounding
+		// showed a finished bar with the last video at 88% in a batch of 25, and at
+		// barely half of it in a batch of 100 - the fuller the batch, the earlier the
+		// lie.
+		return Math.clamp((int) Math.floor(done * 100 / count), 0, 99);
 	}
 
 	private void report(int done, int count, int percentOfFile, String file) {

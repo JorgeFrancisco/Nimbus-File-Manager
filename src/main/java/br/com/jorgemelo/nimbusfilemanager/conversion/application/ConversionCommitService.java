@@ -67,6 +67,8 @@ public class ConversionCommitService {
 
 		try {
 			placed = conversionFilePlacement.place(converted, source, options);
+
+			log.info("Converted {} placed as {}", source.getFileName(), placed.getFileName());
 		} catch (Exception e) {
 			log.error("Could not rename the converted file {} next to {}", converted, source, e);
 

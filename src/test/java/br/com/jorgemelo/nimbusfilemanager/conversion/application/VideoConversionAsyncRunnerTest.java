@@ -67,6 +67,28 @@ class VideoConversionAsyncRunnerTest {
 		Assertions.assertThat(runner.percent()).isEqualTo(25);
 	}
 
+	/**
+	 * The bar reaches 100% when the batch is done, never while the encoder is still
+	 * writing the last file. Rounding used to close it early - the bigger the
+	 * batch, the earlier: with a hundred files, the last one crossing half way was
+	 * enough.
+	 */
+	@Test
+	void holdsTheBarBelowFullWhileTheLastFileIsStillBeingWritten() {
+		doAnswer(invocation -> {
+			ConversionProgressCallback callback = invocation.getArgument(2);
+
+			callback.update(99, 100, 90, "last.mp4");
+
+			return null;
+		}).when(service).convert(any(), any(), any(), any());
+
+		runner.start(100);
+		runner.run(ids, ConversionOptions.defaults());
+
+		Assertions.assertThat(runner.percent()).isEqualTo(99);
+	}
+
 	@Test
 	void doesNotClaimASecondBatchWhileOneIsRunning() {
 		Assertions.assertThat(runner.start(3)).isTrue();

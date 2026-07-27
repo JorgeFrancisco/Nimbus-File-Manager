@@ -164,6 +164,25 @@ class ConversionFilePlacementTest {
 				.isInstanceOf(IOException.class);
 	}
 
+	/**
+	 * A move that reports success without leaving the file behind has to be a
+	 * failure, not a conversion: it happened once, and the batch counted the video
+	 * as converted while the catalog pointed at a path with nothing behind it and
+	 * the original had already gone to quarantine.
+	 */
+	@Test
+	void refusesToCallThePlacementDoneWhenNothingLandedAtTheTarget(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
+		Path converted = convertedFile(tmp, "clip.mp4");
+
+		SecureFileMove silentlyLosingTheFile = mock(SecureFileMove.class);
+
+		ConversionFilePlacement losing = new ConversionFilePlacement(silentlyLosingTheFile, conversionFileNaming);
+
+		Assertions.assertThatThrownBy(() -> losing.place(converted, source, noAffix)).isInstanceOf(IOException.class);
+	}
+
 	private Path convertedFile(Path tmp, String fileName) throws IOException {
 		Path workspace = Files.createDirectories(tmp.resolve("workspace").resolve("conversion"));
 

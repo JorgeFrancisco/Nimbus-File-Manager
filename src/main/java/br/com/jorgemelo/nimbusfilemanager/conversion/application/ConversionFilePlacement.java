@@ -48,6 +48,15 @@ public class ConversionFilePlacement {
 
 		secureFileMove.move(converted, target, false);
 
+		// The move says it verified the file byte for byte, so this can only fail if
+		// something outside the application took the file away in between. It happened
+		// once: the batch counted the video as converted while the catalog pointed at a
+		// path with nothing behind it and the encode sat next to it under the temporary
+		// name. One stat call turns that silent loss into a reported failure.
+		if (!Files.exists(target)) {
+			throw new IOException("The converted file is not at " + target + " after the move");
+		}
+
 		return target;
 	}
 

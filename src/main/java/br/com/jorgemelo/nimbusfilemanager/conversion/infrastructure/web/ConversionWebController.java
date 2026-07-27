@@ -52,7 +52,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 @Controller
 public class ConversionWebController extends LocalizedComponent {
 
-	private static final List<Integer> PAGE_SIZES = List.of(25, 50, 100);
+	// Conversion is selected in bulk and runs for hours, so the page doubles as the
+	// selection unit: picking 300 candidates at once is a normal way to use it.
+	private static final List<Integer> PAGE_SIZES = List.of(25, 50, 100, 150, 200, 250, 300);
 	private static final int DEFAULT_PAGE_SIZE = 25;
 	private static final String SYSTEM_USERNAME = "system";
 
