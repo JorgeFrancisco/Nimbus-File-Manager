@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -12,10 +15,19 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 
 class ConversionFileNamingTest {
 
-	private final ConversionFileNaming naming = new ConversionFileNaming();
+	@TempDir
+	private Path workspace;
+
+	private final WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
+	private final ConversionFileNaming naming = new ConversionFileNaming(workspaceManager);
+
+	ConversionFileNamingTest() {
+		when(workspaceManager.temp()).thenAnswer(_ -> workspace.resolve("temp"));
+	}
 
 	@Test
 	void putsTheAffixAtTheEndOfTheNameByDefault() {
@@ -65,24 +77,53 @@ class ConversionFileNamingTest {
 		Assertions.assertThat(naming.affix(options(null, NameAffixPosition.SUFFIX))).isEmpty();
 	}
 
+	/**
+	 * The encode belongs to the application, not to the library: a sync client
+	 * mirroring the library uploads a half-written encode as if it were media and
+	 * reverts the rename that puts the finished file in place.
+	 */
 	@Test
-	void encodesNextToTheSourceUnderAnExtensionTheInventorySkips(@TempDir Path folder) {
+	void encodesInsideTheWorkspaceUnderTheNameTheFileWillCarry(@TempDir Path folder) {
 		Path source = folder.resolve("clip.mkv");
 
 		Path temporary = naming.temporaryFor(source, ConversionOptions.defaults());
 
-		Assertions.assertThat(temporary).hasParentRaw(folder);
-		Assertions.assertThat(temporary.getFileName()).hasToString("clip_H265_temp.tmp");
+		Assertions.assertThat(temporary).hasParentRaw(workspace.resolve("temp").resolve("conversion"));
+		Assertions.assertThat(temporary.getFileName()).hasToString("clip_H265.mp4");
+		Assertions.assertThat(temporary.getParent()).isDirectory();
 	}
 
+	/**
+	 * A file sitting where the work folder should be, or a workspace pointed at
+	 * something unwritable: the encode cannot start, and the reason has to name the
+	 * folder instead of failing later as a mysterious missing output.
+	 */
 	@Test
-	void neverReusesATemporaryNameThatIsAlreadyOnDisk(@TempDir Path folder) throws Exception {
+	void refusesToEncodeWhenTheWorkFolderCannotBeCreated(@TempDir Path folder) throws Exception {
+		Files.createDirectories(workspace.resolve("temp"));
+		Files.writeString(workspace.resolve("temp").resolve("conversion"), "a file in the way");
+
 		Path source = folder.resolve("clip.mkv");
 
-		Files.writeString(folder.resolve("clip_H265_temp.tmp"), "leftover");
+		ConversionOptions options = ConversionOptions.defaults();
+
+		Assertions.assertThatThrownBy(() -> naming.temporaryFor(source, options))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining("conversion");
+	}
+
+	/**
+	 * Two sources with the same name, from different folders of the library, share
+	 * one work folder now.
+	 */
+	@Test
+	void neverReusesAWorkNameThatIsAlreadyOnDisk(@TempDir Path folder) throws Exception {
+		Path source = folder.resolve("clip.mkv");
+
+		Files.createDirectories(workspace.resolve("temp").resolve("conversion"));
+		Files.writeString(workspace.resolve("temp").resolve("conversion").resolve("clip_H265.mp4"), "leftover");
 
 		Assertions.assertThat(naming.temporaryFor(source, ConversionOptions.defaults()).getFileName())
-				.hasToString("clip_H265_temp (1).tmp");
+				.hasToString("clip_H265 (1).mp4");
 	}
 
 	@Test

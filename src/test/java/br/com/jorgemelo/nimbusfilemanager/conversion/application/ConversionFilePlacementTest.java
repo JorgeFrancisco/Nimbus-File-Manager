@@ -5,31 +5,33 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 
 class ConversionFilePlacementTest {
 
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
-	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming();
+	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming(
+			mock(WorkspaceManager.class));
 	private final ConversionFilePlacement placement = new ConversionFilePlacement(
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 			conversionFileNaming);

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileNames;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,13 +18,15 @@ import lombok.extern.slf4j.Slf4j;
  * and the one that stays in the library.
  *
  * <p>
- * The encode happens <b>in the source folder</b>, which makes the final step a
- * rename instead of a copy - moving a finished multi-gigabyte file in from
- * another volume would take as long as part of the encode itself. What makes
- * that safe is the {@code .tmp} extension: it is one of the extensions the
- * inventory skips by default ({@code ScanExclusionService}), so a half-written
- * file is never cataloged, fingerprinted or shown, and the {@code _temp} marker
- * keeps it recognisable if a crash ever leaves one behind.
+ * The encode happens in the application's own workspace, never in the library.
+ * It used to be written next to the source, to make the final step a rename
+ * instead of a copy, and that was a mistake: a file-sync client mirroring the
+ * library uploads the half-written encode as if it were media, and when the
+ * finished file is renamed into place mid-upload the client reverts the
+ * rename - restoring its copy of the intermediate and deleting the real
+ * output. It happened four times in one evening. Out of the library the
+ * intermediate is invisible to whatever watches it, and the copy back costs a
+ * fraction of the encode that produced it.
  *
  * <p>
  * The converted file only takes its real name once it is validated, so a file
@@ -32,6 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Component
 public class ConversionFileNaming {
+
+	private final WorkspaceManager workspaceManager;
 
 	/**
 	 * Characters no Windows/POSIX file name can hold, plus the separators - the
@@ -51,6 +56,10 @@ public class ConversionFileNaming {
 	 * trailing one, and the extension always follows the affix, so a name can never
 	 * end in whitespace anyway.
 	 */
+	public ConversionFileNaming(WorkspaceManager workspaceManager) {
+		this.workspaceManager = workspaceManager;
+	}
+
 	public String affix(ConversionOptions options) {
 		String raw = options.nameAffix();
 
@@ -86,20 +95,34 @@ public class ConversionFileNaming {
 	}
 
 	/**
-	 * A free path in the source folder for ffmpeg to write into: the final name
-	 * plus the {@code _temp} marker and the {@code .tmp} extension the inventory
-	 * ignores.
+	 * A free path in the workspace for ffmpeg to write into, under the name the
+	 * file will carry in the library. Keeping the real name and extension means a
+	 * leftover from an interrupted batch is a video that plays, not an opaque
+	 * artefact somebody has to rename before they can even look at it.
 	 */
 	public Path temporaryFor(Path source, ConversionOptions options) {
-		Path marked = FileNames.withSuffix(finalName(source, options), ConversionConstants.TEMPORARY_SUFFIX);
+		Path folder = workspaceManager.temp().resolve(ConversionConstants.WORKSPACE_FOLDER);
 
-		return FileNames.nextAvailable(FileNames.withExtension(marked, ConversionConstants.TEMPORARY_EXTENSION));
+		try {
+			Files.createDirectories(folder);
+		} catch (IOException e) {
+			throw new IllegalStateException("Could not create the conversion work folder " + folder, e);
+		}
+
+		// Two sources with the same name, from different folders of the library, would
+		// otherwise land on the same work path.
+		return FileNames.nextAvailable(folder.resolve(finalName(source, options).getFileName()));
+	}
+
+	/** The work folder, for whoever has to sweep what an interrupted batch left. */
+	public Path workFolder() {
+		return workspaceManager.temp().resolve(ConversionConstants.WORKSPACE_FOLDER);
 	}
 
 	/**
 	 * Best-effort cleanup of a conversion that will not be kept (it failed, was
-	 * cancelled, or was already renamed into place). A stray temporary file is not
-	 * worth failing a conversion over, so problems are logged and swallowed.
+	 * cancelled, or was already renamed into place). A stray work file is not worth
+	 * failing a conversion over, so problems are logged and swallowed.
 	 */
 	public void discard(Path temporary) {
 		if (temporary == null) {

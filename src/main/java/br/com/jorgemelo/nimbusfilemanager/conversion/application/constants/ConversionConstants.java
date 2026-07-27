@@ -39,18 +39,12 @@ public final class ConversionConstants {
 	public static final String DEFAULT_NAME_AFFIX = "_H265";
 
 	/**
-	 * Marks the file ffmpeg is still writing. Together with
-	 * {@link #TEMPORARY_EXTENSION} it keeps the encode recognisable in the source
-	 * folder and invisible to the inventory.
+	 * Folder under the workspace temp where an encode is written. It is outside
+	 * the library on purpose: a sync client mirroring the library treats a
+	 * half-written encode as media and reverts the rename that puts the finished
+	 * file in place.
 	 */
-	public static final String TEMPORARY_SUFFIX = "_temp";
-
-	/**
-	 * Extension of the file being encoded. It is one of the extensions the
-	 * inventory skips by default, which is what makes it safe to encode inside the
-	 * watched library instead of copying the result in from elsewhere.
-	 */
-	public static final String TEMPORARY_EXTENSION = "tmp";
+	public static final String WORKSPACE_FOLDER = "conversion";
 
 	/**
 	 * Added to the converted file's name when the name it should take is already
