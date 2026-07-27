@@ -18,7 +18,7 @@ import org.springframework.batch.core.JobInstance;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogResumer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
@@ -159,13 +159,33 @@ class InventoryJobExecutionListenerTest {
 		verify(executionProgressService).fail(execution, ExecutionMessages.inventoryFailed("Unknown error."));
 	}
 
+	private final FingerprintBacklogResumer fingerprintBacklogResumer = mock(FingerprintBacklogResumer.class);
+
+	/**
+	 * Both backlogs stand aside while an inventory runs - the video one is
+	 * cancelled mid-drain - and the inventory is what knows it is over. Resuming
+	 * only the photo backlog left video hashing stopped until the next restart.
+	 */
+	@Test
+	void afterJobResumesBothFingerprintBacklogs() {
+		Execution execution = Execution.builder().id(5L).filesFound(10).filesAnalyzed(10).cacheHits(0).errors(0)
+				.build();
+
+		when(executionRepository.findById(5L)).thenReturn(Optional.of(execution));
+		when(executionCancellationService.isCancelled(5L)).thenReturn(false);
+
+		listener().afterJob(jobExecution(BatchStatus.COMPLETED));
+
+		verify(fingerprintBacklogResumer).resume();
+	}
+
 	private InventoryJobExecutionListener listener() {
 		InventoryTelemetryRecorder telemetryRecorder = new InventoryTelemetryRecorder(new ProcessingMetrics(),
 				new ExecutionPhaseTimings(), performanceTelemetryService,
 				new ProcessingProperties(null, null, null, null, null, 1));
 
 		return new InventoryJobExecutionListener(executionRepository, executionProgressService,
-				executionCancellationService, fileScanner, scanExclusionService, mock(PhashBacklogAsyncRunner.class),
+				executionCancellationService, fileScanner, scanExclusionService, fingerprintBacklogResumer,
 				telemetryRecorder);
 	}
 

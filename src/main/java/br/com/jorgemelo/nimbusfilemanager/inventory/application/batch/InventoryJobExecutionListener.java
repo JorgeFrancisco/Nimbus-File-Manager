@@ -7,7 +7,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogResumer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
@@ -41,20 +41,20 @@ public class InventoryJobExecutionListener implements JobExecutionListener {
 	private final ExecutionCancellationService executionCancellationService;
 	private final FileScanner fileScanner;
 	private final ScanExclusionService scanExclusionService;
-	private final PhashBacklogAsyncRunner phashBacklogAsyncRunner;
+	private final FingerprintBacklogResumer fingerprintBacklogResumer;
 	private final InventoryTelemetryRecorder telemetryRecorder;
 
 	public InventoryJobExecutionListener(ExecutionRepository executionRepository,
 			ExecutionProgressService executionProgressService,
 			ExecutionCancellationService executionCancellationService, FileScanner fileScanner,
-			ScanExclusionService scanExclusionService, PhashBacklogAsyncRunner phashBacklogAsyncRunner,
+			ScanExclusionService scanExclusionService, FingerprintBacklogResumer fingerprintBacklogResumer,
 			InventoryTelemetryRecorder telemetryRecorder) {
 		this.executionRepository = executionRepository;
 		this.executionProgressService = executionProgressService;
 		this.executionCancellationService = executionCancellationService;
 		this.fileScanner = fileScanner;
 		this.scanExclusionService = scanExclusionService;
-		this.phashBacklogAsyncRunner = phashBacklogAsyncRunner;
+		this.fingerprintBacklogResumer = fingerprintBacklogResumer;
 		this.telemetryRecorder = telemetryRecorder;
 	}
 
@@ -124,13 +124,11 @@ public class InventoryJobExecutionListener implements JobExecutionListener {
 
 		telemetryRecorder.persist(executionId, metrics);
 
-		// Inventory just added photos with no fingerprint; resume the backlog now that
-		// no
-		// inventory is active. start() is idempotent and guards against concurrent
-		// runs.
-		if (phashBacklogAsyncRunner.start()) {
-			phashBacklogAsyncRunner.run();
-		}
+		// The inventory just added media with no fingerprint, and both backlogs stood
+		// aside while it ran - the video one is cancelled mid-drain by design. Resuming
+		// only the photo backlog left video hashing stopped until the next restart,
+		// which is how a job that had processed four files sat idle for hours.
+		fingerprintBacklogResumer.resume();
 	}
 
 	private Long executionId(JobExecution jobExecution) {

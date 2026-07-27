@@ -48,6 +48,13 @@
 	position: relative;
 }
 
+/* The banner declares a display, and that beats the browser's own rule for
+   [hidden] - without this the background-job banner renders empty, as a bar
+   with nothing but 0%, whenever there is no job to show. */
+.active-execution[hidden] {
+	display: none;
+}
+
 .watch-status {
 	align-items: center;
 	background: var(--panel);
