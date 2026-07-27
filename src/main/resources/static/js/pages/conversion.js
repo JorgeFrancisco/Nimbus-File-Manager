@@ -31,7 +31,8 @@
 	const labels = document.getElementById('conversionOutcomeLabels');
 	const status = document.getElementById('conversionStatus') || document.getElementById('conversionStatusIdle');
 	const pagination = document.getElementById('conversionPagination');
-	const pageSize = document.getElementById('conversionPageSize');
+	const pageSize = document.getElementById('conversionPageSize');
+	const candidates = document.getElementById('conversionCandidates');
 
 	const checkboxes = Array.prototype.slice.call(document.querySelectorAll('.js-select'));
 
@@ -104,8 +105,24 @@
 		}
 
 		setPagingBlocked(value);
+		setPreviewBlocked(value);
 
 		updateSelection();
+	}
+
+	// Opening a candidate mid-batch means playing a file that is queued to move into
+	// quarantine: the player freezes the moment it does, and the user has no way of
+	// knowing which file is next in line. The card stays visible, only inert.
+	function setPreviewBlocked(value) {
+		if (!candidates) {
+			return;
+		}
+
+		candidates.classList.toggle('preview-blocked', value);
+
+		Array.prototype.slice.call(candidates.querySelectorAll('.media-card-open')).forEach((card) => {
+			card.setAttribute('aria-disabled', String(value));
+		});
 	}
 
 	// Leaving the page mid-batch loses the progress and the final report, and the
@@ -528,6 +545,21 @@
 				event.preventDefault();
 			}
 		});
+	}
+
+	if (candidates) {
+		// Capture phase on purpose: the lightbox listens on document, so the click has
+		// to be stopped on the way down or it opens anyway.
+		candidates.addEventListener('click', (event) => {
+			if (!running || !event.target.closest('.media-card-open')) {
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+			setStatus(candidates.dataset.blockedTitle || '', false);
+		}, true);
 	}
 
 	if (cancelButton) {

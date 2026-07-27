@@ -191,7 +191,9 @@
 
 	<div class="panel section" th:unless="${#lists.isEmpty(candidates)}">
 		<div class="table-wrap">
-			<table class="table conversion-table">
+			<table class="table conversion-table" id="conversionCandidates"
+					th:classappend="${conversionRunning} ? 'preview-blocked'"
+					th:attr="data-blocked-title=#{conversion.previewBlocked}">
 				<thead>
 					<tr><th></th><th th:text="#{conversion.col.file}">Arquivo</th><th th:text="#{conversion.col.folder}">Pasta</th><th th:text="#{conversion.col.codec}">Codec atual</th><th th:text="#{conversion.col.container}">Formato</th><th th:text="#{conversion.col.duration}">Duração</th><th th:text="#{conversion.col.resolution}">Resolução</th><th th:text="#{common.size}">Tamanho</th></tr>
 				</thead>

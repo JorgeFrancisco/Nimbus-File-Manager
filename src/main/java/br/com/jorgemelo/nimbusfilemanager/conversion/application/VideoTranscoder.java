@@ -180,7 +180,13 @@ public class VideoTranscoder {
 		Optional<ConversionFailure> rejected = validator.validate(output, request.sourceDurationSeconds());
 
 		if (rejected.isPresent()) {
-			log.warn("The conversion of {} was rejected by validation: {}", request.source(), rejected.get());
+			// ffmpeg reported success and the result still could not be trusted, so what
+			// it said on the way is the only evidence there is. Without it, a rejection
+			// that happened once in three hundred files took a manual re-run of the same
+			// command to rule out a locked source and a broken input - both of which
+			// ffmpeg had already answered here, into nothing.
+			log.warn("The conversion of {} was rejected by validation: {} (ffmpeg exit={}, output at {}): {}",
+					request.source(), rejected.get(), execution.exitCode(), output, execution.errorOutput());
 
 			conversionFileNaming.discard(output);
 

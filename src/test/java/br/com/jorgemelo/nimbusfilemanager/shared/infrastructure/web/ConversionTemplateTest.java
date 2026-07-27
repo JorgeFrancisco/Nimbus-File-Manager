@@ -78,6 +78,21 @@ class ConversionTemplateTest {
 	}
 
 	/**
+	 * Opening a candidate mid-batch plays a file queued to move into quarantine,
+	 * and the player freezes the moment it does. The lightbox listens on document,
+	 * so the click has to be caught on the way down or it opens anyway.
+	 */
+	@Test
+	void openingACandidateIsRefusedWhileABatchRuns() throws Exception {
+		String html = Files.readString(Path.of("src/main/resources/templates/app/conversion.html"));
+		String javascript = Files.readString(SCRIPT);
+
+		assertThat(html).contains("id=\"conversionCandidates\"").contains("#{conversion.previewBlocked}");
+		assertThat(javascript).contains("function setPreviewBlocked").contains("setPreviewBlocked(value)")
+				.contains("event.stopPropagation()").contains("}, true);");
+	}
+
+	/**
 	 * The hardware profile only exists where the machine proved it can encode with
 	 * it, so the screen offers it conditionally and the value must match the enum
 	 * the server binds.
