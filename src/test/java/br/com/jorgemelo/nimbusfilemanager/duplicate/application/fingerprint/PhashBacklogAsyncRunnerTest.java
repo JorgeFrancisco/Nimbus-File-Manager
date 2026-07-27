@@ -32,6 +32,23 @@ class PhashBacklogAsyncRunnerTest {
 	@Mock
 	private FingerprintJobRunRepository jobRunRepository;
 
+	/**
+	 * The photo runner exposes the same reading surface as the video one, and only
+	 * the video side was covered. The live status is what every screen shows.
+	 */
+	@Test
+	void exposesTheBacklogReadingsTheScreensRender() {
+		FingerprintBacklogStatus stored = new FingerprintBacklogStatus(7, 93, 0);
+
+		when(backlogService.status()).thenReturn(stored);
+
+		PhashBacklogAsyncRunner runner = runner();
+
+		Assertions.assertThat(runner.status()).isEqualTo(stored);
+		Assertions.assertThat(runner.liveStatus()).isEqualTo(stored);
+		Assertions.assertThat(runner.lastError()).isNull();
+	}
+
 	private PhashBacklogAsyncRunner runner() {
 		return new PhashBacklogAsyncRunner(backlogService, jobRunRepository, Clock.systemDefaultZone());
 	}

@@ -28,17 +28,22 @@ class FingerprintActivityServiceTest {
 		Assertions.assertThat(service.current()).isEmpty();
 	}
 
+	/**
+	 * The count is what the whole backlog has finished, not what this run did: a
+	 * run that had just started reported "0 of 6342" beside its own 96% bar.
+	 */
 	@Test
-	void reportsTheVideoBacklogWithItsProgress() {
+	void reportsTheVideoBacklogWithTheProgressOfTheWholeQueue() {
 		when(videoBacklogRunner.isRunning()).thenReturn(true);
-		when(videoBacklogRunner.processed()).thenReturn(116L);
-		when(videoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(5926, 116, 0));
+		when(videoBacklogRunner.processed()).thenReturn(0L);
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(269, 6069, 4));
 		when(videoBacklogRunner.etaSeconds()).thenReturn(900L);
 
 		Assertions.assertThat(service.current()).hasValueSatisfying(job -> {
 			Assertions.assertThat(job.label()).contains("vídeo");
-			Assertions.assertThat(job.processed()).isEqualTo(116L);
-			Assertions.assertThat(job.total()).isEqualTo(6042L);
+			Assertions.assertThat(job.processed()).isEqualTo(6073L);
+			Assertions.assertThat(job.total()).isEqualTo(6342L);
+			Assertions.assertThat(job.percent()).isEqualTo(96);
 			Assertions.assertThat(job.etaSeconds()).isEqualTo(900L);
 			Assertions.assertThat(job.link()).isEqualTo("/app/duplicates");
 		});
@@ -48,8 +53,7 @@ class FingerprintActivityServiceTest {
 	void reportsThePhotoBacklogWhenOnlyItIsWorking() {
 		when(videoBacklogRunner.isRunning()).thenReturn(false);
 		when(photoBacklogRunner.isRunning()).thenReturn(true);
-		when(photoBacklogRunner.processed()).thenReturn(40L);
-		when(photoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(60, 40, 0));
+		when(photoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(60, 40, 0));
 		when(photoBacklogRunner.etaSeconds()).thenReturn(30L);
 
 		Assertions.assertThat(service.current())
@@ -63,7 +67,7 @@ class FingerprintActivityServiceTest {
 	@Test
 	void prefersTheVideoBacklogWhenBothAreWorking() {
 		when(videoBacklogRunner.isRunning()).thenReturn(true);
-		when(videoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(10, 0, 0));
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(10, 0, 0));
 
 		Assertions.assertThat(service.current())
 				.hasValueSatisfying(job -> Assertions.assertThat(job.label()).contains("vídeo"));

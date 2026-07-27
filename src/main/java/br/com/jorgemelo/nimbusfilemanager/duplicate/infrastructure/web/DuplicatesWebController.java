@@ -175,7 +175,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 		} else if (similarTab) {
 			renderPhotoTab(model, safeMinSimilarity, page, pageSize);
 		} else {
-			setBacklogAttributes(model, phashBacklogService.status(), phashBacklogAsyncRunner.etaSeconds(),
+			setBacklogAttributes(model, phashBacklogAsyncRunner.liveStatus(), phashBacklogAsyncRunner.etaSeconds(),
 					phashBacklogAsyncRunner.isRunning(), PHOTO_ACTION_BASE, false);
 			model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
 
@@ -319,7 +319,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 	 * until the compute finishes.
 	 */
 	private void renderPhotoTab(Model model, int safeMinSimilarity, int page, int pageSize) {
-		FingerprintBacklogStatus status = phashBacklogService.status();
+		FingerprintBacklogStatus status = phashBacklogAsyncRunner.liveStatus();
 
 		boolean block = status.blocking();
 
@@ -358,7 +358,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 	}
 
 	private void renderVideoTab(Model model, int safeMinSimilarity, int page, int pageSize) {
-		FingerprintBacklogStatus status = videoSimilarityWeb.backlogService().status();
+		FingerprintBacklogStatus status = videoSimilarityWeb.backlogRunner().liveStatus();
 
 		boolean block = status.blocking();
 

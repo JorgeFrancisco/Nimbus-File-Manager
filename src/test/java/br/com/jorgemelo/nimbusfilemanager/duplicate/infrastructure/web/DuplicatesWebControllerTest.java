@@ -56,13 +56,29 @@ class DuplicatesWebControllerTest {
 	private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-08T12:00:00");
 
 	/**
-	 * Video-similarity collaborators bundled for the constructor. These tests only
-	 * drive the exact and photo tabs, so the mocks are never exercised; they just
-	 * satisfy the constructor.
+	 * Collaborators bundled for the constructor. Every panel reads its counts from
+	 * the runner's live status, so a runner left answering null leaves the screen
+	 * with nothing to render - which is how fourteen of these tests failed at once.
 	 */
+	private static PhashBacklogAsyncRunner phashRunner() {
+		PhashBacklogAsyncRunner runner = mock(PhashBacklogAsyncRunner.class);
+
+		when(runner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+
+		return runner;
+	}
+
+	private static VideoFingerprintBacklogAsyncRunner videoBacklogRunner() {
+		VideoFingerprintBacklogAsyncRunner runner = mock(VideoFingerprintBacklogAsyncRunner.class);
+
+		when(runner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+
+		return runner;
+	}
+
 	private static VideoSimilarityWeb videoWeb() {
 		return new VideoSimilarityWeb(mock(VideoSimilarityService.class), mock(VideoSimilarityAsyncRunner.class),
-				mock(VideoFingerprintBacklogService.class), mock(VideoFingerprintBacklogAsyncRunner.class));
+				mock(VideoFingerprintBacklogService.class), videoBacklogRunner());
 	}
 
 	@Test
@@ -74,17 +90,20 @@ class DuplicatesWebControllerTest {
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any()))
 				.thenReturn(Optional.of(new PageImpl<>(List.of())));
 
+		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
+
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+				videoBacklog, videoBacklogRunner);
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class),
-				phashBacklogService, mock(PhashBacklogAsyncRunner.class), preferences,
+				phashBacklogService, phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
@@ -117,16 +136,19 @@ class DuplicatesWebControllerTest {
 				PageRequest.of(0, 50), 2);
 
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.of(page));
 
+		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
+
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+				videoBacklog, videoBacklogRunner);
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
@@ -152,17 +174,20 @@ class DuplicatesWebControllerTest {
 		// Photo threshold 80, video threshold 95: the video tab must read its own key.
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of(
 				DuplicateConstants.MIN_SIMILARITY_KEY, "80", DuplicateConstants.MIN_SIMILARITY_VIDEO_KEY, "95"));
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any()))
 				.thenReturn(Optional.of(new PageImpl<>(List.of())));
 
+		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
+
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+				videoBacklog, videoBacklogRunner);
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, null, "details", null, null), null, model);
@@ -179,7 +204,6 @@ class DuplicatesWebControllerTest {
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.empty());
 		when(videoSimilarityRunner.start(70)).thenReturn(true);
 		when(videoSimilarityRunner.percent()).thenReturn(40);
@@ -187,12 +211,12 @@ class DuplicatesWebControllerTest {
 		when(videoSimilarityRunner.total()).thenReturn(5);
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, videoSimilarityRunner, videoBacklog,
-				mock(VideoFingerprintBacklogAsyncRunner.class));
+				videoBacklogRunner());
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
@@ -206,16 +230,18 @@ class DuplicatesWebControllerTest {
 		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
+		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
+
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
-				mock(VideoSimilarityAsyncRunner.class), videoBacklog, mock(VideoFingerprintBacklogAsyncRunner.class));
+				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoBacklogRunner);
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class), preferences,
+				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
 				mock(DuplicateExclusionService.class), videoWeb)
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
@@ -257,7 +283,7 @@ class DuplicatesWebControllerTest {
 
 	private static DuplicatesWebController controllerWith(VideoSimilarityWeb videoWeb) {
 		return new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class),
+				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb);
 	}
@@ -268,7 +294,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		ExtendedModelMap model = new ExtendedModelMap();
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
 				SizeResponse.of(100), "C:/keep.jpg", "C:/", NOW);
@@ -309,7 +335,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		ExtendedModelMap model = new ExtendedModelMap();
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
 				SizeResponse.of(200), "C:/keep.jpg", "C:/", NOW);
@@ -341,7 +367,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
 		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
 		when(similarityRunner.start(70)).thenReturn(true);
@@ -369,7 +395,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
 		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
 		when(similarityRunner.start(70)).thenReturn(false);
@@ -389,14 +415,15 @@ class DuplicatesWebControllerTest {
 	void duplicatesShouldPersistTheRequestedTab() {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
 		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(List.of()));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
@@ -408,7 +435,8 @@ class DuplicatesWebControllerTest {
 	void duplicatesShouldFallBackToTheSavedTabWhenNoneIsRequested() {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, "similar"));
@@ -418,7 +446,7 @@ class DuplicatesWebControllerTest {
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest(null, 0, 70, "details", null, null), null, model);
 
@@ -429,14 +457,15 @@ class DuplicatesWebControllerTest {
 	void duplicatesShouldPersistAndApplyTheRequestedPageSize() {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
 		when(duplicateService.candidates(eq(PageRequest.of(0, 100)), any())).thenReturn(new PageImpl<>(List.of()));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", 100, null), null, model);
 
@@ -450,7 +479,8 @@ class DuplicatesWebControllerTest {
 	void duplicatesShouldFallBackToTheSavedPageSize() {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
@@ -458,7 +488,7 @@ class DuplicatesWebControllerTest {
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
@@ -470,7 +500,8 @@ class DuplicatesWebControllerTest {
 	void duplicatesShouldFallBackToTheSavedViewMode() {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.VIEW_KEY, "large"));
@@ -478,7 +509,7 @@ class DuplicatesWebControllerTest {
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, null, null, null), null, model);
 
@@ -490,7 +521,8 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.MIN_SIMILARITY_KEY, "100"));
@@ -499,7 +531,7 @@ class DuplicatesWebControllerTest {
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), preferences, mock(PhotoSimilarityAsyncRunner.class),
+				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
 				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
 						.duplicates(new DuplicatesViewRequest("similar", 0, null, "details", null, null), null, model);
 
@@ -513,7 +545,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(5, 3, 1));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(5, 3, 1));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
@@ -538,7 +570,7 @@ class DuplicatesWebControllerTest {
 		when(deletionRunner.percent()).thenReturn(0);
 
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class),
+				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
 				mock(DuplicateExclusionService.class), videoWeb());
 
@@ -558,7 +590,7 @@ class DuplicatesWebControllerTest {
 		when(deletionRunner.isRunning()).thenReturn(true);
 
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class),
+				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
 				mock(DuplicateExclusionService.class), videoWeb());
 
@@ -578,7 +610,7 @@ class DuplicatesWebControllerTest {
 		when(deletionRunner.lastResult()).thenReturn(result);
 
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), mock(PhashBacklogAsyncRunner.class),
+				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
 				mock(DuplicateExclusionService.class), videoWeb());
 
@@ -644,7 +676,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		UUID keepId = UuidV7.fromLegacy(1L);
 		UUID candidateId = UuidV7.fromLegacy(2L);
@@ -691,7 +723,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "document.pdf", "pdf", "PDF",
 				SizeResponse.of(100), "C:/document.pdf", "C:/", NOW);
@@ -723,7 +755,7 @@ class DuplicatesWebControllerTest {
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
 		var userPagePreferenceService = mock(UserPagePreferenceService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		UUID keepId = UuidV7.fromLegacy(1L);
 		UUID candidateId = UuidV7.fromLegacy(2L);

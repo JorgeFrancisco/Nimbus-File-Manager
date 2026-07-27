@@ -48,8 +48,13 @@ public final class Fixture {
 	public final VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
 	public Fixture() {
+		// The screens read progress from the runners' live status, which counts what a
+		// run has finished before its batch is written; the services only answer for
+		// what is already stored.
 		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(duplicates.candidates(any(), any())).thenReturn(Page.empty());
 		when(similarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));

@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
@@ -33,21 +34,26 @@ public class FingerprintActivityService extends LocalizedComponent {
 	/** The running backlog, or empty when neither is working. */
 	public Optional<BackgroundJobActivity> current() {
 		if (videoBacklogRunner.isRunning()) {
-			return Optional.of(activity("backend.fingerprint.videoRunning", videoBacklogRunner.processed(),
-					videoBacklogRunner.status().total(), videoBacklogRunner.status().percent(),
+			return Optional.of(activity("backend.fingerprint.videoRunning", videoBacklogRunner.liveStatus(),
 					videoBacklogRunner.etaSeconds()));
 		}
 
 		if (photoBacklogRunner.isRunning()) {
-			return Optional.of(activity("backend.fingerprint.photoRunning", photoBacklogRunner.processed(),
-					photoBacklogRunner.status().total(), photoBacklogRunner.status().percent(),
+			return Optional.of(activity("backend.fingerprint.photoRunning", photoBacklogRunner.liveStatus(),
 					photoBacklogRunner.etaSeconds()));
 		}
 
 		return Optional.empty();
 	}
 
-	private BackgroundJobActivity activity(String labelKey, long processed, long total, int percent, long etaSeconds) {
-		return new BackgroundJobActivity(message(labelKey), DUPLICATES_LINK, processed, total, percent, etaSeconds);
+	/**
+	 * Counts come from the backlog status, never from the runner's own counter: the
+	 * runner counts what the current run has done, so a run that just started
+	 * reported "0 of 6342" next to a 96% bar - the same numbers the Duplicados
+	 * screen shows, disagreeing with each other on the same page.
+	 */
+	private BackgroundJobActivity activity(String labelKey, FingerprintBacklogStatus status, long etaSeconds) {
+		return new BackgroundJobActivity(message(labelKey), DUPLICATES_LINK, status.done() + status.failed(),
+				status.total(), status.percent(), etaSeconds);
 	}
 }

@@ -78,6 +78,10 @@ public class PhashBacklogAsyncRunner {
 		return runner.lastError();
 	}
 
+	public FingerprintBacklogStatus liveStatus() {
+		return runner.liveStatus();
+	}
+
 	public FingerprintBacklogStatus status() {
 		return runner.status();
 	}

@@ -168,38 +168,70 @@ class OperationLockServiceTest {
 		AtomicReference<Throwable> failure = new AtomicReference<>();
 		AtomicReference<Boolean> interrupted = new AtomicReference<>();
 
+		CountDownLatch acquired = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+
+		// This holder keeps the lock until the test says otherwise. The shared helper
+		// lets go after two seconds, which on a loaded CI runner arrived before the
+		// waiter had even been scheduled: it then took the lock legitimately and the
+		// test called that a failure.
+		Thread holder = new Thread(() -> {
+			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, locked)) {
+				acquired.countDown();
+				release.await(30, TimeUnit.SECONDS);
+			} catch (InterruptedException _) {
+				Thread.currentThread().interrupt();
+			}
+		});
+
 		Thread waiter = new Thread(() -> {
 			try (var _ = operationLockService.acquireWithin(Duration.ofMinutes(5), ExecutionType.CONVERSION, locked)) {
 				failure.set(new AssertionError("the lock should never have been granted"));
 			} catch (OperationLockException _) {
-				failure.set(null);
 				interrupted.set(Thread.currentThread().isInterrupted());
 			}
 		});
 
-		whileLockedOnAnotherThread(locked, () -> {
-			waiter.start();
+		holder.start();
 
-			awaitWaitingOnTheLock(waiter);
+		Assertions.assertThat(acquired.await(10, TimeUnit.SECONDS)).isTrue();
 
-			waiter.interrupt();
-		});
+		waiter.start();
 
+		Assertions.assertThat(awaitWaitingOnTheLock(waiter)).isTrue();
+
+		waiter.interrupt();
 		waiter.join();
+
+		release.countDown();
+		holder.join();
 
 		Assertions.assertThat(failure.get()).isNull();
 		Assertions.assertThat(interrupted.get()).isTrue();
 	}
 
 	/**
-	 * Spins until the thread is parked inside the timed wait, so the release (or
-	 * the interrupt) that follows lands while it is genuinely waiting. Sleeping
-	 * would only guess at it.
+	 * Waits until the thread is parked inside the timed wait, so the release (or
+	 * the interrupt) that follows lands while it is genuinely waiting.
+	 *
+	 * <p>
+	 * It yields rather than spinning: a busy spin starves the very thread it is
+	 * waiting for when the runner has few cores, which is how this passed on a
+	 * developer machine and failed in CI. Bounded so a wait that never happens
+	 * fails the test instead of hanging the build.
 	 */
-	private static void awaitWaitingOnTheLock(Thread waiter) {
+	private static boolean awaitWaitingOnTheLock(Thread waiter) {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
 		while (waiter.getState() != Thread.State.TIMED_WAITING) {
-			Thread.onSpinWait();
+			if (System.nanoTime() > deadline) {
+				return false;
+			}
+
+			Thread.yield();
 		}
+
+		return true;
 	}
 
 	/** A free path is granted immediately, with no wait at all. */

@@ -41,7 +41,8 @@ class FingerprintJobRunner {
 	private final AtomicLong processed = new AtomicLong();
 	private final AtomicLong failed = new AtomicLong();
 	private final AtomicLong startedAtMillis = new AtomicLong();
-	private final AtomicLong pendingAtStart = new AtomicLong();
+	private final AtomicLong pendingAtStart = new AtomicLong();
+	private final AtomicLong terminalAtStart = new AtomicLong();
 	private final AtomicReference<Long> currentRunId = new AtomicReference<>();
 	private final AtomicReference<String> lastError = new AtomicReference<>();
 	private final Clock clock;
@@ -75,7 +76,8 @@ class FingerprintJobRunner {
 		processed.set(0);
 		failed.set(0);
 		startedAtMillis.set(System.currentTimeMillis());
-		pendingAtStart.set(status.pending());
+		pendingAtStart.set(status.pending());
+		terminalAtStart.set(status.done() + status.failed());
 		lastError.set(null);
 
 		FingerprintJobRun run = jobRunRepository.save(FingerprintJobRun.builder().kind(backlog.kind())
@@ -188,5 +190,27 @@ class FingerprintJobRunner {
 
 	public FingerprintBacklogStatus status() {
 		return backlog.status();
+	}
+
+	/**
+	 * Progress as it actually stands, which neither of the two obvious sources
+	 * tells on its own. The stored counts only move when a batch is written - two
+	 * hundred items at a time - so a screen reading them sits frozen for minutes;
+	 * the run counter starts at zero every run, so a resumed backlog reports "25 of
+	 * 6342" beside its own 96% bar. What is true is what was already stored when
+	 * this run began plus what the run has finished since, whether or not it has
+	 * been written yet.
+	 */
+	public FingerprintBacklogStatus liveStatus() {
+		FingerprintBacklogStatus stored = backlog.status();
+
+		if (!running.get()) {
+			return stored;
+		}
+
+		long unwritten = Math.max(0, terminalAtStart.get() + processed.get() - stored.done() - stored.failed());
+
+		return new FingerprintBacklogStatus(Math.max(0, stored.pending() - unwritten), stored.done() + unwritten,
+				stored.failed());
 	}
 }
