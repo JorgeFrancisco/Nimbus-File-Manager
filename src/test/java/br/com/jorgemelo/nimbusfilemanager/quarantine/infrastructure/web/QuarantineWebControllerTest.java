@@ -29,6 +29,7 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurge
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineDeleteResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
@@ -79,7 +80,7 @@ class QuarantineWebControllerTest {
 	void rejectsEveryWriteEndpointWhenTheRequestBodyIsMissing() {
 		Assertions.assertThat(controller.restore(null).success()).isFalse();
 		Assertions.assertThat(controller.restoreSelected(null).total()).isZero();
-		Assertions.assertThat(controller.deleteSelected(null).scanned()).isZero();
+		Assertions.assertThat(controller.deleteSelected(null).purged()).isZero();
 
 		verify(quarantineService, never()).restore(any(), any());
 		verify(quarantineService, never()).restoreMany(any());
@@ -126,11 +127,76 @@ class QuarantineWebControllerTest {
 	void deleteSelectedForwardsIdsToPurgeService() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0));
+		when(quarantinePurgeService.purgeSelected(List.of(a)))
+				.thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
 
 		controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
 		verify(quarantinePurgeService).purgeSelected(List.of(a));
+	}
+
+	/**
+	 * A delete that deleted nothing has to say why: the screen shows the sentence
+	 * in a dialog, and a status line of bare counters used to read as success while
+	 * a running conversion held every file.
+	 */
+	@Test
+	void deleteSelectedExplainsWhenAnotherOperationIsHoldingTheFiles() {
+		UUID a = UUID.randomUUID();
+
+		when(quarantinePurgeService.purgeSelected(List.of(a)))
+				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 1, 0));
+
+		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+
+		Assertions.assertThat(response.purged()).isZero();
+		Assertions.assertThat(response.busy()).isEqualTo(1);
+		Assertions.assertThat(response.message()).contains("em uso por outra operação");
+	}
+
+	/** A file the disk refused to delete is reported, not swallowed. */
+	@Test
+	void deleteSelectedExplainsWhenTheDiskRefusedTheDelete() {
+		UUID a = UUID.randomUUID();
+
+		when(quarantinePurgeService.purgeSelected(List.of(a)))
+				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 0, 1));
+
+		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+
+		Assertions.assertThat(response.errors()).isEqualTo(1);
+		Assertions.assertThat(response.message()).contains("Não foi possível apagar");
+	}
+
+	/**
+	 * An item that left quarantine between the listing and the click is not an
+	 * error, but the user still has to learn why nothing happened.
+	 */
+	@Test
+	void deleteSelectedExplainsWhenTheItemLeftQuarantineMeanwhile() {
+		UUID a = UUID.randomUUID();
+
+		when(quarantinePurgeService.purgeSelected(List.of(a)))
+				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 1, 0, 0));
+
+		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+
+		Assertions.assertThat(response.skipped()).isEqualTo(1);
+		Assertions.assertThat(response.message()).contains("deixaram a quarentena");
+	}
+
+	/** Nothing to interrupt the user with when the delete did what was asked. */
+	@Test
+	void deleteSelectedCarriesNoMessageWhenEverythingWasDeleted() {
+		UUID a = UUID.randomUUID();
+
+		when(quarantinePurgeService.purgeSelected(List.of(a)))
+				.thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
+
+		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+
+		Assertions.assertThat(response.purged()).isEqualTo(1);
+		Assertions.assertThat(response.message()).isNull();
 	}
 
 	@Test
@@ -144,7 +210,7 @@ class QuarantineWebControllerTest {
 
 	@Test
 	void rejectsDeleteSelectedWithoutIds() {
-		QuarantinePurgeResult result = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of()));
+		QuarantineDeleteResponse result = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of()));
 
 		Assertions.assertThat(result.purged()).isZero();
 	}

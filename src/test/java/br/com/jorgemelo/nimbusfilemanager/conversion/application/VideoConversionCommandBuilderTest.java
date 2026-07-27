@@ -59,7 +59,7 @@ class VideoConversionCommandBuilderTest {
 		Assertions.assertThat(builder.build(input, output, options(false, false, true)))
 				.containsSubsequence("-crf", "22").containsSubsequence("-preset", "medium");
 
-		CommandOptions high = new CommandOptions(ConversionQuality.HIGH_QUALITY, false, false, true);
+		CommandOptions high = new CommandOptions(ConversionQuality.HIGH_QUALITY, false, false, true, true);
 
 		Assertions.assertThat(builder.build(input, output, high)).containsSubsequence("-crf", "18")
 				.containsSubsequence("-preset", "medium");
@@ -118,8 +118,21 @@ class VideoConversionCommandBuilderTest {
 		Assertions.assertThatThrownBy(() -> command.add("-extra")).isInstanceOf(UnsupportedOperationException.class);
 	}
 
+	/**
+	 * The retry that follows a container refusing the camera's telemetry: the same
+	 * command, without the data tracks that cannot travel into MP4.
+	 */
+	@Test
+	void leavesTheDataTracksOutWhenTheAttemptAsksForIt() {
+		CommandOptions withoutData = new CommandOptions(ConversionQuality.BALANCED, false, false, true, false);
+
+		Assertions.assertThat(builder.build(input, output, withoutData)).doesNotContain("0:d?");
+		Assertions.assertThat(builder.build(input, output, options(false, false, true))).contains("0:d?");
+	}
+
 	private CommandOptions options(boolean copyVideo, boolean encodeAudioAsAac, boolean includeSubtitles) {
-		return new CommandOptions(ConversionQuality.BALANCED, copyVideo, encodeAudioAsAac, includeSubtitles);
+		return new CommandOptions(ConversionQuality.BALANCED, copyVideo, encodeAudioAsAac, includeSubtitles,
+				true);
 	}
 
 	/**
@@ -131,7 +144,7 @@ class VideoConversionCommandBuilderTest {
 	void usesWhicheverGraphicsCardEncoderTheMachineHasWithItsOwnQualityScale() {
 		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.of(VideoEncoder.QUICK_SYNC));
 
-		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true);
+		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true, true);
 
 		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "hevc_qsv")
 				.containsSubsequence("-global_quality", "22").containsSubsequence("-look_ahead", "1")
@@ -157,7 +170,7 @@ class VideoConversionCommandBuilderTest {
 	void fallsBackToTheSoftwareEncoderWhenTheMachineHasNoUsableCard() {
 		when(hardwareEncoderProbe.hardwareEncoder()).thenReturn(Optional.empty());
 
-		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true);
+		CommandOptions fast = new CommandOptions(ConversionQuality.FAST_BALANCED, false, false, true, true);
 
 		Assertions.assertThat(builder.build(input, output, fast)).containsSubsequence("-c:v", "libx265")
 				.containsSubsequence("-crf", "22");

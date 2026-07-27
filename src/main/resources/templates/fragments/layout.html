@@ -79,7 +79,7 @@
 				<span class="active-execution-pulse" aria-hidden="true"></span>
 				<div class="active-execution-copy">
 					<strong id="activeExecutionTitle"
-							th:text="${activeExecution.executionType() == 'INVENTORY'} ? #{execution.inventory.running} : #{execution.organization.running}">Execução em andamento</strong>
+							th:text="#{execution.running(${activeExecution.typeLabel()})}">Execução em andamento</strong>
 					<span class="active-execution-folder" id="activeExecutionFolder"
 							th:title="${activeExecution.sourcePath()}">
 						<i class="bi bi-folder2-open"></i>

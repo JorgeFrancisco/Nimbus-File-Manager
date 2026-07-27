@@ -68,6 +68,26 @@ public class SecureFileMove {
 		}
 
 		verifier.verify(source, target, baseline);
+
+		reportIfTheMoveLeftSomethingBehind(source, target);
+	}
+
+	/**
+	 * A move that returned without throwing must leave the file at the target and
+	 * nothing at the source. Twice now a conversion ended with the encoded video
+	 * back under its temporary name and the catalogued path empty, and there was
+	 * nothing in the logs to say when or how - the move itself had reported
+	 * success. Two {@code exists} calls turn the next occurrence into evidence of
+	 * which end survived, which is the fact both investigations lacked.
+	 */
+	private void reportIfTheMoveLeftSomethingBehind(Path source, Path target) {
+		boolean sourceSurvived = Files.exists(source);
+		boolean targetMissing = !Files.exists(target);
+
+		if (sourceSurvived || targetMissing) {
+			log.warn("Move reported success but the file system disagrees: source={} stillThere={} target={}"
+					+ " present={}", source, sourceSurvived, target, !targetMissing);
+		}
 	}
 
 	/**

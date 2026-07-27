@@ -11,6 +11,6 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionOutc
  * carries the already localized explanation.
  */
 public record ConversionFileResult(UUID mediaId, String fileName, ConversionOutcome outcome, long originalBytes,
-		long convertedBytes, long savedBytes, String savedLabel, long elapsedMillis, boolean audioFallback,
-		boolean subtitlesDropped, boolean originalQuarantined, String message) {
+		long convertedBytes, long savedBytes, String savedLabel, long elapsedMillis,
+		ConversionAdjustments adjustments, boolean originalQuarantined, String message) {
 }

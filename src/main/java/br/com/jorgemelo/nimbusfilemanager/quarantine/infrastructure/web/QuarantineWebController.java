@@ -25,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineServi
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineCleanupResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineDeleteResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
@@ -153,12 +154,36 @@ public class QuarantineWebController extends LocalizedComponent {
 	 */
 	@PostMapping("/app/quarantine/delete-selected")
 	@ResponseBody
-	public QuarantinePurgeResult deleteSelected(@RequestBody QuarantineRestoreSelectedRequest request) {
+	public QuarantineDeleteResponse deleteSelected(@RequestBody QuarantineRestoreSelectedRequest request) {
 		if (request == null || request.ids() == null || request.ids().isEmpty()) {
-			return new QuarantinePurgeResult(0, 0, 0, 0, 0);
+			return new QuarantineDeleteResponse(0, 0, 0, 0, 0, message("backend.quarantine.noneSelected"));
 		}
 
-		return quarantinePurgeService.purgeSelected(request.ids());
+		QuarantinePurgeResult result = quarantinePurgeService.purgeSelected(request.ids());
+
+		return new QuarantineDeleteResponse(result.purged(), result.catalogsFreed(), result.skipped(), result.busy(),
+				result.errors(), deleteOutcome(result));
+	}
+
+	/**
+	 * Why the delete did not do what was asked, or null when it did. The screen
+	 * shows this instead of leaving the user to read "0 deleted" as a success -
+	 * being held by a running conversion is something they can act on by waiting.
+	 */
+	private String deleteOutcome(QuarantinePurgeResult result) {
+		if (result.busy() > 0) {
+			return message("backend.quarantine.delete.busy", result.busy());
+		}
+
+		if (result.errors() > 0) {
+			return message("backend.quarantine.delete.errors", result.errors());
+		}
+
+		if (result.skipped() > 0) {
+			return message("backend.quarantine.delete.skipped", result.skipped());
+		}
+
+		return null;
 	}
 
 	/**

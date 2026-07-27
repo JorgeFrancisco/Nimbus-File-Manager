@@ -112,7 +112,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 4_000));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
 		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -139,7 +139,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, 1_000));
+				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1_000));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
 				notCancelled());
@@ -161,7 +161,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 4_000));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.failed(ConversionFailure.PLACEMENT_FAILED));
 
@@ -197,7 +197,7 @@ class VideoConversionServiceTest {
 		stubSource("hevc", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 5));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 5));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -270,7 +270,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -291,7 +291,7 @@ class VideoConversionServiceTest {
 
 		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.of(quarantineRoot));
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, 1));
+				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1));
 
 		service.convert(List.of(mediaId),
 				new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO, OriginalDisposition.QUARANTINE,
@@ -334,7 +334,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(invocation -> {
 			invocation.getArgument(1, IntConsumer.class).accept(40);
 
-			return TranscodeResult.converted(converted, false, false, 100);
+			return TranscodeResult.converted(converted, false, false, false, 100);
 		});
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
@@ -357,7 +357,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, true, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, true, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, true));
 
@@ -370,7 +370,7 @@ class VideoConversionServiceTest {
 
 		Assertions.assertThat(totals.getValue().converted()).isEqualTo(1);
 		Assertions.assertThat(totals.getValue().savedBytes()).isEqualTo(6);
-		Assertions.assertThat(result.items().getFirst().audioFallback()).isTrue();
+		Assertions.assertThat(result.items().getFirst().adjustments().audioFallback()).isTrue();
 		Assertions.assertThat(result.items().getFirst().originalQuarantined()).isTrue();
 	}
 
@@ -384,7 +384,7 @@ class VideoConversionServiceTest {
 
 		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.of(tmp.resolve("trash")));
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.partial(converted, false, ConversionFailure.QUARANTINE_FAILED));
 
@@ -405,7 +405,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, 1));
+				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1));
 
 		service.convert(List.of(mediaId), null, progress(), notCancelled());
 
@@ -422,7 +422,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.failed(failure, false, false, 1));
+				.thenReturn(TranscodeResult.failed(failure, false, false, false, 1));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
 				notCancelled());
@@ -439,7 +439,7 @@ class VideoConversionServiceTest {
 		stubSource(null, null);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -458,7 +458,7 @@ class VideoConversionServiceTest {
 
 		when(conversionCandidateRepository.findSourcesByPublicIdIn(any())).thenReturn(List.of());
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -477,7 +477,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -501,7 +501,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.converted(converted, false, false, 100));
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
 		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
@@ -527,7 +527,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
 			cancelled.set(true);
 
-			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, 10);
+			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, 10);
 		});
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
@@ -551,7 +551,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		when(videoTranscoder.transcode(any(), any(), any()))
-				.thenReturn(TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, 10));
+				.thenReturn(TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, 10));
 
 		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), () -> true);
 
@@ -578,7 +578,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
 			liveWhileConverting.set(executionCancellationService.isLive(4242L));
 
-			return TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, 10);
+			return TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 10);
 		});
 
 		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), notCancelled());
@@ -606,7 +606,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
 			executionCancellationService.requestCancellation(4242L);
 
-			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, 10);
+			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, 10);
 		});
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),

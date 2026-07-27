@@ -148,8 +148,13 @@ class QuarantinePurgeServiceTest {
 		verify(purgePersistence, never()).deleteMovement(anyLong());
 	}
 
+	/**
+	 * Counted apart from a plain skip because it is the outcome the user can act
+	 * on: a conversion moving originals into quarantine holds the folder, and the
+	 * screen has to say so instead of reporting a delete that did nothing.
+	 */
 	@Test
-	void skipsItemWhenPathIsLockedByAnotherOperation(@TempDir Path tmp) throws Exception {
+	void reportsTheItemAsBusyWhenAnotherOperationHoldsThePath(@TempDir Path tmp) throws Exception {
 		Path file = Files.writeString(
 				Files.createDirectories(tmp.resolve("trash").resolve("exec-1")).resolve("10__a.jpg"), "old");
 
@@ -166,7 +171,8 @@ class QuarantinePurgeServiceTest {
 
 		QuarantinePurgeResult result = locked.purgeOlderThan(90);
 
-		Assertions.assertThat(result.skipped()).isEqualTo(1);
+		Assertions.assertThat(result.busy()).isEqualTo(1);
+		Assertions.assertThat(result.skipped()).isZero();
 		Assertions.assertThat(Files.exists(file)).isTrue();
 
 		verify(purgePersistence, never()).deleteMovement(anyLong());

@@ -88,7 +88,7 @@ public class QuarantinePurgeService {
 	 */
 	QuarantinePurgeResult purgeOlderThan(int days) {
 		if (days <= 0) {
-			return new QuarantinePurgeResult(0, 0, 0, 0, 0);
+			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
 
 		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
@@ -101,6 +101,7 @@ public class QuarantinePurgeService {
 		int purged = 0;
 		int catalogsFreed = 0;
 		int skipped = 0;
+		int busy = 0;
 		int errors = 0;
 
 		for (Movement movement : overdue) {
@@ -111,14 +112,15 @@ public class QuarantinePurgeService {
 				catalogsFreed++;
 			}
 			case SKIPPED -> skipped++;
+			case BUSY -> busy++;
 			case ERROR -> errors++;
 			}
 		}
 
-		log.info("Quarantine purge finished. scanned={}, purged={}, catalogsFreed={}, skipped={}, errors={}",
-				overdue.size(), purged, catalogsFreed, skipped, errors);
+		log.info("Quarantine purge finished. scanned={}, purged={}, catalogsFreed={}, skipped={}, busy={}, errors={}",
+				overdue.size(), purged, catalogsFreed, skipped, busy, errors);
 
-		return new QuarantinePurgeResult(overdue.size(), purged, catalogsFreed, skipped, errors);
+		return new QuarantinePurgeResult(overdue.size(), purged, catalogsFreed, skipped, busy, errors);
 	}
 
 	/**
@@ -130,12 +132,13 @@ public class QuarantinePurgeService {
 	 */
 	public QuarantinePurgeResult purgeSelected(List<UUID> movementIds) {
 		if (movementIds == null || movementIds.isEmpty()) {
-			return new QuarantinePurgeResult(0, 0, 0, 0, 0);
+			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
 
 		int purged = 0;
 		int catalogsFreed = 0;
 		int skipped = 0;
+		int busy = 0;
 		int errors = 0;
 
 		for (UUID movementId : movementIds) {
@@ -154,14 +157,15 @@ public class QuarantinePurgeService {
 				catalogsFreed++;
 			}
 			case SKIPPED -> skipped++;
+			case BUSY -> busy++;
 			case ERROR -> errors++;
 			}
 		}
 
-		log.info("Quarantine manual delete finished. requested={}, purged={}, catalogsFreed={}, skipped={}, errors={}",
-				movementIds.size(), purged, catalogsFreed, skipped, errors);
+		log.info("Quarantine manual delete finished. requested={}, purged={}, catalogsFreed={}, skipped={},"
+				+ " busy={}, errors={}", movementIds.size(), purged, catalogsFreed, skipped, busy, errors);
 
-		return new QuarantinePurgeResult(movementIds.size(), purged, catalogsFreed, skipped, errors);
+		return new QuarantinePurgeResult(movementIds.size(), purged, catalogsFreed, skipped, busy, errors);
 	}
 
 	/**
@@ -252,8 +256,10 @@ public class QuarantinePurgeService {
 
 			return freeCatalog(deletion.catalogFileId()) ? Outcome.PURGED_WITH_CATALOG : Outcome.PURGED;
 		} catch (OperationLockException _) {
-			// A restore is touching this path right now; leave it for the next run.
-			return Outcome.SKIPPED;
+			// Something else owns this path right now - a restore, or a conversion batch
+			// moving originals into the same folder. Counted apart from a plain skip
+			// because it is the one outcome the user can act on: wait and try again.
+			return Outcome.BUSY;
 		}
 	}
 

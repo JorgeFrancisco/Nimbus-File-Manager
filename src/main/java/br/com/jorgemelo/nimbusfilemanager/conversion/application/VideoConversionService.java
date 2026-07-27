@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionAdjustments;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
@@ -240,7 +241,7 @@ public class VideoConversionService extends LocalizedComponent {
 
 		if (!commit.successful()) {
 			return failed(file, TranscodeResult.failed(commit.failure(), transcode.audioFallback(),
-					transcode.subtitlesDropped(), transcode.elapsedMillis()));
+					transcode.subtitlesDropped(), transcode.dataDropped(), transcode.elapsedMillis()));
 		}
 
 		return converted(file, transcode, commit);
@@ -303,25 +304,29 @@ public class VideoConversionService extends LocalizedComponent {
 
 		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.CONVERTED,
 				originalBytes, convertedBytes, savedBytes, SizeFormatter.format(Math.max(0, savedBytes)),
-				transcode.elapsedMillis(), transcode.audioFallback(), transcode.subtitlesDropped(),
-				commit.originalQuarantined(), message);
+				transcode.elapsedMillis(), adjustmentsOf(transcode), commit.originalQuarantined(), message);
 	}
 
 	private ConversionFileResult failed(CatalogFile file, TranscodeResult transcode) {
 		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.FAILED, sizeOf(file),
-				0, 0, SizeFormatter.format(0), transcode.elapsedMillis(), transcode.audioFallback(),
-				transcode.subtitlesDropped(), false, failureMessage(transcode.failure()));
+				0, 0, SizeFormatter.format(0), transcode.elapsedMillis(), adjustmentsOf(transcode), false,
+				failureMessage(transcode.failure()));
+	}
+
+	private ConversionAdjustments adjustmentsOf(TranscodeResult transcode) {
+		return new ConversionAdjustments(transcode.audioFallback(), transcode.subtitlesDropped(),
+				transcode.dataDropped());
 	}
 
 	private ConversionFileResult cancelledItem(CatalogFile file) {
 		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.CANCELLED,
-				sizeOf(file), 0, 0, SizeFormatter.format(0), 0, false, false, false,
+				sizeOf(file), 0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false,
 				message("backend.conversion.cancelled"));
 	}
 
 	private ConversionFileResult skipped(CatalogFile file, String messageKey) {
 		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.SKIPPED, sizeOf(file),
-				0, 0, SizeFormatter.format(0), 0, false, false, false, message(messageKey));
+				0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false, message(messageKey));
 	}
 
 	/**

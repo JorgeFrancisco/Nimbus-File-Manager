@@ -290,8 +290,9 @@
 			const detail = document.createElement('td');
 			detail.textContent = [
 				item.message,
-				item.audioFallback ? labels.dataset.audioFallback : '',
-				item.subtitlesDropped ? labels.dataset.subtitlesDropped : '',
+				item.adjustments.audioFallback ? labels.dataset.audioFallback : '',
+				item.adjustments.subtitlesDropped ? labels.dataset.subtitlesDropped : '',
+				item.adjustments.dataDropped ? labels.dataset.dataDropped : '',
 				item.originalQuarantined ? labels.dataset.quarantined : ''
 			].filter(Boolean).join(' · ');
 

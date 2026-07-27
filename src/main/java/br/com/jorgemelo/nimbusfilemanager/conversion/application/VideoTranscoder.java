@@ -76,14 +76,28 @@ public class VideoTranscoder {
 	private TranscodeResult encodeAndValidate(TranscodeRequest request, Path output, IntConsumer onFilePercent,
 			BooleanSupplier cancelled, long start) {
 		CommandOptions options = new CommandOptions(request.options().quality(), request.sourceIsHevc(),
-				streamCompatibilityPolicy.encodesAacUpFront(request.options().audio()), true);
+				streamCompatibilityPolicy.encodesAacUpFront(request.options().audio()), true, true);
 
 		TranscodeExecution execution = run(request, output, options, onFilePercent, cancelled);
 
 		if (retriesWithAac(request, execution, cancelled)) {
 			log.info("Retrying {} with AAC audio: MP4 does not accept the original audio stream", request.source());
 
-			options = new CommandOptions(options.quality(), options.copyVideo(), true, options.includeSubtitles());
+			options = new CommandOptions(options.quality(), options.copyVideo(), true, options.includeSubtitles(),
+					options.includeData());
+
+			execution = run(request, output, options, onFilePercent, cancelled);
+		}
+
+		if (retriesWithoutData(execution, cancelled)) {
+			// Action cameras carry telemetry and timecode tracks that MP4 has no tag for.
+			// The muxer refuses them before the first frame is encoded, so the video is
+			// perfectly convertible - it just has to travel without them.
+			log.info("Retrying {} without the data tracks: MP4 cannot hold this camera's telemetry",
+					request.source());
+
+			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(),
+					options.includeSubtitles(), false);
 
 			execution = run(request, output, options, onFilePercent, cancelled);
 		}
@@ -96,7 +110,7 @@ public class VideoTranscoder {
 			// back to software costs time but keeps the batch moving, exactly like the
 			// audio fallback does.
 			options = new CommandOptions(options.quality().softwareEquivalent(), options.copyVideo(),
-					options.encodeAudioAsAac(), options.includeSubtitles());
+					options.encodeAudioAsAac(), options.includeSubtitles(), options.includeData());
 
 			execution = run(request, output, options, onFilePercent, cancelled);
 		}
@@ -105,7 +119,8 @@ public class VideoTranscoder {
 			log.info("Retrying {} without subtitles: MP4 cannot hold the subtitle track of this file",
 					request.source());
 
-			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(), false);
+			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(), false,
+					options.includeData());
 
 			execution = run(request, output, options, onFilePercent, cancelled);
 		}
@@ -114,7 +129,7 @@ public class VideoTranscoder {
 			// The half-written file goes with it; the source was never touched.
 			conversionFileNaming.discard(output);
 
-			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, elapsedMillis(start));
+			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, elapsedMillis(start));
 		}
 
 		return validate(request, output, options, execution, start);
@@ -132,6 +147,12 @@ public class VideoTranscoder {
 				&& options.quality().requiresHardware();
 	}
 
+	/** Only worth another attempt while the data tracks are still being mapped. */
+	private boolean retriesWithoutData(TranscodeExecution execution, BooleanSupplier cancelled) {
+		return !cancelled.getAsBoolean() && !execution.successful()
+				&& streamCompatibilityPolicy.shouldRetryWithoutData(execution.errorOutput());
+	}
+
 	private boolean retriesWithoutSubtitles(TranscodeExecution execution, BooleanSupplier cancelled) {
 		return !cancelled.getAsBoolean() && !execution.successful()
 				&& streamCompatibilityPolicy.shouldRetryWithoutSubtitles(execution.errorOutput());
@@ -144,6 +165,8 @@ public class VideoTranscoder {
 
 		boolean subtitlesDropped = !options.includeSubtitles();
 
+		boolean dataDropped = !options.includeData();
+
 		if (!execution.successful()) {
 			log.warn("ffmpeg could not convert {} (finished={}, exit={}): {}", request.source(), execution.finished(),
 					execution.exitCode(), execution.errorOutput());
@@ -151,7 +174,7 @@ public class VideoTranscoder {
 			conversionFileNaming.discard(output);
 
 			return TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, audioFallback, subtitlesDropped,
-					elapsedMillis(start));
+					dataDropped, elapsedMillis(start));
 		}
 
 		Optional<ConversionFailure> rejected = validator.validate(output, request.sourceDurationSeconds());
@@ -161,10 +184,11 @@ public class VideoTranscoder {
 
 			conversionFileNaming.discard(output);
 
-			return TranscodeResult.failed(rejected.get(), audioFallback, subtitlesDropped, elapsedMillis(start));
+			return TranscodeResult.failed(rejected.get(), audioFallback, subtitlesDropped, dataDropped,
+					elapsedMillis(start));
 		}
 
-		return TranscodeResult.converted(output, audioFallback, subtitlesDropped, elapsedMillis(start));
+		return TranscodeResult.converted(output, audioFallback, subtitlesDropped, dataDropped, elapsedMillis(start));
 	}
 
 	private TranscodeExecution run(TranscodeRequest request, Path output, CommandOptions options,

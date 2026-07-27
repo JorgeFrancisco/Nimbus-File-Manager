@@ -85,8 +85,11 @@ public class VideoConversionCommandBuilder {
 			command.add("0:s?");
 		}
 
-		command.add("-map");
-		command.add("0:d?");
+		if (options.includeData()) {
+			command.add("-map");
+			command.add("0:d?");
+		}
+
 		command.add("-map_metadata");
 		command.add("0");
 		command.add("-map_chapters");

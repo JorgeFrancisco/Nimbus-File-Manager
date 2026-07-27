@@ -190,6 +190,16 @@
 		</div>
 	</dialog>
 
+	<dialog id="quarantineOutcomeDialog" class="quarantine-dialog" aria-labelledby="quarantineOutcomeTitle">
+		<header class="quarantine-dialog-header">
+			<h2 id="quarantineOutcomeTitle" th:text="#{quarantine.outcome.title}">Nada foi apagado</h2>
+		</header>
+		<p id="quarantineOutcomeMessage"></p>
+		<div class="actions">
+			<button type="button" class="button js-outcome-close" th:text="#{action.close}">Fechar</button>
+		</div>
+	</dialog>
+
 	<div th:replace="~{fragments/folder-picker :: folderPicker}"></div>
 </section>
 </div>

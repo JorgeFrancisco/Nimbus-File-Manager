@@ -17,6 +17,30 @@ class StreamCompatibilityPolicyTest {
 				"Could not write header for output file #0 (incorrect codec parameters ?)")).isTrue();
 	}
 
+	/**
+	 * A GoPro carries telemetry and timecode tracks that reach ffmpeg with no codec
+	 * at all. The muxer refuses them before encoding a single frame, and the error
+	 * blames the video filter chain - so the file used to burn a full AAC attempt
+	 * and a full software attempt before failing for a reason neither could fix.
+	 */
+	@Test
+	void dropsTheDataTracksWhenTheyAreWhatMp4RefusedNotTheAudio() {
+		String error = "[mp4] Could not find tag for codec none in stream #2, "
+				+ "codec not currently supported in container";
+
+		Assertions.assertThat(policy.shouldRetryWithoutData(error)).isTrue();
+		Assertions.assertThat(policy.shouldRetryWithAac(AudioHandling.AUTO, error)).isFalse();
+	}
+
+	@Test
+	void keepsTheDataTracksWhenTheFailureBlamesTheAudioInstead() {
+		String error = "[mp4] Could not find tag for codec pcm_s16le in stream #1, "
+				+ "codec not currently supported in container";
+
+		Assertions.assertThat(policy.shouldRetryWithoutData(error)).isFalse();
+		Assertions.assertThat(policy.shouldRetryWithAac(AudioHandling.AUTO, error)).isTrue();
+	}
+
 	@Test
 	void doesNotRetryForAFailureAnotherAudioCodecCannotFix() {
 		Assertions.assertThat(policy.shouldRetryWithAac(AudioHandling.AUTO, "No space left on device")).isFalse();

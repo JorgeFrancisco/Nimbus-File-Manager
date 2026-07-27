@@ -176,6 +176,7 @@
 		}
 
 		bindDeleteSelected();
+		bindOutcomeDialog();
 		bindCleanupAbsent();
 		refreshSelection();
 	}
@@ -195,6 +196,29 @@
 				status(t("js.quarantine.cleanupError"), "error");
 			});
 		});
+	}
+
+	function showOutcome(message) {
+		var dialog = el("quarantineOutcomeDialog");
+		var body = el("quarantineOutcomeMessage");
+
+		if (!dialog || !body) {
+			status(message, "warn");
+
+			return;
+		}
+
+		body.textContent = message;
+		dialog.showModal();
+	}
+
+	function bindOutcomeDialog() {
+		var dialog = el("quarantineOutcomeDialog");
+		var close = dialog ? dialog.querySelector(".js-outcome-close") : null;
+
+		if (close) {
+			close.addEventListener("click", function () { dialog.close(); });
+		}
 	}
 
 	function bindDeleteSelected() {
@@ -225,8 +249,15 @@
 			}
 			postJson("/app/quarantine/delete-selected", { ids: ids }).then(function (result) {
 				discardSelection(ids);
+
+				// Nothing deleted is never a success: the server says why - most often a
+				// conversion holding the quarantine folder while it moves originals into it.
+				if (result.message) {
+					showOutcome(result.message);
+				}
+
 				status(t("js.quarantine.purgeCompleted", result.purged || 0, result.errors || 0),
-						result.errors > 0 ? "warn" : "ok");
+						result.errors > 0 || result.busy > 0 ? "warn" : "ok");
 				reloadSoon();
 			}).catch(function () {
 				status(t("js.quarantine.purgeError"), "error");

@@ -40,9 +40,31 @@ public class StreamCompatibilityPolicy {
 	private static final List<String> SUBTITLE_MARKERS = List.of("subtitle", "hdmv_pgs", "dvd_sub", "dvb_sub", "vobsub",
 			"mov_text");
 
+	/**
+	 * How ffmpeg names a stream it could not identify at all: "codec none" is what
+	 * a data track looks like by the time the muxer refuses it.
+	 */
+	private static final List<String> DATA_MARKERS = List.of("for codec none");
+
+	/**
+	 * The data check comes first because a refused data track prints the same
+	 * container markers as a refused audio codec: without it a GoPro spent a full
+	 * second encode on AAC audio that was never the problem.
+	 */
 	public boolean shouldRetryWithAac(AudioHandling handling, String ffmpegError) {
-		return handling == AudioHandling.AUTO && !mentionsSubtitles(ffmpegError)
+		return handling == AudioHandling.AUTO && !mentionsSubtitles(ffmpegError) && !mentionsData(ffmpegError)
 				&& matchesAny(ffmpegError, INCOMPATIBLE_STREAM_MARKERS);
+	}
+
+	/**
+	 * True when the error blames a data track. Action cameras carry telemetry and
+	 * timecode tracks ({@code gpmd}, {@code fdsc}, {@code tmcd}) that reach ffmpeg
+	 * with no codec at all, and MP4 has no tag to write for them - the muxer then
+	 * fails before a single frame is encoded, which reads like a video error. The
+	 * conversion itself is fine; only the telemetry has to be left behind.
+	 */
+	public boolean shouldRetryWithoutData(String ffmpegError) {
+		return mentionsData(ffmpegError) && matchesAny(ffmpegError, INCOMPATIBLE_STREAM_MARKERS);
 	}
 
 	/**
@@ -61,6 +83,10 @@ public class StreamCompatibilityPolicy {
 
 	private boolean mentionsSubtitles(String ffmpegError) {
 		return matchesAny(ffmpegError, SUBTITLE_MARKERS);
+	}
+
+	private boolean mentionsData(String ffmpegError) {
+		return matchesAny(ffmpegError, DATA_MARKERS);
 	}
 
 	private boolean matchesAny(String ffmpegError, List<String> markers) {

@@ -45,11 +45,13 @@ class SharedTemplatesI18nTest {
 	void activeExecutionUsesMessageExpressionsOutsideSpelExpressions() throws Exception {
 		String html = read("src/main/resources/templates/fragments/layout.html");
 
-		assertThat(html).contains(
-				"${activeExecution.executionType() == 'INVENTORY'} ? #{execution.inventory.running} : #{execution.organization.running}")
+		// The running execution names itself with the label the back end resolved: the
+		// banner used to decide between "inventory" and "organization" in the template,
+		// so a conversion announced itself as an organization.
+		assertThat(html).contains("#{execution.running(${activeExecution.typeLabel()})}")
 				.contains(
 						"${activeExecution.percentComplete() != null} ? ${activeExecution.percentComplete() + '%'} : #{execution.preparing}")
-				.doesNotContain("? #{execution.inventory.running} : #{execution.organization.running}}")
+				.doesNotContain("execution.organization.running")
 				.doesNotContain("+ '%' : #{execution.preparing}}");
 	}
 

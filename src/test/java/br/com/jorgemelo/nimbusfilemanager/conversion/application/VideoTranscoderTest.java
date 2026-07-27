@@ -43,6 +43,10 @@ class VideoTranscoderTest {
 	private static final TranscodeExecution SUBTITLES_REJECTED = new TranscodeExecution(true, 1,
 			"Could not find tag for codec hdmv_pgs_subtitle in stream #2");
 
+	/** What an action camera's telemetry track looks like when MP4 refuses it. */
+	private static final TranscodeExecution DATA_REJECTED = new TranscodeExecution(true, 1,
+			"Could not find tag for codec none in stream #2, codec not currently supported in container");
+
 	private final ConvertedVideoValidator validator = mock(ConvertedVideoValidator.class);
 	private final ConversionFileNaming conversionFileNaming = mock(ConversionFileNaming.class);
 	private final ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
@@ -209,6 +213,30 @@ class VideoTranscoderTest {
 
 		// The interrupt is re-raised so whoever is cancelling the batch still sees it.
 		Assertions.assertThat(Thread.interrupted()).isTrue();
+	}
+
+	/**
+	 * The telemetry and timecode tracks of an action camera cannot travel into MP4,
+	 * and the muxer refuses them before a frame is encoded. Dropping them converts
+	 * the video that used to fail outright - and the report has to say so, exactly
+	 * as it does for a subtitle track left behind.
+	 */
+	@Test
+	void dropsTheCameraDataTracksWhenMp4CannotHoldThemAndSaysSo() {
+		stubNaming();
+
+		TranscodeResult result = transcoder(attempt -> attempt == 1 ? DATA_REJECTED : SUCCESS)
+				.transcode(request(AudioHandling.COPY), _ -> {
+				}, notCancelled());
+
+		Assertions.assertThat(result.successful()).isTrue();
+		Assertions.assertThat(result.dataDropped()).isTrue();
+		Assertions.assertThat(result.audioFallback()).isFalse();
+		Assertions.assertThat(result.subtitlesDropped()).isFalse();
+
+		Assertions.assertThat(commands).hasSize(2);
+		Assertions.assertThat(commands.get(0)).contains("0:d?");
+		Assertions.assertThat(commands.get(1)).doesNotContain("0:d?");
 	}
 
 	@Test
