@@ -63,17 +63,13 @@ class DuplicatesWebControllerTest {
 	private static PhashBacklogAsyncRunner phashRunner() {
 		PhashBacklogAsyncRunner runner = mock(PhashBacklogAsyncRunner.class);
 
-		when(runner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(runner.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		return runner;
 	}
 
 	private static VideoFingerprintBacklogAsyncRunner videoBacklogRunner() {
-		VideoFingerprintBacklogAsyncRunner runner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(runner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-
-		return runner;
+		return mock(VideoFingerprintBacklogAsyncRunner.class);
 	}
 
 	private static VideoSimilarityWeb videoWeb() {
@@ -95,7 +91,7 @@ class DuplicatesWebControllerTest {
 
 		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
 				videoBacklog, videoBacklogRunner);
@@ -140,7 +136,7 @@ class DuplicatesWebControllerTest {
 
 		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
 				videoBacklog, videoBacklogRunner);
@@ -179,7 +175,7 @@ class DuplicatesWebControllerTest {
 
 		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
 				videoBacklog, videoBacklogRunner);
@@ -204,6 +200,7 @@ class DuplicatesWebControllerTest {
 		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
 
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.empty());
 		when(videoSimilarityRunner.start(70)).thenReturn(true);
 		when(videoSimilarityRunner.percent()).thenReturn(40);
@@ -233,7 +230,7 @@ class DuplicatesWebControllerTest {
 		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 
 		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
 				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoBacklogRunner);
@@ -294,7 +291,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		ExtendedModelMap model = new ExtendedModelMap();
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
 				SizeResponse.of(100), "C:/keep.jpg", "C:/", NOW);
@@ -335,7 +332,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		ExtendedModelMap model = new ExtendedModelMap();
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
 				SizeResponse.of(200), "C:/keep.jpg", "C:/", NOW);
@@ -367,7 +364,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
 		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
 		when(similarityRunner.start(70)).thenReturn(true);
@@ -395,7 +392,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
 		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
 		when(similarityRunner.start(70)).thenReturn(false);
@@ -416,7 +413,7 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
 		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(List.of()));
@@ -436,7 +433,7 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, "similar"));
@@ -458,7 +455,7 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
 		when(duplicateService.candidates(eq(PageRequest.of(0, 100)), any())).thenReturn(new PageImpl<>(List.of()));
@@ -480,7 +477,7 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
@@ -501,7 +498,7 @@ class DuplicatesWebControllerTest {
 		DuplicateService duplicateService = mock(DuplicateService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.VIEW_KEY, "large"));
@@ -522,7 +519,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		var preferences = mock(UserPagePreferenceService.class);
 		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
 				.thenReturn(Map.of(DuplicateConstants.MIN_SIMILARITY_KEY, "100"));
@@ -545,7 +542,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(5, 3, 1));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(5, 3, 1));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
@@ -676,7 +673,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		UUID keepId = UuidV7.fromLegacy(1L);
 		UUID candidateId = UuidV7.fromLegacy(2L);
@@ -723,7 +720,7 @@ class DuplicatesWebControllerTest {
 		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "document.pdf", "pdf", "PDF",
 				SizeResponse.of(100), "C:/document.pdf", "C:/", NOW);
@@ -755,7 +752,7 @@ class DuplicatesWebControllerTest {
 		var phashBacklogService = mock(PhashBacklogService.class);
 		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
 		var userPagePreferenceService = mock(UserPagePreferenceService.class);
-		when(phashBacklogAsyncRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 
 		UUID keepId = UuidV7.fromLegacy(1L);
 		UUID candidateId = UuidV7.fromLegacy(2L);

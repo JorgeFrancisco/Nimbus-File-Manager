@@ -34,7 +34,7 @@ class PhashBacklogAsyncRunnerTest {
 
 	/**
 	 * The photo runner exposes the same reading surface as the video one, and only
-	 * the video side was covered. The live status is what every screen shows.
+	 * the video side was covered.
 	 */
 	@Test
 	void exposesTheBacklogReadingsTheScreensRender() {
@@ -45,7 +45,6 @@ class PhashBacklogAsyncRunnerTest {
 		PhashBacklogAsyncRunner runner = runner();
 
 		Assertions.assertThat(runner.status()).isEqualTo(stored);
-		Assertions.assertThat(runner.liveStatus()).isEqualTo(stored);
 		Assertions.assertThat(runner.lastError()).isNull();
 	}
 

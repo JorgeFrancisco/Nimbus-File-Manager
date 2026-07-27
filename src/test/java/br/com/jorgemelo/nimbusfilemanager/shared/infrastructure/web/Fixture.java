@@ -53,8 +53,8 @@ public final class Fixture {
 		// what is already stored.
 		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(phashRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(duplicates.candidates(any(), any())).thenReturn(Page.empty());
 		when(similarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));

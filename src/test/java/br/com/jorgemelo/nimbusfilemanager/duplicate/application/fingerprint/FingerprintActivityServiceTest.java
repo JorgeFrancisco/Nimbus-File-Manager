@@ -36,7 +36,7 @@ class FingerprintActivityServiceTest {
 	void reportsTheVideoBacklogWithTheProgressOfTheWholeQueue() {
 		when(videoBacklogRunner.isRunning()).thenReturn(true);
 		when(videoBacklogRunner.processed()).thenReturn(0L);
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(269, 6069, 4));
+		when(videoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(269, 6069, 4));
 		when(videoBacklogRunner.etaSeconds()).thenReturn(900L);
 
 		Assertions.assertThat(service.current()).hasValueSatisfying(job -> {
@@ -53,7 +53,7 @@ class FingerprintActivityServiceTest {
 	void reportsThePhotoBacklogWhenOnlyItIsWorking() {
 		when(videoBacklogRunner.isRunning()).thenReturn(false);
 		when(photoBacklogRunner.isRunning()).thenReturn(true);
-		when(photoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(60, 40, 0));
+		when(photoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(60, 40, 0));
 		when(photoBacklogRunner.etaSeconds()).thenReturn(30L);
 
 		Assertions.assertThat(service.current())
@@ -67,7 +67,7 @@ class FingerprintActivityServiceTest {
 	@Test
 	void prefersTheVideoBacklogWhenBothAreWorking() {
 		when(videoBacklogRunner.isRunning()).thenReturn(true);
-		when(videoBacklogRunner.liveStatus()).thenReturn(new FingerprintBacklogStatus(10, 0, 0));
+		when(videoBacklogRunner.status()).thenReturn(new FingerprintBacklogStatus(10, 0, 0));
 
 		Assertions.assertThat(service.current())
 				.hasValueSatisfying(job -> Assertions.assertThat(job.label()).contains("vídeo"));

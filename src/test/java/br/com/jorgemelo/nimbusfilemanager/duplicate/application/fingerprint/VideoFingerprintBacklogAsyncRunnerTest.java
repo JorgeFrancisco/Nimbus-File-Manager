@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,45 +28,6 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(0, 4, 0));
 
 		assertThat(runner.start()).isFalse();
-	}
-
-	/**
-	 * The stored counts only move when a batch of two hundred is written, so a
-	 * screen reading them sits frozen for minutes while the machine works. What
-	 * this reports is what was stored plus what the run has finished since -
-	 * measured here mid-drain, which is exactly when the two disagree.
-	 */
-	@Test
-	void liveStatusCountsWhatTheRunFinishedBeforeItIsWritten() {
-		AtomicReference<FingerprintBacklogStatus> midDrain = new AtomicReference<>();
-
-		when(backlogService.pausedByActiveExecution()).thenReturn(false);
-		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(342, 6000, 0));
-		when(jobRunRepository.save(any())).thenReturn(FingerprintJobRun.builder().id(9L).build());
-		when(jobRunRepository.findById(9L)).thenReturn(Optional.of(FingerprintJobRun.builder().id(9L).build()));
-		when(backlogService.drainPending(any(), any())).thenAnswer(invocation -> {
-			invocation.<ProgressListener>getArgument(1).onProgress(50, 0);
-
-			midDrain.set(runner.liveStatus());
-
-			return new DrainResult(50, 0);
-		});
-
-		runner.start();
-		runner.run();
-
-		assertThat(midDrain.get().done()).isEqualTo(6050);
-		assertThat(midDrain.get().pending()).isEqualTo(292);
-	}
-
-	/** Once the run is over there is nothing in flight to add to the stored count. */
-	@Test
-	void liveStatusIsTheStoredStatusWhileNothingRuns() {
-		FingerprintBacklogStatus stored = new FingerprintBacklogStatus(342, 6000, 0);
-
-		when(backlogService.status()).thenReturn(stored);
-
-		assertThat(runner.liveStatus()).isEqualTo(stored);
 	}
 
 	@Test

@@ -34,12 +34,12 @@ public class FingerprintActivityService extends LocalizedComponent {
 	/** The running backlog, or empty when neither is working. */
 	public Optional<BackgroundJobActivity> current() {
 		if (videoBacklogRunner.isRunning()) {
-			return Optional.of(activity("backend.fingerprint.videoRunning", videoBacklogRunner.liveStatus(),
+			return Optional.of(activity("backend.fingerprint.videoRunning", videoBacklogRunner.status(),
 					videoBacklogRunner.etaSeconds()));
 		}
 
 		if (photoBacklogRunner.isRunning()) {
-			return Optional.of(activity("backend.fingerprint.photoRunning", photoBacklogRunner.liveStatus(),
+			return Optional.of(activity("backend.fingerprint.photoRunning", photoBacklogRunner.status(),
 					photoBacklogRunner.etaSeconds()));
 		}
 
