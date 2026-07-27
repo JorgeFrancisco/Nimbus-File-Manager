@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -461,6 +462,43 @@ class FileExplorerServiceTest {
 
 		Assertions.assertThat(drives).isNotEmpty()
 				.allSatisfy(drive -> Assertions.assertThat(drive).isNotBlank());
+	}
+
+	/**
+	 * Opening a single file straight from a link: the folder it lives in is read so
+	 * the screen can say whether that file is in the catalog. With an empty folder
+	 * behind the mock, the registered case had never run.
+	 */
+	@Test
+	void browseShouldMarkASingleRequestedFileAsRegisteredWhenTheCatalogKnowsIt() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("known.jpg"), "image");
+
+		CatalogFileLocationRepository repository = mock(CatalogFileLocationRepository.class);
+
+		FileExplorerLocationProjection location = mock(FileExplorerLocationProjection.class);
+
+		UUID mediaId = UUID.randomUUID();
+
+		when(location.getCatalogFileId()).thenReturn(77L);
+		when(location.getPublicId()).thenReturn(mediaId);
+		when(location.getFileName()).thenReturn("known.jpg");
+		when(location.getFileType()).thenReturn(FileType.PHOTO);
+		when(location.getSizeBytes()).thenReturn(5L);
+		when(location.getCurrentPath()).thenReturn(file.toString());
+
+		when(repository.findActiveByCurrentFolder(PathUtils.normalize(tempDir))).thenReturn(List.of(location));
+
+		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
+						.browse(file.toString(), "large");
+
+		Assertions.assertThat(view.directory()).isFalse();
+		Assertions.assertThat(view.inventoriedCount()).isEqualTo(1);
+		Assertions.assertThat(view.entries()).singleElement().satisfies(entry -> {
+			Assertions.assertThat(entry.registered()).isTrue();
+			Assertions.assertThat(entry.mediaPublicId()).isEqualTo(mediaId);
+			Assertions.assertThat(entry.fileType()).isEqualTo(FileType.PHOTO.name());
+		});
 	}
 
 	private FileExplorerLocationProjection missingLocation(Path missing) {

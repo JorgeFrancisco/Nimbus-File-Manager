@@ -54,4 +54,18 @@ class ConversionWorkspaceCleanerTest {
 
 		Assertions.assertThatCode(() -> cleaner.run(null)).doesNotThrowAnyException();
 	}
+
+	/**
+	 * A file occupying the folder's name cannot be listed, and housekeeping is
+	 * never a reason to stop the application from starting.
+	 */
+	@Test
+	void startsCleanlyWhenSomethingElseOccupiesTheFolderName(@TempDir Path workspace) throws Exception {
+		when(workspaceManager.temp()).thenReturn(workspace.resolve("temp"));
+
+		Files.createDirectories(workspace.resolve("temp"));
+		Files.writeString(workspace.resolve("temp").resolve("conversion"), "a file in the way");
+
+		Assertions.assertThatCode(() -> cleaner.run(null)).doesNotThrowAnyException();
+	}
 }

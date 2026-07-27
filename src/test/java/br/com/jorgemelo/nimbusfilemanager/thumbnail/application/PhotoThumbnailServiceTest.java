@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -212,6 +213,63 @@ class PhotoThumbnailServiceTest {
 		var url = PhotoThumbnailServiceTest.class.getClassLoader().getResource(name);
 
 		return url == null ? null : Path.of(url.toURI());
+	}
+
+	/**
+	 * A request above the small size gets the large one: the offered sizes are
+	 * walked in order, and only the first of them was ever exercised.
+	 */
+	@Test
+	void shouldRoundAWideRequestUpToTheLargestOfferedSize() throws Exception {
+		Path fixture = classpathFixture("photo/webp/lossy.webp");
+
+		UUID id = UUID.randomUUID();
+
+		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+
+		when(repository.findSource(id))
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), modified, 0)));
+
+		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w640";
+
+		Path target = temp.resolve("cache").resolve(key + ".jpg");
+
+		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
+				.thenReturn(target);
+
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
+
+		Assertions.assertThat(service.get(id, 500)).isPresent();
+		Assertions.assertThat(target).exists();
+	}
+
+	/**
+	 * A file whose header says photo but whose data is cut short: the screen gets
+	 * "no thumbnail", never a failure that bubbles up as a broken page.
+	 */
+	@Test
+	void shouldReturnEmptyWhenThePhotoDataIsTruncated() throws Exception {
+		Path fixture = classpathFixture("photo/webp/lossy.webp");
+
+		byte[] complete = Files.readAllBytes(fixture);
+
+		Path truncated = Files.write(temp.resolve("truncated.webp"), Arrays.copyOf(complete, complete.length / 3));
+
+		UUID id = UUID.randomUUID();
+
+		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+
+		when(repository.findSource(id))
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, truncated.toString(), modified, 0)));
+
+		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+
+		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
+				.thenReturn(temp.resolve("cache").resolve(key + ".jpg"));
+
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
+
+		Assertions.assertThat(service.get(id, 320)).isEmpty();
 	}
 
 	@Test

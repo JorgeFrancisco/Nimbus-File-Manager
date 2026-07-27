@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
@@ -37,10 +38,6 @@ public class ConversionWorkspaceCleaner implements ApplicationRunner {
 	public void run(ApplicationArguments args) {
 		Path folder = conversionFileNaming.workFolder();
 
-		if (!Files.isDirectory(folder)) {
-			return;
-		}
-
 		try (Stream<Path> entries = Files.list(folder)) {
 			List<Path> leftovers = entries.filter(Files::isRegularFile).toList();
 
@@ -49,8 +46,13 @@ public class ConversionWorkspaceCleaner implements ApplicationRunner {
 			if (!leftovers.isEmpty()) {
 				log.info("Cleared {} unfinished encode(s) left in {}", leftovers.size(), folder);
 			}
+		} catch (NoSuchFileException _) {
+			// The folder appears with the first conversion; before that there is nothing
+			// to sweep and nothing worth saying.
 		} catch (IOException e) {
-			// Housekeeping must never stop the application from starting.
+			// Anything else - a file where the folder should be, a drive that will not
+			// list it - is odd enough to report, and never a reason to stop the
+			// application from starting.
 			log.warn("Could not sweep the conversion work folder {}", folder, e);
 		}
 	}

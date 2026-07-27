@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +40,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationUndoResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
@@ -263,6 +266,51 @@ class OrganizationServiceTest {
 		when(organizationPlanStore.get(5L)).thenReturn(plan);
 
 		Assertions.assertThat(service().getPreviewPlan(5L)).isSameAs(plan);
+	}
+
+	/**
+	 * The REST surface speaks public ids and the store speaks internal ones, so
+	 * every public entry point has to translate before it delegates - getting that
+	 * translation wrong is how a screen ends up looking at another execution.
+	 */
+	@Test
+	void getPreviewPlanPublicShouldTranslateThePublicIdBeforeReadingTheStore() {
+		UUID publicId = UUID.randomUUID();
+
+		OrganizationPlan plan = plan();
+
+		when(executionRepository.findByPublicId(publicId))
+				.thenReturn(Optional.of(Execution.builder().id(9L).publicId(publicId).build()));
+		when(organizationPlanStore.get(9L)).thenReturn(plan);
+
+		Assertions.assertThat(service().getPreviewPlanPublic(publicId)).isSameAs(plan);
+	}
+
+	@Test
+	void undoPublicShouldTranslateThePublicIdBeforeUndoing() {
+		UUID publicId = UUID.randomUUID();
+
+		OrganizationUndoResponse response = new OrganizationUndoResponse(4L, "FINISHED", 2, 2, 0, 0, "ok",
+				List.of());
+
+		when(executionRepository.findByPublicId(publicId))
+				.thenReturn(Optional.of(Execution.builder().id(4L).publicId(publicId).build()));
+		when(organizationUndoService.undo(4L)).thenReturn(response);
+
+		Assertions.assertThat(service().undoPublic(publicId)).isSameAs(response);
+	}
+
+	/** An id nobody recognises fails saying which one, not with a null later on. */
+	@Test
+	void publicEntryPointsRefuseAnUnknownExecutionId() {
+		UUID publicId = UUID.randomUUID();
+
+		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+
+		OrganizationService service = service();
+
+		Assertions.assertThatThrownBy(() -> service.undoPublic(publicId))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining(publicId.toString());
 	}
 
 	private OrganizationService service() {

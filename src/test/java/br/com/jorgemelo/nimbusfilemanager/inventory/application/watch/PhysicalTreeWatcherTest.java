@@ -128,6 +128,60 @@ class PhysicalTreeWatcherTest {
 		}
 	}
 
+	/**
+	 * A folder created inside the watched tree has to start being watched at once,
+	 * or everything dropped into it afterwards is invisible - which is how a whole
+	 * new album could arrive without a single event.
+	 */
+	@Test
+	void directoryCreatedInsideTheTreeStartsBeingWatched() throws Exception {
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
+			Path album = Files.createDirectory(tempDir.resolve("album"));
+			Path inside = Files.createDirectory(album.resolve("2026"));
+
+			List<Path> changed = new ArrayList<>();
+
+			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, Path.of("album")), changed);
+
+			assertThat(watcher.isWatching(album)).isTrue();
+			assertThat(watcher.isWatching(inside)).isTrue();
+
+			// A new folder is not itself a changed file; what lands in it will be.
+			assertThat(changed).isEmpty();
+		}
+	}
+
+	/** A folder that leaves the tree stops being watched instead of leaking a key. */
+	@Test
+	void deletedDirectoryStopsBeingWatched() throws Exception {
+		Path album = Files.createDirectory(tempDir.resolve("album"));
+
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
+			assertThat(watcher.isWatching(album)).isTrue();
+
+			Files.delete(album);
+
+			List<Path> changed = new ArrayList<>();
+
+			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_DELETE, Path.of("album")), changed);
+
+			assertThat(watcher.isWatching(album)).isFalse();
+			assertThat(watcher.watchedDirectoryCount()).isEqualTo(1);
+		}
+	}
+
+	/** An event the platform hands over without a name has nothing to report. */
+	@Test
+	void eventWithoutANameIsIgnored() throws Exception {
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
+			List<Path> changed = new ArrayList<>();
+
+			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, null), changed);
+
+			assertThat(changed).isEmpty();
+		}
+	}
+
 	@Test
 	void overflowEventSetsAConsumableFlagWithoutReportingFiles() throws Exception {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {

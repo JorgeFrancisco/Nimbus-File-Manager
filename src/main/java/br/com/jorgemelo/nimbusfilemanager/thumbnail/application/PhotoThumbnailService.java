@@ -87,18 +87,20 @@ public class PhotoThumbnailService {
 		return Optional.of(new PhotoThumbnail(target, '"' + key + '"'));
 	}
 
+	/**
+	 * The offered size a request rounds up to. Anything outside the offered range
+	 * falls through the loop and is refused there, which is also why there is no
+	 * return after it: the guard used to live before the loop and left the last
+	 * statement unreachable.
+	 */
 	private int normalizeWidth(int requestedWidth) {
-		if (requestedWidth < 1 || requestedWidth > WIDTHS[WIDTHS.length - 1]) {
-			throw new IllegalArgumentException("Thumbnail width must be between 1 and 640");
-		}
-
 		for (int width : WIDTHS) {
-			if (requestedWidth <= width) {
+			if (requestedWidth >= 1 && requestedWidth <= width) {
 				return width;
 			}
 		}
 
-		return WIDTHS[WIDTHS.length - 1];
+		throw new IllegalArgumentException("Thumbnail width must be between 1 and " + WIDTHS[WIDTHS.length - 1]);
 	}
 
 	private void generate(PhotoThumbnailSource source, int width, Path target) throws IOException {

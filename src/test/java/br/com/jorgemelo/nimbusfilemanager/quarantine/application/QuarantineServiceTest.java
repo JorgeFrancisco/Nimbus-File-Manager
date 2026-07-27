@@ -30,6 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletio
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
@@ -467,6 +468,91 @@ class QuarantineServiceTest {
 				QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+	}
+
+	/**
+	 * Status alone is not enough: a movement can be MOVED and still not be a
+	 * quarantine - a plain organization move, for instance - and restoring one
+	 * of those would put a file back where nobody asked.
+	 */
+	@Test
+	void shouldRefuseAMovementWhoseReasonIsNotQuarantine(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		movement.setReason(MovementReason.NONE);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
+				QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+	}
+
+	/**
+	 * The same protection that stopped a delete while a conversion held the
+	 * quarantine folder: the restore says so instead of touching a path somebody
+	 * else is using.
+	 */
+	@Test
+	void shouldReportLockedWhenAnotherOperationHoldsThePath(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		OperationLockService lockService = mock(OperationLockService.class);
+
+		when(lockService.acquire(any(), any(Path[].class))).thenThrow(new OperationLockException("busy"));
+
+		QuarantineService locked = new QuarantineService(movementRepository, persistence,
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService);
+
+		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.LOCKED.name());
+		Assertions.assertThat(quarantine).exists();
+	}
+
+	/**
+	 * The worst case of a failed restore: the move left the file at the
+	 * destination and putting it back failed too. Nothing is silently half-done -
+	 * the item is reported as an error and the log names the file to recover.
+	 */
+	@Test
+	void shouldReportAnErrorWhenNeitherTheMoveNorTheRollbackSucceeded(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		SecureFileMove failing = mock(SecureFileMove.class);
+
+		doAnswer(_ -> {
+			// The move physically happened and then failed its verify.
+			Files.move(quarantine, origin.resolve("a.jpg"));
+
+			throw new MoveIntegrityException("sha mismatch");
+		}).when(failing).move(any(), any(), anyBoolean());
+
+		when(failing.rollback(any(), any())).thenReturn(false);
+
+		QuarantineService orphaning = new QuarantineService(movementRepository, persistence, failing,
+				new OperationLockService());
+
+		QuarantineRestoreResult result = orphaning.restore(movement.getPublicId(),
+				QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+
+		verify(failing).rollback(any(), any());
 	}
 
 	@Test

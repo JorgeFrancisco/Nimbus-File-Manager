@@ -229,6 +229,49 @@ class OrganizationReconcileServiceTest {
 		Assertions.assertThat(response.pathMismatchSamples().getFirst().catalogFileId()).isEqualTo(3L);
 	}
 
+	/**
+	 * The straggler a move leaves behind: file_key already points at the real file
+	 * while current_path still names where it used to be. Nothing is missing on
+	 * disk, so the only sane repair is to let current_path catch up - and the
+	 * repair has to be applied, not just counted.
+	 */
+	@Test
+	void reconcileAndApplyShouldSyncACurrentPathThatLaggedBehindTheFileKey() throws Exception {
+		Path source = Files.createDirectory(tempDir.resolve("source"));
+		Path moved = Files.writeString(source.resolve("moved.jpg"), "content");
+		Path stale = source.resolve("where-it-used-to-be.jpg");
+
+		CatalogFile catalogFile = catalogFileWithLocation(8L, stale, 7L, "sha", null);
+
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
+				any(), eq(0L), any(Limit.class))).thenReturn(List.of(row(8L, moved, stale)));
+		when(catalogFileLocationRepository.findById(8L)).thenReturn(Optional.of(catalogFile.getLocation()));
+
+		service().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+
+		Assertions.assertThat(catalogFile.getLocation().getCurrentPath())
+				.isEqualTo(moved.toAbsolutePath().normalize().toString());
+	}
+
+	/**
+	 * The non-recursive scan is a different code path from the walk, and with an
+	 * empty folder its filters never ran: a file in the folder has to be seen, and
+	 * one in a subfolder has to be ignored.
+	 */
+	@Test
+	void reconcileShouldSeeOnlyTheTopFolderWhenItIsNotRecursive() throws Exception {
+		Path source = Files.createDirectory(tempDir.resolve("source"));
+
+		Files.writeString(source.resolve("top.jpg"), "top");
+		Files.writeString(Files.createDirectory(source.resolve("sub")).resolve("deep.jpg"), "deep");
+
+		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), false, false, 10));
+
+		Assertions.assertThat(response.filesOnDisk()).isEqualTo(1);
+		Assertions.assertThat(response.missingInDatabaseSamples()).singleElement().satisfies(sample -> Assertions
+				.assertThat(sample.path()).endsWith("top.jpg"));
+	}
+
 	@Test
 	void reconcileShouldLimitSamples() throws Exception {
 		Path source = Files.createDirectory(tempDir.resolve("source"));

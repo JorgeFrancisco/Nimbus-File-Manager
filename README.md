@@ -1115,8 +1115,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       1933 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.40% instruction, 89.54% branch, 97.01% line, 97.56% method, 100.00% class
+Tests:       1953 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.68% instruction, 89.97% branch, 97.17% line, 97.91% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1128,34 +1128,30 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.40% instruction, 89.54% branch, 97.01% line, 97.56% method, 100.00% class
-Goal:   97.00% instruction, 95.00% branch, 97.00% line, 97.00% method, 100.00% class
+Floor:  97.68% instruction, 89.97% branch, 97.17% line, 97.91% method, 100.00% class
+Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 
-Instruction, method and class already sit at or above the goal, so for those three
-the floor is what defends them. What is left is 3 lines and about 256 branches.
-Most of it sits in classes already above 90%, which is where the remaining work is
-cheapest per test: each one needs only a handful of cases, and they add up. Roughly
-30–50 of those are legitimately unreachable (I/O failure paths that depend on OS
-permissions, utility-class anti-instantiation guards, a `FilterInputStream`
-single-byte override the JSON parser never calls), so the goal stays reachable
-without artificial tests — but the remaining lines are error branches that each need
-a real test, not a percentage chase.
+Class coverage is at the goal; the other four are below it, and the distance is
+measured rather than guessed: **169 instructions, 86 lines, 2 methods and 1 branch**.
+The branch goal was lowered from 95% to 90% because 95% never oriented anything — it
+sat more than five points from the real number, and a goal nobody can reach is a
+goal nobody works toward. Once 90% lands, the next step gets defined from data.
 
-The branch goal was raised from 90% to 95% after sampling what is actually still
-uncovered. The assumption that the tail was mostly unreachable defensive code did
-not survive contact with the data: of 404 uncovered branches in classes already
-above 90%, 84 are plain business conditions (the per-family organization rules, EXIF
-orientation ranges, USN record bounds) and the bulk of the 189 null guards map to
-states the system really produces — a blank path submitted from a form, the first
-library switch with no previous folder, a video with no declared dimensions, an
-entity not yet persisted, a photo with no GPS.
+Where the remaining work is: the classes furthest from the goal are the ones that
+touch the file system and the delivery layer, and each needs a handful of real cases
+rather than a sweep. The last pass over the seven worst offenders is what the numbers
+above reflect, and it produced two code changes rather than only tests — an
+unreachable `return` deleted from the thumbnail width rules, and a redundant
+`isDirectory` guard folded into the exception handling of the conversion sweeper.
+Chasing coverage found dead code, which is the useful version of the exercise.
 
-What is genuinely unreachable is a much smaller set, on the order of 15-25 branches:
-I/O failure paths that need OS-level permission denial, utility-class
-anti-instantiation guards, a `FilterInputStream` single-byte override the JSON
-parser never calls. That set is what will eventually cap the metric, somewhere above
-95% rather than below it.
+What is genuinely unreachable is a small set, on the order of 15-25 branches: I/O
+failure paths that need OS-level permission denial, utility-class anti-instantiation
+guards, a `FilterInputStream` single-byte override the JSON parser never calls. Part
+of what a report shows as uncovered is also covered by tests that *self-skip* on this
+machine (symbolic-link cases needing privilege), so the same suite measures higher
+elsewhere.
 
 The rule still stands: if the remaining tail turns out to be that unreachable set,
 coverage stops there and the reason is recorded. The goal never justifies

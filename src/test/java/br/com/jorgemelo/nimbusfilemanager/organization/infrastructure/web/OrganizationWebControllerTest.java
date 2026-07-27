@@ -195,6 +195,40 @@ class OrganizationWebControllerTest {
 		Assertions.assertThat(model).containsEntry("errorProgressId", executionId);
 	}
 
+	/**
+	 * A preview that is gone can be gone for four different reasons, and the user
+	 * gets a different sentence for each: it ended, it was cancelled, it is still
+	 * running, or nobody ever heard of that id. Saying "still processing" about a
+	 * finished run is what sends someone waiting on a screen forever.
+	 */
+	@Test
+	void organizationPreviewResultExplainsEachReasonThePlanIsNoLongerThere() {
+		Assertions.assertThat(previewErrorFor("FINISHED")).contains("não está mais disponível");
+		Assertions.assertThat(previewErrorFor("CANCELLED")).contains("não está mais disponível");
+		Assertions.assertThat(previewErrorFor("PROCESSING_FILES")).contains("ainda está sendo processada");
+		Assertions.assertThat(previewErrorFor("FINISHED_WITH_ERRORS")).contains("terminou com erro");
+	}
+
+	private String previewErrorFor(String status) {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
+
+		OrganizationWebController controller = new OrganizationWebController(organizationService,
+				mock(UserPagePreferenceService.class), executionQueryService);
+
+		UUID executionId = UUID.randomUUID();
+
+		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(null);
+		when(executionQueryService.get(executionId)).thenReturn(new ExecutionResponse(executionId, "ORGANIZATION",
+				status, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.previewResult(executionId, 0, 50, false, null, model);
+
+		return model.get("error").toString();
+	}
+
 	@Test
 	void organizationPreviewResultShouldRestoreSavedFormChoicesNotDefaults() {
 		OrganizationService organizationService = mock(OrganizationService.class);
