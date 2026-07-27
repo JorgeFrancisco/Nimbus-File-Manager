@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-	File logging with weekly rotation. Spring Boot picks up this logback-spring.xml
+	File logging rotated by day and by size. Spring Boot picks up this logback-spring.xml
 	automatically; the workspace root is injected from the application property so
 	the logs land in the same <workspace>/logs folder the WorkspaceBootstrapListener
 	creates on start (logback also creates the parent folder itself, so it never
@@ -21,13 +21,19 @@
 		<file>${LOG_DIR}/nimbus-file-manager.log</file>
 		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
 			<!--
-				%d{yyyy-ww} rolls the file over once per week (week-of-year); %i splits it
-				again within the week whenever the active file reaches maxFileSize.
+				%d{yyyyMMdd} rolls the file over once per day; %i splits it again within
+				the same day whenever the active file reaches maxFileSize, so an archive is
+				always dated and numbered in the order it was written. maxHistory counts in
+				the unit of the date pattern - days here - and drops the oldest archive
+				past that window. The window is sized for how long it takes to notice a
+				problem, not for how much a log weighs: a file that ended up in the wrong
+				place is found weeks later, and the log of the run that moved it has to
+				still be there. totalSizeCap is the emergency brake behind it.
 			-->
-			<fileNamePattern>${LOG_DIR}/nimbus-file-manager-%d{yyyy-ww}.%i.log</fileNamePattern>
+			<fileNamePattern>${LOG_DIR}/nimbus-file-manager-%d{yyyyMMdd}.%i.log</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
-			<maxHistory>52</maxHistory>
-			<totalSizeCap>1GB</totalSizeCap>
+			<maxHistory>30</maxHistory>
+			<totalSizeCap>2GB</totalSizeCap>
 			<cleanHistoryOnStart>true</cleanHistoryOnStart>
 		</rollingPolicy>
 		<encoder>
