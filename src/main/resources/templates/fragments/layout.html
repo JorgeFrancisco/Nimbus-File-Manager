@@ -98,6 +98,26 @@
 						th:style="|width: ${activeExecution.percentComplete() != null ? activeExecution.percentComplete() : 0}%|"></span>
 			</div>
 		</a>
+		<a class="active-execution background-job" id="backgroundJob"
+				th:href="@{${backgroundJob != null ? backgroundJob.link() : '/app/duplicates'}}"
+				th:hidden="${backgroundJob == null}">
+			<div class="active-execution-main">
+				<span class="active-execution-pulse" aria-hidden="true"></span>
+				<div class="active-execution-copy">
+					<strong id="backgroundJobLabel" th:text="${backgroundJob != null ? backgroundJob.label() : ''}">Impressões digitais</strong>
+					<span class="active-execution-folder" id="backgroundJobCount"
+							th:text="${backgroundJob != null ? #messages.msg('background.job.count', backgroundJob.processed(), backgroundJob.total()) : ''}">0 de 0</span>
+				</div>
+			</div>
+			<div class="active-execution-summary">
+				<strong id="backgroundJobPercent"
+						th:text="${backgroundJob != null ? backgroundJob.percent() + '%' : '0%'}">0%</strong>
+			</div>
+			<div class="active-execution-progress" aria-hidden="true">
+				<span id="backgroundJobProgressFill"
+						th:style="|width: ${backgroundJob != null ? backgroundJob.percent() : 0}%|"></span>
+			</div>
+		</a>
 		<div th:replace="${content}"></div>
 	</main>
 	<div class="idle-modal-overlay" id="idleModalOverlay" hidden>
@@ -135,6 +155,7 @@
 	<script th:src="@{/js/folder-picker.js}"></script>
 	<script th:src="@{/js/idle-timeout.js}"></script>
 	<script th:src="@{/js/execution-status.js}"></script>
+	<script th:src="@{/js/background-job.js}"></script>
 	<script th:src="@{/js/active-execution.js}"></script>
 </div>
 </body>

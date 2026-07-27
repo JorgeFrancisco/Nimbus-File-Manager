@@ -15,6 +15,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
@@ -42,6 +43,9 @@ class AppViewModelAdviceTest {
 
 	@Mock
 	private AppUserRepository appUserRepository;
+
+	@Mock
+	private FingerprintActivityService fingerprintActivityService;
 
 	@Test
 	void appVersionShouldReturnConfiguredValue() {
@@ -130,6 +134,6 @@ class AppViewModelAdviceTest {
 
 	private AppViewModelAdvice advice(String version) {
 		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, executionQueryService,
-				inventoryWatchService, appUserRepository);
+				inventoryWatchService, appUserRepository, fingerprintActivityService);
 	}
 }

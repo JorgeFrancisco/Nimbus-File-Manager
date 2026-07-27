@@ -21,6 +21,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 		"br.com.jorgemelo.nimbusfilemanager.media.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.rest",
+		"br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.statistics.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.thumbnail.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.rest" })
