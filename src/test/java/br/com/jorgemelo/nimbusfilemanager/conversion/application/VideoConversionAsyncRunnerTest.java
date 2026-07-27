@@ -16,11 +16,13 @@ import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogResumer;
 
 class VideoConversionAsyncRunnerTest {
 
 	private final VideoConversionService service = mock(VideoConversionService.class);
-	private final VideoConversionAsyncRunner runner = new VideoConversionAsyncRunner(service);
+	private final FingerprintBacklogResumer backlogResumer = mock(FingerprintBacklogResumer.class);
+	private final VideoConversionAsyncRunner runner = new VideoConversionAsyncRunner(service, backlogResumer);
 
 	private final List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID());
 
@@ -113,6 +115,30 @@ class VideoConversionAsyncRunnerTest {
 
 		Assertions.assertThat(runner.isRunning()).isFalse();
 		Assertions.assertThat(runner.lastResult().message()).isNotBlank();
+	}
+
+	/**
+	 * The fingerprint backlogs step aside while a conversion runs and have nobody
+	 * to restart them - the batch is the only one that knows it is over. Without
+	 * this they would stay idle until the next restart.
+	 */
+	@Test
+	void resumesTheFingerprintBacklogsWhenTheBatchEnds() {
+		runner.start(1);
+		runner.run(ids, ConversionOptions.defaults());
+
+		verify(backlogResumer).resume();
+	}
+
+	/** Including when the batch failed: the backlog is not to blame for that. */
+	@Test
+	void resumesTheFingerprintBacklogsEvenWhenTheBatchBlowsUp() {
+		doThrow(new IllegalStateException("boom")).when(service).convert(any(), any(), any(), any());
+
+		runner.start(1);
+		runner.run(ids, ConversionOptions.defaults());
+
+		verify(backlogResumer).resume();
 	}
 
 	@Test

@@ -18,7 +18,7 @@ interface FingerprintBacklog {
 
 	String algorithm();
 
-	boolean inventoryActive();
+	boolean pausedByActiveExecution();
 
 	FingerprintBacklogStatus status();
 

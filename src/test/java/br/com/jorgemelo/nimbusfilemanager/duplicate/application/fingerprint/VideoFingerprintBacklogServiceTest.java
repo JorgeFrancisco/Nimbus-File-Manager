@@ -30,6 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
@@ -55,6 +56,41 @@ class VideoFingerprintBacklogServiceTest {
 
 	@Mock
 	private ExecutionQueryService executionQueryService;
+
+	/**
+	 * The Duplicados screen offers retry, listing and rebuild for videos exactly as
+	 * it does for photos, and only the photo side was covered.
+	 */
+	@Test
+	void resetFailuresClearsTheRetryableFailureRows() {
+		when(fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM,
+				FingerprintBacklogEngine.UNSUPPORTED_PREFIX)).thenReturn(4L);
+
+		assertThat(service().resetFailures()).isEqualTo(4L);
+	}
+
+	@Test
+	void failuresReturnsOnlyTheExhaustedRowsWithTheirPaths() {
+		List<FingerprintFailureDetail> expected = List
+				.of(new FingerprintFailureDetail("C:/videos/broken.mp4", "decode failed"));
+
+		when(fingerprintFailureRepository.findExhaustedVideoWithPath(FingerprintKind.VIDEO_PHASH, ALGORITHM,
+				VideoFingerprintBacklogService.MAX_ATTEMPTS, FingerprintBacklogEngine.UNSUPPORTED_PREFIX))
+				.thenReturn(expected);
+
+		assertThat(service().failures()).isSameAs(expected);
+	}
+
+	@Test
+	void rebuildDeletesOnlyThisAlgorithmsVideoFingerprintsAndFailures() {
+		when(mediaFingerprintRepository.deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM))
+				.thenReturn(12L);
+
+		assertThat(service().rebuild()).isEqualTo(12L);
+
+		verify(fingerprintFailureRepository).deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM);
+		verify(mediaFingerprintRepository).deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM);
+	}
 
 	private VideoFingerprintBacklogService service() {
 		when(algorithm.kind()).thenReturn(FingerprintKind.VIDEO_PHASH);

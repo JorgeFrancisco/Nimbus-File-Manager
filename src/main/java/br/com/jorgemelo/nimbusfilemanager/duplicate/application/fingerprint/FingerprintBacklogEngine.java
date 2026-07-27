@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 import org.springframework.transaction.PlatformTransactionManager;
@@ -39,6 +40,9 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
  */
 class FingerprintBacklogEngine {
 
+	private static final String INVENTORY = "INVENTORY";
+	private static final String CONVERSION = "CONVERSION";
+
 	static final int BATCH_SIZE = 200;
 	static final String UNSUPPORTED_PREFIX = "[unsupported] ";
 	private static final int MAX_ERROR_LENGTH = 500;
@@ -63,10 +67,33 @@ class FingerprintBacklogEngine {
 		this.clock = clock;
 	}
 
-	/** True while an inventory execution is active - the backlog yields to it. */
+	/**
+	 * True while an inventory execution is active. Kept apart from
+	 * {@link #pausedByActiveExecution()} because the Duplicados screen shows the
+	 * inventory's own progress with it, and a conversion is not an inventory.
+	 */
 	public boolean inventoryActive() {
-		return executionQueryService.active().map(execution -> "INVENTORY".equals(execution.executionType()))
-				.orElse(false);
+		return activeTypeIsOneOf(INVENTORY);
+	}
+
+	/**
+	 * True while an execution the backlog has to step aside for is running.
+	 *
+	 * <p>
+	 * An inventory, because it is about to hand the backlog more work and racing
+	 * it only wastes both. A conversion, because it competes for the very same
+	 * scarce resource - ffmpeg processes and the hardware encoder - on work the
+	 * user is sitting in front of, waiting. Fingerprints have nobody waiting on
+	 * them: stopping costs nothing, since the next run reads what is still pending
+	 * from the database and everything already computed was persisted per batch.
+	 */
+	public boolean pausedByActiveExecution() {
+		return activeTypeIsOneOf(INVENTORY, CONVERSION);
+	}
+
+	private boolean activeTypeIsOneOf(String... executionTypes) {
+		return executionQueryService.active()
+				.map(execution -> Set.of(executionTypes).contains(execution.executionType())).orElse(false);
 	}
 
 	public FingerprintBacklogStatus status(FingerprintProducer<?, ?> producer) {
@@ -111,7 +138,12 @@ class FingerprintBacklogEngine {
 
 		long failed = 0;
 
-		while (!stop.getAsBoolean() && !inventoryActive()) {
+		// Checked per item, not only between batches: a batch is BATCH_SIZE videos and
+		// each one costs seconds of ffmpeg, so waiting for the batch boundary would
+		// keep competing with the conversion for several minutes after it started.
+		BooleanSupplier halt = () -> stop.getAsBoolean() || pausedByActiveExecution();
+
+		while (!halt.getAsBoolean()) {
 			List<P> batch = producer.fetchPendingBatch(BATCH_SIZE);
 
 			if (batch.isEmpty()) {
@@ -121,7 +153,7 @@ class FingerprintBacklogEngine {
 			long baseProcessed = processed;
 			long baseFailed = failed;
 
-			List<Outcome<P, R>> outcomes = processingCoordinator.process(batch, stop, producer::compute, done -> {
+			List<Outcome<P, R>> outcomes = processingCoordinator.process(batch, halt, producer::compute, done -> {
 				if (done % PROGRESS_STRIDE == 0) {
 					progress.onProgress(baseProcessed + done, baseFailed);
 				}

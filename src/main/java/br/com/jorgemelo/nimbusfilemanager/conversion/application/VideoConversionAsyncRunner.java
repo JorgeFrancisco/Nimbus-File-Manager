@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogResumer;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
@@ -36,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class VideoConversionAsyncRunner extends LocalizedComponent {
 
 	private final VideoConversionService videoConversionService;
+	private final FingerprintBacklogResumer fingerprintBacklogResumer;
 
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private final AtomicBoolean cancelled = new AtomicBoolean(false);
@@ -47,8 +49,10 @@ public class VideoConversionAsyncRunner extends LocalizedComponent {
 	private final AtomicReference<ConversionResult> lastResult = new AtomicReference<>();
 	private volatile Locale requestedLocale = Locale.forLanguageTag("pt-BR");
 
-	public VideoConversionAsyncRunner(VideoConversionService videoConversionService) {
+	public VideoConversionAsyncRunner(VideoConversionService videoConversionService,
+			FingerprintBacklogResumer fingerprintBacklogResumer) {
 		this.videoConversionService = videoConversionService;
+		this.fingerprintBacklogResumer = fingerprintBacklogResumer;
 	}
 
 	/**
@@ -110,6 +114,12 @@ public class VideoConversionAsyncRunner extends LocalizedComponent {
 			LocaleContextHolder.setLocale(previousLocale);
 
 			running.set(false);
+
+			// The backlogs stepped aside for this batch and have nobody to restart them:
+			// the conversion is the only one that knows it is over. Resuming here is what
+			// keeps "paused during the conversion" from meaning "paused until the next
+			// restart".
+			fingerprintBacklogResumer.resume();
 		}
 	}
 

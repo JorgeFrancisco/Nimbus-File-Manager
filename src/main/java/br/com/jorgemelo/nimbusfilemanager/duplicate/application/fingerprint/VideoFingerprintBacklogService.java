@@ -63,8 +63,8 @@ public class VideoFingerprintBacklogService
 	}
 
 	@Override
-	public boolean inventoryActive() {
-		return engine.inventoryActive();
+	public boolean pausedByActiveExecution() {
+		return engine.pausedByActiveExecution();
 	}
 
 	@Override

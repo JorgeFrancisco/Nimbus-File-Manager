@@ -65,9 +65,19 @@ public class PhashBacklogService
 		this.clock = clock;
 	}
 
-	/** True while an inventory execution is active - the backlog yields to it. */
+	/**
+	 * True while an inventory execution is active. Read by the Duplicados screen to
+	 * show the inventory's own progress, which is why it stays apart from
+	 * {@link #pausedByActiveExecution()} - a conversion also pauses the backlog,
+	 * but it is not an inventory and the screen must not say it is.
+	 */
 	public boolean inventoryActive() {
 		return engine.inventoryActive();
+	}
+
+	@Override
+	public boolean pausedByActiveExecution() {
+		return engine.pausedByActiveExecution();
 	}
 
 	public FingerprintBacklogStatus status() {

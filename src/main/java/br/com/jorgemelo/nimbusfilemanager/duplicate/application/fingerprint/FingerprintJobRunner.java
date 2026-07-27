@@ -57,7 +57,7 @@ class FingerprintJobRunner {
 	 *         pending, or a run is already in progress. Idempotent.
 	 */
 	public synchronized boolean start() {
-		if (backlog.inventoryActive()) {
+		if (backlog.pausedByActiveExecution()) {
 			return false;
 		}
 
@@ -89,7 +89,7 @@ class FingerprintJobRunner {
 
 	/** Prepares a fingerprint-only rebuild without racing an active worker. */
 	public synchronized boolean prepareRebuild() {
-		if (running.get() || backlog.inventoryActive()) {
+		if (running.get() || backlog.pausedByActiveExecution()) {
 			return false;
 		}
 
@@ -109,7 +109,7 @@ class FingerprintJobRunner {
 				failed.set(failures);
 			});
 
-			if (stopRequested.get() || backlog.inventoryActive()) {
+			if (stopRequested.get() || backlog.pausedByActiveExecution()) {
 				finalStatus = FingerprintJobStatus.CANCELLED;
 			}
 

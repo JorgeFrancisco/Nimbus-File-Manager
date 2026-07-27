@@ -37,8 +37,8 @@ class PhashBacklogAsyncRunnerTest {
 	}
 
 	@Test
-	void startRefusesWhileInventoryActive() {
-		when(backlogService.inventoryActive()).thenReturn(true);
+	void startRefusesWhileAPriorityExecutionIsActive() {
+		when(backlogService.pausedByActiveExecution()).thenReturn(true);
 
 		Assertions.assertThat(runner().start()).isFalse();
 
@@ -47,7 +47,7 @@ class PhashBacklogAsyncRunnerTest {
 
 	@Test
 	void startRefusesWhenNothingIsPending() {
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(0, 10, 0));
 
 		Assertions.assertThat(runner().start()).isFalse();
@@ -59,7 +59,7 @@ class PhashBacklogAsyncRunnerTest {
 	void startIsIdempotentUnderConcurrentCalls() {
 		PhashBacklogAsyncRunner runner = runner();
 
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(5, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(runWithId(7L));
 
@@ -72,7 +72,7 @@ class PhashBacklogAsyncRunnerTest {
 	void etaIsUnknownUntilEnoughProgressAndElapsedTimeExist() {
 		PhashBacklogAsyncRunner runner = runner();
 
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(5, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(runWithId(9L));
 
@@ -85,7 +85,7 @@ class PhashBacklogAsyncRunnerTest {
 	void prepareRebuildClearsOnlyFingerprintsThenStartsTrackedJob() {
 		PhashBacklogAsyncRunner runner = runner();
 
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(12, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(runWithId(8L));
 
@@ -98,7 +98,7 @@ class PhashBacklogAsyncRunnerTest {
 
 	@Test
 	void prepareRebuildRefusesWhileInventoryIsActive() {
-		when(backlogService.inventoryActive()).thenReturn(true);
+		when(backlogService.pausedByActiveExecution()).thenReturn(true);
 
 		Assertions.assertThat(runner().prepareRebuild()).isFalse();
 
@@ -110,7 +110,7 @@ class PhashBacklogAsyncRunnerTest {
 		PhashBacklogAsyncRunner runner = runner();
 		FingerprintJobRun run = runWithId(7L);
 
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(5, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(run);
 		when(jobRunRepository.findById(7L)).thenReturn(Optional.of(run));
@@ -157,7 +157,7 @@ class PhashBacklogAsyncRunnerTest {
 		PhashBacklogAsyncRunner runner = runner();
 		FingerprintJobRun run = runWithId(11L);
 
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(5, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(run);
 		when(jobRunRepository.findById(11L)).thenReturn(Optional.of(run));

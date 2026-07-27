@@ -119,6 +119,46 @@ class PhashBacklogServiceTest {
 		verify(mediaFingerprintRepository, never()).findPendingPhotos(any(), any(), anyInt(), any());
 	}
 
+	/**
+	 * A conversion needs ffmpeg and the hardware encoder for work the user is
+	 * waiting on, and the backlog has nobody waiting on it: it steps aside, and the
+	 * run that follows picks the queue up from the database where it left it.
+	 */
+	@Test
+	void drainYieldsToAnActiveConversion() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+
+		DrainResult result = service().drainPending(() -> false, (_, _) -> {
+		});
+
+		Assertions.assertThat(result.processed()).isZero();
+
+		verify(mediaFingerprintRepository, never()).findPendingPhotos(any(), any(), anyInt(), any());
+	}
+
+	/** Anything else running is none of the backlog's business. */
+	@Test
+	void drainKeepsGoingWhileAnUnrelatedExecutionRuns() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("ORGANIZATION")));
+
+		service().drainPending(() -> false, (_, _) -> {
+		});
+
+		verify(mediaFingerprintRepository).findPendingPhotos(any(), any(), anyInt(), any());
+	}
+
+	/**
+	 * The Duplicados screen shows the inventory's own progress from this flag, so
+	 * it has to keep meaning the inventory and nothing else.
+	 */
+	@Test
+	void inventoryActiveStaysAboutTheInventoryAlone() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+
+		Assertions.assertThat(service().inventoryActive()).isFalse();
+		Assertions.assertThat(service().pausedByActiveExecution()).isTrue();
+	}
+
 	@Test
 	void statusDerivesCountsFromTheTables() {
 		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(PhashBacklogService.KIND,
@@ -196,7 +236,11 @@ class PhashBacklogServiceTest {
 	}
 
 	private ExecutionResponse inventoryExecution() {
-		return new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1,
-				0, 0, 0, 0, null, null, "running", false);
+		return execution("INVENTORY");
+	}
+
+	private ExecutionResponse execution(String executionType) {
+		return new ExecutionResponse(1L, executionType, "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1,
+				1, 0, 0, 0, 0, null, null, "running", false);
 	}
 }

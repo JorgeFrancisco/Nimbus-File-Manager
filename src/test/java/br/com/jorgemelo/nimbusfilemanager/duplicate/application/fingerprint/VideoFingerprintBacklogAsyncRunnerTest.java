@@ -24,7 +24,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 
 	@Test
 	void startRefusesWhenNothingIsPending() {
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(0, 4, 0));
 
 		assertThat(runner.start()).isFalse();
@@ -32,7 +32,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 
 	@Test
 	void runDrainsAndFinalizesTheJobRun() {
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(FingerprintJobRun.builder().id(7L).build());
 		when(jobRunRepository.findById(7L))
@@ -53,7 +53,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 
 	@Test
 	void runMarksTheJobFailedWhenDrainingThrows() {
-		when(backlogService.inventoryActive()).thenReturn(false);
+		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(FingerprintJobRun.builder().id(9L).build());
 		when(jobRunRepository.findById(9L))
@@ -76,7 +76,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 		assertThat(runner.etaSeconds()).isEqualTo(-1);
 		assertThat(runner.lastError()).isNull();
 
-		when(backlogService.inventoryActive()).thenReturn(true);
+		when(backlogService.pausedByActiveExecution()).thenReturn(true);
 
 		assertThat(runner.prepareRebuild()).isFalse();
 	}
