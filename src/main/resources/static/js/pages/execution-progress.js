@@ -52,7 +52,7 @@
 		var estimate = executionStatus.estimatedRemaining(data);
 		var message = data.message;
 		document.getElementById("progressText").textContent = data.percentComplete != null
-				? percent.toFixed(1) + "% - " + (message || "")
+				? executionStatus.percent(percent) + " - " + (message || "")
 				: (message || t("js.execution.processing"));
 		if (estimate) document.getElementById("progressText").textContent += " · " + estimate;
 

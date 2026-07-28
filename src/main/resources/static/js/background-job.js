@@ -30,7 +30,7 @@
 		banner.href = job.link;
 		label.textContent = job.label;
 		count.textContent = i18n.t("js.backgroundJob.count", job.processed, job.total);
-		percent.textContent = job.percent + "%";
+		percent.textContent = window.NimbusFileManagerExecutionStatus.percent(job.percent);
 		fill.style.width = job.percent + "%";
 	}
 

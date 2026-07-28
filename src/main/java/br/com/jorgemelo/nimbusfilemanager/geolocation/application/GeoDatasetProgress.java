@@ -79,7 +79,7 @@ public class GeoDatasetProgress {
 		long done = bytesDone.get();
 		long total = bytesTotal;
 
-		int percent = -1;
+		double percent = -1;
 		long etaSeconds = -1;
 
 		// Average rate since the current step started; stable enough for a

@@ -97,8 +97,8 @@
 			th:if="${similarityComputing}" role="status" data-refresh-ms="3000">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.similarity.calculatingVideos} : #{duplicates.similarity.calculating}">Calculando fotos semelhantes…</h2>
 		<p class="muted" th:text="#{duplicates.similarity.calculating.description}">O agrupamento por semelhança roda em segundo plano para não travar a página. Este painel se atualiza automaticamente a cada 3 segundos e os grupos aparecem assim que o cálculo terminar.</p>
-		<p class="progress-text"><strong th:text="|${similarityPercent}%|">0%</strong></p>
-		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${similarityPercent})}"
+		<p class="progress-text"><strong th:text="${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)}">0%</strong></p>
+		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)})}"
 				th:attr="aria-valuenow=${similarityPercent},aria-valuemin=0,aria-valuemax=100">
 			<div class="fingerprint-progress-fill" th:style="|width: ${similarityPercent}%|"></div>
 		</div>
@@ -295,12 +295,12 @@
 			th:attr="data-refresh-ms=${phashBlocking ? 4000 : null}">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos} : #{duplicates.fingerprint.calculating}">Calculando impressões digitais das fotos…</h2>
 		<p class="muted"><span th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos.description} : #{duplicates.fingerprint.calculating.description}">A comparação por semelhança fica disponível quando todas as fotos tiverem sua impressão digital.</span><span th:if="${phashBlocking}" th:text="#{duplicates.fingerprint.calculating.refresh}"> Este painel se atualiza automaticamente a cada 4 segundos.</span></p>
-		<p class="progress-text"><strong th:text="|${phashPercent}%|">0%</strong>
+		<p class="progress-text"><strong th:text="${#numbers.formatPercent(phashPercent / 100.0, 1, 2)}">0%</strong>
 			<span th:if="${phashEtaSeconds >= 60}" th:text="#{duplicates.eta.minutes(${phashEtaSeconds / 60})}">· tempo estimado</span>
 			<span th:if="${phashEtaSeconds >= 0 and phashEtaSeconds < 60}" th:text="#{duplicates.eta.lessThanMinute}">· menos de 1 min restante</span>
 			<span th:if="${phashEtaSeconds < 0 and phashRunning}" th:text="#{duplicates.eta.calculating}">· calculando tempo estimado…</span>
 		</p>
-		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${phashPercent})}"
+		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}"
 				th:attr="aria-valuenow=${phashPercent},aria-valuemin=0,aria-valuemax=100">
 			<div class="fingerprint-progress-fill" th:style="|width: ${phashPercent}%|"></div>
 		</div>

@@ -73,7 +73,8 @@ class VideoConversionAsyncRunnerTest {
 	 * The bar reaches 100% when the batch is done, never while the encoder is still
 	 * writing the last file. Rounding used to close it early - the bigger the
 	 * batch, the earlier: with a hundred files, the last one crossing half way was
-	 * enough.
+	 * enough. Decimals sharpen the reading without loosening the rule, so what is
+	 * asserted is the rule first and the value second.
 	 */
 	@Test
 	void holdsTheBarBelowFullWhileTheLastFileIsStillBeingWritten() {
@@ -88,7 +89,7 @@ class VideoConversionAsyncRunnerTest {
 		runner.start(100);
 		runner.run(ids, ConversionOptions.defaults());
 
-		Assertions.assertThat(runner.percent()).isEqualTo(99);
+		Assertions.assertThat(runner.percent()).isLessThan(100).isEqualTo(99.9);
 	}
 
 	@Test

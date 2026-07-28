@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 
 /**
  * Neutral background driver for a {@link SimilarityGrouping}: claims a run for
@@ -73,9 +74,9 @@ class SimilarityGroupingRunner {
 	}
 
 	/** Percent complete (0-100), or 0 while the candidate count is unknown. */
-	public int percent() {
+	public double percent() {
 		int candidates = total.get();
 
-		return candidates <= 0 ? 0 : Math.min(100, (int) Math.round(processed.get() * 100.0 / candidates));
+		return candidates <= 0 ? 0 : ProgressMath.percent(processed.get(), candidates);
 	}
 }

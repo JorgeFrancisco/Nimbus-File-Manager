@@ -5,6 +5,6 @@ package br.com.jorgemelo.nimbusfilemanager.conversion.application.dto;
  * far into the current one ffmpeg is, and - once {@code running} turns false -
  * the final report.
  */
-public record ConversionProgress(boolean running, int processed, int total, int percent, int filePercent,
+public record ConversionProgress(boolean running, int processed, int total, double percent, int filePercent,
 		long etaSeconds, String currentFile, ConversionResult result) {
 }

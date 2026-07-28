@@ -263,7 +263,7 @@ class ConversionWebControllerTest {
 		when(runner.isRunning()).thenReturn(true);
 		when(runner.processed()).thenReturn(1);
 		when(runner.total()).thenReturn(3);
-		when(runner.percent()).thenReturn(45);
+		when(runner.percent()).thenReturn(45d);
 		when(runner.filePercent()).thenReturn(20);
 		when(runner.currentFile()).thenReturn("clip.mp4");
 

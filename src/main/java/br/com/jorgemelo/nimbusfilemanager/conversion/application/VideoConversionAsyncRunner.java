@@ -181,7 +181,7 @@ public class VideoConversionAsyncRunner extends LocalizedComponent {
 	 * Overall progress, counting how far into the current file the encoder is so a
 	 * batch of one long video still advances visibly.
 	 */
-	public int percent() {
+	public double percent() {
 		int count = total.get();
 
 		if (count <= 0) {
@@ -198,7 +198,7 @@ public class VideoConversionAsyncRunner extends LocalizedComponent {
 		// showed a finished bar with the last video at 88% in a batch of 25, and at
 		// barely half of it in a batch of 100 - the fuller the batch, the earlier the
 		// lie.
-		return Math.clamp((int) Math.floor(done * 100 / count), 0, 99);
+		return Math.clamp(Math.floor(done * 10_000 / count) / 100.0, 0, 99.99);
 	}
 
 	private void report(int done, int count, int percentOfFile, String file) {

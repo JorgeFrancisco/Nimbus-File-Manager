@@ -203,7 +203,7 @@ class DuplicatesWebControllerTest {
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.empty());
 		when(videoSimilarityRunner.start(70)).thenReturn(true);
-		when(videoSimilarityRunner.percent()).thenReturn(40);
+		when(videoSimilarityRunner.percent()).thenReturn(40d);
 		when(videoSimilarityRunner.processed()).thenReturn(2);
 		when(videoSimilarityRunner.total()).thenReturn(5);
 
@@ -219,7 +219,7 @@ class DuplicatesWebControllerTest {
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		verify(videoSimilarityRunner).run(70);
-		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 40);
+		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 40.0);
 	}
 
 	@Test
@@ -368,7 +368,7 @@ class DuplicatesWebControllerTest {
 		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
 		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
 		when(similarityRunner.start(70)).thenReturn(true);
-		when(similarityRunner.percent()).thenReturn(42);
+		when(similarityRunner.percent()).thenReturn(42d);
 		when(similarityRunner.processed()).thenReturn(21);
 		when(similarityRunner.total()).thenReturn(50);
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -379,7 +379,7 @@ class DuplicatesWebControllerTest {
 						.duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 42)
+		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 42.0)
 				.containsEntry("similarityProcessed", 21).containsEntry("similarityTotal", 50);
 		Assertions.assertThat((List<?>) model.get("groups")).isEmpty();
 		verify(similarityRunner).start(70);
@@ -564,7 +564,7 @@ class DuplicatesWebControllerTest {
 		when(deletionRunner.isRunning()).thenReturn(true);
 		when(deletionRunner.processed()).thenReturn(0);
 		when(deletionRunner.total()).thenReturn(2);
-		when(deletionRunner.percent()).thenReturn(0);
+		when(deletionRunner.percent()).thenReturn(0d);
 
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(),
@@ -603,7 +603,7 @@ class DuplicatesWebControllerTest {
 		when(deletionRunner.isRunning()).thenReturn(false);
 		when(deletionRunner.processed()).thenReturn(2);
 		when(deletionRunner.total()).thenReturn(2);
-		when(deletionRunner.percent()).thenReturn(100);
+		when(deletionRunner.percent()).thenReturn(100d);
 		when(deletionRunner.lastResult()).thenReturn(result);
 
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),

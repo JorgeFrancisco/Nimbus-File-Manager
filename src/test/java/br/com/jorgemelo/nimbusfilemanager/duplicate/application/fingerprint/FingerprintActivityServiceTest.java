@@ -43,7 +43,7 @@ class FingerprintActivityServiceTest {
 			Assertions.assertThat(job.label()).contains("vídeo");
 			Assertions.assertThat(job.processed()).isEqualTo(6073L);
 			Assertions.assertThat(job.total()).isEqualTo(6342L);
-			Assertions.assertThat(job.percent()).isEqualTo(96);
+			Assertions.assertThat(job.percent()).isEqualTo(95.76);
 			Assertions.assertThat(job.etaSeconds()).isEqualTo(900L);
 			Assertions.assertThat(job.link()).isEqualTo("/app/duplicates");
 		});

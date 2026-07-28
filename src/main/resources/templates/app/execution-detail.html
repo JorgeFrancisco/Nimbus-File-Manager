@@ -18,7 +18,7 @@
 			<div><div class="metric" th:text="#{common.errors}">Erros</div><div class="value" th:text="${execution.errors()}">0</div></div>
 			<div><div class="metric" th:text="#{execution.processed}">Processados</div><div class="value" th:text="${execution.filesFound()}">0</div></div>
 			<div><div class="metric" th:text="#{execution.totalEstimated}">Total estimado</div><div class="value" th:text="${execution.totalExpected() != null ? execution.totalExpected() : '-'}">0</div></div>
-			<div><div class="metric" th:text="#{execution.percent}">Percentual</div><div class="value" th:text="${execution.percentComplete() != null ? execution.percentComplete() + '%' : '-'}">-</div></div>
+			<div><div class="metric" th:text="#{execution.percent}">Percentual</div><div class="value" th:text="${execution.percentComplete() != null ? #numbers.formatPercent(execution.percentComplete() / 100.0, 1, 2) : '-'}">-</div></div>
 			<div><div class="metric" th:text="#{common.start}">Início</div><div class="value" th:text="${execution.startedAtLabel()}">-</div></div>
 			<div><div class="metric" th:text="#{common.end}">Fim</div><div class="value" th:text="${execution.finishedAtLabel()}">-</div></div>
 		</div>

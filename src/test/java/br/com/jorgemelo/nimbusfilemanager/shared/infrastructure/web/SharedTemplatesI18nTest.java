@@ -49,8 +49,9 @@ class SharedTemplatesI18nTest {
 		// banner used to decide between "inventory" and "organization" in the template,
 		// so a conversion announced itself as an organization.
 		assertThat(html).contains("#{execution.running(${activeExecution.typeLabel()})}")
-				.contains(
-						"${activeExecution.percentComplete() != null} ? ${activeExecution.percentComplete() + '%'} : #{execution.preparing}")
+				.contains("${activeExecution.percentComplete() != null} ? "
+						+ "${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} "
+						+ ": #{execution.preparing}")
 				.doesNotContain("execution.organization.running")
 				.doesNotContain("+ '%' : #{execution.preparing}}");
 	}

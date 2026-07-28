@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
+
 /**
  * Live progress of a visual fingerprint backlog (photo or video), derived from
  * the DB counts. {@code failed} counts only items that exhausted their attempts
@@ -19,9 +21,9 @@ public record FingerprintBacklogStatus(long pending, long done, long failed) {
 	}
 
 	/** 0-100 completion, counting done + failed as terminal against the total. */
-	public int percent() {
+	public double percent() {
 		long total = total();
 
-		return total == 0 ? 100 : (int) Math.round((done + failed) * 100.0 / total);
+		return total == 0 ? 100 : ProgressMath.percent(done + failed, total);
 	}
 }

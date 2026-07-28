@@ -91,7 +91,7 @@
 			<div class="active-execution-summary">
 				<span class="badge info" id="activeExecutionStatus" th:text="${activeExecution.statusLabel()}">PROCESSING_FILES</span>
 				<strong id="activeExecutionPercent"
-						th:text="${activeExecution.percentComplete() != null} ? ${activeExecution.percentComplete() + '%'} : #{execution.preparing}">0%</strong>
+						th:text="${activeExecution.percentComplete() != null} ? ${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} : #{execution.preparing}">0%</strong>
 			</div>
 			<div class="active-execution-progress" aria-hidden="true">
 				<span id="activeExecutionProgressFill"
@@ -111,7 +111,7 @@
 			</div>
 			<div class="active-execution-summary">
 				<strong id="backgroundJobPercent"
-						th:text="${backgroundJob != null ? backgroundJob.percent() + '%' : '0%'}">0%</strong>
+						th:text="${backgroundJob != null ? #numbers.formatPercent(backgroundJob.percent() / 100.0, 1, 2) : ''}">0%</strong>
 			</div>
 			<div class="active-execution-progress" aria-hidden="true">
 				<span id="backgroundJobProgressFill"

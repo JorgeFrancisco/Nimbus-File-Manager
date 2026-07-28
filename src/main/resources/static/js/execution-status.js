@@ -72,10 +72,30 @@ window.NimbusFileManagerExecutionStatus = (function () {
 		return t("js.eta.hours", hours, rest ? " " + rest + " min" : "");
 	}
 
+	// Percentages carry two decimals, and the separator is the reader's, not Java's:
+	// "97,88%" in pt-BR, "97.88%" in English. Only the visible text goes through here -
+	// a CSS width must stay a raw number with a dot, or the bar silently breaks.
+	var percentFormat = new Intl.NumberFormat(window.NimbusFileManagerI18n.locale, {
+		style: "percent",
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2
+	});
+
+	function percentText(value) {
+		var number = Number(value);
+
+		// style:"percent" wants a fraction, and it owns the sign: where it goes and
+		// whether a space precedes it differ by language, so no caller appends "%".
+		return Number.isFinite(number) ? percentFormat.format(number / 100) : "";
+	}
+
 	return {
 		// Shared by every screen that shows "time remaining", so the wording stays the same
 		// whether the seconds come from this module or from a backend job (js.eta.* keys).
 		format: humanize,
+
+		// Shared for the same reason: one place decides how a percentage reads.
+		percent: percentText,
 
 		estimatedRemaining: function (data) {
 			if (!data || data.status !== "PROCESSING_FILES" || !data.startedAt || !data.totalExpected

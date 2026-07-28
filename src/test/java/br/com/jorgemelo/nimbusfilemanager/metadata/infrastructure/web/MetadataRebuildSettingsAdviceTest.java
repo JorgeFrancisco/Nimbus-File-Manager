@@ -36,7 +36,7 @@ class MetadataRebuildSettingsAdviceTest {
 		when(runner.isRunning()).thenReturn(true);
 		when(runner.processed()).thenReturn(30L);
 		when(runner.total()).thenReturn(100L);
-		when(runner.percent()).thenReturn(30);
+		when(runner.percent()).thenReturn(30d);
 		when(runner.etaSeconds()).thenReturn(90L);
 
 		Model model = new ConcurrentModel();
@@ -46,7 +46,7 @@ class MetadataRebuildSettingsAdviceTest {
 		Assertions.assertThat(model.getAttribute("metadataRebuildRunning")).isEqualTo(true);
 		Assertions.assertThat(model.getAttribute("metadataRebuildProcessed")).isEqualTo(30L);
 		Assertions.assertThat(model.getAttribute("metadataRebuildTotal")).isEqualTo(100L);
-		Assertions.assertThat(model.getAttribute("metadataRebuildPercent")).isEqualTo(30);
+		Assertions.assertThat(model.getAttribute("metadataRebuildPercent")).isEqualTo(30.0);
 		Assertions.assertThat(model.getAttribute("metadataRebuildEta")).isEqualTo(90L);
 	}
 

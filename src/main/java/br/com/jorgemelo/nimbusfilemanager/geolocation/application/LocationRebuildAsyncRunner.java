@@ -81,7 +81,7 @@ public class LocationRebuildAsyncRunner {
 	}
 
 	/** 0-100, or -1 when the total is unknown. */
-	public int percent() {
+	public double percent() {
 		return ProgressMath.percent(processed.get(), total.get());
 	}
 

@@ -106,15 +106,15 @@
 							: (${importing} ? #{settings.geo.importing(${step})}
 							: #{settings.geo.downloadingAndImporting})"></strong>
 				</div>
-				<p th:if="${downloading and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.downloadProgress(${geoProgress.percent()}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${downloading and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.downloadProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${downloading and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.downloadedSoFar(${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')})}"></p>
-				<p th:if="${importing and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.importProgress(${geoProgress.percent()}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${importing and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.importProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${importing and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.importedSoFar(${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></p>
 				<p th:unless="${downloading or importing}" th:text="#{settings.geo.autoRefresh}">Esta página será atualizada automaticamente até a operação terminar.</p>
 				<progress th:if="${(downloading or importing) and geoProgress.percent() >= 0}" th:value="${geoProgress.percent()}" max="100"
-						th:aria-label="#{duplicates.progress(${geoProgress.percent()})}"></progress>
+						th:aria-label="#{duplicates.progress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)})}"></progress>
 				<progress th:unless="${(downloading or importing) and geoProgress.percent() >= 0}"
 						th:aria-label="#{settings.geo.operationRunning}"></progress>
 			</div>

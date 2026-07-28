@@ -42,7 +42,7 @@ public class PhotoSimilarityAsyncRunner {
 		return runner.total();
 	}
 
-	public int percent() {
+	public double percent() {
 		return runner.percent();
 	}
 }

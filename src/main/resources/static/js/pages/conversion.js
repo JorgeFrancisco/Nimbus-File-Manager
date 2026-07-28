@@ -230,7 +230,7 @@
 			return;
 		}
 
-		const parts = [`${progress.percent || 0}%`];
+		const parts = [executionStatus.percent(progress.percent || 0)];
 
 		if (progress.etaSeconds >= 0) {
 			parts.push(executionStatus.format(progress.etaSeconds));
@@ -418,7 +418,7 @@
 
 		if (progress && progress.running) {
 			setRunning(true);
-			setStatus(t('js.conversion.progress', progress.processed, progress.total, progress.percent || 0), false);
+			setStatus(t('js.conversion.progress', progress.processed, progress.total, executionStatus.percent(progress.percent || 0)), false);
 			setProgress(progress.percent || 0);
 			setProgressText(progress);
 			window.setTimeout(pollProgress, POLL_INTERVAL_MILLIS);

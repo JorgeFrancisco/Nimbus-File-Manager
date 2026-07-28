@@ -10,6 +10,6 @@ package br.com.jorgemelo.nimbusfilemanager.shared.application.dto;
  * The label arrives resolved: what the screen receives is text to display, not
  * a domain value to translate.
  */
-public record BackgroundJobActivity(String label, String link, long processed, long total, int percent,
+public record BackgroundJobActivity(String label, String link, long processed, long total, double percent,
 		long etaSeconds) {
 }

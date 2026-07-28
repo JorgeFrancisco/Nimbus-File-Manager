@@ -6,6 +6,6 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
  * {@code processed}/{@code total}; once it turns false {@code result} carries
  * the final {@link DuplicateDeletionResult} (null while still running).
  */
-public record DuplicateDeletionProgress(boolean running, int processed, int total, int percent,
+public record DuplicateDeletionProgress(boolean running, int processed, int total, double percent,
 		DuplicateDeletionResult result) {
 }

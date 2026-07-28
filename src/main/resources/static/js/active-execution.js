@@ -12,7 +12,7 @@
 		status.textContent = data.statusLabel;
 		var estimate = executionStatus.estimatedRemaining(data);
 		percentLabel.textContent = data.percentComplete != null
-				? t("js.active.progress", percent.toFixed(1), data.filesFound || 0, data.totalExpected)
+				? t("js.active.progress", executionStatus.percent(percent), data.filesFound || 0, data.totalExpected)
 				: t("js.active.preparing");
 		if (estimate) percentLabel.textContent += " · " + estimate;
 		fill.style.width = percent + "%";

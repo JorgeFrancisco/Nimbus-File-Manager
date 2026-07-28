@@ -18,8 +18,8 @@ class DuplicatesTemplateTest {
 				"app(~{::section}, #{duplicates.title})", "th:text=\"#{duplicates.tab.exact}\"",
 				"th:text=\"#{duplicates.tab.similar}\"", "th:text=\"#{duplicates.tab.videos}\"",
 				"#{duplicates.rebuild.confirm}", "#{duplicates.rebuild.confirm.videos}",
-				"th:aria-label=\"#{duplicates.progress(${similarityPercent})}\"",
-				"th:aria-label=\"#{duplicates.progress(${phashPercent})}\"",
+				"#{duplicates.progress(${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)})}",
+				"#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}",
 				"th:text=\"#{duplicates.delete.confirm.title}\"", "th:text=\"#{duplicates.folder.clear.description}\"",
 				"id=\"clearSelectionButton\"", "th:text=\"#{duplicates.selection.clear}\"",
 				"th:title=\"#{duplicates.selection.clear.title}\"")

@@ -123,7 +123,7 @@ public class DuplicateDeletionAsyncRunner extends LocalizedComponent {
 	 * Percent complete (0-100) of the current deletion, or 0 while the total is
 	 * unknown.
 	 */
-	public int percent() {
+	public double percent() {
 		int count = total.get();
 
 		return count <= 0 ? 0 : Math.min(100, (int) Math.round(processed.get() * 100.0 / count));
