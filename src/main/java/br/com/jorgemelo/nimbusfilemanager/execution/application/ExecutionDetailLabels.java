@@ -46,6 +46,7 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 		case IO_ERROR -> message("backend.movement.reason.ioError");
 		case DATABASE_UPDATE_FAILED -> message("backend.movement.reason.databaseUpdateFailed");
 		case INTEGRITY_CHECK_FAILED -> message("backend.movement.reason.integrityCheckFailed");
+		case UNDONE_BY_USER -> message("backend.movement.reason.undoneByUser");
 		case USER_CANCELLED -> message("backend.movement.reason.userCancelled");
 		};
 	}

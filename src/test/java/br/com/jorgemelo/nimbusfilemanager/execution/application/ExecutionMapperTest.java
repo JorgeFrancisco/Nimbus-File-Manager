@@ -162,8 +162,6 @@ class ExecutionMapperTest {
 		assertThat(typeLabelOf(ExecutionType.INVENTORY)).isEqualTo("Inventário");
 		assertThat(typeLabelOf(ExecutionType.ORGANIZATION)).isEqualTo("Organização");
 		assertThat(typeLabelOf(ExecutionType.UNDO)).isEqualTo("Desfazer");
-		assertThat(typeLabelOf(ExecutionType.EXPORT)).isEqualTo("Exportação");
-		assertThat(typeLabelOf(ExecutionType.SUMMARY)).isEqualTo("Resumo");
 		assertThat(typeLabelOf(ExecutionType.DEDUP_DELETE)).isEqualTo("Remoção de duplicados");
 		assertThat(typeLabelOf(ExecutionType.RECONCILE)).isEqualTo("Reconciliação");
 	}

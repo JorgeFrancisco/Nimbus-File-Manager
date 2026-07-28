@@ -25,8 +25,6 @@ public class ExecutionLabels extends LocalizedComponent {
 		case INVENTORY -> message("backend.execution.type.INVENTORY");
 		case ORGANIZATION -> message("backend.execution.type.ORGANIZATION");
 		case UNDO -> message("backend.execution.type.UNDO");
-		case EXPORT -> message("backend.execution.type.EXPORT");
-		case SUMMARY -> message("backend.execution.type.SUMMARY");
 		case DEDUP_DELETE -> message("backend.execution.type.DEDUP_DELETE");
 		case RECONCILE -> message("backend.execution.type.RECONCILE");
 		case CONVERSION -> message("backend.execution.type.CONVERSION");

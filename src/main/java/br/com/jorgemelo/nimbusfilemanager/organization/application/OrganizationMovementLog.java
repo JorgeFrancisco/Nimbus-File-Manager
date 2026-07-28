@@ -45,7 +45,7 @@ public class OrganizationMovementLog {
 		this.executionErrorService = executionErrorService;
 	}
 
-	/** Resolves the media file first; a dry run resolves nothing and writes nothing. */
+	/** Resolves the media file first; a dry run resolves and writes nothing. */
 	public void recordMovement(Execution execution, Long catalogFileId, MovePaths paths, MovementStatus status,
 			MovementReason reason, String errorMessage, boolean dryRun) {
 		// Resolving the media file is a read; skip it too in dry-run so a simulation is
@@ -81,23 +81,36 @@ public class OrganizationMovementLog {
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR));
 	}
 
-	public void save(Movement movement) {
-		movementRepository.save(movement);
+	/**
+	 * A file put back where it came from. The movement being reversed keeps its
+	 * own story - the reason it was moved is not erased - and the reversal is
+	 * appended as a movement of its own, in the opposite direction, belonging to
+	 * the undo. A file organized and undone three times leaves six rows in order
+	 * instead of one row rewritten three times.
+	 */
+	public void recordUndone(Movement undone, Execution undoExecution) {
+		undone.setStatus(MovementStatus.UNDONE);
+
+		movementRepository.save(undone);
+
+		movementRepository.save(Movement.builder().execution(undoExecution).catalogFile(undone.getCatalogFile())
+				.sourcePath(undone.getTargetPath()).targetPath(undone.getSourcePath()).status(MovementStatus.MOVED)
+				.reason(MovementReason.UNDONE_BY_USER).build());
 	}
 
 	/**
-	 * An undo that could not put a file back. The failure belongs to the execution
-	 * being undone - an undo does not open one of its own - and the reason lives
-	 * with every other per-file failure instead of on the movement row.
+	 * An undo that could not put a file back: the failure belongs to the undo, and
+	 * the reason lives with every other per-file failure instead of on the
+	 * movement row.
 	 */
-	public void recordUndoFailure(Movement movement, MovementReason reason, String message) {
+	public void recordUndoFailure(Movement movement, Execution undoExecution, MovementReason reason, String message) {
 		movement.setStatus(MovementStatus.UNDO_ERROR);
 		movement.setReason(reason);
 
 		movementRepository.save(movement);
 
 		executionErrorService.save(Path.of(movement.getTargetPath()), ExecutionErrorType.MOVE_ERROR, message,
-				movement.getExecution());
+				undoExecution);
 	}
 
 	/**

@@ -811,6 +811,13 @@ Behavior:
 - Skips movements already undone.
 - Does not overwrite an existing original file.
 - Reports partial results when some files cannot be undone.
+- Runs as an execution of its own (type `UNDO`), so it appears on the executions
+  screen with its own counters, and a file that could not be put back is reported
+  against the undo rather than against the organization it reverses.
+- Appends history instead of rewriting it: the movement being reversed keeps the
+  reason it was moved and is only marked `UNDONE`, while the reversal is stored as
+  a movement in the opposite direction. A file organized and undone three times
+  leaves six rows in order.
 
 ## Metadata Rebuild
 
@@ -1014,7 +1021,7 @@ curl "http://localhost:8088/api/executions/{id}/errors/summary"
 curl "http://localhost:8088/api/executions/{id}/movements"
 ```
 
-`/movements` returns the file movement records for an organization execution (source path, target path, status, undo timestamp when available) as a separate call - they are not embedded in the `/api/executions/{id}` response itself.
+`/movements` returns the file movement records for an organization execution (source path, target path, status) as a separate call - they are not embedded in the `/api/executions/{id}` response itself.
 
 ## Statistics
 
@@ -1115,8 +1122,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2014 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.88% instruction, 90.19% branch, 97.37% line, 98.28% method, 100.00% class
+Tests:       2015 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.89% instruction, 90.19% branch, 97.37% line, 98.29% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1128,12 +1135,12 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.88% instruction, 90.19% branch, 97.37% line, 98.28% method, 100.00% class
+Floor:  97.89% instruction, 90.19% branch, 97.37% line, 98.29% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 
-Branch, method and class are **at the goal**; instruction and line are **63
-instructions and 67 lines** away from theirs. Branch and method need a new target
+Branch, method and class are **at the goal**; instruction and line are **60
+instructions and 66 lines** away from theirs. Branch and method need a new target
 set from here — the ratchet promotes a reached goal to floor and asks for the next
 step. The branch goal had been lowered from 95% to 90% because 95% never oriented
 anything: it sat more than five points from the real number, and a goal nobody can

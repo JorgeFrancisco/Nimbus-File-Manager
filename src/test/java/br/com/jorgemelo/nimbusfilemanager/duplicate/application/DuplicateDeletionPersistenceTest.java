@@ -103,7 +103,6 @@ class DuplicateDeletionPersistenceTest {
 		verify(managed).setFileName("a.jpg");
 		verify(catalogFileRepository).save(managed);
 		verify(movement).setStatus(MovementStatus.UNDONE);
-		verify(movement).setUndoneAt(any());
 		verify(movementRepository).save(movement);
 	}
 }

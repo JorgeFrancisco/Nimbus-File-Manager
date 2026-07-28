@@ -72,9 +72,6 @@ public class Movement {
 	@Column(name = "moved_at", nullable = false)
 	private LocalDateTime movedAt;
 
-	@Column(name = "undone_at")
-	private LocalDateTime undoneAt;
-
 	@PrePersist
 	void prePersist() {
 		if (publicId == null) {

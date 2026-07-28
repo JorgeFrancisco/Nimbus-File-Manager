@@ -2,6 +2,8 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -100,7 +102,17 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(catalogFile.getFileKey()).isEqualTo(source.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(location.getCurrentPath()).isEqualTo(source.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.UNDONE);
-		Assertions.assertThat(movement.getUndoneAt()).isNotNull();
+
+		// The reversal is a movement of its own, in the opposite direction: two saves,
+		// the mark on the original and the row the undo appends.
+		ArgumentCaptor<Movement> saved = ArgumentCaptor.forClass(Movement.class);
+
+		verify(movementRepository, times(2)).save(saved.capture());
+
+		Movement reverse = saved.getAllValues().get(1);
+
+		Assertions.assertThat(reverse.getReason()).isEqualTo(MovementReason.UNDONE_BY_USER);
+		Assertions.assertThat(reverse.getSourcePath()).isEqualTo(movement.getTargetPath());
 	}
 
 	@Test
@@ -325,7 +337,19 @@ class OrganizationUndoServiceTest {
 
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
 
+	/**
+	 * The undo opens an execution of its own now, so the repository has to hand one
+	 * back: without it the run has nothing to finish and nothing to attach a
+	 * failure to. Lenient because the tests that refuse before starting - unknown
+	 * execution, execution of a type that cannot be undone - never get that far.
+	 */
+	private void stubUndoExecution() {
+		lenient().when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+	}
+
 	private OrganizationUndoService service() {
+		stubUndoExecution();
+
 		WorkspaceManager workspace = mock(WorkspaceManager.class);
 
 		when(workspace.getWorkspacePath()).thenReturn(tempDir);
@@ -364,9 +388,12 @@ class OrganizationUndoServiceTest {
 		when(lockService.acquire(eq(ExecutionType.ORGANIZATION), any(Path[].class)))
 				.thenReturn(mock(OperationLock.class));
 
+		stubUndoExecution();
+
 		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
 				catalogFileLocationRepository,
-				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService), lockService, mock(OrganizationPathValidator.class),
+				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				lockService, mock(OrganizationPathValidator.class),
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 
@@ -420,6 +447,8 @@ class OrganizationUndoServiceTest {
 	 * skips the workspace stubbing that would otherwise go unused.
 	 */
 	private OrganizationUndoService serviceWithoutWorkspace() {
+		stubUndoExecution();
+
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
 				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
 				operationLockService, mock(OrganizationPathValidator.class),

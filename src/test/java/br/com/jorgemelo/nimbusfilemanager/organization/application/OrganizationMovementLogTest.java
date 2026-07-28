@@ -2,13 +2,16 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.nio.file.Path;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
@@ -55,7 +58,8 @@ class OrganizationMovementLogTest {
 
 	@Test
 	void aMoveThatWorkedRecordsNoError(@TempDir Path tmp) {
-		log.recordMovement(execution, (CatalogFile) null, paths(tmp), MovementStatus.MOVED, MovementReason.NONE, null, false);
+		log.recordMovement(execution, (CatalogFile) null, paths(tmp), MovementStatus.MOVED, MovementReason.NONE, null,
+				false);
 
 		verify(movementRepository).save(any());
 		verify(executionErrorService, never()).save(any(), any(), any(), any());
@@ -64,28 +68,59 @@ class OrganizationMovementLogTest {
 	/** A simulation writes nothing at all - not the movement, not the error. */
 	@Test
 	void aDryRunRecordsNothing(@TempDir Path tmp) {
-		log.recordMovement(execution, (CatalogFile) null, paths(tmp), MovementStatus.ERROR, MovementReason.IO_ERROR, "boom",
-				true);
+		log.recordMovement(execution, (CatalogFile) null, paths(tmp), MovementStatus.ERROR, MovementReason.IO_ERROR,
+				"boom", true);
 
 		verify(movementRepository, never()).save(any());
 		verify(executionErrorService, never()).save(any(), any(), any(), any());
 	}
 
-	/**
-	 * An undo failure belongs to the execution being undone: an undo does not open
-	 * one of its own.
-	 */
+	/** An undo failure belongs to the undo, which is an execution of its own. */
 	@Test
-	void anUndoFailureIsRecordedAgainstTheExecutionBeingUndone(@TempDir Path tmp) {
+	void anUndoFailureIsRecordedAgainstTheUndoExecution(@TempDir Path tmp) {
 		Path target = tmp.resolve("organized.mp4");
+		Execution undoExecution = Execution.builder().id(9L).build();
 
 		Movement movement = Movement.builder().execution(execution).sourcePath(tmp.resolve("clip.mp4").toString())
 				.targetPath(target.toString()).status(MovementStatus.MOVED).build();
 
-		log.recordUndoFailure(movement, MovementReason.IO_ERROR, "target is read-only");
+		log.recordUndoFailure(movement, undoExecution, MovementReason.IO_ERROR, "target is read-only");
 
 		verify(movementRepository).save(movement);
-		verify(executionErrorService).save(target, ExecutionErrorType.MOVE_ERROR, "target is read-only", execution);
+		verify(executionErrorService).save(target, ExecutionErrorType.MOVE_ERROR, "target is read-only",
+				undoExecution);
+	}
+
+	/**
+	 * The reversal is appended, not written over the movement it reverses: the
+	 * original keeps the reason it was moved for, and the undo gets a row of its
+	 * own in the opposite direction. That is what gives a file moved and undone
+	 * repeatedly a history instead of a final state.
+	 */
+	@Test
+	void undoingAppendsTheReverseMovementAndLeavesTheOriginalReasonAlone(@TempDir Path tmp) {
+		Execution undoExecution = Execution.builder().id(9L).build();
+
+		Movement original = Movement.builder().execution(execution).sourcePath(tmp.resolve("clip.mp4").toString())
+				.targetPath(tmp.resolve("organized.mp4").toString()).status(MovementStatus.MOVED)
+				.reason(MovementReason.NONE).build();
+
+		log.recordUndone(original, undoExecution);
+
+		ArgumentCaptor<Movement> saved = ArgumentCaptor.forClass(Movement.class);
+
+		verify(movementRepository, times(2)).save(saved.capture());
+
+		Movement marked = saved.getAllValues().get(0);
+		Movement reverse = saved.getAllValues().get(1);
+
+		Assertions.assertThat(marked.getStatus()).isEqualTo(MovementStatus.UNDONE);
+		Assertions.assertThat(marked.getReason()).isEqualTo(MovementReason.NONE);
+
+		Assertions.assertThat(reverse.getExecution()).isSameAs(undoExecution);
+		Assertions.assertThat(reverse.getSourcePath()).isEqualTo(original.getTargetPath());
+		Assertions.assertThat(reverse.getTargetPath()).isEqualTo(original.getSourcePath());
+		Assertions.assertThat(reverse.getReason()).isEqualTo(MovementReason.UNDONE_BY_USER);
 	}
 
 	private MovePaths paths(Path tmp) {

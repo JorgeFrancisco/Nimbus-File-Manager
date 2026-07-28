@@ -10,5 +10,8 @@ public enum MovementReason {
 
 	INTEGRITY_CHECK_FAILED,
 
+	/** The reverse move an undo writes, so the trail reads in both directions. */
+	UNDONE_BY_USER,
+
 	USER_CANCELLED
 }

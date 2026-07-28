@@ -20,6 +20,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationUndoResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.UndoResult;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.UndoStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
@@ -28,14 +29,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocatio
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j @Service
-public class OrganizationUndoService {
+public class OrganizationUndoService extends LocalizedComponent {
 
 	private final ExecutionRepository executionRepository;
 	private final CatalogFileRepository catalogFileRepository;
@@ -87,7 +90,13 @@ public class OrganizationUndoService {
 		// locking
 		// those, a concurrent organization on the same tree would race the restore.
 		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, lockedPaths(execution, movements))) {
-			return undoMovements(execution, movements);
+			Execution undoExecution = startUndoExecution(execution, movements.size());
+
+			OrganizationUndoResponse response = undoMovements(execution, undoExecution, movements);
+
+			finishUndoExecution(undoExecution, response);
+
+			return response;
 		}
 	}
 
@@ -106,7 +115,8 @@ public class OrganizationUndoService {
 		return Stream.concat(executionPaths, movementPaths).distinct().toArray(Path[]::new);
 	}
 
-	private OrganizationUndoResponse undoMovements(Execution execution, List<Movement> movements) {
+	private OrganizationUndoResponse undoMovements(Execution execution, Execution undoExecution,
+			List<Movement> movements) {
 		for (Movement movement : movements) {
 			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getSourcePath()), "undo source");
 			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getTargetPath()), "undo target");
@@ -119,7 +129,7 @@ public class OrganizationUndoService {
 		long errors = 0;
 
 		for (Movement movement : movements) {
-			UndoResult result = undoOne(movement);
+			UndoResult result = undoOne(movement, undoExecution);
 
 			items.add(toItemResponse(movement, result));
 
@@ -139,7 +149,7 @@ public class OrganizationUndoService {
 				movements.size(), undone, skipped, errors, message, items);
 	}
 
-	private UndoResult undoOne(Movement movement) {
+	private UndoResult undoOne(Movement movement, Execution undoExecution) {
 		if (movement.getStatus() == MovementStatus.UNDONE) {
 			return new UndoResult(UndoStatus.SKIPPED, "Movement was already undone.");
 		}
@@ -148,13 +158,13 @@ public class OrganizationUndoService {
 		Path target = PathUtils.normalizePath(movement.getTargetPath());
 
 		if (!Files.exists(target)) {
-			markUndoError(movement, MovementReason.SOURCE_NOT_FOUND, "Target file does not exist.");
+			markUndoError(movement, undoExecution, MovementReason.SOURCE_NOT_FOUND, "Target file does not exist.");
 
 			return new UndoResult(UndoStatus.ERROR, "Target file does not exist.");
 		}
 
 		if (Files.exists(source)) {
-			markUndoError(movement, MovementReason.TARGET_EXISTS, "Original path already exists.");
+			markUndoError(movement, undoExecution, MovementReason.TARGET_EXISTS, "Original path already exists.");
 
 			return new UndoResult(UndoStatus.ERROR, "Original path already exists.");
 		}
@@ -169,7 +179,7 @@ public class OrganizationUndoService {
 			// or not at all. Without this, a failure after the location save left the
 			// catalog
 			// pointing at the now-missing source while the file was rolled back to target.
-			transactionTemplate.executeWithoutResult(_ -> applyUndoToDatabase(movement, source, target));
+			transactionTemplate.executeWithoutResult(_ -> applyUndoToDatabase(movement, undoExecution, source, target));
 
 			return new UndoResult(UndoStatus.UNDONE, "Movement undone.");
 		} catch (Exception e) {
@@ -187,13 +197,13 @@ public class OrganizationUndoService {
 			log.error("Could not undo movement. executionId={} movementId={} source={} target={}",
 					movement.getExecution().getId(), movement.getId(), source, target, e);
 
-			markUndoError(movement, reason, e.getMessage());
+			markUndoError(movement, undoExecution, reason, e.getMessage());
 
 			return new UndoResult(UndoStatus.ERROR, e.getMessage());
 		}
 	}
 
-	private void applyUndoToDatabase(Movement movement, Path source, Path target) {
+	private void applyUndoToDatabase(Movement movement, Execution undoExecution, Path source, Path target) {
 		CatalogFile catalogFile = movement.getCatalogFile();
 
 		if (catalogFile == null) {
@@ -221,11 +231,35 @@ public class OrganizationUndoService {
 		catalogFileLocationRepository.save(location);
 		catalogFileRepository.save(catalogFile);
 
-		movement.setStatus(MovementStatus.UNDONE);
-		movement.setReason(MovementReason.NONE);
-		movement.setUndoneAt(LocalDateTime.now(clock));
+		organizationMovementLog.recordUndone(movement, undoExecution);
+	}
 
-		organizationMovementLog.save(movement);
+	/**
+	 * An undo is an operation of its own: it moves files, it can fail, and until
+	 * now it left no trace anyone could look up. Opening an execution gives it a
+	 * line on the Execuções screen and gives its failures somewhere to belong.
+	 */
+	private Execution startUndoExecution(Execution undone, int total) {
+		return executionRepository.save(Execution.builder().executionType(ExecutionType.UNDO)
+				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
+				.sourcePath(undone.getTargetPath()).targetPath(undone.getSourcePath()).recursive(false)
+				.executeFlag(true).statusMessage(StatusMessage.raw(message("backend.undo.started", total)))
+				.filesFound(total).filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build());
+	}
+
+	private void finishUndoExecution(Execution undoExecution, OrganizationUndoResponse response) {
+		Execution managed = executionRepository.findById(undoExecution.getId()).orElse(undoExecution);
+
+		managed.setStatus(response.errors() > 0 ? ExecutionStatus.FINISHED_WITH_ERRORS : ExecutionStatus.FINISHED);
+		managed.setFinishedAt(LocalDateTime.now(clock));
+		managed.setFilesAnalyzed((int) (response.undone() + response.skipped() + response.errors()));
+		managed.setFilesMoved((int) response.undone());
+		managed.setCacheHits((int) response.skipped());
+		managed.setErrors((int) response.errors());
+		managed.setStatusMessage(StatusMessage
+				.raw(message("backend.undo.completed", response.undone(), response.skipped(), response.errors())));
+
+		executionRepository.save(managed);
 	}
 
 	private Path requireParent(Path path, String description) {
@@ -246,8 +280,8 @@ public class OrganizationUndoService {
 		}
 	}
 
-	private void markUndoError(Movement movement, MovementReason reason, String message) {
-		organizationMovementLog.recordUndoFailure(movement, reason, message);
+	private void markUndoError(Movement movement, Execution undoExecution, MovementReason reason, String message) {
+		organizationMovementLog.recordUndoFailure(movement, undoExecution, reason, message);
 	}
 
 	private OrganizationUndoItemResponse toItemResponse(Movement movement, UndoResult result) {

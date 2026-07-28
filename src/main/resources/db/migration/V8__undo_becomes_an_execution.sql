@@ -1,0 +1,14 @@
+-- An undo used to leave no trace of itself: it rewrote the movement it was
+-- reversing - status to UNDONE, the original reason wiped to NONE - and stamped
+-- undone_at. A file organized and undone twice ended with one row that said
+-- only where it currently was, and the Execuções screen never showed the undo
+-- had happened at all.
+--
+-- From here an undo opens its own execution and writes its own movement in the
+-- opposite direction, so history is appended instead of overwritten and
+-- undone_at is what the new row's moved_at already says.
+--
+-- Past undos keep their UNDONE status - the fact survives. Their exact hour
+-- does not: reconstructing it would mean inventing an execution that never ran,
+-- and invented history is worse than a missing timestamp.
+ALTER TABLE movement DROP COLUMN undone_at;

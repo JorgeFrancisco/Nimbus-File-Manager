@@ -114,7 +114,6 @@ public class ExecutionQueryService {
 				movement.getCatalogFile() == null ? null
 						: UuidV7.orLegacy(movement.getCatalogFile().getPublicId(), movement.getCatalogFile().getId()),
 				movement.getSourcePath(), movement.getTargetPath(), movement.getStatus().name(),
-				movement.getReason() == null ? null : movement.getReason().name(), movement.getMovedAt(),
-				movement.getUndoneAt());
+				movement.getReason() == null ? null : movement.getReason().name(), movement.getMovedAt());
 	}
 }

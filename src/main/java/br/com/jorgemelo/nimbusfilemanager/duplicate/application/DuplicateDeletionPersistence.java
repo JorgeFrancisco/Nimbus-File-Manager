@@ -116,8 +116,6 @@ public class DuplicateDeletionPersistence {
 		Movement managed = movementRepository.findById(movement.getId()).orElse(movement);
 
 		managed.setStatus(MovementStatus.UNDONE);
-		managed.setReason(MovementReason.NONE);
-		managed.setUndoneAt(LocalDateTime.now(clock));
 
 		movementRepository.save(managed);
 	}
