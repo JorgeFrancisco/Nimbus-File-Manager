@@ -26,6 +26,13 @@ document.addEventListener('DOMContentLoaded', () => {
 	}));
 	const selectionCount = document.getElementById('selectionCount');
 	const selectionSize = document.getElementById('selectionSize');
+	const selectionBar = document.getElementById('selectionBar');
+
+	// Decided by the server and rendered into the bar: a conversion holds the
+	// quarantine a deletion writes to. The screen only obeys - it never works out
+	// on its own whether deleting is allowed.
+	const deletionBlocked = selectionBar ? selectionBar.dataset.deletionBlocked === 'true' : false;
+
 	const previewButton = document.getElementById('previewDeleteButton');
 	const suggestSelectionButton = document.getElementById('suggestSelectionButton');
 	const clearSelectionButton = document.getElementById('clearSelectionButton');
@@ -131,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 
 		if (previewButton) {
-			previewButton.disabled = empty;
+			previewButton.disabled = empty || deletionBlocked;
 		}
 
 		if (clearSelectionButton) {
@@ -139,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 
 		if (confirmDeleteButton) {
-			confirmDeleteButton.disabled = empty;
+			confirmDeleteButton.disabled = empty || deletionBlocked;
 		}
 
 		if (previewPanel && !previewPanel.hidden && empty) {

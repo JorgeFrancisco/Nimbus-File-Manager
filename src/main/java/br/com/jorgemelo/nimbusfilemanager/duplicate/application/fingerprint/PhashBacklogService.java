@@ -75,6 +75,11 @@ public class PhashBacklogService
 		return engine.inventoryActive();
 	}
 
+	/** Whether a conversion is holding the quarantine a deletion would write to. */
+	public boolean conversionActive() {
+		return engine.conversionActive();
+	}
+
 	@Override
 	public boolean pausedByActiveExecution() {
 		return engine.pausedByActiveExecution();

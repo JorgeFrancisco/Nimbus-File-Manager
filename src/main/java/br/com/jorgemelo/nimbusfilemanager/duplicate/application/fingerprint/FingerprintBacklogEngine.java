@@ -81,6 +81,16 @@ class FingerprintBacklogEngine {
 	}
 
 	/**
+	 * True while a conversion is running. It holds the quarantine folder to move
+	 * originals into it, which is exactly where a duplicate deletion has to write,
+	 * so the Duplicados screen has to say so before the user picks files instead of
+	 * refusing the click afterwards.
+	 */
+	public boolean conversionActive() {
+		return activeTypeIsOneOf(CONVERSION);
+	}
+
+	/**
 	 * True while an execution the backlog has to step aside for is running.
 	 *
 	 * <p>

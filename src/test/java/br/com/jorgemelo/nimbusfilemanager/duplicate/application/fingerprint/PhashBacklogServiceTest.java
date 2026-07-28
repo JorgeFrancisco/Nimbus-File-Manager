@@ -189,6 +189,26 @@ class PhashBacklogServiceTest {
 		Assertions.assertThat(service().pausedByActiveExecution()).isTrue();
 	}
 
+	/**
+	 * The Duplicados screen refuses deletions up front from this flag, so it has to
+	 * mean the conversion and nothing else - an inventory blocks the whole screen
+	 * for a different reason and says so in its own words.
+	 */
+	@Test
+	void conversionActiveStaysAboutTheConversionAlone() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+
+		Assertions.assertThat(service().conversionActive()).isTrue();
+		Assertions.assertThat(service().inventoryActive()).isFalse();
+	}
+
+	@Test
+	void noConversionRunningLeavesDeletionAlone() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("INVENTORY")));
+
+		Assertions.assertThat(service().conversionActive()).isFalse();
+	}
+
 	@Test
 	void statusDerivesCountsFromTheTables() {
 		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(PhashBacklogService.KIND,

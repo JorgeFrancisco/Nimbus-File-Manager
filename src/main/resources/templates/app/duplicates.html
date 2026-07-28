@@ -252,7 +252,14 @@
 		</div>
 	</div>
 
-	<div class="panel section selection-bar" id="selectionBar">
+	<!-- A conversion holds the quarantine a deletion writes to, so the delete actions are
+	     refused up front with the reason, instead of letting the user pick files and only
+	     then learn nothing was deleted. The listing itself stays usable. -->
+	<div class="alert warn section" id="deletionBlockedNotice" role="status"
+			th:if="${deletionBlockedMessage != null}" th:text="${deletionBlockedMessage}">Conversão em andamento.</div>
+
+	<div class="panel section selection-bar" id="selectionBar"
+			th:attr="data-deletion-blocked=${deletionBlockedMessage != null}">
 		<span><strong id="selectionCount">0</strong> <span th:text="#{duplicates.selection.files}">arquivo(s) selecionado(s) -</span> <strong id="selectionSize">0 B</strong> <span class="muted" th:text="#{duplicates.selection.scope}">(nas páginas que você abriu)</span></span>
 		<div class="selection-actions">
 			<span id="deleteStatus" class="muted" role="status" hidden></span>
@@ -260,8 +267,10 @@
 					title="Marca de novo os arquivos sugeridos para exclusão nesta página (os que não são 'Manter')" th:title="#{duplicates.selection.suggest.title}" th:text="#{duplicates.selection.suggest}">Sugerir seleção</button>
 			<button type="button" id="clearSelectionButton" class="secondary" disabled
 					title="Desmarca todos os arquivos selecionados, inclusive nas outras páginas já abertas" th:title="#{duplicates.selection.clear.title}" th:text="#{duplicates.selection.clear}">Limpar seleção</button>
-			<button type="button" id="previewDeleteButton" class="secondary" disabled th:text="#{duplicates.delete.preview.action}">Pré-visualizar exclusão</button>
-			<button type="button" id="confirmDeleteButton" class="button danger" disabled th:text="#{duplicates.delete.selected}">Excluir selecionados</button>
+			<button type="button" id="previewDeleteButton" class="secondary" disabled
+					th:title="${deletionBlockedMessage}" th:text="#{duplicates.delete.preview.action}">Pré-visualizar exclusão</button>
+			<button type="button" id="confirmDeleteButton" class="button danger" disabled
+					th:title="${deletionBlockedMessage}" th:text="#{duplicates.delete.selected}">Excluir selecionados</button>
 		</div>
 		<div id="deleteProgressBar" class="fingerprint-progress-bar delete-progress-bar" role="progressbar"
 				aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>

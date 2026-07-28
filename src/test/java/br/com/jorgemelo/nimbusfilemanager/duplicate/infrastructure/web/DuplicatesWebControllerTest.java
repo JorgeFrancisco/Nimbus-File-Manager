@@ -17,6 +17,7 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.ui.ExtendedModelMap;
@@ -644,6 +645,51 @@ class DuplicatesWebControllerTest {
 		Assertions.assertThat(controller.rebuildFingerprints()).isEqualTo("redirect:/app/duplicates?tab=similar");
 		verify(runner).prepareRebuild();
 		verify(runner).run();
+	}
+
+	/**
+	 * A conversion does not make the analysis wrong, so the results stay on screen -
+	 * only the deletion is refused, and the reason arrives ready to display instead
+	 * of the screen working it out.
+	 */
+	@Test
+	void duplicatesShouldRefuseDeletionWithAReasonWhileAConversionRuns() {
+		DuplicateService duplicateService = mock(DuplicateService.class);
+		var phashBacklogService = mock(PhashBacklogService.class);
+
+		when(phashBacklogService.conversionActive()).thenReturn(true);
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
+				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
+				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
+				mock(DuplicateExclusionService.class), videoWeb())
+						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
+
+		Assertions.assertThat(model.get("deletionBlockedMessage")).asString().isNotBlank();
+		Assertions.assertThat(model).containsEntry("inventoryActive", false);
+	}
+
+	@Test
+	void duplicatesShouldNotAnnounceABlockWhenNothingIsRunning() {
+		DuplicateService duplicateService = mock(DuplicateService.class);
+		var phashBacklogService = mock(PhashBacklogService.class);
+
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class),
+				phashBacklogService, mock(PhashBacklogAsyncRunner.class),
+				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
+
+		Assertions.assertThat(model.get("deletionBlockedMessage")).isNull();
 	}
 
 	@Test

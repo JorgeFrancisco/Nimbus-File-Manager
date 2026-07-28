@@ -164,6 +164,14 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		model.addAttribute("inventoryActive", inventoryActive);
 
+		// A conversion does not make the analysis wrong - it only holds the quarantine
+		// a deletion writes to. So the results stay on screen and only the deletion is
+		// refused, with the reason said up front instead of after the click. It
+		// arrives localized: the screen only shows what it is given.
+		model.addAttribute("deletionBlockedMessage", phashBacklogService.conversionActive()
+				? message("backend.duplicates.deletionBlockedByConversion")
+				: null);
+
 		if (inventoryActive) {
 			addPageAttributes(model, Page.empty(), List.of());
 
