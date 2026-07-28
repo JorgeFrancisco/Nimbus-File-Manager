@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 
@@ -50,6 +51,10 @@ interface FingerprintProducer<P, R> {
 	/** Persists the fingerprint row(s); runs inside the batch transaction. */
 	void store(P pending, R result);
 
-	/** Whether the error is a terminal, non-retryable unsupported condition. */
-	boolean unsupported(Throwable error);
+	/**
+	 * Why this item has no fingerprint. The producer knows where its file is, so
+	 * it is the one that can read the bytes and tell a blank file from a format
+	 * the decoder never supported.
+	 */
+	FingerprintFailureReason reason(P pending, Throwable error);
 }

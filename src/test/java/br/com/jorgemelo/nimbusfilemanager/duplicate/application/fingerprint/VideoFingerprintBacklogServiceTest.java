@@ -25,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityA
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
@@ -64,7 +65,7 @@ class VideoFingerprintBacklogServiceTest {
 	@Test
 	void resetFailuresClearsTheRetryableFailureRows() {
 		when(fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM,
-				FingerprintBacklogEngine.UNSUPPORTED_PREFIX)).thenReturn(4L);
+				FingerprintFailureReason.UNKNOWN)).thenReturn(4L);
 
 		assertThat(service().resetFailures()).isEqualTo(4L);
 	}
@@ -72,11 +73,11 @@ class VideoFingerprintBacklogServiceTest {
 	@Test
 	void failuresReturnsOnlyTheExhaustedRowsWithTheirPaths() {
 		List<FingerprintFailureDetail> expected = List
-				.of(new FingerprintFailureDetail("C:/videos/broken.mp4", "decode failed"));
+				.of(new FingerprintFailureDetail("C:/videos/broken.mp4", FingerprintFailureReason.DECODER_REFUSED,
+						"decode failed"));
 
 		when(fingerprintFailureRepository.findExhaustedVideoWithPath(FingerprintKind.VIDEO_PHASH, ALGORITHM,
-				VideoFingerprintBacklogService.MAX_ATTEMPTS, FingerprintBacklogEngine.UNSUPPORTED_PREFIX))
-				.thenReturn(expected);
+				VideoFingerprintBacklogService.MAX_ATTEMPTS)).thenReturn(expected);
 
 		assertThat(service().failures()).isSameAs(expected);
 	}
@@ -145,7 +146,7 @@ class VideoFingerprintBacklogServiceTest {
 		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(FingerprintKind.VIDEO_PHASH, ALGORITHM))
 				.thenReturn(6L);
 		when(fingerprintFailureRepository.countExhaustedVideoFailures(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM),
-				anyInt(), any())).thenReturn(1L);
+				anyInt())).thenReturn(1L);
 		when(mediaFingerprintRepository.countPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt()))
 				.thenReturn(3L);
 
@@ -177,6 +178,6 @@ class VideoFingerprintBacklogServiceTest {
 		verify(fingerprintFailureRepository).save(failure.capture());
 
 		assertThat(failure.getValue().getAttempts()).isEqualTo(VideoFingerprintBacklogService.MAX_ATTEMPTS);
-		assertThat(failure.getValue().getLastError()).startsWith(FingerprintBacklogEngine.UNSUPPORTED_PREFIX);
+		assertThat(failure.getValue().getReason()).isEqualTo(FingerprintFailureReason.UNSUPPORTED_FORMAT);
 	}
 }

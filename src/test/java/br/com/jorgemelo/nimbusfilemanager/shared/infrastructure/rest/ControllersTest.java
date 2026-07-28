@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.FingerprintFailureLabels;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
@@ -134,7 +135,8 @@ class ControllersTest {
 				new MediaSearchCriteria(FileType.PHOTO, "h264", "folder", "jpg", 2024, 5, 1L, 10L), pageable);
 
 		DuplicateController duplicateController = new DuplicateController(duplicateService, photoSimilarityService,
-				phashBacklogService, videoSimilarityService, videoFingerprintBacklogService);
+				phashBacklogService, videoSimilarityService, videoFingerprintBacklogService,
+				new FingerprintFailureLabels());
 
 		duplicateController.groups(pageable);
 		duplicateController.files("hash");

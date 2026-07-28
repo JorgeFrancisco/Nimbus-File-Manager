@@ -199,11 +199,24 @@ document.addEventListener('DOMContentLoaded', () => {
 					failures.forEach((failure) => {
 						const row = document.createElement('tr');
 						const path = document.createElement('td');
+						const reason = document.createElement('td');
 						const error = document.createElement('td');
 
+						const badge = document.createElement('span');
+
+						// The server says which reason means the file itself is gone; the row only
+						// dresses it. Losing data reads differently from a format nothing decodes.
+						badge.className = failure.severe ? 'badge error' : 'badge muted';
+						badge.textContent = failure.reasonLabel || '';
+
+						if (failure.severe) {
+							row.className = 'fingerprint-failure-severe';
+						}
+
 						path.textContent = failure.path || '—';
+						reason.appendChild(badge);
 						error.textContent = failure.error || t('js.duplicates.errorUnknown');
-						row.append(path, error);
+						row.append(path, reason, error);
 						failuresRows.appendChild(row);
 					});
 				}

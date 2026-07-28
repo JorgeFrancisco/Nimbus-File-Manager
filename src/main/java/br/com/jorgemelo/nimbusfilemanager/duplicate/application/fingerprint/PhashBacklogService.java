@@ -16,6 +16,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
@@ -27,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHa
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
  * Photo half of the fingerprint backlog: the {@link FingerprintProducer} that
@@ -45,7 +47,6 @@ public class PhashBacklogService
 
 	static final FingerprintKind KIND = FingerprintKind.PHOTO_PHASH;
 	static final int MAX_ATTEMPTS = 3;
-	static final String UNSUPPORTED_PREFIX = FingerprintBacklogEngine.UNSUPPORTED_PREFIX;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
@@ -140,14 +141,12 @@ public class PhashBacklogService
 
 	@Override
 	public long countExhaustedFailures() {
-		return fingerprintFailureRepository.countExhaustedFailures(KIND, DuplicateConstants.ALGORITHM, MAX_ATTEMPTS,
-				UNSUPPORTED_PREFIX);
+		return fingerprintFailureRepository.countExhaustedFailures(KIND, DuplicateConstants.ALGORITHM, MAX_ATTEMPTS);
 	}
 
 	@Override
 	public List<FingerprintFailureDetail> exhaustedFailures() {
-		return fingerprintFailureRepository.findExhaustedWithPath(KIND, DuplicateConstants.ALGORITHM, MAX_ATTEMPTS,
-				UNSUPPORTED_PREFIX);
+		return fingerprintFailureRepository.findExhaustedWithPath(KIND, DuplicateConstants.ALGORITHM, MAX_ATTEMPTS);
 	}
 
 	@Override
@@ -171,8 +170,12 @@ public class PhashBacklogService
 	}
 
 	@Override
-	public boolean unsupported(Throwable error) {
-		return error instanceof UnsupportedPhotoFingerprintException;
+	public FingerprintFailureReason reason(PendingPhoto pending, Throwable error) {
+		if (error instanceof UnsupportedPhotoFingerprintException) {
+			return FingerprintFailureReason.UNSUPPORTED_FORMAT;
+		}
+
+		return FingerprintFailureClassifier.classify(PathUtils.normalizePath(pending.path()));
 	}
 
 	private List<PendingPhoto> deduplicate(List<PendingPhoto> rows) {

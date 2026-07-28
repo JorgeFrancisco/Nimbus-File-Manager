@@ -194,7 +194,17 @@
 }
 
 .fingerprint-failures-table {
-	min-width: 760px;
+	min-width: 860px;
+}
+
+/*
+ * A corrupted file is the one failure that means data was lost, not a format the
+ * decoder never read. It gets the danger tint so it does not sit unnoticed among
+ * the stickers and panoramas nothing can decode. Theme variables keep the
+ * contrast right in both light and dark.
+ */
+.fingerprint-failures-table tr.fingerprint-failure-severe td {
+	background: var(--danger-soft);
 }
 
 .fingerprint-failures-table th {

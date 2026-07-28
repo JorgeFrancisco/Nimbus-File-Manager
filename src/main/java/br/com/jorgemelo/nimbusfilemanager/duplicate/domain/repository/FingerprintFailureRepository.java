@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
@@ -31,10 +32,9 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.attempts >= :attempts
 			  AND m.fileType = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType.PHOTO
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND (fe.lastError IS NULL OR fe.lastError NOT LIKE CONCAT(:unsupportedPrefix, '%'))
 			""")
 	long countExhaustedFailures(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm,
-			@Param("attempts") int attempts, @Param("unsupportedPrefix") String unsupportedPrefix);
+			@Param("attempts") int attempts);
 
 	/**
 	 * Exhausted failures with their current physical path for the UI details modal.
@@ -42,19 +42,17 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 	@Transactional(readOnly = true)
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail(
-				l.currentPath, fe.lastError)
+				l.currentPath, fe.reason, fe.lastError)
 			FROM FingerprintFailure fe
 			JOIN CatalogFile m ON m.id = fe.catalogFileId
 			JOIN m.location l
 			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.attempts >= :attempts
 			  AND m.fileType = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType.PHOTO
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND (fe.lastError IS NULL OR fe.lastError NOT LIKE CONCAT(:unsupportedPrefix, '%'))
 			ORDER BY l.currentPath ASC, fe.id ASC
 			""")
 	List<FingerprintFailureDetail> findExhaustedWithPath(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("attempts") int attempts,
-			@Param("unsupportedPrefix") String unsupportedPrefix);
+			@Param("algorithm") String algorithm, @Param("attempts") int attempts);
 
 	/** Video counterpart of {@link #countExhaustedFailures}, filtered to videos. */
 	@Query("""
@@ -63,28 +61,25 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.attempts >= :attempts
 			  AND m.fileType = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType.VIDEO
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND (fe.lastError IS NULL OR fe.lastError NOT LIKE CONCAT(:unsupportedPrefix, '%'))
 			""")
 	long countExhaustedVideoFailures(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm,
-			@Param("attempts") int attempts, @Param("unsupportedPrefix") String unsupportedPrefix);
+			@Param("attempts") int attempts);
 
 	/** Video counterpart of {@link #findExhaustedWithPath}, filtered to videos. */
 	@Transactional(readOnly = true)
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail(
-				l.currentPath, fe.lastError)
+				l.currentPath, fe.reason, fe.lastError)
 			FROM FingerprintFailure fe
 			JOIN CatalogFile m ON m.id = fe.catalogFileId
 			JOIN m.location l
 			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.attempts >= :attempts
 			  AND m.fileType = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType.VIDEO
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND (fe.lastError IS NULL OR fe.lastError NOT LIKE CONCAT(:unsupportedPrefix, '%'))
 			ORDER BY l.currentPath ASC, fe.id ASC
 			""")
 	List<FingerprintFailureDetail> findExhaustedVideoWithPath(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("attempts") int attempts,
-			@Param("unsupportedPrefix") String unsupportedPrefix);
+			@Param("algorithm") String algorithm, @Param("attempts") int attempts);
 
 	@Transactional
 	void deleteByCatalogFileIdAndKindAndAlgorithm(Long catalogFileId, FingerprintKind kind, String algorithm);
@@ -96,16 +91,16 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 	long deleteByKindAndAlgorithm(FingerprintKind kind, String algorithm);
 
 	/**
-	 * Manual retry keeps known unsupported files terminal and retries real failures
-	 * only.
+	 * Manual retry clears only what a retry can change. A terminal reason - blank
+	 * bytes, a format the decoder never read - stays, so the button never promises
+	 * to fix a file nothing can fix.
 	 */
 	@Transactional
 	@Modifying
 	@Query("""
 			DELETE FROM FingerprintFailure fe
-			WHERE fe.kind = :kind AND fe.algorithm = :algorithm
-			  AND (fe.lastError IS NULL OR fe.lastError NOT LIKE CONCAT(:unsupportedPrefix, '%'))
+			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.reason = :reason
 			""")
 	long deleteRetryableByKindAndAlgorithm(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm,
-			@Param("unsupportedPrefix") String unsupportedPrefix);
+			@Param("reason") FingerprintFailureReason reason);
 }

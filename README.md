@@ -1122,8 +1122,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2048 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.91% instruction, 90.33% branch, 97.41% line, 98.30% method, 100.00% class
+Tests:       2063 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.92% instruction, 90.39% branch, 97.41% line, 98.31% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,7 +1135,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.91% instruction, 90.33% branch, 97.41% line, 98.30% method, 100.00% class
+Floor:  97.92% instruction, 90.39% branch, 97.41% line, 98.31% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 

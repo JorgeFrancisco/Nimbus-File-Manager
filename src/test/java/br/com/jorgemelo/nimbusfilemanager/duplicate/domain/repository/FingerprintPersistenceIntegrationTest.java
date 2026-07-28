@@ -12,6 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
@@ -76,10 +77,11 @@ class FingerprintPersistenceIntegrationTest {
 		CatalogFile file = persistCatalogFile("failure-details");
 
 		fingerprintFailureRepository.saveAndFlush(FingerprintFailure.builder().catalogFileId(file.getId())
-				.kind(FingerprintKind.PHOTO_PHASH).algorithm(ALGORITHM).attempts(3).lastError("decode failed").build());
+				.kind(FingerprintKind.PHOTO_PHASH).algorithm(ALGORITHM).attempts(3)
+				.reason(FingerprintFailureReason.DECODER_REFUSED).lastError("decode failed").build());
 
 		Assertions.assertThat(fingerprintFailureRepository.findExhaustedWithPath(FingerprintKind.PHOTO_PHASH, ALGORITHM,
-				3, "[unsupported] ")).anySatisfy(failure -> {
+				3)).anySatisfy(failure -> {
 					Assertions.assertThat(failure.path()).isEqualTo(file.getLocation().getCurrentPath());
 					Assertions.assertThat(failure.error()).isEqualTo("decode failed");
 				});

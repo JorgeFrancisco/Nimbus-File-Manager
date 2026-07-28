@@ -27,6 +27,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
@@ -214,8 +215,7 @@ class PhashBacklogServiceTest {
 		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(PhashBacklogService.KIND,
 				DuplicateConstants.ALGORITHM)).thenReturn(10L);
 		when(fingerprintFailureRepository.countExhaustedFailures(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM, PhashBacklogService.MAX_ATTEMPTS,
-				PhashBacklogService.UNSUPPORTED_PREFIX)).thenReturn(2L);
+				DuplicateConstants.ALGORITHM, PhashBacklogService.MAX_ATTEMPTS)).thenReturn(2L);
 		when(mediaFingerprintRepository.countPendingPhotos(PhashBacklogService.KIND, DuplicateConstants.ALGORITHM,
 				PhashBacklogService.MAX_ATTEMPTS)).thenReturn(5L);
 
@@ -231,7 +231,7 @@ class PhashBacklogServiceTest {
 	@Test
 	void resetFailuresClearsTheFailureRows() {
 		when(fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM, PhashBacklogService.UNSUPPORTED_PREFIX)).thenReturn(4L);
+				DuplicateConstants.ALGORITHM, FingerprintFailureReason.UNKNOWN)).thenReturn(4L);
 
 		Assertions.assertThat(service().resetFailures()).isEqualTo(4L);
 	}
@@ -258,16 +258,17 @@ class PhashBacklogServiceTest {
 		verify(fingerprintFailureRepository).save(failure.capture());
 
 		Assertions.assertThat(failure.getValue().getAttempts()).isEqualTo(PhashBacklogService.MAX_ATTEMPTS);
-		Assertions.assertThat(failure.getValue().getLastError()).startsWith(PhashBacklogService.UNSUPPORTED_PREFIX);
+		Assertions.assertThat(failure.getValue().getReason()).isEqualTo(FingerprintFailureReason.UNSUPPORTED_FORMAT);
 	}
 
 	@Test
 	void failuresReturnsOnlyTheExhaustedRowsWithTheirPaths() {
 		List<FingerprintFailureDetail> expected = List
-				.of(new FingerprintFailureDetail("C:/photos/broken.jpg", "decode failed"));
+				.of(new FingerprintFailureDetail("C:/photos/broken.jpg", FingerprintFailureReason.DECODER_REFUSED,
+						"decode failed"));
 
 		when(fingerprintFailureRepository.findExhaustedWithPath(PhashBacklogService.KIND, DuplicateConstants.ALGORITHM,
-				PhashBacklogService.MAX_ATTEMPTS, PhashBacklogService.UNSUPPORTED_PREFIX)).thenReturn(expected);
+				PhashBacklogService.MAX_ATTEMPTS)).thenReturn(expected);
 
 		Assertions.assertThat(service().failures()).isSameAs(expected);
 	}

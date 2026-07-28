@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BatchCounts;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
@@ -44,7 +45,6 @@ class FingerprintBacklogEngine {
 	private static final String CONVERSION = "CONVERSION";
 
 	static final int BATCH_SIZE = 200;
-	static final String UNSUPPORTED_PREFIX = "[unsupported] ";
 	private static final int MAX_ERROR_LENGTH = 500;
 	/**
 	 * How many items are written at a time. Small on purpose: it is the amount of
@@ -127,7 +127,7 @@ class FingerprintBacklogEngine {
 	/** Manual retry: exhausted (retryable) failures return to the pending queue. */
 	public long resetFailures(FingerprintProducer<?, ?> producer) {
 		return fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(producer.kind(), producer.algorithm(),
-				UNSUPPORTED_PREFIX);
+				FingerprintFailureReason.UNKNOWN);
 	}
 
 	/** Clears only this kind/algorithm's derived fingerprints and failures. */
@@ -230,10 +230,14 @@ class FingerprintBacklogEngine {
 				.orElseGet(() -> FingerprintFailure.builder().catalogFileId(catalogFileId).kind(producer.kind())
 						.algorithm(producer.algorithm()).attempts(0).build());
 
-		boolean unsupported = producer.unsupported(error);
+		FingerprintFailureReason reason = producer.reason(item, error);
 
-		failure.setAttempts(unsupported ? producer.maxAttempts() : failure.getAttempts() + 1);
-		failure.setLastError((unsupported ? UNSUPPORTED_PREFIX : "") + truncate(error));
+		// A terminal reason spends every attempt at once: the file will not decode on
+		// the next pass either, and letting attempts climb only means decoding it again
+		// on every run.
+		failure.setAttempts(reason.terminal() ? producer.maxAttempts() : failure.getAttempts() + 1);
+		failure.setReason(reason);
+		failure.setLastError(truncate(error));
 		failure.setLastAttemptAt(LocalDateTime.now(clock));
 
 		fingerprintFailureRepository.save(failure);

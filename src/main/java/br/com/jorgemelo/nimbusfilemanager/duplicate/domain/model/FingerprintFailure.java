@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model;
 
 import java.time.LocalDateTime;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,6 +54,11 @@ public class FingerprintFailure {
 	@Column(name = "attempts", nullable = false)
 	@Builder.Default
 	private Integer attempts = 0;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "reason", nullable = false, length = 30)
+	@Builder.Default
+	private FingerprintFailureReason reason = FingerprintFailureReason.UNKNOWN;
 
 	@Column(name = "last_error")
 	private String lastError;

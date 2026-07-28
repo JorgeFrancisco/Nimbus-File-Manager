@@ -16,6 +16,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
@@ -27,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoF
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
  * Video half of the fingerprint backlog: the {@link FingerprintProducer} that
@@ -121,14 +123,12 @@ public class VideoFingerprintBacklogService
 
 	@Override
 	public long countExhaustedFailures() {
-		return fingerprintFailureRepository.countExhaustedVideoFailures(kind(), algorithm(), MAX_ATTEMPTS,
-				FingerprintBacklogEngine.UNSUPPORTED_PREFIX);
+		return fingerprintFailureRepository.countExhaustedVideoFailures(kind(), algorithm(), MAX_ATTEMPTS);
 	}
 
 	@Override
 	public List<FingerprintFailureDetail> exhaustedFailures() {
-		return fingerprintFailureRepository.findExhaustedVideoWithPath(kind(), algorithm(), MAX_ATTEMPTS,
-				FingerprintBacklogEngine.UNSUPPORTED_PREFIX);
+		return fingerprintFailureRepository.findExhaustedVideoWithPath(kind(), algorithm(), MAX_ATTEMPTS);
 	}
 
 	@Override
@@ -157,8 +157,12 @@ public class VideoFingerprintBacklogService
 	}
 
 	@Override
-	public boolean unsupported(Throwable error) {
-		return error instanceof UnsupportedVideoFingerprintException;
+	public FingerprintFailureReason reason(PendingVideo pending, Throwable error) {
+		if (error instanceof UnsupportedVideoFingerprintException) {
+			return FingerprintFailureReason.UNSUPPORTED_FORMAT;
+		}
+
+		return FingerprintFailureClassifier.classify(PathUtils.normalizePath(pending.path()));
 	}
 
 	private List<PendingVideo> deduplicate(List<PendingVideo> rows) {
