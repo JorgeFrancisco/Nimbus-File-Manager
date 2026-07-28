@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
@@ -27,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -57,14 +59,16 @@ public class QuarantineService extends LocalizedComponent {
 	private final DuplicateDeletionPersistence duplicateDeletionPersistence;
 	private final SecureFileMove secureFileMove;
 	private final OperationLockService operationLockService;
+	private final QuarantineRestoreLog restoreLog;
 
 	public QuarantineService(MovementRepository movementRepository,
 			DuplicateDeletionPersistence duplicateDeletionPersistence, SecureFileMove secureFileMove,
-			OperationLockService operationLockService) {
+			OperationLockService operationLockService, QuarantineRestoreLog restoreLog) {
 		this.movementRepository = movementRepository;
 		this.duplicateDeletionPersistence = duplicateDeletionPersistence;
 		this.secureFileMove = secureFileMove;
 		this.operationLockService = operationLockService;
+		this.restoreLog = restoreLog;
 	}
 
 	/** One page of files currently held in quarantine, newest deletion first. */
@@ -75,15 +79,24 @@ public class QuarantineService extends LocalizedComponent {
 	}
 
 	/**
-	 * Restores a single quarantined file according to {@code options}. Never
-	 * overwrites an existing file. Deliberately not {@code @Transactional}: the
-	 * physical move happens here and only the catalog write
-	 * ({@link DuplicateDeletionPersistence#applyRestore}) needs a transaction, so a
-	 * catalog failure rolls back on its own without poisoning an outer transaction
-	 * - the same pattern {@code DuplicateDeletionService} uses for the forward
-	 * move.
+	 * Restores a single quarantined file according to {@code options}, as an
+	 * operation of its own - a restore moves user files back into the library, so
+	 * it gets an execution like every other operation. Never overwrites an
+	 * existing file.
 	 */
 	public QuarantineRestoreResult restore(UUID movementId, QuarantineRestoreOptions options) {
+		return restoreAll(List.of(movementId), options).items().getFirst();
+	}
+
+	/**
+	 * Restores one file inside a running restore execution. Deliberately not
+	 * {@code @Transactional}: the physical move happens here and only the catalog
+	 * write ({@link DuplicateDeletionPersistence#applyRestore}) needs a
+	 * transaction, so a catalog failure rolls back on its own without poisoning an
+	 * outer transaction - the same pattern {@code DuplicateDeletionService} uses
+	 * for the forward move.
+	 */
+	private QuarantineRestoreResult restoreOne(Execution execution, UUID movementId, QuarantineRestoreOptions options) {
 		QuarantineRestoreOptions effective = options == null ? QuarantineRestoreOptions.defaults() : options;
 
 		Movement movement = movementRepository.findByPublicId(movementId).orElse(null);
@@ -105,6 +118,9 @@ public class QuarantineService extends LocalizedComponent {
 		Path original = PathUtils.normalizePath(movement.getSourcePath());
 
 		if (!Files.exists(quarantine)) {
+			restoreLog.recordFailure(execution, quarantine, ExecutionErrorType.FILE_NOT_FOUND,
+					message("backend.quarantine.fileMissing"));
+
 			return result(movementId, RestoreOutcome.MISSING_IN_QUARANTINE, message("backend.quarantine.fileMissing"),
 					null);
 		}
@@ -113,6 +129,9 @@ public class QuarantineService extends LocalizedComponent {
 			// Same rule as the forward path (DuplicateDeletionService): never follow a
 			// symlink/junction/.lnk. If the quarantine copy was swapped for a link, refuse
 			// instead of "restoring" the link into the library.
+			restoreLog.recordFailure(execution, quarantine, ExecutionErrorType.UNKNOWN,
+					message("backend.quarantine.notPhysical"));
+
 			return result(movementId, RestoreOutcome.ERROR, message("backend.quarantine.notPhysical"), null);
 		}
 
@@ -140,7 +159,7 @@ public class QuarantineService extends LocalizedComponent {
 			}
 		}
 
-		return moveBack(movement, quarantine, destination);
+		return moveBack(execution, movement, quarantine, destination);
 	}
 
 	/**
@@ -150,10 +169,30 @@ public class QuarantineService extends LocalizedComponent {
 	 * by one on the screen.
 	 */
 	public QuarantineRestoreBatchResult restoreMany(List<UUID> movementIds) {
-		return restoreAll(movementIds == null ? List.of() : movementIds);
+		return restoreAll(movementIds == null ? List.of() : movementIds, QuarantineRestoreOptions.defaults());
 	}
 
-	private QuarantineRestoreBatchResult restoreAll(List<UUID> movementIds) {
+	/**
+	 * The one restore loop, shared by the single button and the batch: both are a
+	 * user action that moves files, so both open one execution and close it with
+	 * what happened. Items that only need a decision (a name collision, a missing
+	 * origin folder) are counted apart from failures - they stay in quarantine and
+	 * are not errors.
+	 */
+	private QuarantineRestoreBatchResult restoreAll(List<UUID> movementIds, QuarantineRestoreOptions options) {
+		Execution execution = restoreLog.start(movementIds.size());
+
+		try {
+			return restoreEach(execution, movementIds, options);
+		} catch (RuntimeException restoreError) {
+			restoreLog.fail(execution, movementIds.size(), message("backend.quarantine.restoreFailed"));
+
+			throw restoreError;
+		}
+	}
+
+	private QuarantineRestoreBatchResult restoreEach(Execution execution, List<UUID> movementIds,
+			QuarantineRestoreOptions options) {
 		List<QuarantineRestoreResult> items = new ArrayList<>();
 
 		int restored = 0;
@@ -163,7 +202,7 @@ public class QuarantineService extends LocalizedComponent {
 		int errors = 0;
 
 		for (UUID movementId : movementIds) {
-			QuarantineRestoreResult item = restore(movementId, QuarantineRestoreOptions.defaults());
+			QuarantineRestoreResult item = restoreOne(execution, movementId, options);
 
 			items.add(item);
 
@@ -178,21 +217,26 @@ public class QuarantineService extends LocalizedComponent {
 
 		String message = message("backend.quarantine.batchCompleted", restored, conflicts, originMissing, errors);
 
+		restoreLog.finish(execution, movementIds.size(), restored, skipped + conflicts + originMissing, errors,
+				message);
+
 		return new QuarantineRestoreBatchResult(errors == 0, movementIds.size(), restored, skipped, conflicts,
 				originMissing, errors, message, items);
 	}
 
-	private QuarantineRestoreResult moveBack(Movement movement, Path quarantine, Path destination) {
+	private QuarantineRestoreResult moveBack(Execution execution, Movement movement, Path quarantine,
+			Path destination) {
 		UUID movementId = movement.getPublicId();
 
-		try (var _ = operationLockService.acquire(ExecutionType.DEDUP_DELETE, quarantine, destination)) {
-			QuarantineRestoreResult moveError = restoreSecureMove(movementId, quarantine, destination);
+		try (var _ = operationLockService.acquire(ExecutionType.QUARANTINE_RESTORE, quarantine, destination)) {
+			QuarantineRestoreResult moveError = restoreSecureMove(execution, movementId, quarantine, destination);
 
 			if (moveError != null) {
 				return moveError;
 			}
 
-			QuarantineRestoreResult catalogError = restoreCatalog(movement, movementId, quarantine, destination);
+			QuarantineRestoreResult catalogError = restoreCatalog(execution, movement, movementId, quarantine,
+					destination);
 
 			if (catalogError != null) {
 				return catalogError;
@@ -201,11 +245,15 @@ public class QuarantineService extends LocalizedComponent {
 			return result(movementId, RestoreOutcome.RESTORED, message("backend.quarantine.restored"),
 					PathUtils.normalize(destination));
 		} catch (OperationLockException _) {
+			restoreLog.recordFailure(execution, quarantine, ExecutionErrorType.ACCESS_DENIED,
+					message("backend.quarantine.pathLocked"));
+
 			return result(movementId, RestoreOutcome.LOCKED, message("backend.quarantine.pathLocked"), null);
 		}
 	}
 
-	private QuarantineRestoreResult restoreSecureMove(UUID movementId, Path quarantine, Path destination) {
+	private QuarantineRestoreResult restoreSecureMove(Execution execution, UUID movementId, Path quarantine,
+			Path destination) {
 		try {
 			// Same secure move as everywhere else: SHA-256 baseline + byte-for-byte verify.
 			secureFileMove.move(quarantine, destination, false);
@@ -226,15 +274,18 @@ public class QuarantineService extends LocalizedComponent {
 				log.error("Quarantine restore could not move {} back to {}", quarantine, destination, moveError);
 			}
 
+			restoreLog.recordFailure(execution, quarantine, ExecutionErrorType.MOVE_ERROR,
+					message("backend.quarantine.moveFailed", moveError.getMessage()));
+
 			return result(movementId, RestoreOutcome.ERROR,
 					message("backend.quarantine.moveFailed", moveError.getMessage()), null);
 		}
 	}
 
-	private QuarantineRestoreResult restoreCatalog(Movement movement, UUID movementId, Path quarantine,
-			Path destination) {
+	private QuarantineRestoreResult restoreCatalog(Execution execution, Movement movement, UUID movementId,
+			Path quarantine, Path destination) {
 		try {
-			duplicateDeletionPersistence.applyRestore(movement, destination);
+			duplicateDeletionPersistence.applyRestore(movement, destination, execution);
 
 			return null;
 		} catch (Exception catalogError) {
@@ -249,6 +300,8 @@ public class QuarantineService extends LocalizedComponent {
 								+ "back; the restored file is now outside the catalog and needs manual recovery",
 						quarantine, destination, catalogError);
 			}
+
+			restoreLog.recordFailure(execution, quarantine, catalogError);
 
 			return result(movementId, RestoreOutcome.ERROR, message("backend.quarantine.catalogFailed"), null);
 		}

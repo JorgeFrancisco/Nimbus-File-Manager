@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -10,10 +11,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -25,10 +26,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
@@ -40,6 +41,7 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineR
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.ConflictResolution;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.RestoreOutcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
@@ -55,9 +57,10 @@ class QuarantineServiceTest {
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
+	private final QuarantineRestoreLog restoreLog = mock(QuarantineRestoreLog.class);
 	private final QuarantineService service = new QuarantineService(movementRepository, persistence,
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
-			new OperationLockService());
+			new OperationLockService(), restoreLog);
 
 	@Test
 	void listsQuarantinedFilesWithLiveOriginAndConflictFlags(@TempDir Path tmp) throws Exception {
@@ -98,7 +101,7 @@ class QuarantineServiceTest {
 		Assertions.assertThat(Files.exists(original)).isTrue();
 		Assertions.assertThat(Files.exists(quarantine)).isFalse();
 
-		verify(persistence).applyRestore(eq(movement), any());
+		verify(persistence).applyRestore(eq(movement), any(), any());
 	}
 
 	@Test
@@ -117,7 +120,7 @@ class QuarantineServiceTest {
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 		Assertions.assertThat(Files.readString(original)).isEqualTo("existing");
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -153,7 +156,7 @@ class QuarantineServiceTest {
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ORIGIN_MISSING.name());
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -187,7 +190,7 @@ class QuarantineServiceTest {
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -209,7 +212,7 @@ class QuarantineServiceTest {
 		// library.
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -262,7 +265,7 @@ class QuarantineServiceTest {
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -280,7 +283,7 @@ class QuarantineServiceTest {
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.SKIPPED.name());
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -292,7 +295,7 @@ class QuarantineServiceTest {
 		Movement movement = quarantineMovement(original, quarantine);
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-		doThrow(new IllegalStateException("db down")).when(persistence).applyRestore(any(), any());
+		doThrow(new IllegalStateException("db down")).when(persistence).applyRestore(any(), any(), any());
 
 		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
@@ -315,7 +318,7 @@ class QuarantineServiceTest {
 		doAnswer(_ -> {
 			Files.writeString(quarantine, "blocker");
 			throw new IllegalStateException("db down");
-		}).when(persistence).applyRestore(any(), any());
+		}).when(persistence).applyRestore(any(), any(), any());
 
 		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
@@ -341,7 +344,8 @@ class QuarantineServiceTest {
 				.thenThrow(new OperationLockException("busy"));
 
 		QuarantineService locked = new QuarantineService(movementRepository, persistence,
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService);
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService,
+				restoreLog);
 
 		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
@@ -363,13 +367,13 @@ class QuarantineServiceTest {
 		doThrow(new IOException("disk full")).when(failingMove).move(any(), any(), anyBoolean());
 
 		QuarantineService failing = new QuarantineService(movementRepository, persistence, failingMove,
-				new OperationLockService());
+				new OperationLockService(), restoreLog);
 
 		QuarantineRestoreResult result = failing.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 
-		verify(persistence, never()).applyRestore(any(), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
@@ -511,7 +515,8 @@ class QuarantineServiceTest {
 		when(lockService.acquire(any(), any(Path[].class))).thenThrow(new OperationLockException("busy"));
 
 		QuarantineService locked = new QuarantineService(movementRepository, persistence,
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService);
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService,
+				restoreLog);
 
 		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
@@ -545,7 +550,7 @@ class QuarantineServiceTest {
 		when(failing.rollback(any(), any())).thenReturn(false);
 
 		QuarantineService orphaning = new QuarantineService(movementRepository, persistence, failing,
-				new OperationLockService());
+				new OperationLockService(), restoreLog);
 
 		QuarantineRestoreResult result = orphaning.restore(movement.getPublicId(),
 				QuarantineRestoreOptions.defaults());
@@ -753,6 +758,91 @@ class QuarantineServiceTest {
 				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
 				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
 				.build();
+	}
+
+	/**
+	 * A restore moves user files back into the library, so it is an operation and
+	 * has to leave a row on the executions screen - opened before the first file
+	 * and closed with what happened.
+	 */
+	@Test
+	void aRestoreOpensAndClosesAnExecutionOfItsOwn(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		Execution restoreExecution = mock(Execution.class);
+
+		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+
+		verify(restoreLog).start(1);
+		verify(restoreLog).finish(eq(restoreExecution), eq(1), eq(1), eq(0), eq(0), any());
+		verify(persistence).applyRestore(eq(movement), any(), eq(restoreExecution));
+	}
+
+	/** An item waiting for a decision is not a failure, nor counted as one. */
+	@Test
+	void anItemWaitingForADecisionIsClosedAsSkippedNotAsAnError(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path original = Files.writeString(origin.resolve("a.jpg"), "existing");
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(original, quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+
+		verify(restoreLog).finish(any(), eq(1), eq(0), eq(1), eq(0), any());
+	}
+
+	/** The failure names the file, which is what the execution screen lists. */
+	@Test
+	void aFileMissingFromQuarantineIsRecordedAgainstTheRestore(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		Execution restoreExecution = mock(Execution.class);
+
+		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
+				QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
+
+		verify(restoreLog).recordFailure(eq(restoreExecution), eq(quarantine), eq(ExecutionErrorType.FILE_NOT_FOUND),
+				any());
+		verify(restoreLog).finish(eq(restoreExecution), eq(1), eq(0), eq(0), eq(1), any());
+	}
+
+	/**
+	 * A crash mid-loop must not leave the row open: the application reads an
+	 * unfinished execution as the operation currently running.
+	 */
+	@Test
+	void aCrashMidLoopStillClosesTheExecution() {
+		UUID movementId = UUID.randomUUID();
+
+		Execution restoreExecution = mock(Execution.class);
+
+		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(movementRepository.findByPublicId(movementId)).thenThrow(new IllegalStateException("db down"));
+
+		QuarantineRestoreOptions options = QuarantineRestoreOptions.defaults();
+
+		Assertions.assertThatThrownBy(() -> service.restore(movementId, options))
+				.isInstanceOf(IllegalStateException.class);
+
+		verify(restoreLog).fail(eq(restoreExecution), eq(1), any());
+		verify(restoreLog, never()).finish(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
 	}
 
 	private Path writeQuarantineCopy(Path tmp, String name, String content) throws Exception {

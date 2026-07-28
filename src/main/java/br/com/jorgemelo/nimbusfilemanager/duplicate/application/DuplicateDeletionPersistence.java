@@ -66,28 +66,17 @@ public class DuplicateDeletionPersistence {
 	}
 
 	/**
-	 * Restores the catalog to the original path and marks the file ACTIVE again
-	 * (undo).
-	 */
-	@Transactional
-	public void persistRestore(Execution execution, CatalogFile catalogFile, Path quarantine, Path original) {
-		repoint(catalogFile, original);
-
-		catalogFile.markActive();
-
-		catalogFileRepository.save(catalogFile);
-
-		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(quarantine)).targetPath(PathUtils.normalize(original))
-				.status(MovementStatus.MOVED).reason(MovementReason.NONE).build());
-	}
-
-	/**
 	 * Catalog side of an individual quarantine restore driven by the Quarentena
 	 * screen: repoints the file to {@code destination} (its original path, or an
 	 * alternate the user picked), re-activates it, and flips the existing
 	 * quarantine {@link Movement} to {@code UNDONE} so it leaves the quarantine
 	 * listing. All in one transaction; the physical move happens before this call.
+	 *
+	 * <p>
+	 * The quarantine row keeps the reason that put the file there and the reversal
+	 * is appended as a movement of its own, belonging to the restore - the same
+	 * append-only trail an organization undo writes, so a file quarantined and
+	 * restored more than once reads in order instead of being rewritten in place.
 	 *
 	 * <p>
 	 * The passed entities arrive detached and their {@code location} is lazy, so
@@ -96,7 +85,7 @@ public class DuplicateDeletionPersistence {
 	 * forward quarantine path loads files that way.
 	 */
 	@Transactional
-	public void applyRestore(Movement movement, Path destination) {
+	public void applyRestore(Movement movement, Path destination, Execution restoreExecution) {
 		CatalogFile detached = movement.getCatalogFile();
 
 		if (detached == null) {
@@ -118,6 +107,10 @@ public class DuplicateDeletionPersistence {
 		managed.setStatus(MovementStatus.UNDONE);
 
 		movementRepository.save(managed);
+
+		movementRepository.save(Movement.builder().execution(restoreExecution).catalogFile(catalogFile)
+				.sourcePath(managed.getTargetPath()).targetPath(PathUtils.normalize(destination))
+				.status(MovementStatus.MOVED).reason(MovementReason.RESTORED_FROM_QUARANTINE).build());
 	}
 
 	private void repoint(CatalogFile catalogFile, Path target) {

@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -24,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 class DuplicateDeletionPersistenceTest {
 
@@ -62,21 +64,6 @@ class DuplicateDeletionPersistenceTest {
 	}
 
 	@Test
-	void restoreRepointsCatalogMarksActiveAndRecordsMovement() {
-		CatalogFileLocation location = mock(CatalogFileLocation.class);
-		CatalogFile file = mock(CatalogFile.class);
-
-		when(file.getLocation()).thenReturn(location);
-
-		persistence.persistRestore(mock(Execution.class), file, quarantine, original);
-
-		verify(file).markActive();
-		verify(file).setFileName("a.jpg");
-		verify(catalogFileRepository).save(file);
-		verify(movementRepository).save(any(Movement.class));
-	}
-
-	@Test
 	void applyRestoreReloadsManagedEntitiesRepointsAndMarksMovementUndone() {
 		CatalogFileLocation location = mock(CatalogFileLocation.class);
 		CatalogFile managed = mock(CatalogFile.class);
@@ -97,12 +84,26 @@ class DuplicateDeletionPersistenceTest {
 		when(catalogFileRepository.findByPublicIdIn(List.of(filePublicId))).thenReturn(List.of(managed));
 		when(movementRepository.findById(7L)).thenReturn(Optional.of(movement));
 
-		persistence.applyRestore(movement, original);
+		when(movement.getTargetPath()).thenReturn(quarantine.toString());
+
+		Execution restoreExecution = mock(Execution.class);
+
+		ArgumentCaptor<Movement> recorded = ArgumentCaptor.forClass(Movement.class);
+
+		persistence.applyRestore(movement, original, restoreExecution);
 
 		verify(managed).markActive();
 		verify(managed).setFileName("a.jpg");
 		verify(catalogFileRepository).save(managed);
 		verify(movement).setStatus(MovementStatus.UNDONE);
-		verify(movementRepository).save(movement);
+		verify(movementRepository, times(2)).save(recorded.capture());
+
+		Movement reverse = recorded.getAllValues().get(1);
+
+		Assertions.assertThat(reverse.getExecution()).isSameAs(restoreExecution);
+		Assertions.assertThat(reverse.getSourcePath()).isEqualTo(quarantine.toString());
+		Assertions.assertThat(reverse.getTargetPath()).isEqualTo(PathUtils.normalize(original));
+		Assertions.assertThat(reverse.getStatus()).isEqualTo(MovementStatus.MOVED);
+		Assertions.assertThat(reverse.getReason()).isEqualTo(MovementReason.RESTORED_FROM_QUARANTINE);
 	}
 }

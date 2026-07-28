@@ -13,5 +13,8 @@ public enum MovementReason {
 	/** The reverse move an undo writes, so the trail reads in both directions. */
 	UNDONE_BY_USER,
 
+	/** The reverse move a quarantine restore writes, for the same reason. */
+	RESTORED_FROM_QUARANTINE,
+
 	USER_CANCELLED
 }
