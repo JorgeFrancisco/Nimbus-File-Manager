@@ -41,7 +41,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Metadata rebuild from the settings screen: pick a folder and which fields to reprocess (capture date, MIME, GPS, dimensions, camera, family classification), simulate first if you want, and follow progress with percentage and estimated time while it runs in the background. The same rebuild stays available as a synchronous REST call for scripted use.
 - Fully offline GPS reverse geocoding based on administrative boundaries (point-in-polygon), persisted as reusable media metadata.
 - Duplicate detection using SHA-256, plus visual similarity for photos and videos (perceptual hashing + SSIM).
-- Quarantine for removed media: files soft-deleted by duplicate resolution or left behind by a video conversion are moved into a single quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items. A restore runs as an execution of its own, naming any file it could not put back.
+- Quarantine for removed media: files soft-deleted by duplicate resolution or left behind by a video conversion are moved into a single quarantine area where they can be restored or permanently purged, with a scheduled purge for long-quarantined items. Restoring, purging and clearing missing records each run as an execution of their own, so the executions screen tells them apart and names any file that could not be handled.
 - Statistics and paginated media search.
 - Timeline screen for browsing media grouped by date.
 - Map screen plotting geo-referenced media: one aggregated pin per location (EXIF media at their real coordinate rounded to ~11 m, coordinate-less media at their administrative region's representative point), each opening the paginated media captured there.
@@ -1122,8 +1122,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2024 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.90% instruction, 90.22% branch, 97.39% line, 98.29% method, 100.00% class
+Tests:       2035 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      97.91% instruction, 90.31% branch, 97.40% line, 98.30% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,7 +1135,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.90% instruction, 90.22% branch, 97.39% line, 98.29% method, 100.00% class
+Floor:  97.91% instruction, 90.31% branch, 97.40% line, 98.30% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 

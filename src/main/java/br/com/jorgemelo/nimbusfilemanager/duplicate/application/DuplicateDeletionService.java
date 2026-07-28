@@ -114,6 +114,17 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			Path quarantineRoot, DeletionProgressCallback progress) {
 		Execution execution = startExecution(quarantineRoot);
 
+		try {
+			return deleteEach(execution, publicIds, files, quarantineRoot, progress);
+		} catch (RuntimeException deletionError) {
+			failExecution(execution, deletionError.getMessage());
+
+			throw deletionError;
+		}
+	}
+
+	private DuplicateDeletionResult deleteEach(Execution execution, Collection<UUID> publicIds, List<CatalogFile> files,
+			Path quarantineRoot, DeletionProgressCallback progress) {
 		// Selected ids that map to no active catalog entry never reach the loop below;
 		// count them as skipped up front so moved + skipped + errors always equals the
 		// number the user requested (publicIds.size()), and the progress total matches.
@@ -178,6 +189,20 @@ public class DuplicateDeletionService extends LocalizedComponent {
 				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
 
 		return executionRepository.save(execution);
+	}
+
+	/**
+	 * Closes a row whose loop died on the way: an execution still holding a null
+	 * {@code finishedAt} is read everywhere as the operation currently running.
+	 */
+	private void failExecution(Execution execution, String detail) {
+		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
+
+		managed.setStatus(ExecutionStatus.ERROR);
+		managed.setFinishedAt(LocalDateTime.now(clock));
+		managed.setStatusMessage(StatusMessage.raw(message("backend.execution.operationFailed", detail)));
+
+		executionRepository.save(managed);
 	}
 
 	private void finishExecution(Execution execution, ExecutionStatus status, long filesFound, long moved, long skipped,

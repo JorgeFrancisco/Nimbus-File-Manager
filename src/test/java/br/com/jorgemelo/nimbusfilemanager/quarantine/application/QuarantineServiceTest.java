@@ -57,7 +57,7 @@ class QuarantineServiceTest {
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
-	private final QuarantineRestoreLog restoreLog = mock(QuarantineRestoreLog.class);
+	private final QuarantineOperationLog restoreLog = mock(QuarantineOperationLog.class);
 	private final QuarantineService service = new QuarantineService(movementRepository, persistence,
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 			new OperationLockService(), restoreLog);
@@ -774,12 +774,12 @@ class QuarantineServiceTest {
 
 		Execution restoreExecution = mock(Execution.class);
 
-		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
 		service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
-		verify(restoreLog).start(1);
+		verify(restoreLog).startRestore(1);
 		verify(restoreLog).finish(eq(restoreExecution), eq(1), eq(1), eq(0), eq(0), any());
 		verify(persistence).applyRestore(eq(movement), any(), eq(restoreExecution));
 	}
@@ -810,7 +810,7 @@ class QuarantineServiceTest {
 
 		Execution restoreExecution = mock(Execution.class);
 
-		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
 		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
@@ -833,7 +833,7 @@ class QuarantineServiceTest {
 
 		Execution restoreExecution = mock(Execution.class);
 
-		when(restoreLog.start(1)).thenReturn(restoreExecution);
+		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
 		when(movementRepository.findByPublicId(movementId)).thenThrow(new IllegalStateException("db down"));
 
 		QuarantineRestoreOptions options = QuarantineRestoreOptions.defaults();
@@ -841,7 +841,7 @@ class QuarantineServiceTest {
 		Assertions.assertThatThrownBy(() -> service.restore(movementId, options))
 				.isInstanceOf(IllegalStateException.class);
 
-		verify(restoreLog).fail(eq(restoreExecution), eq(1), any());
+		verify(restoreLog).fail(eq(restoreExecution), any());
 		verify(restoreLog, never()).finish(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
 	}
 

@@ -37,6 +37,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBasel
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -373,6 +374,34 @@ class DuplicateDeletionServiceTest {
 
 		verify(executionRepository, never()).save(any());
 		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+	}
+
+	/**
+	 * A crash mid-loop must not leave the row open: an execution still holding a
+	 * null {@code finishedAt} is read everywhere as the operation currently
+	 * running, so it would show a phantom deletion on every screen.
+	 */
+	@Test
+	void aCrashMidDeletionStillClosesTheExecution(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path trash = tmp.resolve("trash");
+		Path original = Files.writeString(library.resolve("a.jpg"), "content");
+
+		configureTrash(trash);
+
+		Execution execution = stubExecution();
+
+		CatalogFile file = stubFile(10L, original, "a.jpg");
+
+		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		doThrow(new IllegalStateException("cache blew up")).when(similarityCaches).evictAll(any());
+
+		List<UUID> selection = List.of(UUID.randomUUID());
+
+		Assertions.assertThatThrownBy(() -> service.delete(selection)).isInstanceOf(IllegalStateException.class);
+
+		verify(execution).setStatus(ExecutionStatus.ERROR);
+		verify(execution).setFinishedAt(any());
 	}
 
 	private void configureTrash(Path trash) {

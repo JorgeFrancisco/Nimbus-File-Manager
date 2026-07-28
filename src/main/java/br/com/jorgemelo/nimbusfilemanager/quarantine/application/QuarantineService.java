@@ -59,11 +59,11 @@ public class QuarantineService extends LocalizedComponent {
 	private final DuplicateDeletionPersistence duplicateDeletionPersistence;
 	private final SecureFileMove secureFileMove;
 	private final OperationLockService operationLockService;
-	private final QuarantineRestoreLog restoreLog;
+	private final QuarantineOperationLog restoreLog;
 
 	public QuarantineService(MovementRepository movementRepository,
 			DuplicateDeletionPersistence duplicateDeletionPersistence, SecureFileMove secureFileMove,
-			OperationLockService operationLockService, QuarantineRestoreLog restoreLog) {
+			OperationLockService operationLockService, QuarantineOperationLog restoreLog) {
 		this.movementRepository = movementRepository;
 		this.duplicateDeletionPersistence = duplicateDeletionPersistence;
 		this.secureFileMove = secureFileMove;
@@ -180,12 +180,12 @@ public class QuarantineService extends LocalizedComponent {
 	 * are not errors.
 	 */
 	private QuarantineRestoreBatchResult restoreAll(List<UUID> movementIds, QuarantineRestoreOptions options) {
-		Execution execution = restoreLog.start(movementIds.size());
+		Execution execution = restoreLog.startRestore(movementIds.size());
 
 		try {
 			return restoreEach(execution, movementIds, options);
 		} catch (RuntimeException restoreError) {
-			restoreLog.fail(execution, movementIds.size(), message("backend.quarantine.restoreFailed"));
+			restoreLog.fail(execution, restoreError.getMessage());
 
 			throw restoreError;
 		}

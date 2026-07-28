@@ -26,6 +26,8 @@ public class ExecutionLabels extends LocalizedComponent {
 		case ORGANIZATION -> message("backend.execution.type.ORGANIZATION");
 		case UNDO -> message("backend.execution.type.UNDO");
 		case QUARANTINE_RESTORE -> message("backend.execution.type.QUARANTINE_RESTORE");
+		case QUARANTINE_PURGE -> message("backend.execution.type.QUARANTINE_PURGE");
+		case QUARANTINE_CLEANUP -> message("backend.execution.type.QUARANTINE_CLEANUP");
 		case DEDUP_DELETE -> message("backend.execution.type.DEDUP_DELETE");
 		case RECONCILE -> message("backend.execution.type.RECONCILE");
 		case CONVERSION -> message("backend.execution.type.CONVERSION");

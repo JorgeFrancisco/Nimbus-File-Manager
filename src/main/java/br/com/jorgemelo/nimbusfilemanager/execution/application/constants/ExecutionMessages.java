@@ -39,6 +39,7 @@ public final class ExecutionMessages {
 	public static final String ORGANIZATION_REJECTED = "backend.execution.organizationRejected";
 	public static final String ORGANIZATION_FAILED = "backend.execution.organizationFailed";
 	public static final String RECONCILE_REPAIRED = "backend.execution.reconcileRepaired";
+	public static final String OPERATION_FAILED = "backend.execution.operationFailed";
 
 	private ExecutionMessages() {
 	}
@@ -93,6 +94,14 @@ public final class ExecutionMessages {
 
 	public static ExecutionMessage errorProcessingFile(String path) {
 		return of(ERROR_PROCESSING_FILE, path);
+	}
+
+	/**
+	 * An operation whose loop died on the way. Shared by every operation that
+	 * opens an execution: what differs between them is the detail, not the fact.
+	 */
+	public static ExecutionMessage operationFailed(String detail) {
+		return of(OPERATION_FAILED, detail);
 	}
 
 	public static ExecutionMessage executionInterrupted() {

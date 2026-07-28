@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -31,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPur
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -40,8 +42,9 @@ class QuarantinePurgeServiceTest {
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final QuarantinePurgePersistence purgePersistence = mock(QuarantinePurgePersistence.class);
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
+	private final QuarantineOperationLog purgeLog = mock(QuarantineOperationLog.class);
 	private final QuarantinePurgeService service = new QuarantinePurgeService(movementRepository, purgePersistence,
-			new OperationLockService(), appSettingService, Clock.systemDefaultZone());
+			new OperationLockService(), appSettingService, purgeLog, Clock.systemDefaultZone());
 
 	@Test
 	void reportsTheConfiguredRetentionWindow() {
@@ -165,7 +168,7 @@ class QuarantinePurgeServiceTest {
 		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
 
 		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
-				appSettingService, Clock.systemDefaultZone());
+				appSettingService, purgeLog, Clock.systemDefaultZone());
 
 		overdueReturns(movement);
 
@@ -309,7 +312,7 @@ class QuarantinePurgeServiceTest {
 		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
 
 		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
-				appSettingService, Clock.systemDefaultZone());
+				appSettingService, purgeLog, Clock.systemDefaultZone());
 
 		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
@@ -364,6 +367,153 @@ class QuarantinePurgeServiceTest {
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.notRemoved());
 
 		Assertions.assertThat(service.cleanupAbsent()).isZero();
+	}
+
+	/**
+	 * Deleting a user's file for good is the most destructive thing the
+	 * application does; until now it left nothing but a log line.
+	 */
+	@Test
+	void aPurgeRunsAsAnExecutionOfItsOwn(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path file = Files.writeString(exec.resolve("10__a.jpg"), "old");
+
+		Movement movement = overdueMovement(1L, file);
+
+		Execution purgeExecution = mock(Execution.class);
+
+		when(purgeLog.startPurge(1)).thenReturn(purgeExecution);
+		overdueReturns(movement);
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
+
+		service.purgeOlderThan(90);
+
+		verify(purgeLog).startPurge(1);
+		verify(purgeLog).finish(eq(purgeExecution), eq(1), eq(1), eq(0), eq(0), any());
+	}
+
+	/**
+	 * A daily pass with nothing overdue would otherwise write a row saying "0
+	 * purged" every single day, burying the rows that record a real deletion.
+	 */
+	@Test
+	void aPassWithNothingOverdueOpensNoExecution() {
+		when(movementRepository.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+		QuarantinePurgeResult result = service.purgeOlderThan(90);
+
+		Assertions.assertThat(result.purged()).isZero();
+
+		verify(purgeLog, never()).startPurge(anyInt());
+	}
+
+	/** The file that could not be deleted is named, not just counted. */
+	@Test
+	void aFileThatCouldNotBeDeletedIsRecordedAgainstThePurge(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path folderInTheWayOfDeletion = Files.createDirectories(exec.resolve("10__a.jpg"));
+
+		Files.writeString(folderInTheWayOfDeletion.resolve("keeps-it-undeletable.txt"), "x");
+
+		Movement movement = overdueMovement(1L, folderInTheWayOfDeletion);
+
+		Execution purgeExecution = mock(Execution.class);
+
+		when(purgeLog.startPurge(1)).thenReturn(purgeExecution);
+		overdueReturns(movement);
+
+		QuarantinePurgeResult result = service.purgeOlderThan(90);
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+
+		verify(purgeLog).recordFailure(eq(purgeExecution), eq(folderInTheWayOfDeletion), any(IOException.class));
+		verify(purgeLog).finish(eq(purgeExecution), eq(1), eq(0), eq(0), eq(1), any());
+	}
+
+	/**
+	 * A crash mid-loop must not leave the row open: an unfinished execution is
+	 * read everywhere as the operation currently running.
+	 */
+	@Test
+	void aCrashMidPurgeStillClosesTheExecution(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path file = Files.writeString(exec.resolve("10__a.jpg"), "old");
+
+		Movement movement = overdueMovement(1L, file);
+
+		Execution purgeExecution = mock(Execution.class);
+
+		when(purgeLog.startPurge(1)).thenReturn(purgeExecution);
+		overdueReturns(movement);
+		when(purgePersistence.deleteMovement(1L)).thenThrow(new IllegalStateException("db down"));
+
+		Assertions.assertThatThrownBy(() -> service.purgeOlderThan(90)).isInstanceOf(IllegalStateException.class);
+
+		verify(purgeLog).fail(eq(purgeExecution), any());
+		verify(purgeLog, never()).finish(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
+	}
+
+	/**
+	 * Clearing records is the quieter half of the purge, but it still ends
+	 * quarantine entries for good, so it leaves the same kind of row.
+	 */
+	@Test
+	void clearingAbsentRecordsRunsAsAnExecutionOfItsOwn(@TempDir Path tmp) {
+		Path absent = tmp.resolve("trash").resolve("exec-1").resolve("10__gone.jpg");
+
+		Movement movement = overdueMovement(1L, absent);
+
+		Execution cleanupExecution = mock(Execution.class);
+
+		when(purgeLog.startAbsentCleanup(1)).thenReturn(cleanupExecution);
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
+
+		Assertions.assertThat(service.cleanupAbsent()).isEqualTo(1);
+
+		verify(purgeLog).finish(eq(cleanupExecution), eq(1), eq(1), eq(0), eq(0), any());
+	}
+
+	/** Nothing looks absent: no records end, so no row is written. */
+	@Test
+	void clearingWithNothingAbsentOpensNoExecution(@TempDir Path tmp) throws Exception {
+		Path exec = Files.createDirectories(tmp.resolve("trash").resolve("exec-1"));
+		Path present = Files.writeString(exec.resolve("11__present.jpg"), "here");
+
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
+				.thenReturn(new PageImpl<>(List.of(overdueMovement(1L, present))));
+
+		Assertions.assertThat(service.cleanupAbsent()).isZero();
+
+		verify(purgeLog, never()).startAbsentCleanup(anyInt());
+	}
+
+	/** An item kept under the lock is counted apart, and is not an error. */
+	@Test
+	void clearingCountsAKeptRecordApartFromAFailure(@TempDir Path tmp) {
+		Path absent = tmp.resolve("trash").resolve("exec-1").resolve("10__gone.jpg");
+
+		Movement movement = overdueMovement(1L, absent);
+
+		OperationLockService lockService = mock(OperationLockService.class);
+
+		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
+
+		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
+				appSettingService, purgeLog, Clock.systemDefaultZone());
+
+		Execution cleanupExecution = mock(Execution.class);
+
+		when(purgeLog.startAbsentCleanup(1)).thenReturn(cleanupExecution);
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
+
+		Assertions.assertThat(locked.cleanupAbsent()).isZero();
+
+		verify(purgeLog).finish(eq(cleanupExecution), eq(1), eq(0), eq(1), eq(0), any());
 	}
 
 	private Movement quarantined(long id, Path target) {

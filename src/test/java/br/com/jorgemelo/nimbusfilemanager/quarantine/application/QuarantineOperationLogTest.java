@@ -16,24 +16,27 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
-class QuarantineRestoreLogTest {
+class QuarantineOperationLogTest {
 
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
-	private final QuarantineRestoreLog log = new QuarantineRestoreLog(executionRepository, executionErrorService,
-			Clock.fixed(Instant.parse("2026-07-28T10:15:30Z"), ZoneOffset.UTC));
+	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
+	private final QuarantineOperationLog log = new QuarantineOperationLog(executionRepository, executionErrorService,
+			executionProgressService, Clock.fixed(Instant.parse("2026-07-28T10:15:30Z"), ZoneOffset.UTC));
 
 	@Test
 	void startOpensAnExecutionOfItsOwnType() {
 		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		Execution execution = log.start(3);
+		Execution execution = log.startRestore(3);
 
 		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_RESTORE);
 		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
@@ -65,21 +68,43 @@ class QuarantineRestoreLogTest {
 	}
 
 	/**
+	 * Clearing missing records deletes nothing from disk, so it must not read on
+	 * the executions screen as the purge that erases files.
+	 */
+	@Test
+	void startAbsentCleanupIsToldApartFromThePurgeThatErasesFiles() {
+		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Execution execution = log.startAbsentCleanup(4);
+
+		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_CLEANUP);
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(4);
+	}
+
+	@Test
+	void startPurgeOpensAnExecutionOfItsOwnType() {
+		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Execution execution = log.startPurge(9);
+
+		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_PURGE);
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(9);
+	}
+
+	/**
 	 * A row left with a null {@code finishedAt} is read as the operation currently
-	 * running, so a crashed restore has to close its own row or it haunts every
-	 * screen.
+	 * running, so a crashed operation has to close its own row or it haunts every
+	 * screen. The shared service does it in a transaction of its own, because the
+	 * caller's may be what just broke.
 	 */
 	@Test
 	void failClosesTheRowSoNoPhantomOperationIsLeftRunning() {
-		Execution execution = managedExecution();
+		Execution execution = mock(Execution.class);
 
-		execution.setFilesMoved(1);
+		log.fail(execution, "disk gone");
 
-		log.fail(execution, 4, "crashed");
-
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.ERROR);
-		Assertions.assertThat(execution.getFinishedAt()).isNotNull();
-		Assertions.assertThat(execution.getErrors()).isEqualTo(3);
+		verify(executionProgressService).fail(execution, ExecutionMessages.operationFailed("disk gone"));
 	}
 
 	@Test

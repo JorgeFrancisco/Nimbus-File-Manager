@@ -92,11 +92,17 @@ public class OrganizationUndoService extends LocalizedComponent {
 		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, lockedPaths(execution, movements))) {
 			Execution undoExecution = startUndoExecution(execution, movements.size());
 
-			OrganizationUndoResponse response = undoMovements(execution, undoExecution, movements);
+			try {
+				OrganizationUndoResponse response = undoMovements(execution, undoExecution, movements);
 
-			finishUndoExecution(undoExecution, response);
+				finishUndoExecution(undoExecution, response);
 
-			return response;
+				return response;
+			} catch (RuntimeException undoError) {
+				failUndoExecution(undoExecution, undoError.getMessage());
+
+				throw undoError;
+			}
 		}
 	}
 
@@ -245,6 +251,20 @@ public class OrganizationUndoService extends LocalizedComponent {
 				.sourcePath(undone.getTargetPath()).targetPath(undone.getSourcePath()).recursive(false)
 				.executeFlag(true).statusMessage(StatusMessage.raw(message("backend.undo.started", total)))
 				.filesFound(total).filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build());
+	}
+
+	/**
+	 * Closes a row whose loop died on the way: an execution still holding a null
+	 * {@code finishedAt} is read everywhere as the operation currently running.
+	 */
+	private void failUndoExecution(Execution undoExecution, String detail) {
+		Execution managed = executionRepository.findById(undoExecution.getId()).orElse(undoExecution);
+
+		managed.setStatus(ExecutionStatus.ERROR);
+		managed.setFinishedAt(LocalDateTime.now(clock));
+		managed.setStatusMessage(StatusMessage.raw(message("backend.execution.operationFailed", detail)));
+
+		executionRepository.save(managed);
 	}
 
 	private void finishUndoExecution(Execution undoExecution, OrganizationUndoResponse response) {

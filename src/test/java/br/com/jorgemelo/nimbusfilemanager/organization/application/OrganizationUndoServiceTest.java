@@ -443,6 +443,58 @@ class OrganizationUndoServiceTest {
 	}
 
 	/**
+	 * A crash mid-loop must not leave the row open: an execution still holding a
+	 * null {@code finishedAt} is read everywhere as the operation currently
+	 * running, so it would show a phantom undo on every screen.
+	 */
+	@Test
+	void aCrashMidUndoStillClosesTheExecution() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+		Path source = sourceFolder.resolve("photo.jpg");
+		Path target = Files.writeString(targetFolder.resolve("photo.jpg"), "content");
+
+		CatalogFile catalogFile = catalogFile(10L, target);
+
+		Movement movement = movement(100L, catalogFile, source, target, MovementStatus.MOVED);
+
+		Execution undoExecution = Execution.builder().id(2L).build();
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
+		when(executionRepository.findById(2L)).thenReturn(Optional.of(undoExecution));
+		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
+				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				.thenReturn(List.of(movement));
+
+		OrganizationPathValidator refusingValidator = mock(OrganizationPathValidator.class);
+
+		doThrow(new IllegalStateException("outside the workspace")).when(refusingValidator).validateAllowed(any(),
+				any());
+
+		stubUndoExecution();
+
+		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
+				catalogFileLocationRepository,
+				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				operationLockService, refusingValidator,
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
+
+		// Registered after the service, whose shared stub also answers save(any()): the
+		// undo row needs an id here, because closing it looks the row up by id.
+		when(executionRepository.save(any())).thenAnswer(invocation -> {
+			Execution saved = invocation.getArgument(0);
+
+			return saved == null || saved.getId() == null ? undoExecution : saved;
+		});
+
+		Assertions.assertThatThrownBy(() -> service.undo(1L)).isInstanceOf(IllegalStateException.class);
+
+		Assertions.assertThat(undoExecution.getStatus()).isEqualTo(ExecutionStatus.ERROR);
+		Assertions.assertThat(undoExecution.getFinishedAt()).isNotNull();
+	}
+
+	/**
 	 * The validation guards bail out before any path is resolved, so this variant
 	 * skips the workspace stubbing that would otherwise go unused.
 	 */

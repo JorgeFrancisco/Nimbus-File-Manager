@@ -162,6 +162,9 @@ class ExecutionMapperTest {
 		assertThat(typeLabelOf(ExecutionType.INVENTORY)).isEqualTo("Inventário");
 		assertThat(typeLabelOf(ExecutionType.ORGANIZATION)).isEqualTo("Organização");
 		assertThat(typeLabelOf(ExecutionType.UNDO)).isEqualTo("Desfazer");
+		assertThat(typeLabelOf(ExecutionType.QUARANTINE_RESTORE)).isEqualTo("Restauração da quarentena");
+		assertThat(typeLabelOf(ExecutionType.QUARANTINE_PURGE)).isEqualTo("Expurgo da quarentena");
+		assertThat(typeLabelOf(ExecutionType.QUARANTINE_CLEANUP)).isEqualTo("Limpeza de ausentes");
 		assertThat(typeLabelOf(ExecutionType.DEDUP_DELETE)).isEqualTo("Remoção de duplicados");
 		assertThat(typeLabelOf(ExecutionType.RECONCILE)).isEqualTo("Reconciliação");
 	}
