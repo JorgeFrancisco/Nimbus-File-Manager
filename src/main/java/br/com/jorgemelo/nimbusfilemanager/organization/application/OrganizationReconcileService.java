@@ -75,7 +75,11 @@ public class OrganizationReconcileService {
 		// Hold the tree lock for the whole apply so catalog mutations never race an
 		// organization/undo/dedup on the same paths. The watcher's blocked gate already
 		// skips this case; the lock closes the check-then-act window it cannot cover.
-		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source())) {
+		//
+		// Declared as RECONCILE, not ORGANIZATION: the type is what the refusal
+		// message names, so borrowing another operation's type told the user an
+		// organization was running when this background pass held the tree.
+		try (var _ = operationLockService.acquire(ExecutionType.RECONCILE, request.source())) {
 			Scan scan = scan(request);
 
 			return reconcileApplier.apply(scan);

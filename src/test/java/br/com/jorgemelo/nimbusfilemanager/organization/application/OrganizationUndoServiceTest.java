@@ -385,7 +385,7 @@ class OrganizationUndoServiceTest {
 
 		OperationLockService lockService = mock(OperationLockService.class);
 
-		when(lockService.acquire(eq(ExecutionType.ORGANIZATION), any(Path[].class)))
+		when(lockService.acquire(eq(ExecutionType.UNDO), any(Path[].class)))
 				.thenReturn(mock(OperationLock.class));
 
 		stubUndoExecution();
@@ -406,7 +406,7 @@ class OrganizationUndoServiceTest {
 
 		ArgumentCaptor<Path[]> lockedPaths = ArgumentCaptor.forClass(Path[].class);
 
-		verify(lockService).acquire(eq(ExecutionType.ORGANIZATION), lockedPaths.capture());
+		verify(lockService).acquire(eq(ExecutionType.UNDO), lockedPaths.capture());
 
 		Assertions.assertThat(lockedPaths.getValue())
 				.contains(PathUtils.normalizePath(original.toAbsolutePath().normalize().toString()));

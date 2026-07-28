@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR" th:lang="${#locale.toLanguageTag()}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: common(#{page.execution}, null)}"></head>
+<body>
+<div th:replace="~{fragments/layout :: app(~{::section}, #{page.execution})}">
+<section>
+	<!-- Voltar returns to the actual previous page (see app.js data-history-back); the th:href is only
+	     a fallback for when there is no history. This page is reached from the executions list and from
+	     the progress screen, so a fixed target would be wrong for one of them. -->
+	<a class="button secondary back-link" data-history-back
+			th:href="${execution.executionType() == 'ORGANIZATION'} ? @{/app/organization} : @{/app}">
+		<i class="bi bi-arrow-left"></i><span th:text="#{action.back}">Voltar</span></a>
+	<div class="panel">
+		<div class="grid">
+			<div><div class="metric" th:text="#{common.id}">ID</div><div class="value" th:text="${execution.executionId()}">1</div></div>
+			<div><div class="metric" th:text="#{common.type}">Tipo</div><div class="value" th:text="${execution.typeLabel()}">ORG</div></div>
+			<div><div class="metric" th:text="#{common.status}">Status</div><div class="value" th:text="${execution.statusLabel()}">OK</div></div>
+			<div><div class="metric" th:text="#{common.errors}">Erros</div><div class="value" th:text="${execution.errors()}">0</div></div>
+			<div><div class="metric" th:text="#{execution.processed}">Processados</div><div class="value" th:text="${execution.filesFound()}">0</div></div>
+			<div><div class="metric" th:text="#{execution.totalEstimated}">Total estimado</div><div class="value" th:text="${execution.totalExpected() != null ? execution.totalExpected() : '-'}">0</div></div>
+			<div><div class="metric" th:text="#{execution.percent}">Percentual</div><div class="value" th:text="${execution.percentComplete() != null ? #numbers.formatPercent(execution.percentComplete() / 100.0, 1, 2) : '-'}">-</div></div>
+			<div><div class="metric" th:text="#{common.start}">Início</div><div class="value" th:text="${execution.startedAtLabel()}">-</div></div>
+			<div><div class="metric" th:text="#{common.end}">Fim</div><div class="value" th:text="${execution.finishedAtLabel()}">-</div></div>
+		</div>
+		<p class="path" th:text="${execution.sourcePath()}">source</p>
+		<p class="path" th:text="${execution.targetPath()}">target</p>
+		<div class="alert section" th:if="${execution.message() != null and !execution.message().isEmpty()}"
+				th:classappend="${execution.status() == 'ERROR' or execution.status() == 'FINISHED_WITH_ERRORS' or execution.status() == 'INTERRUPTED'} ? 'error'
+						: (${execution.status() == 'REJECTED'} ? 'warn'
+						: (${execution.status() == 'CANCELLED'} ? '' : 'ok'))"
+				role="status" th:text="${execution.message()}">Detalhe da execução.</div>
+		<div class="execution-actions">
+			<!-- Reprocessar: an interrupted/failed/cancelled organization is only partially done (no
+			     mid-run resume exists), so this reopens the Organização form pre-filled with the same
+			     source/target to finish the remaining files with the user's usual settings. -->
+			<a class="button secondary"
+					th:if="${canReprocess}"
+					th:href="@{/app/organization(source=${execution.sourcePath()}, target=${execution.targetPath()})}">
+				<i class="bi bi-arrow-repeat"></i><span th:text="#{action.reprocess}">Reprocessar</span></a>
+			<form th:if="${canUndo}" th:action="@{/app/executions/{id}/undo(id=${execution.executionId()})}" method="post">
+				<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+				<button type="submit" th:attr="data-confirm=#{execution.undoConfirm}" th:text="#{action.undo}">Undo</button>
+			</form>
+		</div>
+	</div>
+	<div class="panel section" th:if="${undo != null}">
+		<h2 th:text="#{action.undo}">Undo</h2>
+		<p th:text="${undo.message()}">ok</p>
+	</div>
+	<div class="panel section" th:if="${movementSummary != null and !movementSummary.isEmpty()}">
+		<h2 th:text="#{execution.integritySummary}">Resumo de integridade</h2>
+		<div class="table-wrap">
+			<table class="table">
+				<thead><tr><th th:text="#{common.status}">Status</th><th th:text="#{common.reason}">Motivo</th><th th:text="#{common.quantity}">Quantidade</th></tr></thead>
+				<tbody>
+				<tr th:each="row : ${movementSummary}">
+					<td><span class="badge" th:classappend="${row.status() == 'MOVED' ? 'ok' : (row.status() == 'SKIPPED' ? 'warn' : ((row.status() == 'ERROR' or row.status() == 'UNDO_ERROR') ? 'error' : 'info'))}" th:text="${movementStatusLabels.get(row.status())}">MOVED</span></td>
+					<td th:text="${row.reason() != null ? movementReasonLabels.get(row.reason()) :'—'}">—</td>
+					<td th:text="${row.count()}">0</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+	<div class="panel section">
+		<h2 th:text="#{execution.movements}">Movimentos</h2>
+		<div class="table-wrap">
+			<table class="table">
+				<thead><tr><th th:text="#{common.id}">ID</th><th th:text="#{common.status}">Status</th><th th:text="#{common.origin}">Origem</th><th th:text="#{common.destination}">Destino</th><th th:text="#{common.reason}">Motivo</th></tr></thead>
+				<tbody>
+				<tr th:each="movement : ${movements}">
+					<td th:text="${movement.id()}">1</td>
+					<td th:text="${movementStatusLabels.get(movement.status())}">MOVED</td>
+					<td class="path" th:text="${movement.sourcePath()}">source</td>
+					<td class="path" th:text="${movement.targetPath()}">target</td>
+					<td th:text="${movement.reason() != null ? movementReasonLabels.get(movement.reason()) : '—'}">—</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+	<div class="panel section">
+		<h2 th:text="#{execution.errorsSection}">Erros</h2>
+		<div class="table-wrap">
+			<table class="table">
+				<thead><tr><th th:text="#{common.type}">Tipo</th><th th:text="#{common.path}">Path</th><th th:text="#{common.message}">Mensagem</th></tr></thead>
+				<tbody>
+				<tr th:each="error : ${errors}">
+					<td th:text="${executionErrorTypeLabels.get(error.errorType())}">UNKNOWN</td>
+					<td class="path" th:text="${error.path()}">path</td>
+					<td th:text="${error.errorMessage()}">msg</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</section>
+</div>
+</body>
+</html>

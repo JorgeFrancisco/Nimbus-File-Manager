@@ -89,7 +89,7 @@ public class OrganizationUndoService extends LocalizedComponent {
 		// its ORIGINAL path (movement.sourcePath), which lies outside it; without
 		// locking
 		// those, a concurrent organization on the same tree would race the restore.
-		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, lockedPaths(execution, movements))) {
+		try (var _ = operationLockService.acquire(ExecutionType.UNDO, lockedPaths(execution, movements))) {
 			Execution undoExecution = startUndoExecution(execution, movements.size());
 
 			try {
