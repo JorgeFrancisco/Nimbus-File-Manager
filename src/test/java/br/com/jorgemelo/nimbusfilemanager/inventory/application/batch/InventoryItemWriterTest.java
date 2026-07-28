@@ -21,7 +21,7 @@ import org.springframework.batch.item.Chunk;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryPersistenceResult;
@@ -41,7 +41,7 @@ class InventoryItemWriterTest {
 	private MetadataFacade metadataFacade;
 
 	@Mock
-	private AnalysisErrorService analysisErrorService;
+	private ExecutionErrorService executionErrorService;
 
 	@Mock
 	private ExecutionProgressService executionProgressService;
@@ -76,7 +76,7 @@ class InventoryItemWriterTest {
 
 		writer.write(new Chunk<>(List.of(analyzed, cached, failed)));
 
-		verify(analysisErrorService).save(failed, boom, execution);
+		verify(executionErrorService).save(failed, boom, execution);
 		verify(executionProgressService).updateProgress(execution, 3, 1, 1, 1, failed);
 	}
 
@@ -145,7 +145,7 @@ class InventoryItemWriterTest {
 	private InventoryItemWriter writer() {
 		InventoryItemWriterParameters parameters = new InventoryItemWriterParameters("C:/media", "true", "false", 5L);
 
-		return new InventoryItemWriter(inventoryPersistenceService, metadataFacade, analysisErrorService,
+		return new InventoryItemWriter(inventoryPersistenceService, metadataFacade, executionErrorService,
 				executionProgressService, executionRepository, executionCancellationService, parameters);
 	}
 }

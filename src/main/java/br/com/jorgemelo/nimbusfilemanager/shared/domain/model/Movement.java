@@ -69,9 +69,6 @@ public class Movement {
 	@Column(name = "reason", length = 30)
 	private MovementReason reason;
 
-	@Column(name = "error_message")
-	private String errorMessage;
-
 	@Column(name = "moved_at", nullable = false)
 	private LocalDateTime movedAt;
 

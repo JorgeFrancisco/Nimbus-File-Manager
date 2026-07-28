@@ -25,6 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
@@ -312,8 +314,16 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(Files.exists(target)).isTrue();
 		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
 		Assertions.assertThat(movement.getReason()).isEqualTo(MovementReason.IO_ERROR);
-		Assertions.assertThat(movement.getErrorMessage()).contains("database down");
+
+		// The reason an undo failed lives with every other per-file failure now.
+		ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+
+		verify(executionErrorService).save(any(), eq(ExecutionErrorType.MOVE_ERROR), message.capture(), any());
+
+		Assertions.assertThat(message.getValue()).contains("database down");
 	}
+
+	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
 
 	private OrganizationUndoService service() {
 		WorkspaceManager workspace = mock(WorkspaceManager.class);
@@ -321,7 +331,8 @@ class OrganizationUndoServiceTest {
 		when(workspace.getWorkspacePath()).thenReturn(tempDir);
 
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
-				movementRepository, operationLockService,
+				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				operationLockService,
 				new OrganizationPathValidator(mock(AppSettingService.class), workspace),
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
@@ -354,7 +365,8 @@ class OrganizationUndoServiceTest {
 				.thenReturn(mock(OperationLock.class));
 
 		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
-				catalogFileLocationRepository, movementRepository, lockService, mock(OrganizationPathValidator.class),
+				catalogFileLocationRepository,
+				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService), lockService, mock(OrganizationPathValidator.class),
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 
@@ -409,7 +421,8 @@ class OrganizationUndoServiceTest {
 	 */
 	private OrganizationUndoService serviceWithoutWorkspace() {
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
-				movementRepository, operationLockService, mock(OrganizationPathValidator.class),
+				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				operationLockService, mock(OrganizationPathValidator.class),
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}

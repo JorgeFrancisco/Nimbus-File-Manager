@@ -24,6 +24,8 @@ import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
@@ -55,9 +57,10 @@ class DuplicateDeletionServiceTest {
 	private final OperationLock operationLock = mock(OperationLock.class);
 	private final QuarantineIntakeService quarantineIntakeService = new QuarantineIntakeService(persistence,
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
+	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
 	private final DuplicateDeletionService service = new DuplicateDeletionService(catalogFileRepository,
 			executionRepository, quarantineIntakeService, similarityCaches, operationLockService,
-			Clock.systemDefaultZone());
+			executionErrorService, Clock.systemDefaultZone());
 
 	DuplicateDeletionServiceTest() {
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class))).thenReturn(operationLock);
@@ -143,6 +146,10 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(original)).isTrue();
+
+		// Counted and named: the execution screen used to show the number alone, so a
+		// deletion that failed gave no way to tell which file it was.
+		verify(executionErrorService).save(eq(original), eq(ExecutionErrorType.MOVE_ERROR), any(), any());
 	}
 
 	@Test
@@ -163,7 +170,7 @@ class DuplicateDeletionServiceTest {
 		DuplicateDeletionService integrityFailingService = new DuplicateDeletionService(catalogFileRepository,
 				executionRepository,
 				new QuarantineIntakeService(persistence, new SecureFileMove(verifier, pathRegistry), appSettingService),
-				similarityCaches, operationLockService, Clock.systemDefaultZone());
+				similarityCaches, operationLockService, executionErrorService, Clock.systemDefaultZone());
 
 		configureTrash(trash);
 

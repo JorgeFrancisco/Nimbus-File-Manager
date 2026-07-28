@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.AnalysisErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
@@ -36,7 +36,7 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 
 	private final InventoryPersistenceService inventoryPersistenceService;
 	private final MetadataFacade metadataFacade;
-	private final AnalysisErrorService analysisErrorService;
+	private final ExecutionErrorService executionErrorService;
 	private final ExecutionProgressService executionProgressService;
 	private final ExecutionRepository executionRepository;
 	private final ExecutionCancellationService executionCancellationService;
@@ -51,12 +51,12 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 	private final AtomicInteger errors = new AtomicInteger();
 
 	public InventoryItemWriter(InventoryPersistenceService inventoryPersistenceService, MetadataFacade metadataFacade,
-			AnalysisErrorService analysisErrorService, ExecutionProgressService executionProgressService,
+			ExecutionErrorService executionErrorService, ExecutionProgressService executionProgressService,
 			ExecutionRepository executionRepository, ExecutionCancellationService executionCancellationService,
 			InventoryItemWriterParameters parameters) {
 		this.inventoryPersistenceService = inventoryPersistenceService;
 		this.metadataFacade = metadataFacade;
-		this.analysisErrorService = analysisErrorService;
+		this.executionErrorService = executionErrorService;
 		this.executionProgressService = executionProgressService;
 		this.executionRepository = executionRepository;
 		this.executionCancellationService = executionCancellationService;
@@ -89,7 +89,7 @@ public class InventoryItemWriter implements ItemWriter<Path> {
 			lastFile = result.file();
 
 			if (result.failed()) {
-				analysisErrorService.save(result.file(), result.exception(), execution);
+				executionErrorService.save(result.file(), result.exception(), execution);
 
 				errors.incrementAndGet();
 

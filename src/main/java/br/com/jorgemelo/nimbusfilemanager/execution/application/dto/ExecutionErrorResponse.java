@@ -5,10 +5,10 @@ import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
-public record AnalysisErrorResponse(UUID id, UUID executionId, String path, String errorType, String errorMessage,
+public record ExecutionErrorResponse(UUID id, UUID executionId, String path, String errorType, String errorMessage,
 		LocalDateTime createdAt) {
 
-	public AnalysisErrorResponse(Long id, Long executionId, String path, String errorType, String errorMessage,
+	public ExecutionErrorResponse(Long id, Long executionId, String path, String errorType, String errorMessage,
 			LocalDateTime createdAt) {
 		this(UuidV7.fromLegacy(id), executionId == null ? null : UuidV7.fromLegacy(executionId), path, errorType,
 				errorMessage, createdAt);

@@ -11,10 +11,13 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 
+import org.junit.jupiter.api.io.TempDir;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionTotals;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -25,7 +28,24 @@ class ConversionExecutionRecorderTest {
 
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final Clock clock = Clock.fixed(Instant.parse("2026-07-25T10:15:30Z"), ZoneId.of("UTC"));
-	private final ConversionExecutionRecorder recorder = new ConversionExecutionRecorder(executionRepository, clock);
+	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
+	private final ConversionExecutionRecorder recorder = new ConversionExecutionRecorder(executionRepository,
+			executionErrorService, clock);
+
+	/**
+	 * A batch that fails one file used to leave the execution screen reporting "1
+	 * error" over an empty list, with no way to tell which of three hundred videos
+	 * it was.
+	 */
+	@Test
+	void recordFailureNamesTheFileAndTheReason(@TempDir Path tmp) {
+		Execution execution = Execution.builder().id(9L).build();
+		Path failed = tmp.resolve("clip.mp4");
+
+		recorder.recordFailure(execution, failed, "output missing");
+
+		verify(executionErrorService).save(failed, ExecutionErrorType.CONVERSION_ERROR, "output missing", execution);
+	}
 
 	@Test
 	void opensAConversionExecutionForTheFolderTheBatchRunsIn() {

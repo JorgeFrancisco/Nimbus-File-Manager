@@ -8,10 +8,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.AnalysisErrorRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionErrorRepository;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorFileDetailsResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
@@ -37,31 +37,31 @@ public class StatisticsService {
 	private final NimbusFileManagerProperties properties;
 
 	private final StatisticsRepository statisticsRepository;
-	private final AnalysisErrorRepository analysisErrorRepository;
+	private final ExecutionErrorRepository executionErrorRepository;
 	private final AppSettingService appSettingService;
 
 	@Autowired
-	public StatisticsService(StatisticsRepository statisticsRepository, AnalysisErrorRepository analysisErrorRepository,
+	public StatisticsService(StatisticsRepository statisticsRepository, ExecutionErrorRepository executionErrorRepository,
 			NimbusFileManagerProperties properties, AppSettingService appSettingService) {
 		this.statisticsRepository = statisticsRepository;
-		this.analysisErrorRepository = analysisErrorRepository;
+		this.executionErrorRepository = executionErrorRepository;
 		this.properties = properties;
 		this.appSettingService = appSettingService;
 	}
 
 	public List<ErrorStatisticsResponse> errors() {
-		return analysisErrorRepository.summarize();
+		return executionErrorRepository.summarize();
 	}
 
 	public List<ErrorStatisticsResponse> errorFiles() {
-		return analysisErrorRepository.summarizeDistinctFiles();
+		return executionErrorRepository.summarizeDistinctFiles();
 	}
 
-	public Page<ErrorFileDetailsResponse> errorFileDetails(AnalysisErrorType errorType, String path,
+	public Page<ErrorFileDetailsResponse> errorFileDetails(ExecutionErrorType errorType, String path,
 			Pageable pageable) {
 		Pageable page = PageUtils.capped(pageable, maxPageSize());
 
-		return analysisErrorRepository.findErrorFileDetails(errorType, TextUtils.blankToNull(path), page);
+		return executionErrorRepository.findErrorFileDetails(errorType, TextUtils.blankToNull(path), page);
 	}
 
 	public StatisticsSummaryResponse summary() {

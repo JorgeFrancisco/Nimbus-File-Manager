@@ -7,6 +7,8 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionTotals;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -26,10 +28,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 public class ConversionExecutionRecorder extends LocalizedComponent {
 
 	private final ExecutionRepository executionRepository;
+	private final ExecutionErrorService executionErrorService;
 	private final Clock clock;
 
-	public ConversionExecutionRecorder(ExecutionRepository executionRepository, Clock clock) {
+	public ConversionExecutionRecorder(ExecutionRepository executionRepository,
+			ExecutionErrorService executionErrorService, Clock clock) {
 		this.executionRepository = executionRepository;
+		this.executionErrorService = executionErrorService;
 		this.clock = clock;
 	}
 
@@ -43,6 +48,15 @@ public class ConversionExecutionRecorder extends LocalizedComponent {
 				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
 
 		return executionRepository.save(execution);
+	}
+
+	/**
+	 * Names the file a batch could not convert. The execution counter alone left
+	 * the screen reporting "1 error" over an empty list, with no way to tell which
+	 * of three hundred videos it was.
+	 */
+	public void recordFailure(Execution execution, Path file, String reason) {
+		executionErrorService.save(file, ExecutionErrorType.CONVERSION_ERROR, reason, execution);
 	}
 
 	public void finish(Execution execution, ConversionTotals totals, String message, boolean cancelled) {

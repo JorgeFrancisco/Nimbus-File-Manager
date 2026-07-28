@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorFileDetailsResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PagedResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.statistics.application.StatisticsService;
@@ -70,7 +70,7 @@ public class StatisticsController {
 
 	@GetMapping("/errors/files/details")
 	public PagedResponse<ErrorFileDetailsResponse> errorFileDetails(
-			@RequestParam(required = false) AnalysisErrorType errorType, @RequestParam(required = false) String path,
+			@RequestParam(required = false) ExecutionErrorType errorType, @RequestParam(required = false) String path,
 			Pageable pageable) {
 		return PagedResponse.from(statisticsService.errorFileDetails(errorType, path, pageable));
 	}

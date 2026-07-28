@@ -97,7 +97,7 @@ public class ExecutionWebController {
 	private void addLabels(Model model) {
 		model.addAttribute("movementStatusLabels", detailLabels.movementStatuses());
 		model.addAttribute("movementReasonLabels", detailLabels.movementReasons());
-		model.addAttribute("analysisErrorTypeLabels", detailLabels.analysisErrorTypes());
+		model.addAttribute("executionErrorTypeLabels", detailLabels.executionErrorTypes());
 	}
 
 	/**

@@ -21,10 +21,10 @@ import org.springframework.data.domain.PageRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.AnalysisError;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.AnalysisErrorRepository;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionError;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionErrorRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
@@ -53,7 +53,7 @@ class ExecutionQueryServiceTest {
 	private ExecutionStepRepository executionStepRepository;
 
 	@Mock
-	private AnalysisErrorRepository analysisErrorRepository;
+	private ExecutionErrorRepository executionErrorRepository;
 
 	@Mock
 	private MovementRepository movementRepository;
@@ -134,8 +134,8 @@ class ExecutionQueryServiceTest {
 				.path("C:/f.jpg").statusMessage(StatusMessage.raw("done")).filesFound(1).filesAnalyzed(1).cacheHits(0)
 				.errors(0).createdAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0)).build();
 
-		AnalysisError error = AnalysisError.builder().id(20L).execution(execution).path("C:/f.jpg")
-				.errorType(AnalysisErrorType.METADATA_ERROR).errorMessage("bad metadata")
+		ExecutionError error = ExecutionError.builder().id(20L).execution(execution).path("C:/f.jpg")
+				.errorType(ExecutionErrorType.METADATA_ERROR).errorMessage("bad metadata")
 				.createdAt(LocalDateTime.of(2024, Month.JANUARY, 1, 11, 0)).build();
 
 		Movement movement = Movement.builder().id(3L).execution(execution)
@@ -145,9 +145,9 @@ class ExecutionQueryServiceTest {
 
 		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(execution));
 		when(executionStepRepository.findByExecutionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(step));
-		when(analysisErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(error));
-		when(analysisErrorRepository.summarizeByExecutionId(1L))
-				.thenReturn(List.of(new AnalysisErrorSummaryResponse("METADATA_ERROR", 3)));
+		when(executionErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(error));
+		when(executionErrorRepository.summarizeByExecutionId(1L))
+				.thenReturn(List.of(new ExecutionErrorSummaryResponse("METADATA_ERROR", 3)));
 		when(movementRepository.findByExecutionIdOrderByIdAsc(1L)).thenReturn(List.of(movement));
 		when(movementRepository.summarizeByExecutionId(1L))
 				.thenReturn(List.of(new MovementSummaryResponse("MOVED", null, 900),
@@ -161,7 +161,7 @@ class ExecutionQueryServiceTest {
 		Assertions.assertThat(service.steps(publicId).getFirst().stepType())
 				.isEqualTo(ExecutionStepType.FINISHED.name());
 		Assertions.assertThat(service.errors(publicId).getFirst().errorType())
-				.isEqualTo(AnalysisErrorType.METADATA_ERROR.name());
+				.isEqualTo(ExecutionErrorType.METADATA_ERROR.name());
 		Assertions.assertThat(service.errorSummary(publicId)).hasSize(1);
 
 		var movementResponse = service.movements(publicId).getFirst();
@@ -194,15 +194,15 @@ class ExecutionQueryServiceTest {
 
 		Execution execution = execution(1L);
 
-		AnalysisError errorWithoutExecution = AnalysisError.builder().id(20L).execution(null).path("C:/x.jpg")
-				.errorType(AnalysisErrorType.METADATA_ERROR).errorMessage("m").createdAt(LocalDateTime.now()).build();
+		ExecutionError errorWithoutExecution = ExecutionError.builder().id(20L).execution(null).path("C:/x.jpg")
+				.errorType(ExecutionErrorType.METADATA_ERROR).errorMessage("m").createdAt(LocalDateTime.now()).build();
 
 		Movement movementWithoutCatalogFile = Movement.builder().id(3L).execution(execution).catalogFile(null)
 				.sourcePath("C:/a").targetPath("C:/b").status(MovementStatus.SKIPPED).reason(null)
 				.movedAt(LocalDateTime.now()).build();
 
 		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(execution));
-		when(analysisErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L))
+		when(executionErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L))
 				.thenReturn(List.of(errorWithoutExecution));
 		when(movementRepository.findByExecutionIdOrderByIdAsc(1L)).thenReturn(List.of(movementWithoutCatalogFile));
 
@@ -217,7 +217,7 @@ class ExecutionQueryServiceTest {
 	}
 
 	private ExecutionQueryService service() {
-		return new ExecutionQueryService(executionRepository, executionStepRepository, analysisErrorRepository,
+		return new ExecutionQueryService(executionRepository, executionStepRepository, executionErrorRepository,
 				movementRepository, executionMapper);
 	}
 

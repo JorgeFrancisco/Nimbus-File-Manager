@@ -9,11 +9,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.AnalysisErrorResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionErrorResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.MovementResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 
 @RestController
@@ -46,13 +46,13 @@ public class ExecutionController {
 
 	@GetMapping("/{id}/errors")
 	@Operation(summary = "Returns execution errors")
-	public List<AnalysisErrorResponse> errors(@PathVariable UUID id) {
+	public List<ExecutionErrorResponse> errors(@PathVariable UUID id) {
 		return executionQueryService.errors(id);
 	}
 
 	@GetMapping("/{id}/errors/summary")
 	@Operation(summary = "Returns execution errors summary")
-	public List<AnalysisErrorSummaryResponse> errorSummary(@PathVariable UUID id) {
+	public List<ExecutionErrorSummaryResponse> errorSummary(@PathVariable UUID id) {
 		return executionQueryService.errorSummary(id);
 	}
 

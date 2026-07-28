@@ -14,7 +14,9 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -47,16 +49,19 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	private final QuarantineIntakeService quarantineIntakeService;
 	private final SimilarityCaches similarityCaches;
 	private final OperationLockService operationLockService;
+	private final ExecutionErrorService executionErrorService;
 	private final Clock clock;
 
 	public DuplicateDeletionService(CatalogFileRepository catalogFileRepository,
 			ExecutionRepository executionRepository, QuarantineIntakeService quarantineIntakeService,
-			SimilarityCaches similarityCaches, OperationLockService operationLockService, Clock clock) {
+			SimilarityCaches similarityCaches, OperationLockService operationLockService,
+			ExecutionErrorService executionErrorService, Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.executionRepository = executionRepository;
 		this.quarantineIntakeService = quarantineIntakeService;
 		this.similarityCaches = similarityCaches;
 		this.operationLockService = operationLockService;
+		this.executionErrorService = executionErrorService;
 		this.clock = clock;
 	}
 
@@ -134,7 +139,14 @@ public class DuplicateDeletionService extends LocalizedComponent {
 				movedIds.add(file.getPublicId());
 			}
 			case SKIPPED -> skipped++;
-			case ERROR -> errors++;
+			case ERROR -> {
+				errors++;
+
+				// Counted and named: the execution screen used to report the failure without
+				// ever saying which file it belonged to.
+				executionErrorService.save(PathUtils.normalizePath(file.getFileKey()), ExecutionErrorType.MOVE_ERROR,
+						message("backend.duplicates.moveFailed"), execution);
+			}
 			}
 
 			progress.update(++processed, total);

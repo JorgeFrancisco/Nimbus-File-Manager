@@ -5,7 +5,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -50,14 +50,16 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 		};
 	}
 
-	public String analysisErrorType(AnalysisErrorType type) {
+	public String executionErrorType(ExecutionErrorType type) {
 		return switch (type) {
-		case CRC_ERROR -> message("backend.analysisError.type.crcError");
-		case ACCESS_DENIED -> message("backend.analysisError.type.accessDenied");
-		case FILE_NOT_FOUND -> message("backend.analysisError.type.fileNotFound");
-		case HASH_ERROR -> message("backend.analysisError.type.hashError");
-		case METADATA_ERROR -> message("backend.analysisError.type.metadataError");
-		case UNKNOWN -> message("backend.analysisError.type.unknown");
+		case CRC_ERROR -> message("backend.executionError.type.crcError");
+		case ACCESS_DENIED -> message("backend.executionError.type.accessDenied");
+		case FILE_NOT_FOUND -> message("backend.executionError.type.fileNotFound");
+		case HASH_ERROR -> message("backend.executionError.type.hashError");
+		case METADATA_ERROR -> message("backend.executionError.type.metadataError");
+		case CONVERSION_ERROR -> message("backend.executionError.type.conversionError");
+		case MOVE_ERROR -> message("backend.executionError.type.moveError");
+		case UNKNOWN -> message("backend.executionError.type.unknown");
 		};
 	}
 
@@ -84,11 +86,11 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 	}
 
 	/** Every analysis-error type label by enum name, for the errors table. */
-	public Map<String, String> analysisErrorTypes() {
+	public Map<String, String> executionErrorTypes() {
 		Map<String, String> labels = new HashMap<>();
 
-		for (AnalysisErrorType type : AnalysisErrorType.values()) {
-			labels.put(type.name(), analysisErrorType(type));
+		for (ExecutionErrorType type : ExecutionErrorType.values()) {
+			labels.put(type.name(), executionErrorType(type));
 		}
 
 		return labels;

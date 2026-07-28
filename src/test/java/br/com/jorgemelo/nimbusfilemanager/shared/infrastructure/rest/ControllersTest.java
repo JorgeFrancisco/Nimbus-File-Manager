@@ -32,7 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Vide
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.rest.DuplicateController;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.rest.ExecutionController;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.media.application.MediaSearchService;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaSearchCriteria;
 import br.com.jorgemelo.nimbusfilemanager.media.infrastructure.rest.MediaController;
@@ -126,7 +126,7 @@ class ControllersTest {
 		when(duplicateService.candidates(pageable, null)).thenReturn(new PageImpl<>(List.of()));
 		when(photoSimilarityService.groups(70, pageable)).thenReturn(new PageImpl<>(List.of()));
 		when(videoSimilarityService.groups(70, pageable)).thenReturn(new PageImpl<>(List.of()));
-		when(statisticsService.errorFileDetails(AnalysisErrorType.UNKNOWN, "path", pageable))
+		when(statisticsService.errorFileDetails(ExecutionErrorType.UNKNOWN, "path", pageable))
 				.thenReturn(new PageImpl<>(List.of()));
 
 		new MetadataController(metadataRebuildService).rebuild(metadataRequest);
@@ -162,7 +162,7 @@ class ControllersTest {
 		statisticsController.folders(20, FileType.VIDEO, "h265", "size");
 		statisticsController.errors();
 		statisticsController.errorFiles();
-		statisticsController.errorFileDetails(AnalysisErrorType.UNKNOWN, "path", pageable);
+		statisticsController.errorFileDetails(ExecutionErrorType.UNKNOWN, "path", pageable);
 
 		verify(metadataRebuildService).rebuild(metadataRequest);
 		verify(mediaSearchService).search(any(), any());
@@ -170,7 +170,7 @@ class ControllersTest {
 		verify(phashBacklogService).failures();
 		verify(executionQueryService).errorSummary(executionId);
 		verify(executionQueryService).movements(executionId);
-		verify(statisticsService).errorFileDetails(AnalysisErrorType.UNKNOWN, "path", pageable);
+		verify(statisticsService).errorFileDetails(ExecutionErrorType.UNKNOWN, "path", pageable);
 	}
 
 	@Test

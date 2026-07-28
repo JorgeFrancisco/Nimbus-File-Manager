@@ -16,9 +16,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.AnalysisErrorRepository;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionErrorRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
@@ -37,7 +37,7 @@ class StatisticsServiceTest {
 	private StatisticsRepository statisticsRepository;
 
 	@Mock
-	private AnalysisErrorRepository analysisErrorRepository;
+	private ExecutionErrorRepository executionErrorRepository;
 
 	@Mock
 	private AppSettingService appSettingService;
@@ -133,8 +133,8 @@ class StatisticsServiceTest {
 		List<ErrorStatisticsResponse> errors = List.of(new ErrorStatisticsResponse("UNKNOWN", 2));
 		List<ErrorStatisticsResponse> files = List.of(new ErrorStatisticsResponse("METADATA", 1));
 
-		when(analysisErrorRepository.summarize()).thenReturn(errors);
-		when(analysisErrorRepository.summarizeDistinctFiles()).thenReturn(files);
+		when(executionErrorRepository.summarize()).thenReturn(errors);
+		when(executionErrorRepository.summarizeDistinctFiles()).thenReturn(files);
 
 		Assertions.assertThat(service().errors()).isSameAs(errors);
 		Assertions.assertThat(service().errorFiles()).isSameAs(files);
@@ -144,12 +144,12 @@ class StatisticsServiceTest {
 	void errorQueriesShouldDelegateWithNormalizedPageAndPath() {
 		var pageable = PageRequest.of(2, 20, Sort.by("ignored"));
 
-		when(analysisErrorRepository.findErrorFileDetails(AnalysisErrorType.UNKNOWN, null, PageRequest.of(2, 20)))
+		when(executionErrorRepository.findErrorFileDetails(ExecutionErrorType.UNKNOWN, null, PageRequest.of(2, 20)))
 				.thenReturn(Page.empty());
 
-		service().errorFileDetails(AnalysisErrorType.UNKNOWN, "   ", pageable);
+		service().errorFileDetails(ExecutionErrorType.UNKNOWN, "   ", pageable);
 
-		verify(analysisErrorRepository).findErrorFileDetails(AnalysisErrorType.UNKNOWN, null, PageRequest.of(2, 20));
+		verify(executionErrorRepository).findErrorFileDetails(ExecutionErrorType.UNKNOWN, null, PageRequest.of(2, 20));
 	}
 
 	private StatisticsService service() {
@@ -163,6 +163,6 @@ class StatisticsServiceTest {
 		lenient().when(appSettingService.intValue(any(), any(Integer.class)))
 				.thenAnswer(invocation -> invocation.getArgument(1));
 
-		return new StatisticsService(statisticsRepository, analysisErrorRepository, properties, appSettingService);
+		return new StatisticsService(statisticsRepository, executionErrorRepository, properties, appSettingService);
 	}
 }

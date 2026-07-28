@@ -83,7 +83,6 @@ class OrganizationMovePersistenceTest {
 
 		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.MOVED);
 		Assertions.assertThat(movement.getReason()).isNull();
-		Assertions.assertThat(movement.getErrorMessage()).isNull();
 		Assertions.assertThat(movement.getExecution()).isSameAs(execution);
 		Assertions.assertThat(movement.getCatalogFile()).isSameAs(catalogFile);
 		Assertions.assertThat(movement.getSourcePath()).isEqualTo(PathUtils.normalize(source));

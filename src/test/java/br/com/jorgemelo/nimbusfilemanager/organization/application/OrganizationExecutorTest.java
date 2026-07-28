@@ -36,6 +36,8 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
@@ -426,7 +428,7 @@ class OrganizationExecutorTest {
 
 		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.ERROR);
 		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.DATABASE_UPDATE_FAILED);
-		Assertions.assertThat(movementCaptor.getValue().getErrorMessage()).contains("Physical rollback succeeded");
+		Assertions.assertThat(recordedError()).contains("Physical rollback succeeded");
 	}
 
 	@Test
@@ -472,7 +474,7 @@ class OrganizationExecutorTest {
 
 		verify(movementRepository).save(movementCaptor.capture());
 
-		Assertions.assertThat(movementCaptor.getValue().getErrorMessage()).contains("Physical rollback failed");
+		Assertions.assertThat(recordedError()).contains("Physical rollback failed");
 		Assertions.assertThat(Files.exists(target)).isTrue();
 	}
 
@@ -531,8 +533,7 @@ class OrganizationExecutorTest {
 
 		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.ERROR);
 		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.INTEGRITY_CHECK_FAILED);
-		Assertions.assertThat(movementCaptor.getValue().getErrorMessage()).contains("integrity check failed");
-		Assertions.assertThat(movementCaptor.getValue().getErrorMessage()).contains("Physical rollback succeeded");
+		Assertions.assertThat(recordedError()).contains("integrity check failed", "Physical rollback succeeded");
 	}
 
 	@Test
@@ -966,9 +967,31 @@ class OrganizationExecutorTest {
 
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier, OrganizationMovePersistence persistence) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
-				catalogFileLocationRepository, movementRepository, operationLockService, executionProgressService,
+				catalogFileLocationRepository, movementLog(), operationLockService, executionProgressService,
 				executionCancellationService, new SecureFileMove(verifier, pathRegistry), persistence,
 				new OrganizationPlanStore(), new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
+	}
+
+	/**
+	 * The real log over the mocked repository: the movement stubs keep working and
+	 * the error it records on a failure is exercised instead of stubbed away.
+	 */
+	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
+
+	/**
+	 * The reason a move failed lives with every other per-file failure now, so the
+	 * assertions read it from there instead of from the movement row.
+	 */
+	private String recordedError() {
+		ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+
+		verify(executionErrorService).save(any(), eq(ExecutionErrorType.MOVE_ERROR), message.capture(), any());
+
+		return message.getValue();
+	}
+
+	private OrganizationMovementLog movementLog() {
+		return new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService);
 	}
 
 	private OrganizationExecuteRequest dryRunRequest(Path source, Path target, boolean allowConflicts) {
@@ -979,7 +1002,7 @@ class OrganizationExecutorTest {
 
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
-				catalogFileLocationRepository, movementRepository, operationLockService, executionProgressService,
+				catalogFileLocationRepository, movementLog(), operationLockService, executionProgressService,
 				executionCancellationService, new SecureFileMove(verifier, pathRegistry),
 				new OrganizationMovePersistence(catalogFileRepository, catalogFileLocationRepository,
 						movementRepository,

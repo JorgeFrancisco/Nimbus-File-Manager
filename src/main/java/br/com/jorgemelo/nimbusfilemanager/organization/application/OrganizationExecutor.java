@@ -11,11 +11,11 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePaths;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePreparation;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
@@ -31,20 +31,17 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.NumberUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
-@Service
+@Slf4j @Service
 public class OrganizationExecutor {
 
 	private static final String SKIPPED_LABEL = ", skipped=";
@@ -56,7 +53,7 @@ public class OrganizationExecutor {
 	private final ExecutionRepository executionRepository;
 	private final CatalogFileRepository catalogFileRepository;
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
-	private final MovementRepository movementRepository;
+	private final OrganizationMovementLog organizationMovementLog;
 	private final OperationLockService operationLockService;
 	private final ExecutionProgressService executionProgressService;
 	private final ExecutionCancellationService executionCancellationService;
@@ -69,7 +66,7 @@ public class OrganizationExecutor {
 	@Autowired
 	public OrganizationExecutor(OrganizationPlanner organizationPlanner, ExecutionRepository executionRepository,
 			CatalogFileRepository catalogFileRepository, CatalogFileLocationRepository catalogFileLocationRepository,
-			MovementRepository movementRepository, OperationLockService operationLockService,
+			OrganizationMovementLog organizationMovementLog, OperationLockService operationLockService,
 			ExecutionProgressService executionProgressService,
 			ExecutionCancellationService executionCancellationService, SecureFileMove secureFileMove,
 			OrganizationMovePersistence organizationMovePersistence, OrganizationPlanStore organizationPlanStore,
@@ -78,7 +75,7 @@ public class OrganizationExecutor {
 		this.executionRepository = executionRepository;
 		this.catalogFileRepository = catalogFileRepository;
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
-		this.movementRepository = movementRepository;
+		this.organizationMovementLog = organizationMovementLog;
 		this.operationLockService = operationLockService;
 		this.executionProgressService = executionProgressService;
 		this.executionCancellationService = executionCancellationService;
@@ -337,8 +334,8 @@ public class OrganizationExecutor {
 		Path target = paths.target();
 
 		if (item.duplicateTarget()) {
-			recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.SKIPPED,
-					MovementReason.DUPLICATE_TARGET,
+			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
+					MovementStatus.SKIPPED, MovementReason.DUPLICATE_TARGET,
 					"Duplicate target inside the organization plan. File was not moved.", dryRun);
 
 			return MoveResult.SKIPPED;
@@ -352,7 +349,7 @@ public class OrganizationExecutor {
 		// (findById),
 		// just an audit row.
 		if (!PhysicalFilePolicy.isProcessable(source)) {
-			recordMovement(execution, (CatalogFile) null, paths, MovementStatus.SKIPPED,
+			organizationMovementLog.recordMovement(execution, (CatalogFile) null, paths, MovementStatus.SKIPPED,
 					MovementReason.SOURCE_NOT_PHYSICAL,
 					"Source is a symbolic link, junction or .lnk shortcut and is never moved.", dryRun);
 
@@ -361,31 +358,32 @@ public class OrganizationExecutor {
 
 		if (!Files.exists(source)) {
 			if (isAlreadyMoved(item, target, existing)) {
-				recordMovement(execution, existing, paths, MovementStatus.SKIPPED, MovementReason.ALREADY_MOVED,
+				organizationMovementLog.recordMovement(execution, existing, paths, MovementStatus.SKIPPED,
+						MovementReason.ALREADY_MOVED,
 						"Source file does not exist, but target file is already registered for this media file.",
 						dryRun);
 
 				return MoveResult.SKIPPED;
 			}
 
-			recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.ERROR,
+			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.ERROR,
 					MovementReason.SOURCE_NOT_FOUND, "Source file does not exist.", dryRun);
 
 			return MoveResult.ERROR;
 		}
 
 		if (existing != null && !Objects.equals(existing.getId(), item.internalCatalogFileId())) {
-			recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.SKIPPED,
-					MovementReason.TARGET_EXISTS,
+			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
+					MovementStatus.SKIPPED, MovementReason.TARGET_EXISTS,
 					"Target path is already registered in the database for another media file.", dryRun);
 
 			return MoveResult.SKIPPED;
 		}
 
 		if (Files.exists(target) && !request.overwriteExistingValue()) {
-			recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.SKIPPED,
-					MovementReason.OVERWRITE_DISABLED, "Target file already exists and overwriteExisting=false.",
-					dryRun);
+			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
+					MovementStatus.SKIPPED, MovementReason.OVERWRITE_DISABLED,
+					"Target file already exists and overwriteExisting=false.", dryRun);
 
 			return MoveResult.SKIPPED;
 		}
@@ -422,7 +420,7 @@ public class OrganizationExecutor {
 					item.internalCatalogFileId(), source, target, integrityFailure, rolledBack, e);
 		}
 
-		recordMovementSafely(execution, preparation == null ? null : preparation.catalogFile(),
+		organizationMovementLog.recordSafely(execution, preparation == null ? null : preparation.catalogFile(),
 				item.internalCatalogFileId(), paths, reason, message, dryRun);
 
 		return MoveResult.ERROR;
@@ -497,45 +495,6 @@ public class OrganizationExecutor {
 				});
 
 		return new MovePreparation(catalogFile, location);
-	}
-
-	private void recordMovement(Execution execution, Long catalogFileId, MovePaths paths, MovementStatus status,
-			MovementReason reason, String errorMessage, boolean dryRun) {
-		// Resolving the media file is a read; skip it too in dry-run so a simulation is
-		// pure - it changes nothing, and the movement row it would feed is not written.
-		if (dryRun) {
-			return;
-		}
-
-		CatalogFile catalogFile = catalogFileRepository.findById(catalogFileId).orElse(null);
-
-		recordMovement(execution, catalogFile, paths, status, reason, errorMessage, dryRun);
-	}
-
-	private void recordMovement(Execution execution, CatalogFile catalogFile, MovePaths paths, MovementStatus status,
-			MovementReason reason, String errorMessage, boolean dryRun) {
-		// Side-effect choke point: in dry-run no Movement row is ever persisted.
-		if (dryRun) {
-			return;
-		}
-
-		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(paths.source())).targetPath(PathUtils.normalize(paths.target()))
-				.status(status).reason(reason).errorMessage(errorMessage).build());
-	}
-
-	private void recordMovementSafely(Execution execution, CatalogFile catalogFile, Long catalogFileId, MovePaths paths,
-			MovementReason reason, String message, boolean dryRun) {
-		try {
-			if (catalogFile == null) {
-				recordMovement(execution, catalogFileId, paths, MovementStatus.ERROR, reason, message, dryRun);
-			} else {
-				recordMovement(execution, catalogFile, paths, MovementStatus.ERROR, reason, message, dryRun);
-			}
-		} catch (Exception e) {
-			log.error("Could not record movement error. catalogFileId={} source={} target={}", catalogFileId,
-					paths.source(), paths.target(), e);
-		}
 	}
 
 	private Execution startExecution(OrganizationExecuteRequest request) {

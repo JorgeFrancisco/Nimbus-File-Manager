@@ -15,7 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
  * Cleanup of the execution history (and its telemetry). Only finished
  * executions are removed - executions in progress are never deleted. The bulk
  * removal triggers the database FKs (movement / execution_step /
- * execution_phase on CASCADE; analysis_error on SET NULL), so no relevant
+ * execution_phase on CASCADE; execution_error on SET NULL), so no relevant
  * orphan is left behind.
  */
 @Service

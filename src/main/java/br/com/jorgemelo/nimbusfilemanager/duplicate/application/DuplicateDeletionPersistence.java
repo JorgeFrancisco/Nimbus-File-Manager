@@ -62,7 +62,7 @@ public class DuplicateDeletionPersistence {
 
 		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(reason).errorMessage(null).build());
+				.status(MovementStatus.MOVED).reason(reason).build());
 	}
 
 	/**
@@ -79,7 +79,7 @@ public class DuplicateDeletionPersistence {
 
 		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(quarantine)).targetPath(PathUtils.normalize(original))
-				.status(MovementStatus.MOVED).reason(MovementReason.NONE).errorMessage(null).build());
+				.status(MovementStatus.MOVED).reason(MovementReason.NONE).build());
 	}
 
 	/**
@@ -117,7 +117,6 @@ public class DuplicateDeletionPersistence {
 
 		managed.setStatus(MovementStatus.UNDONE);
 		managed.setReason(MovementReason.NONE);
-		managed.setErrorMessage(null);
 		managed.setUndoneAt(LocalDateTime.now(clock));
 
 		movementRepository.save(managed);

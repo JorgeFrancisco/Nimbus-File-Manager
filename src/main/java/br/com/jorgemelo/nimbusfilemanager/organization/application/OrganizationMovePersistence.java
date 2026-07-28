@@ -80,7 +80,7 @@ public class OrganizationMovePersistence {
 
 		movementRepository.save(Movement.builder().execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(source)).targetPath(PathUtils.normalize(target))
-				.status(MovementStatus.MOVED).reason(null).errorMessage(null).build());
+				.status(MovementStatus.MOVED).reason(null).build());
 
 		return catalogFile;
 	}

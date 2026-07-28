@@ -30,19 +30,17 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
-@Service
+@Slf4j @Service
 public class OrganizationUndoService {
 
 	private final ExecutionRepository executionRepository;
 	private final CatalogFileRepository catalogFileRepository;
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
-	private final MovementRepository movementRepository;
+	private final OrganizationMovementLog organizationMovementLog;
 	private final OperationLockService operationLockService;
 	private final OrganizationPathValidator organizationPathValidator;
 	private final SecureFileMove secureFileMove;
@@ -50,13 +48,14 @@ public class OrganizationUndoService {
 	private final Clock clock;
 
 	public OrganizationUndoService(ExecutionRepository executionRepository, CatalogFileRepository catalogFileRepository,
-			CatalogFileLocationRepository catalogFileLocationRepository, MovementRepository movementRepository,
-			OperationLockService operationLockService, OrganizationPathValidator organizationPathValidator,
-			SecureFileMove secureFileMove, PlatformTransactionManager transactionManager, Clock clock) {
+			CatalogFileLocationRepository catalogFileLocationRepository,
+			OrganizationMovementLog organizationMovementLog, OperationLockService operationLockService,
+			OrganizationPathValidator organizationPathValidator, SecureFileMove secureFileMove,
+			PlatformTransactionManager transactionManager, Clock clock) {
 		this.executionRepository = executionRepository;
 		this.catalogFileRepository = catalogFileRepository;
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
-		this.movementRepository = movementRepository;
+		this.organizationMovementLog = organizationMovementLog;
 		this.operationLockService = operationLockService;
 		this.organizationPathValidator = organizationPathValidator;
 		this.secureFileMove = secureFileMove;
@@ -93,8 +92,7 @@ public class OrganizationUndoService {
 	}
 
 	private List<Movement> undoableMovements(Execution execution) {
-		return movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(execution.getId(),
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR));
+		return organizationMovementLog.undoable(execution.getId());
 	}
 
 	private Path[] lockedPaths(Execution execution, List<Movement> movements) {
@@ -204,9 +202,8 @@ public class OrganizationUndoService {
 
 		CatalogFileLocation location = catalogFileLocationRepository
 				.findByCatalogFileIdAndCurrentPath(catalogFile.getId(), PathUtils.normalize(target))
-				.orElseThrow(() -> new IllegalStateException(
-						"CatalogFileLocation not found for catalogFileId=" + catalogFile.getId() + " and path="
-								+ target));
+				.orElseThrow(() -> new IllegalStateException("CatalogFileLocation not found for catalogFileId="
+						+ catalogFile.getId() + " and path=" + target));
 		Path parent = requireParent(source, "organization source");
 
 		catalogFile.setFileKey(PathUtils.normalize(source));
@@ -226,10 +223,9 @@ public class OrganizationUndoService {
 
 		movement.setStatus(MovementStatus.UNDONE);
 		movement.setReason(MovementReason.NONE);
-		movement.setErrorMessage(null);
 		movement.setUndoneAt(LocalDateTime.now(clock));
 
-		movementRepository.save(movement);
+		organizationMovementLog.save(movement);
 	}
 
 	private Path requireParent(Path path, String description) {
@@ -251,11 +247,7 @@ public class OrganizationUndoService {
 	}
 
 	private void markUndoError(Movement movement, MovementReason reason, String message) {
-		movement.setStatus(MovementStatus.UNDO_ERROR);
-		movement.setReason(reason);
-		movement.setErrorMessage(message);
-
-		movementRepository.save(movement);
+		organizationMovementLog.recordUndoFailure(movement, reason, message);
 	}
 
 	private OrganizationUndoItemResponse toItemResponse(Movement movement, UndoResult result) {

@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository;
+package br.com.jorgemelo.nimbusfilemanager.execution.domain.repository;
 
 import java.util.List;
 
@@ -7,45 +7,45 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.AnalysisError;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionError;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorFileDetailsResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse;
 
-public interface AnalysisErrorRepository extends JpaRepository<AnalysisError, Long> {
+public interface ExecutionErrorRepository extends JpaRepository<ExecutionError, Long> {
 
-	List<AnalysisError> findByExecutionIdOrderByCreatedAtAsc(Long executionId);
+	List<ExecutionError> findByExecutionIdOrderByCreatedAtAsc(Long executionId);
 
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse(
+			SELECT new br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse(
 				CAST(e.errorType AS string),
 				COUNT(e)
 			)
-			FROM AnalysisError e
+			FROM ExecutionError e
 			WHERE e.execution.id = :executionId
 			GROUP BY e.errorType
 			ORDER BY COUNT(e) DESC
 			""")
-	List<AnalysisErrorSummaryResponse> summarizeByExecutionId(Long executionId);
+	List<ExecutionErrorSummaryResponse> summarizeByExecutionId(Long executionId);
 
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse(
+			SELECT new br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse(
 				CAST(e.errorType AS string),
 				COUNT(e)
 			)
-			FROM AnalysisError e
+			FROM ExecutionError e
 			GROUP BY e.errorType
 			ORDER BY COUNT(e) DESC
 			""")
 	List<ErrorStatisticsResponse> summarize();
 
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.ErrorStatisticsResponse(
+			SELECT new br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ErrorStatisticsResponse(
 				CAST(e.errorType AS string),
 				COUNT(DISTINCT e.path)
 			)
-			FROM AnalysisError e
+			FROM ExecutionError e
 			GROUP BY e.errorType
 			ORDER BY COUNT(DISTINCT e.path) DESC
 			""")
@@ -59,11 +59,11 @@ public interface AnalysisErrorRepository extends JpaRepository<AnalysisError, Lo
 				MIN(e.createdAt),
 				MAX(e.createdAt)
 			)
-			FROM AnalysisError e
+			FROM ExecutionError e
 			WHERE (:errorType IS NULL OR e.errorType = :errorType)
 			  AND (:path IS NULL OR LOWER(e.path) LIKE LOWER(CONCAT('%', :path, '%')))
 			GROUP BY e.path, e.errorType
 			ORDER BY COUNT(e) DESC, MAX(e.createdAt) DESC
 			""")
-	Page<ErrorFileDetailsResponse> findErrorFileDetails(AnalysisErrorType errorType, String path, Pageable pageable);
+	Page<ErrorFileDetailsResponse> findErrorFileDetails(ExecutionErrorType errorType, String path, Pageable pageable);
 }

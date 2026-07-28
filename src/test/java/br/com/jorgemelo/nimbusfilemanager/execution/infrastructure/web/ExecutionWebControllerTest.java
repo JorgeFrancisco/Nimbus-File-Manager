@@ -47,7 +47,7 @@ class ExecutionWebControllerTest {
 		Assertions.assertThat(model.get("execution")).isNotNull();
 		Assertions.assertThat(model).containsKeys("steps", "errors", "movements")
 				.containsEntry("canUndo", false).containsEntry("canReprocess", false)
-				.containsKeys("movementStatusLabels", "movementReasonLabels", "analysisErrorTypeLabels");
+				.containsKeys("movementStatusLabels", "movementReasonLabels", "executionErrorTypeLabels");
 	}
 
 	@Test

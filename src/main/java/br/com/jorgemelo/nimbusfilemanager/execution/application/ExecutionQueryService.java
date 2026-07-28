@@ -9,13 +9,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.AnalysisErrorResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionErrorResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.MovementResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.model.AnalysisError;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.AnalysisErrorRepository;
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.repository.projection.AnalysisErrorSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionError;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionErrorRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
@@ -31,16 +31,16 @@ public class ExecutionQueryService {
 
 	private final ExecutionRepository executionRepository;
 	private final ExecutionStepRepository executionStepRepository;
-	private final AnalysisErrorRepository analysisErrorRepository;
+	private final ExecutionErrorRepository executionErrorRepository;
 	private final MovementRepository movementRepository;
 	private final ExecutionMapper executionMapper;
 
 	public ExecutionQueryService(ExecutionRepository executionRepository,
-			ExecutionStepRepository executionStepRepository, AnalysisErrorRepository analysisErrorRepository,
+			ExecutionStepRepository executionStepRepository, ExecutionErrorRepository executionErrorRepository,
 			MovementRepository movementRepository, ExecutionMapper executionMapper) {
 		this.executionRepository = executionRepository;
 		this.executionStepRepository = executionStepRepository;
-		this.analysisErrorRepository = analysisErrorRepository;
+		this.executionErrorRepository = executionErrorRepository;
 		this.movementRepository = movementRepository;
 		this.executionMapper = executionMapper;
 	}
@@ -74,13 +74,13 @@ public class ExecutionQueryService {
 				.map(executionMapper::toStepResponse).toList();
 	}
 
-	public List<AnalysisErrorResponse> errors(UUID id) {
-		return analysisErrorRepository.findByExecutionIdOrderByCreatedAtAsc(findByPublicId(id).getId()).stream()
-				.map(this::toAnalysisErrorResponse).toList();
+	public List<ExecutionErrorResponse> errors(UUID id) {
+		return executionErrorRepository.findByExecutionIdOrderByCreatedAtAsc(findByPublicId(id).getId()).stream()
+				.map(this::toExecutionErrorResponse).toList();
 	}
 
-	public List<AnalysisErrorSummaryResponse> errorSummary(UUID id) {
-		return analysisErrorRepository.summarizeByExecutionId(findByPublicId(id).getId());
+	public List<ExecutionErrorSummaryResponse> errorSummary(UUID id) {
+		return executionErrorRepository.summarizeByExecutionId(findByPublicId(id).getId());
 	}
 
 	public List<MovementResponse> movements(UUID id) {
@@ -101,8 +101,8 @@ public class ExecutionQueryService {
 				.orElseThrow(() -> new IllegalArgumentException("Execution not found: " + publicId));
 	}
 
-	private AnalysisErrorResponse toAnalysisErrorResponse(AnalysisError error) {
-		return new AnalysisErrorResponse(UuidV7.orLegacy(error.getPublicId(), error.getId()),
+	private ExecutionErrorResponse toExecutionErrorResponse(ExecutionError error) {
+		return new ExecutionErrorResponse(UuidV7.orLegacy(error.getPublicId(), error.getId()),
 				error.getExecution() == null ? null
 						: UuidV7.orLegacy(error.getExecution().getPublicId(), error.getExecution().getId()),
 				error.getPath(), error.getErrorType().name(), error.getErrorMessage(), error.getCreatedAt());
@@ -114,7 +114,7 @@ public class ExecutionQueryService {
 				movement.getCatalogFile() == null ? null
 						: UuidV7.orLegacy(movement.getCatalogFile().getPublicId(), movement.getCatalogFile().getId()),
 				movement.getSourcePath(), movement.getTargetPath(), movement.getStatus().name(),
-				movement.getReason() == null ? null : movement.getReason().name(), movement.getErrorMessage(),
-				movement.getMovedAt(), movement.getUndoneAt());
+				movement.getReason() == null ? null : movement.getReason().name(), movement.getMovedAt(),
+				movement.getUndoneAt());
 	}
 }

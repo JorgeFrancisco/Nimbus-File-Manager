@@ -190,7 +190,12 @@ public class VideoConversionService extends LocalizedComponent {
 				convertedBytes += item.convertedBytes();
 			}
 			case SKIPPED -> skipped++;
-			case FAILED -> errors++;
+			case FAILED -> {
+				errors++;
+
+				conversionExecutionRecorder.recordFailure(execution, PathUtils.normalizePath(file.getFileKey()),
+						item.message());
+			}
 			case CANCELLED -> log.info("Conversion cancelled while converting {}", file.getFileName());
 			}
 

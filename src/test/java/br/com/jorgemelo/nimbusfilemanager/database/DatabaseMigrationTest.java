@@ -38,6 +38,43 @@ class DatabaseMigrationTest {
 				.doesNotContain("INTEGER PRIMARY KEY AUTOINCREMENT");
 	}
 
+	/**
+	 * The table was created as {@code analysis_error}, named for the only thing
+	 * that wrote to it then. Conversions and duplicate deletions record their
+	 * per-file failures there too, so the rename is what keeps the name describing
+	 * the content instead of one of its writers - along with every constraint and
+	 * index that carried the old word.
+	 */
+	@Test
+	void executionErrorCarriesItsNewNameThroughConstraintsAndIndexes() throws Exception {
+		String rename = Files
+				.readString(Path.of("src/main/resources/db/migration/V5__rename_analysis_error_to_execution_error.sql"));
+
+		Assertions.assertThat(rename).contains("ALTER TABLE analysis_error RENAME TO execution_error",
+				"RENAME CONSTRAINT uk_analysis_error_public_id TO uk_execution_error_public_id",
+				"RENAME CONSTRAINT fk_analysis_error_execution TO fk_execution_error_execution",
+				"RENAME CONSTRAINT analysis_error_pkey TO execution_error_pkey",
+				"ALTER INDEX ix_analysis_error_execution RENAME TO ix_execution_error_execution",
+				"ALTER INDEX ix_analysis_error_lower_path RENAME TO ix_execution_error_lower_path",
+				"ALTER INDEX ix_analysis_error_type_path_created RENAME TO ix_execution_error_type_path_created");
+	}
+
+	/**
+	 * The reason a move failed moves to the one place every screen reads, and the
+	 * column goes with it. A blank message is not carried over: it would repeat
+	 * what the movement's own ERROR status already says and fill an execution's
+	 * error list with rows that answer nothing.
+	 */
+	@Test
+	void movementErrorsAreCarriedIntoExecutionErrorBeforeTheColumnGoes() throws Exception {
+		String migration = Files
+				.readString(Path.of("src/main/resources/db/migration/V7__movement_errors_move_to_execution_error.sql"));
+
+		Assertions.assertThat(migration).contains("INSERT INTO execution_error", "FROM movement m",
+				"m.error_message IS NOT NULL", "btrim(m.error_message) <> ''",
+				"ALTER TABLE movement DROP COLUMN error_message");
+	}
+
 	@Test
 	void shouldCreateQueryPerformanceIndexes() throws Exception {
 		String migration = Files.readString(MIGRATION);

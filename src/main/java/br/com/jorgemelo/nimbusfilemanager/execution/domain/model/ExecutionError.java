@@ -1,9 +1,9 @@
-package br.com.jorgemelo.nimbusfilemanager.inventory.domain.model;
+package br.com.jorgemelo.nimbusfilemanager.execution.domain.model;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.AnalysisErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.ClockHolder;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
@@ -33,9 +33,9 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "analysis_error")
+@Table(name = "execution_error")
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-public class AnalysisError {
+public class ExecutionError {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,8 +45,11 @@ public class AnalysisError {
 	@Column(name = "public_id", nullable = false, unique = true, updatable = false)
 	private UUID publicId;
 
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "execution_id")
+	// Required: a failure with no execution answers nothing - not which operation,
+	// not when, not over which folder - and the database deletes it with its
+	// execution rather than keeping it as a row nobody can read.
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "execution_id", nullable = false)
 	@ToString.Exclude
 	private Execution execution;
 
@@ -55,7 +58,7 @@ public class AnalysisError {
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "error_type", nullable = false, length = 30)
-	private AnalysisErrorType errorType;
+	private ExecutionErrorType errorType;
 
 	@Column(name = "error_message", nullable = false)
 	private String errorMessage;
@@ -74,7 +77,7 @@ public class AnalysisError {
 		}
 
 		if (errorType == null) {
-			errorType = AnalysisErrorType.UNKNOWN;
+			errorType = ExecutionErrorType.UNKNOWN;
 		}
 	}
 }
