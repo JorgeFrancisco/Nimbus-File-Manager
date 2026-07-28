@@ -47,6 +47,23 @@ class ConversionExecutionRecorderTest {
 		verify(executionErrorService).save(failed, ExecutionErrorType.CONVERSION_ERROR, "output missing", execution);
 	}
 
+	/**
+	 * A row left with a null {@code finishedAt} is read everywhere as the operation
+	 * currently running, so a batch that died has to close its own row.
+	 */
+	@Test
+	void failClosesTheRowSoNoPhantomBatchIsLeftRunning() {
+		Execution execution = Execution.builder().id(9L).build();
+
+		when(executionRepository.findById(9L)).thenReturn(Optional.of(execution));
+		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		recorder.fail(execution, "encoder vanished");
+
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.ERROR);
+		Assertions.assertThat(execution.getFinishedAt()).isNotNull();
+	}
+
 	@Test
 	void opensAConversionExecutionForTheFolderTheBatchRunsIn() {
 		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

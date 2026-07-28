@@ -59,6 +59,25 @@ public class ConversionExecutionRecorder extends LocalizedComponent {
 		executionErrorService.save(file, ExecutionErrorType.CONVERSION_ERROR, reason, execution);
 	}
 
+	/**
+	 * Closes a row whose batch died on the way. An execution still holding a null
+	 * {@code finishedAt} is read everywhere as the operation currently running, and
+	 * a conversion is the longest of them: the phantom would sit on every screen
+	 * until the next restart swept it.
+	 */
+	public void fail(Execution execution, String detail) {
+		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
+
+		managed.setStatus(ExecutionStatus.ERROR);
+		managed.setFinishedAt(LocalDateTime.now(clock));
+		managed.setStatusMessage(StatusMessage.raw(message("backend.execution.operationFailed", detail)));
+
+		executionRepository.save(managed);
+
+		execution.setStatus(managed.getStatus());
+		execution.setFinishedAt(managed.getFinishedAt());
+	}
+
 	public void finish(Execution execution, ConversionTotals totals, String message, boolean cancelled) {
 		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
 

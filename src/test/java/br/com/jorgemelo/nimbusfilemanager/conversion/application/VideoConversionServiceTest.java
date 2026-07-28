@@ -622,6 +622,34 @@ class VideoConversionServiceTest {
 		verify(conversionExecutionRecorder).finish(eq(execution), any(), any(), eq(true));
 	}
 
+	/**
+	 * A batch that dies on the way must not leave the row open: an execution still
+	 * holding a null {@code finishedAt} is read everywhere as the operation
+	 * currently running, and a conversion is the longest of them.
+	 */
+	@Test
+	void aCrashMidBatchStillClosesTheExecution(@TempDir Path tmp) throws Exception {
+		Path source = Files.writeString(tmp.resolve("clip.mp4"), "0123456789");
+
+		stubFile(source, 10L);
+		stubSource("h264", 120.0);
+
+		when(videoTranscoder.transcode(any(), any(), any())).thenThrow(new IllegalStateException("encoder vanished"));
+
+		List<UUID> selection = List.of(mediaId);
+
+		ConversionOptions options = ConversionOptions.defaults();
+
+		ConversionProgressCallback progress = progress();
+		BooleanSupplier notCancelled = notCancelled();
+
+		Assertions.assertThatThrownBy(() -> service.convert(selection, options, progress, notCancelled))
+				.isInstanceOf(IllegalStateException.class);
+
+		verify(conversionExecutionRecorder).fail(eq(execution), any());
+		verify(conversionExecutionRecorder, never()).finish(any(), any(), any(), anyBoolean());
+	}
+
 	private ConversionProgressCallback progress() {
 		return (_, _, _, _) -> {
 		};

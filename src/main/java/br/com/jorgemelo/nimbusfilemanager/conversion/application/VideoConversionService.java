@@ -141,6 +141,10 @@ public class VideoConversionService extends LocalizedComponent {
 
 		try {
 			return convertRegistered(execution, publicIds, files, options, quarantineRoot, progress, stopRequested);
+		} catch (RuntimeException conversionError) {
+			conversionExecutionRecorder.fail(execution, conversionError.getMessage());
+
+			throw conversionError;
 		} finally {
 			executionCancellationService.unregister(execution.getId());
 		}
