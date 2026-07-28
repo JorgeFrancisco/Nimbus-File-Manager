@@ -63,6 +63,29 @@ class ConversionWebControllerTest {
 		when(conversionCandidateService.candidates(any())).thenReturn(new PageImpl<>(List.of()));
 	}
 
+	/**
+	 * The browser keeps the selection across pagination, so it can name files a
+	 * finished batch already converted. Which of them survive is the server's call.
+	 */
+	@Test
+	void answersWhichStoredIdsAreStillConvertible() {
+		UUID alive = UUID.randomUUID();
+		UUID gone = UUID.randomUUID();
+
+		when(conversionCandidateService.convertible(List.of(alive, gone))).thenReturn(List.of(alive));
+
+		ConversionRequest request = new ConversionRequest(List.of(alive, gone), null, null, null, null, null);
+
+		Assertions.assertThat(controller.selection(request)).containsExactly(alive);
+	}
+
+	@Test
+	void treatsAMissingSelectionBodyAsAnEmptySelection() {
+		when(conversionCandidateService.convertible(List.of())).thenReturn(List.of());
+
+		Assertions.assertThat(controller.selection(null)).isEmpty();
+	}
+
 	@Test
 	void rendersTheScreenWithTheRecommendedOptionsOnAFirstVisit() {
 		Model model = new ExtendedModelMap();

@@ -587,9 +587,44 @@
 		});
 	}
 
+	// The stored selection may name files a batch already converted while this
+	// screen was closed - they are no longer candidates, and counting them told the
+	// user a page of 300 had 600 selected. The server decides which ones survive.
+	function pruneStoredSelection() {
+		const stored = selectedIds();
+
+		if (stored.length === 0) {
+			return;
+		}
+
+		fetch('/app/conversion/selection', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-CSRF-TOKEN': csrfToken()
+			},
+			body: JSON.stringify({ ids: stored })
+		})
+			.then((response) => (response.ok ? response.json() : null))
+			.then((alive) => {
+				if (!alive) {
+					return;
+				}
+
+				const keep = new Set(alive);
+
+				forgetHandled(stored.filter((id) => !keep.has(id)));
+				applyStoredSelection();
+				updateSelection();
+			})
+			// Offline or refused: keep what is stored rather than dropping a real selection.
+			.catch(() => {});
+	}
+
 	applyStoredSelection();
 	setRunning(running);
 	restoreReport();
+	pruneStoredSelection();
 
 	// A conversion started before this page was opened (or on another tab) keeps
 	// being followed here instead of looking finished.

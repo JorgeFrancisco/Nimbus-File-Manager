@@ -52,6 +52,30 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 	Page<ConversionCandidate> findCandidates(FileType videoType, LifecycleStatus active, String outputExtension,
 			Collection<String> hevcCodecs, Pageable pageable);
 
+	/**
+	 * Which of {@code publicIds} are still convertible. The Conversao screen keeps
+	 * its selection in the browser so it survives pagination, and a file converted
+	 * meanwhile stops being a candidate without the browser ever hearing about it -
+	 * the screen would then count files it can no longer convert.
+	 *
+	 * <p>
+	 * The filter repeats the one in {@link #findCandidates}: JPQL has no way to
+	 * share a where clause, so the two must be changed together.
+	 */
+	@Query("""
+			SELECT m.publicId
+			FROM CatalogFile m
+			LEFT JOIN m.video v
+			WHERE m.publicId IN :publicIds
+			  AND m.fileType = :videoType
+			  AND m.lifecycleStatus = :active
+			  AND (LOWER(m.extension) <> :outputExtension
+			       OR v.videoCodec IS NULL
+			       OR LOWER(TRIM(v.videoCodec)) NOT IN :hevcCodecs)
+			""")
+	List<UUID> findConvertibleIds(Collection<UUID> publicIds, FileType videoType, LifecycleStatus active,
+			String outputExtension, Collection<String> hevcCodecs);
+
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource(
 				m.publicId,

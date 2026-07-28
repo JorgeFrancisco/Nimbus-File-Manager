@@ -90,6 +90,19 @@ class JavaScriptI18nTest {
 	}
 
 	/**
+	 * The Conversao screen keeps its selection in the browser so it survives
+	 * pagination, which also means it survives a batch that converted those very
+	 * files while the screen was closed: the counter then announced 600 files on a
+	 * page of 300. It now asks the server which stored ids are still convertible.
+	 */
+	@Test
+	void theConversionSelectionIsCheckedAgainstTheServerWhenTheScreenOpens() throws Exception {
+		String conversion = read("src/main/resources/static/js/pages/conversion.js");
+
+		assertThat(conversion).contains("/app/conversion/selection").contains("pruneStoredSelection();");
+	}
+
+	/**
 	 * The catalog is a hand-written list, so a key added to the bundles but not to
 	 * it resolves to its own name and the user reads "js.backgroundJob.count" on
 	 * the screen - which is exactly what shipped once. A key ending in a dot is a

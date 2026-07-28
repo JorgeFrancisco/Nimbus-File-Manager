@@ -150,6 +150,19 @@ public class ConversionWebController extends LocalizedComponent {
 	}
 
 	/**
+	 * Prunes the selection the browser kept: answers with the subset of
+	 * {@code ids} that is still convertible. The screen holds its selection across
+	 * pagination, so a batch that finished while it was closed left ids behind and
+	 * the counter announced files that no longer exist as candidates. The decision
+	 * is the server's; the screen only shows what comes back.
+	 */
+	@PostMapping("/app/conversion/selection")
+	@ResponseBody
+	public List<UUID> selection(@RequestBody ConversionRequest request) {
+		return conversionCandidateService.convertible(request == null ? List.of() : request.ids());
+	}
+
+	/**
 	 * Stores the options as soon as the user picks them, without waiting for a
 	 * conversion to be started: the screen is where the choice is made, so that is
 	 * where it has to be remembered - otherwise leaving the page after changing an

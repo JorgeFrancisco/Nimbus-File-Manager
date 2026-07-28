@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,32 @@ class ConversionCandidateServiceTest {
 	private final ConversionCandidateService service = new ConversionCandidateService(repository);
 
 	private final UUID publicId = UUID.randomUUID();
+
+	/**
+	 * The screen keeps its selection in the browser, so a batch that finished while
+	 * it was closed leaves ids behind. Counting them told the user a page of 300
+	 * had 600 files selected.
+	 */
+	@Test
+	void keepsOnlyTheStoredIdsThatAreStillConvertible() {
+		UUID stillCandidate = UUID.randomUUID();
+		UUID alreadyConverted = UUID.randomUUID();
+
+		when(repository.findConvertibleIds(eq(List.of(stillCandidate, alreadyConverted)), eq(FileType.VIDEO),
+				eq(LifecycleStatus.ACTIVE), any(), any())).thenReturn(List.of(stillCandidate));
+
+		Assertions.assertThat(service.convertible(List.of(stillCandidate, alreadyConverted)))
+				.containsExactly(stillCandidate);
+	}
+
+	/** Nothing stored means nothing to ask the database about. */
+	@Test
+	void asksNothingWhenTheStoredSelectionIsEmpty() {
+		Assertions.assertThat(service.convertible(List.of())).isEmpty();
+		Assertions.assertThat(service.convertible(null)).isEmpty();
+
+		verify(repository, never()).findConvertibleIds(any(), any(), any(), any(), any());
+	}
 
 	@Test
 	void describesEachCandidateReadyToRender() {

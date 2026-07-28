@@ -1,6 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +41,21 @@ public class ConversionCandidateService extends LocalizedComponent {
 	public Page<ConversionCandidateView> candidates(Pageable pageable) {
 		return conversionCandidateRepository.findCandidates(FileType.VIDEO, LifecycleStatus.ACTIVE,
 				ConversionConstants.OUTPUT_EXTENSION, ConversionConstants.HEVC_CODECS, pageable).map(this::toView);
+	}
+
+	/**
+	 * Of the ids the screen kept in the browser, the ones it may still convert. A
+	 * batch that finished while the screen was closed leaves its ids behind, and
+	 * counting them told the user a page of 300 had 600 files selected.
+	 */
+	@Transactional(readOnly = true)
+	public List<UUID> convertible(Collection<UUID> publicIds) {
+		if (publicIds == null || publicIds.isEmpty()) {
+			return List.of();
+		}
+
+		return conversionCandidateRepository.findConvertibleIds(publicIds, FileType.VIDEO, LifecycleStatus.ACTIVE,
+				ConversionConstants.OUTPUT_EXTENSION, ConversionConstants.HEVC_CODECS);
 	}
 
 	private ConversionCandidateView toView(ConversionCandidate candidate) {
