@@ -75,6 +75,21 @@ class JavaScriptI18nTest {
 	}
 
 	/**
+	 * The dialog that explains why nothing was deleted used to be wiped by the
+	 * refresh that followed it - 700 milliseconds, enough to see something appear
+	 * and not to read it. The refresh now waits for the dialog to be dismissed,
+	 * whether by the button, Esc or the backdrop.
+	 */
+	@Test
+	void theQuarantineReasonSurvivesUntilItIsDismissed() throws Exception {
+		String quarantine = read("src/main/resources/static/js/pages/quarantine.js");
+
+		assertThat(quarantine).contains("showOutcome(result.message, reloadSoon)")
+				.contains("dialog.addEventListener(\"close\"")
+				.doesNotContain("showOutcome(result.message);");
+	}
+
+	/**
 	 * The catalog is a hand-written list, so a key added to the bundles but not to
 	 * it resolves to its own name and the user reads "js.backgroundJob.count" on
 	 * the screen - which is exactly what shipped once. A key ending in a dot is a

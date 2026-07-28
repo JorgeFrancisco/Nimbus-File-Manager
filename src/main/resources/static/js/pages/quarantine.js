@@ -198,27 +198,54 @@
 		});
 	}
 
-	function showOutcome(message) {
+	// What to do once the reason has been read. The list still has to refresh, but
+	// refreshing behind the dialog wiped it after 700 milliseconds - long enough to
+	// see something appear, not to read why nothing was deleted.
+	var afterOutcome = null;
+
+	function showOutcome(message, onDismiss) {
 		var dialog = el("quarantineOutcomeDialog");
 		var body = el("quarantineOutcomeMessage");
 
 		if (!dialog || !body) {
 			status(message, "warn");
 
+			if (onDismiss) {
+				onDismiss();
+			}
+
 			return;
 		}
 
+		afterOutcome = onDismiss || null;
 		body.textContent = message;
 		dialog.showModal();
 	}
 
 	function bindOutcomeDialog() {
 		var dialog = el("quarantineOutcomeDialog");
-		var close = dialog ? dialog.querySelector(".js-outcome-close") : null;
+
+		if (!dialog) {
+			return;
+		}
+
+		var close = dialog.querySelector(".js-outcome-close");
 
 		if (close) {
 			close.addEventListener("click", function () { dialog.close(); });
 		}
+
+		// Listens for close rather than for the button: Esc and the backdrop dismiss
+		// the dialog too, and the refresh has to follow every one of them.
+		dialog.addEventListener("close", function () {
+			var pending = afterOutcome;
+
+			afterOutcome = null;
+
+			if (pending) {
+				pending();
+			}
+		});
 	}
 
 	function bindDeleteSelected() {
@@ -250,15 +277,17 @@
 			postJson("/app/quarantine/delete-selected", { ids: ids }).then(function (result) {
 				discardSelection(ids);
 
-				// Nothing deleted is never a success: the server says why - most often a
-				// conversion holding the quarantine folder while it moves originals into it.
-				if (result.message) {
-					showOutcome(result.message);
-				}
-
 				status(t("js.quarantine.purgeCompleted", result.purged || 0, result.errors || 0),
 						result.errors > 0 || result.busy > 0 ? "warn" : "ok");
-				reloadSoon();
+
+				// Nothing deleted is never a success: the server says why - most often a
+				// conversion holding the quarantine folder while it moves originals into it.
+				// The refresh waits for the dialog, or it would take the reason with it.
+				if (result.message) {
+					showOutcome(result.message, reloadSoon);
+				} else {
+					reloadSoon();
+				}
 			}).catch(function () {
 				status(t("js.quarantine.purgeError"), "error");
 			});
