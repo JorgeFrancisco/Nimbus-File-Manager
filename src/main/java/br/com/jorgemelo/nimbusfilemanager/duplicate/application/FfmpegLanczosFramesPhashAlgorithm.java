@@ -101,7 +101,11 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 
 		List<Integer> scores = alignedFrameScores(first, second);
 
-		int minConcordant = properties.minConcordantFramesOrDefault();
+		// The quorum cannot ask for more frames than the videos have. A one-frame
+		// video - a phone clip beside a photo - would otherwise be compared against
+		// nothing and never match, which is the same as having no fingerprint at all.
+		int minConcordant = Math.min(properties.minConcordantFramesOrDefault(),
+				Math.min(first.frames().size(), second.frames().size()));
 
 		if (scores.size() < minConcordant) {
 			return -1;

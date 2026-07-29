@@ -22,6 +22,9 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoSignatu
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoFrameSampler;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegPhotoHashProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
@@ -64,7 +67,17 @@ class VideoSimilarityFfmpegIntegrationTest {
 				new ProcessingMetrics());
 
 		return new VideoPerceptualHashService(externalToolPaths, new VideoFrameSampler(), gate,
-				new FfmpegVideoFrameProcessRunner());
+				new FfmpegVideoFrameProcessRunner(), new PhotoPerceptualHashService(externalToolPaths, gate,
+						new FfmpegPhotoHashProcessRunner(), workspaceManager()));
+	}
+
+	/** The fallback for a one-frame video writes its slice inside the workspace. */
+	private WorkspaceManager workspaceManager() {
+		WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
+
+		when(workspaceManager.temp()).thenReturn(tempDir);
+
+		return workspaceManager;
 	}
 
 	private VideoSimilarityAlgorithm algorithm() {

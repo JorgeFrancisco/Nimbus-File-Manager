@@ -17,6 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFra
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 /**
@@ -31,23 +32,31 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 @Service
 public class VideoPerceptualHashService {
 
+	/** The plan a single-frame video ends up with: one sample, at the start. */
+	private static final VideoFrameSamplingPlan SINGLE_FRAME = new VideoFrameSamplingPlan(List.of(0L));
+
 	private final ExternalToolPaths externalToolPaths;
 	private final VideoFrameSampler videoFrameSampler;
 	private final FfmpegVideoFrameRunner ffmpegRunner;
+	private final PhotoPerceptualHashService photoPerceptualHashService;
 
 	@Autowired
+	@CoverageGenerated("Spring wiring: forwards to the constructor every test builds directly")
 	public VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
-			ExternalToolGate externalToolGate, FfmpegVideoFrameProcessRunner processRunner) {
+			ExternalToolGate externalToolGate, FfmpegVideoFrameProcessRunner processRunner,
+			PhotoPerceptualHashService photoPerceptualHashService) {
 		this(externalToolPaths, videoFrameSampler,
 				(ffmpegPath, file, plan) -> externalToolGate.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME,
-						() -> processRunner.run(ffmpegPath, file, plan)));
+						() -> processRunner.run(ffmpegPath, file, plan)),
+				photoPerceptualHashService);
 	}
 
 	VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
-			FfmpegVideoFrameRunner ffmpegRunner) {
+			FfmpegVideoFrameRunner ffmpegRunner, PhotoPerceptualHashService photoPerceptualHashService) {
 		this.externalToolPaths = externalToolPaths;
 		this.videoFrameSampler = videoFrameSampler;
 		this.ffmpegRunner = ffmpegRunner;
+		this.photoPerceptualHashService = photoPerceptualHashService;
 	}
 
 	public VideoPerceptualFingerprint compute(Path file, Double durationSeconds, int frameCount) {
@@ -62,12 +71,40 @@ public class VideoPerceptualHashService {
 
 		byte[] frames = sample(file, plan);
 
-		if (frames.length == 0 || frames.length % MetadataConstants.SAMPLE_BYTES != 0) {
-			throw new UnsupportedVideoFingerprintException("FFmpeg returned no decodable frames for video: " + file
-					+ " (got " + frames.length + " bytes)");
+		// A video of a single frame - the clip a phone keeps beside a photo, or a
+		// recording stopped the instant it started - has nothing at the sampled
+		// timestamps, so sampling comes back empty. Its one frame is still a picture,
+		// and hashing it is what the photos do.
+		if (frames.length == 0) {
+			frames = firstFrame(file);
+			plan = SINGLE_FRAME;
+		}
+
+		// Only the size is checked here: an empty result already went through the
+		// fallback above, which either produced a frame or refused the file.
+		if (frames.length % MetadataConstants.SAMPLE_BYTES != 0) {
+			throw new UnsupportedVideoFingerprintException("FFmpeg returned frames of unexpected size for video: "
+					+ file + " (got " + frames.length + " bytes)");
 		}
 
 		return new VideoPerceptualFingerprint(toFrameFingerprints(frames, plan));
+	}
+
+	/**
+	 * The opening frame, read the way a photo is: no timestamp selection, because a
+	 * one-frame video holds nothing at the positions a plan asks for. Reusing the
+	 * photo service is the point - "treat it as an image" is exactly what this
+	 * fallback means, and that path is already wired and tested.
+	 */
+	private byte[] firstFrame(Path file) {
+		try {
+			return photoPerceptualHashService.compute(file).luminance();
+		} catch (RuntimeException failure) {
+			// Kept as a video failure on purpose: the reason recorded for a video has to
+			// read as one, and the photo path speaks about pixels and images.
+			throw new UnsupportedVideoFingerprintException(
+					"Video holds a single frame that could not be decoded: " + file + ". " + failure.getMessage());
+		}
 	}
 
 	private byte[] sample(Path file, VideoFrameSamplingPlan plan) {
