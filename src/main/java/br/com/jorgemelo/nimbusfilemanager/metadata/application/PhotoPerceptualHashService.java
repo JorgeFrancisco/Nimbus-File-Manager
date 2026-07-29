@@ -79,30 +79,42 @@ public class PhotoPerceptualHashService {
 	}
 
 	/**
-	 * Decodes the file, or the first frame of it when the file is an animated WebP:
-	 * ffmpeg reads no animation, so a sticker would otherwise be undecodable. The
-	 * frame is handed over as a file because the runner takes a path, and is deleted
+	 * Decodes the file, or the part of it ffmpeg can read: the first frame of an
+	 * animated sticker, or a photo without the trailer its camera appended. The
+	 * slice is handed over as a file because the runner takes a path, and is deleted
 	 * straight after - a byte-for-byte slice of the original, regenerated whenever
 	 * it is needed again. It is written inside the application workspace, never in
 	 * the system temp: that one is world-writable, and a file another user can
 	 * swap between the write and the read is a file we should not hand to a decoder.
 	 */
 	private byte[] hashOf(Path file) throws Exception {
-		byte[] firstFrame = AnimatedWebp.firstFrame(file);
+		byte[] decodable = decodableBytes(file);
 
-		if (firstFrame.length == 0) {
+		if (decodable.length == 0) {
 			return ffmpegRunner.run(ffmpegPath(), file);
 		}
 
-		Path frameFile = Files.createTempFile(workspaceManager.temp(), "webp-frame", ".webp");
+		Path decodableFile = Files.createTempFile(workspaceManager.temp(), "decodable", ".tmp");
 
 		try {
-			Files.write(frameFile, firstFrame);
+			Files.write(decodableFile, decodable);
 
-			return ffmpegRunner.run(ffmpegPath(), frameFile);
+			return ffmpegRunner.run(ffmpegPath(), decodableFile);
 		} finally {
-			Files.deleteIfExists(frameFile);
+			Files.deleteIfExists(decodableFile);
 		}
+	}
+
+	/**
+	 * What ffmpeg can actually read, when the file itself defeats it: the first
+	 * frame of an animated WebP, or a JPEG without the vendor trailer a camera left
+	 * behind it. An empty result means the file decodes as it is, which is the
+	 * ordinary case.
+	 */
+	private static byte[] decodableBytes(Path file) throws IOException {
+		byte[] firstFrame = AnimatedWebp.firstFrame(file);
+
+		return firstFrame.length > 0 ? firstFrame : JpegMainImage.withoutTrailer(file);
 	}
 
 	private void rejectZipContainerMasqueradingAsWebp(Path file) {

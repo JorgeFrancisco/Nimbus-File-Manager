@@ -1,0 +1,13 @@
+-- Photos marked DECODER_REFUSED were whole JPEGs all along: what ffmpeg choked on
+-- was the vendor trailer a camera appended after the image - in Samsung panoramas
+-- it is most of the file. The decoder read past the end of the photo, found bytes
+-- that look like a Huffman table with impossible lengths, and gave up.
+--
+-- The image is now handed over without that trailer, so the verdict is stale and
+-- the rows would otherwise sit terminal forever: an exhausted failure is never
+-- fetched again, and the manual retry only clears UNKNOWN. Dropping them returns
+-- the files to the pending queue.
+--
+-- A photo that still cannot be decoded is classified again on this pass and goes
+-- back to terminal, so nothing is retried forever.
+DELETE FROM fingerprint_failure WHERE reason = 'DECODER_REFUSED';

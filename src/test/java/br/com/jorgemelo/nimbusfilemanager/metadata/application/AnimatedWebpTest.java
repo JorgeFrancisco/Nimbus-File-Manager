@@ -78,7 +78,7 @@ class AnimatedWebpTest {
 		assertThat(AnimatedWebp.firstFrame(cut)).isEmpty();
 	}
 
-	/** A frame carrying no image payload yields nothing rather than a broken file. */
+	/** A frame with no image payload yields nothing, not a broken file. */
 	@Test
 	void aFrameWithoutImageDataIsLeftAlone(@TempDir Path tmp) throws IOException {
 		byte[] frameBody = concat(new byte[ANMF_HEADER_BYTES], chunk("ALPH", new byte[] { 1, 2 }));
@@ -132,6 +132,23 @@ class AnimatedWebpTest {
 		Path broken = Files.write(tmp.resolve("broken-frame.webp"), riff(chunk("ANMF", lying)));
 
 		assertThat(AnimatedWebp.firstFrame(broken)).isEmpty();
+	}
+
+	/** RIFF with no WEBP tag at all: another container, not a picture. */
+	@Test
+	void aRiffTooShortToCarryTheWebpTagIsLeftAlone(@TempDir Path tmp) throws IOException {
+		Path stub = Files.write(tmp.resolve("stub.webp"), "RIFF0000".getBytes(StandardCharsets.ISO_8859_1));
+
+		assertThat(AnimatedWebp.firstFrame(stub)).isEmpty();
+	}
+
+	/** A container with no frame at all yields nothing, not a broken file. */
+	@Test
+	void aContainerWithoutAnyFrameIsLeftAlone(@TempDir Path tmp) throws IOException {
+		Path still = Files.write(tmp.resolve("nostill.webp"),
+				riff(concat(chunk("VP8X", new byte[10]), chunk("ANIM", new byte[6]))));
+
+		assertThat(AnimatedWebp.firstFrame(still)).isEmpty();
 	}
 
 	private static byte[] animatedWebp() throws IOException {

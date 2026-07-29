@@ -161,6 +161,39 @@ class PhotoPerceptualHashServiceTest {
 		assertThat(fingerprint.hash()).hasSize(32);
 	}
 
+	/**
+	 * A camera trailer after the image is what defeated ffmpeg, not the photo: the
+	 * runner must be handed the image alone.
+	 */
+	@Test
+	void computeDecodesAPhotoWithoutTheTrailerItsCameraAppended() throws Exception {
+		byte[] image = concat(new byte[] { (byte) 0xFF, (byte) 0xD8 }, segment((byte) 0xDA, new byte[] { 3, 4 }),
+				new byte[] { 1, 2, (byte) 0xFF, (byte) 0xD9 });
+
+		Path panorama = Files.write(tempDir.resolve("panorama.jpg"),
+				concat(image, "SEFT".getBytes(StandardCharsets.ISO_8859_1)));
+
+		FfmpegRunner runner = mock(FfmpegRunner.class);
+
+		List<byte[]> handedOver = new ArrayList<>();
+
+		when(runner.run(any(), any())).thenAnswer(invocation -> {
+			handedOver.add(Files.readAllBytes(invocation.getArgument(1)));
+
+			return gradient();
+		});
+
+		service(runner).compute(panorama);
+
+		Assertions.assertThat(handedOver).singleElement().isEqualTo(image);
+	}
+
+	private static byte[] segment(byte marker, byte[] payload) throws Exception {
+		int length = payload.length + 2;
+
+		return concat(new byte[] { (byte) 0xFF, marker, (byte) (length >> 8), (byte) length }, payload);
+	}
+
 	/** A minimal animated sticker: extended header, ANIM and one frame. */
 	private static byte[] animatedWebp() throws Exception {
 		byte[] frame = concat(new byte[16], chunk("ALPH", new byte[] { 1, 2 }),
