@@ -7,16 +7,25 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Arrays;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 
@@ -152,8 +161,38 @@ class PhotoPerceptualHashServiceTest {
 		assertThat(fingerprint.hash()).hasSize(32);
 	}
 
-	private byte[] gradient() {
-		byte[] pixels = new byte[1024];
+	/** A minimal animated sticker: extended header, ANIM and one frame. */
+	private static byte[] animatedWebp() throws Exception {
+		byte[] frame = concat(new byte[16], chunk("ALPH", new byte[] { 1, 2 }),
+				chunk("VP8 ", new byte[] { 9, 8, 7, 6 }));
+
+		byte[] body = concat(chunk("VP8X", new byte[10]), chunk("ANIM", new byte[6]), chunk("ANMF", frame));
+
+		return concat("RIFF".getBytes(StandardCharsets.ISO_8859_1), littleEndian(4 + body.length),
+				"WEBP".getBytes(StandardCharsets.ISO_8859_1), body);
+	}
+
+	private static byte[] chunk(String tag, byte[] payload) throws Exception {
+		byte[] padding = (payload.length & 1) == 1 ? new byte[1] : new byte[0];
+
+		return concat(tag.getBytes(StandardCharsets.ISO_8859_1), littleEndian(payload.length), payload, padding);
+	}
+
+	private static byte[] concat(byte[]... parts) throws Exception {
+		ByteArrayOutputStream all = new ByteArrayOutputStream();
+
+		for (byte[] part : parts) {
+			all.write(part);
+		}
+
+		return all.toByteArray();
+	}
+
+	private static byte[] littleEndian(int value) {
+		return ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array();
+	}
+
+	private byte[] gradient() {		byte[] pixels = new byte[1024];
 
 		for (int row = 0; row < 32; row++) {
 			for (int column = 0; column < 32; column++) {
@@ -164,11 +203,63 @@ class PhotoPerceptualHashServiceTest {
 		return pixels;
 	}
 
+	/**
+	 * ffmpeg reads no animation, so an animated sticker is decoded through its first
+	 * frame: the runner must be handed that frame, not the original file, and the
+	 * frame must be a plain WebP the decoder understands.
+	 */
+	@Test
+	void computeDecodesAnAnimatedStickerThroughItsFirstFrame() throws Exception {
+		Path sticker = Files.write(tempDir.resolve("sticker.webp"), animatedWebp());
+
+		FfmpegRunner runner = mock(FfmpegRunner.class);
+
+		List<Path> decoded = new ArrayList<>();
+		List<byte[]> handedOver = new ArrayList<>();
+
+		// Read inside the call: the extracted frame is scratch and is gone by the time
+		// compute returns, which is what the next test is about.
+		when(runner.run(any(), any())).thenAnswer(invocation -> {
+			Path given = invocation.getArgument(1);
+
+			decoded.add(given);
+			handedOver.add(Files.readAllBytes(given));
+
+			return gradient();
+		});
+
+		service(runner).compute(sticker);
+
+		Assertions.assertThat(decoded).singleElement().isNotEqualTo(sticker);
+		Assertions.assertThat(new String(handedOver.getFirst(), 8, 4, StandardCharsets.ISO_8859_1)).isEqualTo("WEBP");
+		Assertions.assertThat(new String(handedOver.getFirst(), 12, 4, StandardCharsets.ISO_8859_1)).isEqualTo("VP8 ");
+	}
+
+	/** The lifted frame is scratch: it must not be left behind on disk. */
+	@Test
+	void computeLeavesNoExtractedFrameBehind() throws Exception {
+		Path sticker = Files.write(tempDir.resolve("sticker.webp"), animatedWebp());
+
+		FfmpegRunner runner = mock(FfmpegRunner.class);
+
+		ArgumentCaptor<Path> decoded = ArgumentCaptor.forClass(Path.class);
+
+		when(runner.run(any(), decoded.capture())).thenReturn(gradient());
+
+		service(runner).compute(sticker);
+
+		Assertions.assertThat(Files.exists(decoded.getValue())).isFalse();
+	}
+
 	private PhotoPerceptualHashService service(FfmpegRunner runner) {
 		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
 		lenient().when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
-		return new PhotoPerceptualHashService(externalToolPaths, runner);
+		WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
+
+		lenient().when(workspaceManager.temp()).thenReturn(tempDir);
+
+		return new PhotoPerceptualHashService(externalToolPaths, runner, workspaceManager);
 	}
 }

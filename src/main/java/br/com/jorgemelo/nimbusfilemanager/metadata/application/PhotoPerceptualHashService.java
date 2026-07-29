@@ -16,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
@@ -36,18 +37,22 @@ public class PhotoPerceptualHashService {
 
 	private final ExternalToolPaths externalToolPaths;
 	private final FfmpegRunner ffmpegRunner;
+	private final WorkspaceManager workspaceManager;
 
 	@Autowired
 	@CoverageGenerated("Spring wiring: forwards to the constructor every test builds directly")
 	public PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, ExternalToolGate externalToolGate,
-			FfmpegPhotoHashProcessRunner processRunner) {
+			FfmpegPhotoHashProcessRunner processRunner, WorkspaceManager workspaceManager) {
 		this(externalToolPaths, (ffmpegPath, file) -> externalToolGate
-				.run(ExternalToolCategory.FFMPEG_PHOTO_HASH, () -> processRunner.run(ffmpegPath, file)));
+				.run(ExternalToolCategory.FFMPEG_PHOTO_HASH, () -> processRunner.run(ffmpegPath, file)),
+				workspaceManager);
 	}
 
-	PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, FfmpegRunner ffmpegRunner) {
+	PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, FfmpegRunner ffmpegRunner,
+			WorkspaceManager workspaceManager) {
 		this.externalToolPaths = externalToolPaths;
 		this.ffmpegRunner = ffmpegRunner;
+		this.workspaceManager = workspaceManager;
 	}
 
 	public PhotoPerceptualFingerprint compute(Path file) {
@@ -58,7 +63,7 @@ public class PhotoPerceptualHashService {
 		byte[] pixels;
 
 		try {
-			pixels = ffmpegRunner.run(ffmpegPath(), file);
+			pixels = hashOf(file);
 		} catch (Exception exception) {
 			throw new IllegalStateException(
 					"Could not run ffmpeg to compute perceptual hash for file: " + file + ". " + exception.getMessage(),
@@ -71,6 +76,33 @@ public class PhotoPerceptualHashService {
 		}
 
 		return new PhotoPerceptualFingerprint(PerceptualHashCodec.hash256(pixels), pixels);
+	}
+
+	/**
+	 * Decodes the file, or the first frame of it when the file is an animated WebP:
+	 * ffmpeg reads no animation, so a sticker would otherwise be undecodable. The
+	 * frame is handed over as a file because the runner takes a path, and is deleted
+	 * straight after - a byte-for-byte slice of the original, regenerated whenever
+	 * it is needed again. It is written inside the application workspace, never in
+	 * the system temp: that one is world-writable, and a file another user can
+	 * swap between the write and the read is a file we should not hand to a decoder.
+	 */
+	private byte[] hashOf(Path file) throws Exception {
+		byte[] firstFrame = AnimatedWebp.firstFrame(file);
+
+		if (firstFrame.length == 0) {
+			return ffmpegRunner.run(ffmpegPath(), file);
+		}
+
+		Path frameFile = Files.createTempFile(workspaceManager.temp(), "webp-frame", ".webp");
+
+		try {
+			Files.write(frameFile, firstFrame);
+
+			return ffmpegRunner.run(ffmpegPath(), frameFile);
+		} finally {
+			Files.deleteIfExists(frameFile);
+		}
 	}
 
 	private void rejectZipContainerMasqueradingAsWebp(Path file) {
