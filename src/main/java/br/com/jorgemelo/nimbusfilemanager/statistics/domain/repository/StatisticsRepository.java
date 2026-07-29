@@ -60,21 +60,28 @@ public interface StatisticsRepository extends Repository<CatalogFile, Long> {
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.statistics.domain.repository.projection.CodecStatisticsRawResponse(
 				UPPER(TRIM(v.videoCodec)),
-				COUNT(v),
-				(COUNT(v) * 100.0 / (
+				SUM(CASE WHEN m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
+					THEN 0 ELSE 1 END),
+				SUM(CASE WHEN m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
+					THEN 1 ELSE 0 END),
+				(SUM(CASE WHEN m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
+					THEN 0 ELSE 1 END) * 100.0 / (
 					SELECT COUNT(v2)
 					FROM Video v2
+					JOIN v2.catalogFile m2
 					WHERE v2.videoCodec IS NOT NULL
 					  AND TRIM(v2.videoCodec) <> ''
+					  AND m2.lifecycleStatus <> br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
 				)),
-				COALESCE(SUM(m.sizeBytes), 0)
+				COALESCE(SUM(CASE WHEN m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
+					THEN 0 ELSE m.sizeBytes END), 0)
 			)
 			FROM Video v
 			JOIN v.catalogFile m
 			WHERE v.videoCodec IS NOT NULL
 			  AND TRIM(v.videoCodec) <> ''
 			GROUP BY UPPER(TRIM(v.videoCodec))
-			ORDER BY COUNT(v) DESC, COALESCE(SUM(m.sizeBytes), 0) DESC
+			ORDER BY 2 DESC, 5 DESC
 			""")
 	List<CodecStatisticsRawResponse> codecs();
 

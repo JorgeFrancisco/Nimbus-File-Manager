@@ -57,13 +57,29 @@ class StatisticsServiceTest {
 	@Test
 	void codecsShouldRoundPercentageAndMapSize() {
 		when(statisticsRepository.codecs())
-				.thenReturn(List.of(new CodecStatisticsRawResponse("h265", 2, 33.333, 2048)));
+				.thenReturn(List.of(new CodecStatisticsRawResponse("h265", 2, 0, 33.333, 2048)));
 
 		var codecs = service().codecs();
 
 		Assertions.assertThat(codecs).hasSize(1);
 		Assertions.assertThat(codecs.getFirst().percentage()).isEqualTo(33.33);
 		Assertions.assertThat(codecs.getFirst().totalSize().formatted()).isEqualTo("2.00 KB");
+	}
+
+	/**
+	 * Files no longer on disk are carried apart, not folded into the count: summing
+	 * them said a codec had files the library cannot open, and made the conversion
+	 * screen look as if it were hiding work.
+	 */
+	@Test
+	void codecsShouldCarryMissingFilesApartFromThePresentOnes() {
+		when(statisticsRepository.codecs())
+				.thenReturn(List.of(new CodecStatisticsRawResponse("h264", 0, 1, 0.0, 0)));
+
+		var codec = service().codecs().getFirst();
+
+		Assertions.assertThat(codec.files()).isZero();
+		Assertions.assertThat(codec.missing()).isEqualTo(1);
 	}
 
 	@Test

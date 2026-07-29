@@ -38,11 +38,13 @@
 			<h2 th:text="#{statistics.videoCodecs}">Codecs de vídeo</h2>
 			<div class="table-wrap">
 				<table class="table section">
-					<thead><tr><th th:text="#{statistics.codec}">Codec</th><th th:text="#{category.files}">Arquivos</th><th>%</th><th th:text="#{common.size}">Tamanho</th></tr></thead>
+					<thead><tr><th th:text="#{statistics.codec}">Codec</th><th th:text="#{category.files}">Arquivos</th><th th:text="#{statistics.codec.missing}">Ausentes</th><th>%</th><th th:text="#{common.size}">Tamanho</th></tr></thead>
 					<tbody>
 					<tr th:each="codec : ${codecs}">
 						<td th:text="${codec.codec()}">H265</td>
 						<td th:text="${codec.files()}">0</td>
+						<td th:text="${codec.missing() == 0} ? '—' : ${codec.missing()}"
+								th:title="#{statistics.codec.missing.title}">—</td>
 						<td th:text="${#numbers.formatDecimal(codec.percentage(), 1, 2, 'COMMA')} + '%'">0%</td>
 						<td th:text="${codec.totalSize().formatted()}">0 B</td>
 					</tr>

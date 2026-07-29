@@ -75,8 +75,10 @@ public class StatisticsService {
 	}
 
 	public List<CodecStatisticsResponse> codecs() {
-		return statisticsRepository.codecs().stream().map(codec -> new CodecStatisticsResponse(codec.codec(),
-				codec.files(), NumberUtils.roundPercentage(codec.percentage()), size(codec.totalSizeBytes()))).toList();
+		return statisticsRepository.codecs().stream()
+				.map(codec -> new CodecStatisticsResponse(codec.codec(), codec.files(), codec.missing(),
+						NumberUtils.roundPercentage(codec.percentage()), size(codec.totalSizeBytes())))
+				.toList();
 	}
 
 	public List<ExtensionStatisticsResponse> extensions(int limit) {
