@@ -121,11 +121,21 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 
 	/**
 	 * Lightweight existence check that returns only the {@code fileKey}s already
-	 * present, not whole entities. Used by the parallel inventory to identify
-	 * cached files in a short read transaction (so the connection is released)
-	 * before the heavy extraction runs off any transaction.
+	 * present and active, not whole entities. Used by the parallel inventory to
+	 * identify cached files in a short read transaction (so the connection is
+	 * released) before the heavy extraction runs off any transaction.
+	 *
+	 * <p>
+	 * Active on purpose: a soft-deleted row is not a cache hit. Counting it as one
+	 * meant the persistence step had to load every entity of every batch just to
+	 * find the few that needed reviving - 33 seconds of a 47 second inventory that
+	 * wrote nothing at all.
 	 */
-	@Query("select mf.fileKey from CatalogFile mf where mf.fileKey in :fileKeys")
+	@Query("""
+			select mf.fileKey from CatalogFile mf
+			where mf.fileKey in :fileKeys
+			  and mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
+			""")
 	List<String> findExistingFileKeys(@Param("fileKeys") List<String> fileKeys);
 
 	/**

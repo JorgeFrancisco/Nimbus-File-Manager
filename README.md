@@ -1123,7 +1123,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       2101 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.94% instruction, 90.51% branch, 97.43% line, 98.33% method, 100.00% class
+JaCoCo:      97.95% instruction, 90.56% branch, 97.45% line, 98.33% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,7 +1135,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.94% instruction, 90.51% branch, 97.43% line, 98.33% method, 100.00% class
+Floor:  97.95% instruction, 90.56% branch, 97.45% line, 98.33% method, 100.00% class
 Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
 ```
 

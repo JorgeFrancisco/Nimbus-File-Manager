@@ -174,7 +174,7 @@ public class InventoryPersistenceService {
 		List<Path> toExtract = new ArrayList<>(files.size());
 
 		for (Path file : files) {
-			if (options.forceAnalysis() || cachedKeys == null || !cachedKeys.contains(PathUtils.normalize(file))) {
+			if (needsWriting(PathUtils.normalize(file), options, cachedKeys)) {
 				toExtract.add(file);
 			}
 		}
@@ -195,6 +195,9 @@ public class InventoryPersistenceService {
 				.execute(_ -> persist(files, sourcePath, options, cachedKeys, extracted));
 
 		executionPhaseTimings.addNanos(ExecutionPhaseType.PERSISTENCE, System.nanoTime() - persistenceStart);
+		// The files this step actually wrote. It reported zero before, which made the
+		// screen show a long phase with nothing in it.
+		executionPhaseTimings.addItems(ExecutionPhaseType.PERSISTENCE, toExtract.size());
 
 		processingMetrics.recordWallClock(System.nanoTime() - wallStart);
 
@@ -243,12 +246,7 @@ public class InventoryPersistenceService {
 			outcomeByPath.put(outcome.item(), outcome);
 		}
 
-		List<String> keys = files.stream().map(PathUtils::normalize).toList();
-
-		Map<String, CatalogFile> existingByKey = (options.forceAnalysis()
-				? catalogFileRepository.findByFileKeyInWithDetails(keys)
-				: catalogFileRepository.findByFileKeyIn(keys)).stream()
-				.collect(Collectors.toMap(CatalogFile::getFileKey, Function.identity()));
+		Map<String, CatalogFile> existingByKey = entitiesToWrite(files, options, cachedKeys);
 
 		List<CatalogFile> toPersist = new ArrayList<>();
 
@@ -259,9 +257,7 @@ public class InventoryPersistenceService {
 
 			CatalogFile existing = existingByKey.get(key);
 
-			if (!options.forceAnalysis() && cachedKeys != null && cachedKeys.contains(key)) {
-				reviveIfSoftDeleted(existing, toPersist);
-
+			if (!needsWriting(key, options, cachedKeys)) {
 				results.add(cacheResult(file));
 			} else {
 				Outcome<Path, MetadataResult> outcome = outcomeByPath.get(file);
@@ -286,6 +282,31 @@ public class InventoryPersistenceService {
 		return results;
 	}
 
+	/**
+	 * Whether a file still has to be written. A cache hit is catalogued and active,
+	 * so it is neither read nor written - which is the whole point: loading every
+	 * entity of every batch cost 33 seconds on an inventory that wrote nothing.
+	 */
+	private static boolean needsWriting(String key, MetadataOptions options, Set<String> cachedKeys) {
+		return options.forceAnalysis() || cachedKeys == null || !cachedKeys.contains(key);
+	}
+
+	/** The entities of the files about to be written, and of no others. */
+	private Map<String, CatalogFile> entitiesToWrite(List<Path> files, MetadataOptions options,
+			Set<String> cachedKeys) {
+		List<String> keys = files.stream().map(PathUtils::normalize)
+				.filter(key -> needsWriting(key, options, cachedKeys)).toList();
+
+		if (keys.isEmpty()) {
+			return Map.of();
+		}
+
+		List<CatalogFile> existing = options.forceAnalysis() ? catalogFileRepository.findByFileKeyInWithDetails(keys)
+				: catalogFileRepository.findByFileKeyIn(keys);
+
+		return existing.stream().collect(Collectors.toMap(CatalogFile::getFileKey, Function.identity()));
+	}
+
 	private InventoryBatchItemResult persistExtracted(Path file, Path sourcePath, CatalogFile existing,
 			MetadataResult metadata, List<CatalogFile> toPersist) {
 		if (existing != null) {
@@ -303,14 +324,6 @@ public class InventoryPersistenceService {
 
 		return InventoryBatchItemResult.of(file,
 				new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.CREATED));
-	}
-
-	private void reviveIfSoftDeleted(CatalogFile existing, List<CatalogFile> toPersist) {
-		if (existing != null && !existing.isActive()) {
-			existing.markActive();
-
-			toPersist.add(existing);
-		}
 	}
 
 	private InventoryBatchItemResult cacheResult(Path file) {

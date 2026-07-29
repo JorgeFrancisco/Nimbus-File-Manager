@@ -163,9 +163,6 @@ class InventoryPersistenceServiceTest {
 
 		when(catalogFileRepository.findExistingFileKeys(List.of(fileKey(first), fileKey(second))))
 				.thenReturn(List.of(fileKey(first), fileKey(second)));
-		when(catalogFileRepository.findByFileKeyIn(List.of(fileKey(first), fileKey(second))))
-				.thenReturn(List.of(CatalogFile.builder().fileKey(fileKey(first)).build(),
-						CatalogFile.builder().fileKey(fileKey(second)).build()));
 
 		var results = service().saveOrCacheBatch(List.of(first, second), Path.of("C:/input"),
 				new MetadataOptions(false, false), _ -> {
@@ -180,6 +177,11 @@ class InventoryPersistenceServiceTest {
 		Assertions.assertThat(metadataCalls).hasValue(0);
 
 		verify(catalogFileRepository, never()).saveAll(any());
+
+		// Nothing is read either: a cache hit is catalogued and active, so there is no
+		// entity to load. Loading them all cost 33 seconds on an inventory that wrote
+		// nothing at all.
+		verify(catalogFileRepository, never()).findByFileKeyIn(any());
 	}
 
 	@Test
