@@ -186,7 +186,9 @@ document.addEventListener('DOMContentLoaded', () => {
 			failuresStatus.textContent = t('js.folder.loading');
 		}
 
-		return fetch('/api/duplicates/similar-photos/failures')
+		// Which list to load belongs to the tab, and the tab is the server's to know:
+		// the dialog is shared markup and used to ask for photos on every tab.
+		return fetch(failuresDialog.dataset.failuresUrl)
 			.then((response) => {
 				if (!response.ok) {
 					throw new Error(`HTTP ${response.status}`);
@@ -204,14 +206,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 						const badge = document.createElement('span');
 
-						// The server says which reason means the file itself is gone; the row only
-						// dresses it. Losing data reads differently from a format nothing decodes.
-						badge.className = failure.severe ? 'badge error' : 'badge muted';
+						// Colour, wording and hint all arrive decided: the browser never maps a
+						// reason code to a sentence or to a palette.
+						badge.className = `badge ${failure.tone || 'muted'}`;
 						badge.textContent = failure.reasonLabel || '';
-
-						if (failure.severe) {
-							row.className = 'fingerprint-failure-severe';
-						}
+						badge.title = failure.reasonHint || '';
 
 						path.textContent = failure.path || '—';
 						reason.appendChild(badge);

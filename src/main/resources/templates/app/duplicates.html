@@ -327,7 +327,7 @@
 	</section>
 
 	<dialog id="fingerprintFailuresDialog" class="fingerprint-failures-dialog"
-			aria-labelledby="fingerprintFailuresTitle">
+			th:attr="data-failures-url=${failuresUrl}" aria-labelledby="fingerprintFailuresTitle">
 		<header class="fingerprint-failures-header">
 			<div>
 				<h2 id="fingerprintFailuresTitle" th:text="#{duplicates.failures.title}">Falhas nas impressões digitais</h2>

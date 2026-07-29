@@ -141,6 +141,12 @@ public class DuplicatesWebController extends LocalizedComponent {
 		int page = request.page() == null ? 0 : request.page();
 
 		model.addAttribute("activeTab", safeTab);
+
+		// The failures dialog is one piece of markup shared by the tabs, so which list
+		// it loads is decided here. It used to ask for photos whatever the tab was, and
+		// the Videos tab answered with photo files.
+		model.addAttribute("failuresUrl",
+				videosTab ? "/api/duplicates/similar-videos/failures" : "/api/duplicates/similar-photos/failures");
 		model.addAttribute(MIN_SIMILARITY_KEY, safeMinSimilarity);
 		model.addAttribute("minSimilarityFloor", DuplicateConstants.MIN_SIMILARITY_PERCENT);
 		model.addAttribute("similarityOptions", List.of(70, 75, 80, 85, 90, 95, 100));

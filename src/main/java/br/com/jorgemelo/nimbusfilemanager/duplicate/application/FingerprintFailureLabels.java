@@ -26,8 +26,37 @@ public class FingerprintFailureLabels extends LocalizedComponent {
 		FingerprintFailureReason reason = failure.reason() == null ? FingerprintFailureReason.UNKNOWN
 				: failure.reason();
 
-		return new FingerprintFailureResponse(failure.path(), reason.name(), label(reason),
-				reason == FingerprintFailureReason.CORRUPTED_FILE, failure.error());
+		return new FingerprintFailureResponse(failure.path(), reason.name(), label(reason), hint(reason), tone(reason),
+				failure.error());
+	}
+
+	/**
+	 * One colour per reason, so a long list separates by eye before it is read. The
+	 * scale is the one the rest of the application already uses: red for the file
+	 * that was lost, amber for a real image refused, blue for a known limitation,
+	 * grey for what was never a photo.
+	 */
+	private String tone(FingerprintFailureReason reason) {
+		return switch (reason) {
+		case CORRUPTED_FILE -> "error";
+		case DECODER_REFUSED -> "warn";
+		case UNSUPPORTED_FORMAT -> "info";
+		case NOT_AN_IMAGE -> "muted";
+		case UNKNOWN -> "ok";
+		};
+	}
+
+	/**
+	 * What the label cannot fit: the cause, with the examples this library hit.
+	 */
+	private String hint(FingerprintFailureReason reason) {
+		return message(switch (reason) {
+		case CORRUPTED_FILE -> "backend.fingerprint.reason.corruptedFile.hint";
+		case NOT_AN_IMAGE -> "backend.fingerprint.reason.notAnImage.hint";
+		case UNSUPPORTED_FORMAT -> "backend.fingerprint.reason.unsupportedFormat.hint";
+		case DECODER_REFUSED -> "backend.fingerprint.reason.decoderRefused.hint";
+		case UNKNOWN -> "backend.fingerprint.reason.unknown.hint";
+		});
 	}
 
 	private String label(FingerprintFailureReason reason) {

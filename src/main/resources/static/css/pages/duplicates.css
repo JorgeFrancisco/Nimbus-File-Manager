@@ -198,13 +198,25 @@
 }
 
 /*
- * A corrupted file is the one failure that means data was lost, not a format the
- * decoder never read. It gets the danger tint so it does not sit unnoticed among
- * the stickers and panoramas nothing can decode. Theme variables keep the
- * contrast right in both light and dark.
+ * One colour per reason, so the list separates by eye before it is read. The
+ * badges share a width and centre their text, which turns the column into a
+ * readable stack instead of ragged pills, and every one carries a border: the
+ * corrupted badge sits on a tinted row and would otherwise be red on red.
  */
-.fingerprint-failures-table tr.fingerprint-failure-severe td {
-	background: var(--danger-soft);
+.fingerprint-failures-table .badge {
+	border-color: var(--line);
+	min-width: 210px;
+	text-align: center;
+}
+
+/*
+ * The colour lives in the badge alone and the rows stay plain: tinting the whole
+ * row for one reason made it shout over the others and put red on red. A border
+ * on the strongest badge is enough to find a lost file at a glance.
+ */
+.fingerprint-failures-table .badge.error {
+	border-color: var(--danger);
+	font-weight: 600;
 }
 
 .fingerprint-failures-table th {

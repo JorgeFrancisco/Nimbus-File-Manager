@@ -36,8 +36,11 @@ class DuplicatesTemplateTest {
 				.contains("id=\"similarityProgressRegion\"").contains("data-refresh-ms=\"4000\"")
 				.contains("data-refresh-ms=\"3000\"").contains("data-refresh-ms=${phashBlocking ? 4000 : null}")
 				.doesNotContain("window.location.reload()").contains("fingerprint-failures-open")
-				.contains("id=\"fingerprintFailuresDialog\"").contains("id=\"fingerprintFailuresRows\"");
-		assertThat(javascript).contains("/api/duplicates/similar-photos/failures")
+				.contains("id=\"fingerprintFailuresDialog\"").contains("id=\"fingerprintFailuresRows\"")
+				// The dialog is shared by the tabs, so the list it loads is rendered into it.
+				// Hard-coding the photo endpoint in the script made the Videos tab show photos.
+				.contains("data-failures-url=${failuresUrl}");
+		assertThat(javascript).contains("failuresDialog.dataset.failuresUrl")
 				.contains("let failuresLoaded = false")
 				// A deletion updates the current page in place (rows/groups removed
 				// client-side) as the

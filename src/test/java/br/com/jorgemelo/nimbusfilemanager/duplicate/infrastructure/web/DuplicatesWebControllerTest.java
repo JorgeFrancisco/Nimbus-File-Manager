@@ -648,6 +648,51 @@ class DuplicatesWebControllerTest {
 	}
 
 	/**
+	 * The failures dialog is one piece of markup shared by the tabs, so the tab
+	 * decides which list it loads. It asked for photos on every tab, and the Videos
+	 * tab answered with photo files.
+	 */
+	@Test
+	void theFailuresDialogLoadsTheListOfTheTabItWasOpenedFrom() {
+		DuplicateService duplicateService = mock(DuplicateService.class);
+		var phashBacklogService = mock(PhashBacklogService.class);
+
+		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+
+		ExtendedModelMap exact = new ExtendedModelMap();
+
+		controllerWith(duplicateService, phashBacklogService)
+				.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, exact);
+
+		Assertions.assertThat(exact.get("failuresUrl")).asString()
+				.isEqualTo("/api/duplicates/similar-photos/failures");
+
+		ExtendedModelMap videos = new ExtendedModelMap();
+
+		controllerWith(duplicateService, phashBacklogService)
+				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, videos);
+
+		Assertions.assertThat(videos.get("failuresUrl")).asString()
+				.isEqualTo("/api/duplicates/similar-videos/failures");
+	}
+
+	private DuplicatesWebController controllerWith(DuplicateService duplicateService,
+			PhashBacklogService phashBacklogService) {
+		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
+
+		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+
+		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
+				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoBacklogRunner());
+
+		return new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
+				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
+				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
+				mock(DuplicateExclusionService.class), videoWeb);
+	}
+
+	/**
 	 * A conversion does not make the analysis wrong, so the results stay on screen -
 	 * only the deletion is refused, and the reason arrives ready to display instead
 	 * of the screen working it out.

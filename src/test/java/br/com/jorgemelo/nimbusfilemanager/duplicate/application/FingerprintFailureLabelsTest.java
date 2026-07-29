@@ -19,24 +19,29 @@ class FingerprintFailureLabelsTest {
 	private final FingerprintFailureLabels labels = new FingerprintFailureLabels();
 
 	@Test
-	void aCorruptedFileIsTheOneFlaggedAsSevere() {
+	void aCorruptedFileReadsAsWordsAndNotAsItsCode() {
 		FingerprintFailureResponse described = describe(FingerprintFailureReason.CORRUPTED_FILE);
 
-		assertThat(described.severe()).isTrue();
 		assertThat(described.reason()).isEqualTo("CORRUPTED_FILE");
 		assertThat(described.reasonLabel()).isNotBlank().doesNotContain("CORRUPTED_FILE");
 	}
 
-	/**
-	 * A format nothing decodes is a limitation, not a loss, and must not be dressed
-	 * like one.
-	 */
+	/** Colour helps read the list, and is decided here, not in the browser. */
 	@Test
-	void aFormatNothingReadsIsNotSevere() {
-		assertThat(describe(FingerprintFailureReason.UNSUPPORTED_FORMAT).severe()).isFalse();
-		assertThat(describe(FingerprintFailureReason.DECODER_REFUSED).severe()).isFalse();
-		assertThat(describe(FingerprintFailureReason.NOT_AN_IMAGE).severe()).isFalse();
-		assertThat(describe(FingerprintFailureReason.UNKNOWN).severe()).isFalse();
+	void eachReasonWearsItsOwnColour() {
+		assertThat(describe(FingerprintFailureReason.CORRUPTED_FILE).tone()).isEqualTo("error");
+		assertThat(describe(FingerprintFailureReason.DECODER_REFUSED).tone()).isEqualTo("warn");
+		assertThat(describe(FingerprintFailureReason.UNSUPPORTED_FORMAT).tone()).isEqualTo("info");
+		assertThat(describe(FingerprintFailureReason.NOT_AN_IMAGE).tone()).isEqualTo("muted");
+		assertThat(describe(FingerprintFailureReason.UNKNOWN).tone()).isEqualTo("ok");
+	}
+
+	/** The hint carries the examples the badge has no room for. */
+	@Test
+	void everyReasonExplainsItselfWithExamples() {
+		for (FingerprintFailureReason reason : FingerprintFailureReason.values()) {
+			assertThat(describe(reason).reasonHint()).as("hint of %s", reason).isNotBlank();
+		}
 	}
 
 	@Test
@@ -56,7 +61,7 @@ class FingerprintFailureLabelsTest {
 		FingerprintFailureResponse described = describe(null);
 
 		assertThat(described.reason()).isEqualTo("UNKNOWN");
-		assertThat(described.severe()).isFalse();
+		assertThat(described.tone()).isEqualTo("ok");
 	}
 
 	private FingerprintFailureResponse describe(FingerprintFailureReason reason) {
