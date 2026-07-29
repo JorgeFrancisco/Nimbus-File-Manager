@@ -59,7 +59,7 @@ public class MetadataExtractor {
 
 		boolean excludedMediaContainer = MediaProcessingPolicy.isArchiveMasqueradingAsMedia(file, mimeType);
 
-		FileType fileType = excludedMediaContainer ? FileType.OTHER : resolveFileType(file, mimeType);
+		FileType fileType = excludedMediaContainer ? FileType.OTHER : FileType.resolve(file, mimeType);
 
 		FileSystemDates fileSystemDates = dateSourceService.resolveFileSystemDates(file);
 		LocalDateTime createdAt = fileSystemDates.createdAt();
@@ -232,18 +232,6 @@ public class MetadataExtractor {
 	 * Genuinely supported image formats keep working because their extensions are
 	 * in {@link FileType#PHOTO}.
 	 */
-	private FileType resolveFileType(Path file, String mimeType) {
-		FileType byExtension = FileType.fromPath(file);
-
-		if (byExtension != FileType.OTHER) {
-			return byExtension;
-		}
-
-		FileType byMime = FileType.fromMimeType(mimeType);
-
-		return byMime.isMedia() ? FileType.OTHER : byMime;
-	}
-
 	private Long getSize(Path file) {
 		try {
 			return Files.size(file);

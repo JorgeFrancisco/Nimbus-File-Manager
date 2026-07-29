@@ -109,6 +109,28 @@ public enum FileType {
 		return OTHER;
 	}
 
+	/**
+	 * The type of a file: its extension decides, and the mime type only answers
+	 * when the extension says nothing. A media mime is refused in that fallback -
+	 * an extensionless file sniffed as an image is not treated as a photo, because
+	 * the whole media pipeline keys off the extension.
+	 *
+	 * <p>
+	 * Lives here so the one rule serves both the analysis that first types a file
+	 * and the rename that re-types it when its extension changes.
+	 */
+	public static FileType resolve(Path path, String mimeType) {
+		FileType byExtension = fromPath(path);
+
+		if (byExtension != OTHER) {
+			return byExtension;
+		}
+
+		FileType byMime = fromMimeType(mimeType);
+
+		return byMime.isMedia() ? OTHER : byMime;
+	}
+
 	public static FileType fromPath(Path path) {
 		if (path == null || path.getFileName() == null) {
 			return OTHER;

@@ -74,4 +74,26 @@ class FileTypeTest {
 		Assertions.assertThat(FileType.PHOTO.isArchive()).isFalse();
 		Assertions.assertThat(FileType.PHOTO.isOther()).isFalse();
 	}
+
+	/**
+	 * One rule, read by the analysis that first types a file and by the rename that
+	 * re-types it: the extension decides, and the mime type only speaks when the
+	 * extension says nothing.
+	 */
+	@Test
+	void resolveLetsTheExtensionDecideBeforeTheMimeType() {
+		Assertions.assertThat(FileType.resolve(Path.of("a.jpg"), "application/pdf")).isEqualTo(FileType.PHOTO);
+		Assertions.assertThat(FileType.resolve(Path.of("a.mps"), "application/pdf")).isEqualTo(FileType.PDF);
+		Assertions.assertThat(FileType.resolve(Path.of("a.mps"), null)).isEqualTo(FileType.OTHER);
+	}
+
+	/**
+	 * A media mime is refused in the fallback: the photo and video pipelines key off
+	 * the extension, so a file only sniffed as an image must not enter them.
+	 */
+	@Test
+	void resolveNeverPromotesAnExtensionlessFileToMedia() {
+		Assertions.assertThat(FileType.resolve(Path.of("a.mps"), "image/jpeg")).isEqualTo(FileType.OTHER);
+		Assertions.assertThat(FileType.resolve(Path.of("a.mps"), "video/mp4")).isEqualTo(FileType.OTHER);
+	}
 }

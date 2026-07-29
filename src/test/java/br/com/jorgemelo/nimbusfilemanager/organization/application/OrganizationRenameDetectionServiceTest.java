@@ -26,6 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FileHashes;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FileSystemDates;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileIssueResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
@@ -69,6 +70,47 @@ class OrganizationRenameDetectionServiceTest {
 		Assertions.assertThat(catalogFile.getLocation().getOriginalPath()).isEqualTo(PathUtils.normalize(renamed));
 
 		verify(catalogFileRepository).save(catalogFile);
+	}
+
+	/**
+	 * Correcting a wrong extension is a rename, and the extension is what decides
+	 * the type. Leaving it behind kept a .mps typed PHOTO: counted on every media
+	 * screen and queued for a fingerprint it can never have.
+	 */
+	@Test
+	void shouldRetypeTheRecordWhenTheRenameChangedItsExtension() throws IOException {
+		Path renamed = write("measurements.mps", "not-an-image");
+
+		CatalogFile catalogFile = catalogFile(1L, "C:/media/measurements.bmp", Files.size(renamed), "sha-a");
+
+		catalogFile.setFileType(FileType.PHOTO);
+
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(fileHashService.hashes(renamed)).thenReturn(new FileHashes("sha-a", "md5-a"));
+		when(dateSourceService.resolveFileSystemDates(renamed)).thenReturn(new FileSystemDates(CREATED, CREATED));
+
+		service.detectAndApplyRenames(response(catalogFile, renamed));
+
+		Assertions.assertThat(catalogFile.getExtension()).isEqualTo("mps");
+		Assertions.assertThat(catalogFile.getFileType()).isEqualTo(FileType.OTHER);
+	}
+
+	/** A rename that keeps the extension leaves the type exactly where it was. */
+	@Test
+	void shouldKeepTheTypeWhenTheExtensionSurvivedTheRename() throws IOException {
+		Path renamed = write("renamed.jpg", "photo-bytes");
+
+		CatalogFile catalogFile = catalogFile(1L, "C:/media/original.jpg", Files.size(renamed), "sha-a");
+
+		catalogFile.setFileType(FileType.PHOTO);
+
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(fileHashService.hashes(renamed)).thenReturn(new FileHashes("sha-a", "md5-a"));
+		when(dateSourceService.resolveFileSystemDates(renamed)).thenReturn(new FileSystemDates(CREATED, CREATED));
+
+		service.detectAndApplyRenames(response(catalogFile, renamed));
+
+		Assertions.assertThat(catalogFile.getFileType()).isEqualTo(FileType.PHOTO);
 	}
 
 	@Test

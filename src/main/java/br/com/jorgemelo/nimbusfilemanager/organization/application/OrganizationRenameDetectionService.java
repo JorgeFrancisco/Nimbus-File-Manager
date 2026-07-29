@@ -25,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.RenameCandidate;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.RenamePair;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
@@ -255,6 +256,11 @@ public class OrganizationRenameDetectionService {
 		catalogFile.setFileKey(newFileKey);
 		catalogFile.setFileName(candidate.path().getFileName().toString());
 		catalogFile.setExtension(ExtensionUtils.fromPath(candidate.path()));
+
+		// A rename can change the extension, and the extension is what decides the
+		// type. Leaving it behind kept a corrected .mps typed PHOTO, counted as one on
+		// every media screen and queued for a fingerprint it can never have.
+		catalogFile.setFileType(FileType.resolve(candidate.path(), catalogFile.getMimeType()));
 		catalogFile.markActive();
 
 		if (candidate.dates() != null && candidate.dates().modifiedAt() != null) {
