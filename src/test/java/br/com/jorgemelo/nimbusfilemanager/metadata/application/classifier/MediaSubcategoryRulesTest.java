@@ -164,4 +164,19 @@ class MediaSubcategoryRulesTest {
 		Assertions.assertThat(rule.subcategory()).isEqualTo(MediaSubcategory.CAMERA);
 		Assertions.assertThat(rule.name()).isEqualTo("080_IMAGE_UUID");
 	}
+
+	/**
+	 * The name reaches the families from {@code Path#getFileName()}, which answers
+	 * null for a root path: no family may claim such an item, and none may fail on
+	 * it either - a single throw here would abort the whole classification.
+	 */
+	@Test
+	void noFamilyClaimsAnItemWhoseNameIsUnavailable() {
+		Assertions.assertThat(CameraMediaFamily.matchesName(null)).isFalse();
+		Assertions.assertThat(DroneMediaFamily.matchesName(null)).isFalse();
+		Assertions.assertThat(GoProMediaFamily.matchesName(null)).isFalse();
+		Assertions.assertThat(ImageUuidMediaFamily.matchesName(null)).isFalse();
+		Assertions.assertThat(PeachyMediaFamily.matchesName(null)).isFalse();
+		Assertions.assertThat(ScreenshotMediaFamily.matchesName(null)).isFalse();
+	}
 }

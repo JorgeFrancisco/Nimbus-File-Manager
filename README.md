@@ -1122,8 +1122,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2101 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      97.95% instruction, 90.56% branch, 97.45% line, 98.33% method, 100.00% class
+Tests:       2144 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.41% instruction, 91.60% branch, 98.01% line, 98.58% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,31 +1135,39 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  97.95% instruction, 90.56% branch, 97.45% line, 98.33% method, 100.00% class
-Goal:   98.00% instruction, 90.00% branch, 98.00% line, 98.00% method, 100.00% class
+Floor:  98.41% instruction, 91.60% branch, 98.01% line, 98.58% method, 100.00% class
+Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-Branch, method and class are **at the goal**; instruction and line are **52
-instructions and 65 lines** away from theirs. Branch and method need a new target
-set from here — the ratchet promotes a reached goal to floor and asks for the next
-step. The branch goal had been lowered from 95% to 90% because 95% never oriented
-anything: it sat more than five points from the real number, and a goal nobody can
-reach is a goal nobody works toward. 90% landed two passes later.
+**All five metrics reached their goal**, line last — it was the one still short. The
+goals above are the next step the ratchet asks for, set from the numbers actually
+measured rather than from a round figure: the previous branch goal had been lowered
+from 95% to 90% precisely because a target nobody can reach orients nobody, and 90%
+landed two passes later.
 
 Where the remaining work is: the classes furthest from the goal are the ones that
 touch the file system and the delivery layer, and each needs a handful of real cases
-rather than a sweep. The last pass over the seven worst offenders is what the numbers
-above reflect, and it produced two code changes rather than only tests — an
-unreachable `return` deleted from the thumbnail width rules, and a redundant
-`isDirectory` guard folded into the exception handling of the conversion sweeper.
-Chasing coverage found dead code, which is the useful version of the exercise.
+rather than a sweep. The pass that reached the line goal wrote cases for contracts
+that had none - a pHash refusing a sample of the wrong size, a quarantine cleanup
+that crashes ending its execution as a failure instead of leaving it open forever, a
+refused user creation saying why on the screen, a location name that sanitizes down
+to dots being dropped instead of becoming a path segment. It also deleted two methods
+nobody called (`FileCategory#isOther`, `MediaSubcategory#valueOfNullable`): chasing
+coverage keeps finding dead code, which is the useful version of the exercise.
 
-What is genuinely unreachable is a small set, on the order of 15-25 branches: I/O
-failure paths that need OS-level permission denial, utility-class anti-instantiation
-guards, a `FilterInputStream` single-byte override the JSON parser never calls. Part
-of what a report shows as uncovered is also covered by tests that *self-skip* on this
-machine (symbolic-link cases needing privilege), so the same suite measures higher
-elsewhere.
+Two candidate tests were dropped rather than written, because the paths they would
+have covered cannot happen: the null-name guards of the file-name date rules (the
+engine rejects null before any rule sees it) and the `ERROR`/`CANCELLED` switch arms
+of the inventory writer and the conversion service (present for exhaustiveness; no
+production path produces those values). They are recorded here as residue, not as a
+gap to close.
+
+What is genuinely unreachable is a small set: I/O failure paths that need OS-level
+permission denial, interrupt handling of the shared executors, utility-class
+anti-instantiation guards, a `FilterInputStream` single-byte override the JSON parser
+never calls. Part of what a report shows as uncovered is also covered by tests that
+*self-skip* on this machine (symbolic-link cases needing privilege), so the same
+suite measures higher elsewhere.
 
 The rule still stands: if the remaining tail turns out to be that unreachable set,
 coverage stops there and the reason is recorded. The goal never justifies

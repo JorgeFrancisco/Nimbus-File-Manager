@@ -118,4 +118,18 @@ class OrganizationRuleEngineTest {
 		return new OrganizationCandidate(1L, fileName, "jpg", FileType.PHOTO, 100L, currentPath, "C:/media", 2024, 1, 2,
 				"202401", LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30), FileCategory.MEDIA, subcategory);
 	}
+
+	/**
+	 * A file saved by WhatsApp keeps no marker in its name once renamed, so the
+	 * folder it sits in is what still identifies it.
+	 */
+	@Test
+	void shouldClassifyByFolderWhenTheNameNoLongerSaysWhatsApp() {
+		OrganizationRuleResult result = engine.classify(
+				candidate("renamed.jpg", "C:/media/WhatsApp/Media/WhatsApp Images", MediaSubcategory.OTHER));
+
+		Assertions.assertThat(result.rule()).isEqualTo(OrganizationRuleType.WHATSAPP);
+		Assertions.assertThat(result.reason()).isEqualTo(OrganizationRuleReason.FOLDER);
+		Assertions.assertThat(result.subcategory()).isEqualTo(MediaSubcategory.WHATSAPP);
+	}
 }

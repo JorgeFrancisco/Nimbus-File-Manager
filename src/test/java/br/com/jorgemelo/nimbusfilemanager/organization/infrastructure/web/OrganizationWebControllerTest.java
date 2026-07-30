@@ -494,4 +494,28 @@ class OrganizationWebControllerTest {
 		return new ExecutionResponse(1L, "INVENTORY", "FINISHED", NOW, NOW, "C:/media/input", null, 1, 1, 0, 0, 0, 0,
 				null, null, "ok", false);
 	}
+
+	/**
+	 * A rejected execution keeps the operator on the form with the reason, instead
+	 * of redirecting to a progress page for a run that never started.
+	 */
+	@Test
+	void organizationShouldShowErrorWhenServiceRejectsTheExecution() throws Exception {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		OrganizationWebController controller = new OrganizationWebController(organizationService,
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
+		ExtendedModelMap model = new ExtendedModelMap();
+		Path source = Files.createDirectories(tempDir.resolve("rejected-source"));
+		Path target = tempDir.resolve("rejected-target");
+
+		when(organizationService.executeAsync(any())).thenThrow(new IllegalArgumentException("Path outside roots."));
+
+		OrganizationForm form = new OrganizationForm(source.toString(), target.toString(), true,
+				OrganizationLayout.DEFAULT, 100, false, false, 0, null, null, null, null);
+
+		String view = controller.execute(form, new TestingAuthenticationToken("admin@example.com", "password"), model);
+
+		Assertions.assertThat(view).isEqualTo("app/organization");
+		Assertions.assertThat(model).containsEntry("error", "Path outside roots.");
+	}
 }

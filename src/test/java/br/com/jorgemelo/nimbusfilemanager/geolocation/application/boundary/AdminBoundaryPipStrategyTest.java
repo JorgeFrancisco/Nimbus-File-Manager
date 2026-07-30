@@ -316,4 +316,28 @@ class AdminBoundaryPipStrategyTest {
 			throw new IllegalStateException(e);
 		}
 	}
+
+	/**
+	 * A point whose only container is a state - no country polygon over it and no
+	 * municipality inside it - still resolves, carrying the country denormalized
+	 * on the state row. This is the sparse-coverage case of the worldwide dataset.
+	 */
+	@Test
+	void shouldResolveByStateAloneWhenNoCountryPolygonContainsThePoint() {
+		when(repository.findCandidates(eq(AdminBoundaryKind.STATE), anyDouble(), anyDouble()))
+				.thenReturn(List.of(boundary(AdminBoundaryKind.STATE, "Paraná", PARANA)));
+
+		BoundaryGeometryCache cache = cache();
+
+		AdminBoundaryPipStrategy strategy = new AdminBoundaryPipStrategy(new AdminBoundaryResolver(repository, cache),
+				cache, new LocationConfidencePolicy(), Clock.systemDefaultZone());
+
+		Optional<LocationResolution> resolution = strategy.resolve(new Coordinates(-24.0, -50.0));
+
+		Assertions.assertThat(resolution).isPresent();
+		Assertions.assertThat(resolution.get().cityName()).isNull();
+		Assertions.assertThat(resolution.get().stateName()).isEqualTo("Paraná");
+		Assertions.assertThat(resolution.get().countryCode()).isEqualTo("BR");
+		Assertions.assertThat(resolution.get().countryName()).isEqualTo("Brasil");
+	}
 }

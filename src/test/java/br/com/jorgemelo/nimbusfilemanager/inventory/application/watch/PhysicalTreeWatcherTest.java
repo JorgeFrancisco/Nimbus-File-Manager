@@ -151,7 +151,7 @@ class PhysicalTreeWatcherTest {
 		}
 	}
 
-	/** A folder that leaves the tree stops being watched instead of leaking a key. */
+	/** A folder that leaves the tree stops being watched, never leaking a key. */
 	@Test
 	void deletedDirectoryStopsBeingWatched() throws Exception {
 		Path album = Files.createDirectory(tempDir.resolve("album"));

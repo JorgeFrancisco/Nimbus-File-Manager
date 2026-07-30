@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.security.infrastructure.web;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,5 +62,25 @@ class UsersWebControllerTest {
 	private AppUser user() {
 		return AppUser.builder().username("admin").passwordHash("hash").displayName("Admin").role(Role.ADMIN)
 				.enabled(true).twoFactorEnabled(false).build();
+	}
+
+	/**
+	 * A refused creation has to say why on the screen; the operator would
+	 * otherwise be sent back to a list that simply lacks the new user.
+	 */
+	@Test
+	void usersShouldReportWhyACreationWasRefused() {
+		AppUserAccountService appUserAccountService = mock(AppUserAccountService.class);
+		UsersWebController controller = new UsersWebController(appUserAccountService,
+				mock(UserPagePreferenceService.class));
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		doThrow(new IllegalArgumentException("Email already registered.")).when(appUserAccountService)
+				.createUser("taken@example.com", "Taken", "secret1", "USER");
+
+		Assertions.assertThat(controller.create("taken@example.com", "Taken", "secret1", "USER", redirect))
+				.isEqualTo("redirect:/app/users");
+		Assertions.assertThat(redirect.getFlashAttributes().get("userError")).hasToString("Email already registered.");
+		Assertions.assertThat(redirect.getFlashAttributes()).doesNotContainKey("userCreated");
 	}
 }

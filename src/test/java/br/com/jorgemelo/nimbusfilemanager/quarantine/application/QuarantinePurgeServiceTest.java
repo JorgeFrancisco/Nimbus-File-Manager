@@ -533,4 +533,27 @@ class QuarantinePurgeServiceTest {
 				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
 				.movedAt(LocalDateTime.now().minusDays(200)).build();
 	}
+
+	/**
+	 * A crash halfway through the cleanup used to leave the execution open for
+	 * good, showing as running on the screen forever: it now ends as a failure
+	 * carrying the reason, and the caller still sees the error.
+	 */
+	@Test
+	void aCleanupThatCrashesEndsTheExecutionAsAFailure(@TempDir Path tmp) {
+		Path absent = tmp.resolve("trash").resolve("exec-1").resolve("10__gone.jpg");
+
+		Movement movement = overdueMovement(1L, absent);
+
+		Execution cleanupExecution = mock(Execution.class);
+
+		when(purgeLog.startAbsentCleanup(1)).thenReturn(cleanupExecution);
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		when(purgePersistence.deleteMovement(1L)).thenThrow(new IllegalStateException("the database went away"));
+
+		Assertions.assertThatThrownBy(service::cleanupAbsent).isInstanceOf(IllegalStateException.class);
+
+		verify(purgeLog).fail(cleanupExecution, "the database went away");
+	}
 }

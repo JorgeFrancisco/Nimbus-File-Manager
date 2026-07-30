@@ -77,7 +77,8 @@ class PhashBacklogServiceTest {
 	@Test
 	void aFetchedBatchIsWrittenInSeveralSmallTransactions() {
 		List<PendingPhoto> sixty = IntStream.rangeClosed(1, 60)
-				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg")).toList();
+				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg"))
+				.toList();
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))

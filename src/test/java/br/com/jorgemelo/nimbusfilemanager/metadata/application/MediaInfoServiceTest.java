@@ -177,6 +177,41 @@ class MediaInfoServiceTest {
 		Assertions.assertThat(portrait.orientationType()).isEqualTo(MediaOrientation.PORTRAIT);
 	}
 
+	/**
+	 * ffprobe answers without a format block for some containers, and every tag
+	 * lookup has to survive that instead of reading a null node.
+	 */
+	@Test
+	void extractShouldSurviveOutputWithoutAFormatBlock() {
+		var metadata = service(new FfprobeResult(true, 0, """
+				{ "streams": [] }
+				""")).extract(Path.of("C:/video.mp4"));
+
+		Assertions.assertThat(metadata.latitude()).isNull();
+		Assertions.assertThat(metadata.longitude()).isNull();
+	}
+
+	/** A tag present but blank is the same as absent - not an empty coordinate. */
+	@Test
+	void extractShouldTreatABlankLocationTagAsMissing() {
+		var metadata = service(new FfprobeResult(true, 0, """
+				{ "format": { "tags": { "location": "   " } }, "streams": [] }
+				""")).extract(Path.of("C:/video.mp4"));
+
+		Assertions.assertThat(metadata.latitude()).isNull();
+	}
+
+	/** A coordinate pair outside the accepted bounds yields no location at all. */
+	@Test
+	void extractShouldRejectAnOutOfBoundsLocation() {
+		var metadata = service(new FfprobeResult(true, 0, """
+				{ "format": { "tags": { "location": "+99.0000+200.0000/" } }, "streams": [] }
+				""")).extract(Path.of("C:/video.mp4"));
+
+		Assertions.assertThat(metadata.latitude()).isNull();
+		Assertions.assertThat(metadata.longitude()).isNull();
+	}
+
 	@Test
 	void extractShouldReturnEmptyForInvalidJsonAndInvalidNumbers() {
 		var invalidJson = service(new FfprobeResult(true, 0, "{")).extract(Path.of("C:/video.mp4"));

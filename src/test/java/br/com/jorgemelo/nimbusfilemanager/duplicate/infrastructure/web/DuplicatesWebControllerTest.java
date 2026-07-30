@@ -220,7 +220,8 @@ class DuplicatesWebControllerTest {
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		verify(videoSimilarityRunner).run(70);
-		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 40.0);
+		Assertions.assertThat(model).containsEntry("similarityComputing", true)
+				.containsEntry("similarityPercent", 40.0);
 	}
 
 	@Test

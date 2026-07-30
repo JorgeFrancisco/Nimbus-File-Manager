@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -422,5 +424,24 @@ class DuplicatesWebControllerCoverageTest {
 			Verdict verdict, Reason reason, Integer width, Integer height, DateSource dateSource) {
 		return new DuplicateCandidateFileResponse(UuidV7.fromLegacy(id), name, extension, type, SizeResponse.of(100),
 				"C:/" + name, "C:/", NOW, verdict, reason, width, height, NOW.minusDays(id), dateSource);
+	}
+
+	/**
+	 * When the shared executor refuses the task, the claim taken by start() is
+	 * never released by run(): the screen would report a deletion in progress
+	 * forever and no further deletion could begin.
+	 */
+	@Test
+	void aDeletionTheExecutorRefusedReleasesTheClaim() {
+		Fixture fixture = new Fixture();
+
+		List<UUID> ids = List.of(UUID.randomUUID());
+
+		when(fixture.deletionRunner.start(1)).thenReturn(true);
+		doThrow(new TaskRejectedException("executor saturated")).when(fixture.deletionRunner).run(ids);
+
+		fixture.controller().delete(new DuplicateDeleteRequest(ids));
+
+		verify(fixture.deletionRunner).releaseRejectedSubmission();
 	}
 }

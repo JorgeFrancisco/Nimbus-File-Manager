@@ -18,8 +18,4 @@ public enum MediaSubcategory {
 	public static String folderNameOf(MediaSubcategory subcategory) {
 		return subcategory == null ? OTHER.folderName() : subcategory.folderName();
 	}
-
-	public static MediaSubcategory valueOfNullable(MediaSubcategory subcategory) {
-		return subcategory == null ? UNKNOWN : subcategory;
-	}
 }

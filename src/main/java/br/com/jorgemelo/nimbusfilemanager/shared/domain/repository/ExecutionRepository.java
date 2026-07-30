@@ -91,9 +91,9 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	// We only delete finished executions (finishedAt IS NOT NULL); executions in
 	// progress are never touched. The bulk removal triggers the database FKs:
 	// movement / execution_step / execution_phase / execution_metrics have ON
-	// DELETE CASCADE and execution_error has ON DELETE SET NULL, so the children are
-	// handled in SQL (execution_metrics is unidirectional, so the DB FK is its only
-	// cleanup).
+	// DELETE CASCADE and execution_error has ON DELETE SET NULL, so the children
+	// are handled in SQL (execution_metrics is unidirectional, so the DB FK is its
+	// only cleanup).
 
 	/**
 	 * IDs of the finished executions, most recent first - used by keepLatest to

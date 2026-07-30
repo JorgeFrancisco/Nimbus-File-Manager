@@ -104,8 +104,8 @@ public class QuarantinePurgeService extends LocalizedComponent {
 						QuarantineConstants.QUARANTINED_REASONS, cutoff, PageRequest.of(0, MAX_PER_RUN))
 				.getContent();
 
-		// A pass with nothing overdue writes no execution: a daily row saying "0 purged"
-		// would bury the rows that record an actual deletion.
+		// A pass with nothing overdue writes no execution: a daily row saying "0
+		// purged" would bury the rows that record an actual deletion.
 		if (overdue.isEmpty()) {
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
@@ -138,7 +138,7 @@ public class QuarantinePurgeService extends LocalizedComponent {
 		return purgeAll(selected, movementIds.size(), unresolved);
 	}
 
-	/** The selected ids that are still quarantined, in the order they were given. */
+	/** The selected ids still quarantined, in the order they were given. */
 	private List<Movement> stillQuarantined(List<UUID> movementIds) {
 		List<Movement> selected = new ArrayList<>();
 
@@ -216,10 +216,10 @@ public class QuarantinePurgeService extends LocalizedComponent {
 		List<Movement> absent = movementRepository
 				.findByStatusAndReasonInOrderByIdDesc(MovementStatus.MOVED, QuarantineConstants.QUARANTINED_REASONS,
 						PageRequest.of(0, MAX_PER_RUN))
-				.getContent().stream().filter(movement -> !Files.exists(PathUtils.normalizePath(movement.getTargetPath())))
-				.toList();
+				.getContent().stream()
+				.filter(movement -> !Files.exists(PathUtils.normalizePath(movement.getTargetPath()))).toList();
 
-		// Nothing looks absent: no records will end, so there is no operation to record.
+		// Nothing absent: no record will end, so there is no operation to record.
 		if (absent.isEmpty()) {
 			return 0;
 		}

@@ -64,6 +64,22 @@ class FileExplorerServiceTest {
 				.extracting(FileExplorerEntry::name).isEqualTo("missing.jpg");
 	}
 
+	/**
+	 * A drive root has nowhere to go up to, so the view must report no parent - the
+	 * screen would otherwise offer a link out of the filesystem.
+	 */
+	@Test
+	void browsingAFilesystemRootReportsNoParentToGoUpTo() {
+		Path root = tempDir.getRoot();
+
+		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class),
+				mock(CatalogFileLocationRepository.class), mock(ScanExclusionService.class),
+				mock(FileExplorerReconcileService.class)).browse(root.toString(), "details");
+
+		Assertions.assertThat(view.path()).isEqualTo(PathUtils.normalize(root));
+		Assertions.assertThat(view.parentPath()).isNull();
+	}
+
 	@Test
 	void browseShouldUseWorkspaceTempWhenPathIsBlank() throws Exception {
 		Path file = Files.writeString(tempDir.resolve("file.txt"), "content");

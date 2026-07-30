@@ -29,8 +29,4 @@ public enum FileCategory {
 	public boolean isArchive() {
 		return this == ARCHIVE;
 	}
-
-	public boolean isOther() {
-		return this == OTHER;
-	}
 }

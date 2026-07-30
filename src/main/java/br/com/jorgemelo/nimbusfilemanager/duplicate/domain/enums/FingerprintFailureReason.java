@@ -23,7 +23,7 @@ public enum FingerprintFailureReason {
 	/** Real media in a variant the decoder does not read (extended WebP). */
 	UNSUPPORTED_FORMAT(true),
 
-	/** Real media whose stream the decoder rejects (a vendor trailer, a cut file). */
+	/** Real media whose stream the decoder rejects (vendor trailer, cut file). */
 	DECODER_REFUSED(true),
 
 	/** Unclassified: the only reason a retry may still resolve. */

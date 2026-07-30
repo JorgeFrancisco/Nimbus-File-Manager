@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.io.ByteArrayInputStream;
@@ -47,6 +48,36 @@ class FileHashServiceTest {
 		Assertions.assertThat(hashes.md5()).isEqualTo(service.md5(file));
 		Assertions.assertThat(hashes.sha256()).isEqualTo(service.sha256(file));
 		Assertions.assertThat(opens).hasValue(1);
+	}
+
+	/**
+	 * A read that dies mid-file must name the file: this runs over a whole library,
+	 * and "could not read" without a path is not something anyone can act on.
+	 */
+	@Test
+	void shouldNameTheFileWhenReadingItFails() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("unreadable.txt"), "abc");
+
+		FileHashService failing = new FileHashService(_ -> {
+			throw new IOException("drive went away");
+		});
+
+		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file))
+				.withMessageContaining("unreadable.txt").withMessageContaining("drive went away");
+	}
+
+	/** A JVM without SHA-256 is not something to guess about; it is reported. */
+	@Test
+	void shouldReportAMissingHashAlgorithm() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("file.txt"), "abc");
+
+		FileHashService failing = new FileHashService(
+				_ -> new ByteArrayInputStream("abc".getBytes(StandardCharsets.UTF_8)), algorithm -> {
+					throw new NoSuchAlgorithmException(algorithm + " missing");
+				});
+
+		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file))
+				.withMessageContaining("Hash algorithm not available").withMessageContaining("SHA-256 missing");
 	}
 
 	@Test

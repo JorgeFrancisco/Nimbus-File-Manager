@@ -180,4 +180,33 @@ class VideoFingerprintBacklogServiceTest {
 		assertThat(failure.getValue().getAttempts()).isEqualTo(VideoFingerprintBacklogService.MAX_ATTEMPTS);
 		assertThat(failure.getValue().getReason()).isEqualTo(FingerprintFailureReason.UNSUPPORTED_FORMAT);
 	}
+
+	/**
+	 * An error the video pipeline did not raise itself says nothing about why the
+	 * file failed, so the file is inspected to classify it - and an unreadable one
+	 * stays UNKNOWN, which is retryable rather than terminal.
+	 */
+	@SuppressWarnings("unchecked")
+	@Test
+	void anUnexpectedErrorIsClassifiedByInspectingTheFile() {
+		PendingVideo video = new PendingVideo(3L, "/tmp/vanished.mp4", 5.0);
+
+		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
+				any())).thenReturn(List.of(video), List.of());
+		when(algorithm.fingerprint(Path.of("/tmp/vanished.mp4"), 5.0))
+				.thenThrow(new IllegalStateException("ffmpeg vanished"));
+		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
+				.thenReturn(Optional.empty());
+		when(executionQueryService.active()).thenReturn(Optional.empty());
+
+		service().drainPending(() -> false, (_, _) -> {
+		});
+
+		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
+
+		verify(fingerprintFailureRepository).save(failure.capture());
+
+		assertThat(failure.getValue().getReason()).isEqualTo(FingerprintFailureReason.UNKNOWN);
+		assertThat(failure.getValue().getAttempts()).isEqualTo(1);
+	}
 }

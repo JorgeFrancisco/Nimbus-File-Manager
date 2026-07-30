@@ -96,7 +96,7 @@ class FingerprintFailureClassifierTest {
 		assertThat(FingerprintFailureClassifier.classify(audio)).isEqualTo(FingerprintFailureReason.NOT_AN_IMAGE);
 	}
 
-	/** The other still formats reach the decoder and can be refused just the same. */
+	/** The other still formats reach the decoder and are refused the same way. */
 	@Test
 	void everyStillSignatureTheDecoderRejectsIsARefusedStream(@TempDir Path tmp) throws IOException {
 		Path png = Files.write(tmp.resolve("a.png"),

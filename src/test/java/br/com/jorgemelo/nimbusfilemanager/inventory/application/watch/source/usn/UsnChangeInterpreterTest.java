@@ -123,4 +123,17 @@ class UsnChangeInterpreterTest {
 
 		return new UsnRecord(usn, frn, parentFrn, reason, attributes, name);
 	}
+
+	/**
+	 * A folder that left this batch under its old name may have taken any number
+	 * of files with it, and the journal does not list them: only a reconcile can
+	 * tell what moved.
+	 */
+	@Test
+	void aDirectoryThatLeftUnderItsOldNameAsksForAReconcile() {
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, true, "trip")));
+
+		Assertions.assertThat(result.reconcileNeeded()).isTrue();
+	}
 }

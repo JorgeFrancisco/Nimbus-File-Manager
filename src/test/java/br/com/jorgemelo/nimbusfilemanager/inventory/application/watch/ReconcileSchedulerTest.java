@@ -6,10 +6,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
+import org.assertj.core.api.Assertions;
+import org.mockito.ArgumentMatchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -57,6 +60,43 @@ class ReconcileSchedulerTest {
 		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER, tempDir.toAbsolutePath()
 				.normalize(),
 				response);
+	}
+
+	/**
+	 * A background repair pass must never take the application down with it: an
+	 * unexpected failure is logged and the timer keeps its schedule.
+	 */
+	@Test
+	void runOnceSwallowsAnUnexpectedFailureSoTheTimerSurvives() throws Exception {
+		Path folder = Files.createDirectories(tempDir.resolve("library"));
+
+		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
+		when(organizationReconcileService.reconcileAndApply(ArgumentMatchers.any()))
+				.thenThrow(new IllegalStateException("catalog unreachable"));
+
+		scheduler = scheduler();
+
+		Assertions.assertThatCode(() -> scheduler.runOnce()).doesNotThrowAnyException();
+
+		verifyNoInteractions(reconcileExecutionRecorder);
+	}
+
+	/**
+	 * The same failure during shutdown is expected, not news: the pass is being
+	 * interrupted on purpose, and a stack trace at ERROR would be noise.
+	 */
+	@Test
+	void runOnceStaysQuietWhenTheFailureComesFromShuttingDown() throws Exception {
+		Path folder = Files.createDirectories(tempDir.resolve("library"));
+
+		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
+		when(organizationReconcileService.reconcileAndApply(ArgumentMatchers.any()))
+				.thenThrow(new IllegalStateException("interrupted"));
+
+		scheduler = scheduler();
+		scheduler.shutdown();
+
+		Assertions.assertThatCode(() -> scheduler.runOnce()).doesNotThrowAnyException();
 	}
 
 	@Test

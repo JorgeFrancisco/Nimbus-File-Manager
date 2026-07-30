@@ -187,6 +187,33 @@ class PhotoDecoderTest {
 		assertThat(new Color(rotated.getRGB(rotated.getWidth() - 1, 0))).isEqualTo(Color.WHITE);
 	}
 
+	/**
+	 * EXIF is user data and holds anything: the unspecified orientation 0 must leave
+	 * the image as it is, never rotate it by guess or fail.
+	 */
+	@Test
+	void anUnknownOrientationLeavesTheImageUnrotated() {
+		BufferedImage source = markerImage(3, 2);
+
+		BufferedImage result = decoder.applyExifOrientation(source, 0);
+
+		assertThat(result.getWidth()).isEqualTo(3);
+		assertThat(result.getHeight()).isEqualTo(2);
+		assertThat(new Color(result.getRGB(0, 0))).isEqualTo(new Color(source.getRGB(0, 0)));
+	}
+
+	/** A transparent photo keeps its alpha channel through the rotation. */
+	@Test
+	void rotatingATransparentImageKeepsItsAlphaChannel() {
+		BufferedImage source = new BufferedImage(2, 3, BufferedImage.TYPE_INT_ARGB);
+
+		source.setRGB(0, 0, new Color(255, 0, 0, 128).getRGB());
+
+		BufferedImage result = decoder.applyExifOrientation(source, 6);
+
+		assertThat(result.getColorModel().hasAlpha()).isTrue();
+	}
+
 	@Test
 	void orientation1IsIdentity() {
 		BufferedImage source = markerImage(3, 3);

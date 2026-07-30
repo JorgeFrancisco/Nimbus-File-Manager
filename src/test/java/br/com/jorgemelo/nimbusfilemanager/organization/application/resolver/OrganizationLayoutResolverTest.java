@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application.resolver;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -37,6 +38,31 @@ class OrganizationLayoutResolverTest {
 		Path folder = resolver.resolveFolder(Path.of("target"), null, "202405", "09", "CAMERA", "IMAGENS");
 
 		Assertions.assertThat(folder).isEqualTo(Path.of("target", "202405", "09", "CAMERA", "IMAGENS"));
+	}
+
+	/**
+	 * The location subdivides the chosen structure: its segments go in right after
+	 * the date ones, and a blank or absent segment must not create a folder with no
+	 * name - which is what the user would get for a photo whose city is unknown.
+	 */
+	@Test
+	void shouldInsertLocationSegmentsAndSkipTheBlankOnes() {
+		Path folder = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA", "IMAGENS",
+				Arrays.asList("Brasil", "  ", null, "Rio de Janeiro"));
+
+		Assertions.assertThat(folder).isEqualTo(Path.of("target", "202405", "09", "Brasil", "Rio de Janeiro"));
+	}
+
+	/** No location at all leaves the layout exactly as it was. */
+	@Test
+	void shouldLeaveTheLayoutUntouchedWithoutLocationSegments() {
+		Path withNull = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA",
+				"IMAGENS", null);
+		Path withEmpty = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA",
+				"IMAGENS", List.of());
+
+		Assertions.assertThat(withNull).isEqualTo(Path.of("target", "202405", "09"));
+		Assertions.assertThat(withEmpty).isEqualTo(withNull);
 	}
 
 	@Test

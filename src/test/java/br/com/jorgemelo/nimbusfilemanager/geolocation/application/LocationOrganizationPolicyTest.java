@@ -218,4 +218,16 @@ class LocationOrganizationPolicyTest {
 
 		Assertions.assertThat(policy.distanceLabel(noDistance)).isNull();
 	}
+
+	/**
+	 * A name that sanitizes down to dots would become a path segment meaning "this
+	 * folder" or "the parent one": it is dropped instead of built into a path.
+	 */
+	@Test
+	void aNameThatSanitizesToDotsIsDroppedFromThePath() {
+		MediaGeoLocation location = location("Brasil", "..", "Curitiba", LocationConfidence.HIGH);
+
+		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY_STATE_CITY,
+				LocationConfidence.MEDIUM, LocationFallbackMode.IGNORE)).containsExactly("Brasil", "Curitiba");
+	}
 }

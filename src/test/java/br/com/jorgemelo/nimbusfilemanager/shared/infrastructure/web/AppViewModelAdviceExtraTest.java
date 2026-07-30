@@ -126,6 +126,14 @@ class AppViewModelAdviceExtraTest {
 		Assertions.assertThat(advice.theme(null)).isEqualTo("light");
 	}
 
+	/** A user who never chose a theme sees the light one, not an empty value. */
+	@Test
+	void themeIsLightForAUserWhoNeverChoseOne() {
+		when(userPagePreferenceService.find("bob", "layout")).thenReturn(Map.of());
+
+		Assertions.assertThat(advice.theme(user)).isEqualTo("light");
+	}
+
 	@Test
 	void currentUserResolvedFromRepositoryWhenAuthenticated() {
 		AppUser appUser = AppUser.builder().username("bob").build();

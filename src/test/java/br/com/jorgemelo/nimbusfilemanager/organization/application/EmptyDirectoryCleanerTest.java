@@ -74,6 +74,31 @@ class EmptyDirectoryCleanerTest {
 		Assertions.assertThat(Files.exists(outside)).isTrue();
 	}
 
+	/**
+	 * A folder that filled up between the check and the delete is left alone, and
+	 * the failure is not allowed to break the walk upwards.
+	 */
+	@Test
+	void keepsWalkingWhenADirectoryCannotBeRemoved(@TempDir Path root) throws Exception {
+		Path child = Files.createDirectories(root.resolve("parent").resolve("child"));
+
+		Files.writeString(child.resolve("keeps-it-alive.txt"), "x");
+
+		cleaner.removeEmptyAncestors(child, root);
+
+		Assertions.assertThat(Files.exists(child)).isTrue();
+	}
+
+	/** A regular file is never mistaken for an empty folder. */
+	@Test
+	void neverRemovesARegularFile(@TempDir Path root) throws Exception {
+		Path file = Files.writeString(root.resolve("a.txt"), "x");
+
+		cleaner.removeEmptyAncestors(file, root);
+
+		Assertions.assertThat(Files.exists(file)).isTrue();
+	}
+
 	@Test
 	void isNullSafe() {
 		Assertions.assertThat(cleaner.removeEmptyAncestors(null, Path.of("x"))).isEmpty();

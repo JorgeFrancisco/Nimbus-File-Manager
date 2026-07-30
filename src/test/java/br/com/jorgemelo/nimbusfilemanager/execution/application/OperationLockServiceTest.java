@@ -270,4 +270,18 @@ class OperationLockServiceTest {
 		release.countDown();
 		holder.join();
 	}
+
+	/**
+	 * A lock over no path would guard nothing while looking acquired, so a caller
+	 * that forgot the path is refused instead of silently unprotected.
+	 */
+	@Test
+	void acquireRefusesToLockNothing() {
+		OperationLockService service = new OperationLockService();
+
+		Assertions.assertThatThrownBy(() -> service.acquire(ExecutionType.INVENTORY))
+				.isInstanceOf(IllegalArgumentException.class);
+		Assertions.assertThatThrownBy(() -> service.acquire(ExecutionType.INVENTORY, (Path) null))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
 }

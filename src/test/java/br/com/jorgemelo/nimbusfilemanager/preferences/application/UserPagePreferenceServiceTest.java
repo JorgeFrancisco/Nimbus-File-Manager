@@ -97,4 +97,18 @@ class UserPagePreferenceServiceTest {
 
 		verifyNoInteractions(repository);
 	}
+
+	/**
+	 * A screen reached without an authenticated principal has no user to own a
+	 * preference row: nothing is read and nothing is written for it.
+	 */
+	@Test
+	void anAnonymousRequestOwnsNoPreferences() {
+		Assertions.assertThat(service.find(null, "files")).isEmpty();
+		Assertions.assertThat(service.find("  ", "files")).isEmpty();
+
+		service.save(" ", "files", "view", "details");
+
+		verifyNoInteractions(repository, appUserRepository);
+	}
 }

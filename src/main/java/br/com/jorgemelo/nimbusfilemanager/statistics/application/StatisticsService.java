@@ -41,8 +41,9 @@ public class StatisticsService {
 	private final AppSettingService appSettingService;
 
 	@Autowired
-	public StatisticsService(StatisticsRepository statisticsRepository, ExecutionErrorRepository executionErrorRepository,
-			NimbusFileManagerProperties properties, AppSettingService appSettingService) {
+	public StatisticsService(StatisticsRepository statisticsRepository,
+			ExecutionErrorRepository executionErrorRepository, NimbusFileManagerProperties properties,
+			AppSettingService appSettingService) {
 		this.statisticsRepository = statisticsRepository;
 		this.executionErrorRepository = executionErrorRepository;
 		this.properties = properties;

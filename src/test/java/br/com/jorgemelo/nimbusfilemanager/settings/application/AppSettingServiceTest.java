@@ -280,6 +280,66 @@ class AppSettingServiceTest {
 				.isInstanceOf(IllegalArgumentException.class).hasMessage("Value must be a valid IANA time zone id.");
 	}
 
+	/** The settings screen reads them in the repository's key order. */
+	@Test
+	void listShouldHandBackTheStoredSettingsInKeyOrder() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSetting first = AppSetting.builder().settingKey("a.key").settingValue("1").build();
+		AppSetting second = AppSetting.builder().settingKey("b.key").settingValue("2").build();
+
+		when(repository.findAllByOrderBySettingKeyAsc()).thenReturn(List.of(first, second));
+
+		Assertions.assertThat(new AppSettingService(repository, properties()).list()).containsExactly(first, second);
+	}
+
+	/**
+	 * A stored number is read as one, surrounding spaces included: the value comes
+	 * from a text field a person typed into.
+	 */
+	@Test
+	void intValueShouldReadAStoredNumberEvenWithSurroundingSpaces() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		when(repository.findBySettingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL))
+				.thenReturn(Optional.of(AppSetting.builder()
+						.settingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL).settingValue(" 250 ").build()));
+
+		AppSettingService service = new AppSettingService(repository, properties());
+
+		Assertions.assertThat(service.intValue(SettingsConstants.INVENTORY_PROGRESS_INTERVAL, 100)).isEqualTo(250);
+	}
+
+	/**
+	 * Every definition seeded on startup needs a key and a type, or the settings
+	 * screen renders a row nobody can edit.
+	 */
+	@Test
+	void everyDefinitionCarriesAKeyAndAType() {
+		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), properties());
+
+		Assertions.assertThat(service.definitions()).isNotEmpty().allSatisfy(definition -> {
+			Assertions.assertThat(definition.key()).isNotBlank();
+			Assertions.assertThat(definition.valueType()).isNotBlank();
+		});
+	}
+
+	/**
+	 * A configuration file that omits the optional sections still has to produce the
+	 * whole definition list: the settings screen is where the operator fills those
+	 * values in, so failing to seed it would leave nowhere to fix the configuration.
+	 */
+	@Test
+	void definitionsSurviveAConfigurationWithoutTheOptionalSections() {
+		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", List.of(), null, null, null,
+				null, null, null, null, null);
+
+		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), bare);
+
+		Assertions.assertThat(service.definitions()).isNotEmpty()
+				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isNotNull());
+	}
+
 	private NimbusFileManagerProperties properties() {
 		return properties(true);
 	}

@@ -226,4 +226,21 @@ class SettingsGeodataWebControllerTest {
 
 		verify(offlineGeoDataset, never()).remove();
 	}
+
+	/**
+	 * The import writes the very cache this button empties, so clearing it in the
+	 * middle would throw away rows the import just resolved.
+	 */
+	@Test
+	void clearCacheBlockedWhileTheDatasetImportRuns() {
+		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.clearGeoCache(redirect);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
+
+		verify(mediaLocationService, never()).clearCache();
+	}
 }
