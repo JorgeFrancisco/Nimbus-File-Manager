@@ -21,8 +21,8 @@ import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePrefer
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 
 /**
  * Shared model attributes for server-rendered pages: authenticated vs

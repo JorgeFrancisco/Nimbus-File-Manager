@@ -24,10 +24,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -52,9 +52,6 @@ class MetadataRebuildServiceTest {
 
 	@Mock
 	private MetadataExtractor metadataExtractor;
-
-	@Mock
-	private MediaDateResolver mediaDateResolver;
 
 	@Mock
 	private PlatformTransactionManager transactionManager;
@@ -95,8 +92,6 @@ class MetadataRebuildServiceTest {
 				.thenReturn(List.of(success, withoutLocation, missing, error));
 		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
 				.thenReturn(metadata).thenThrow(new IllegalStateException("bad metadata"));
-		when(mediaDateResolver.resolve(metadata))
-				.thenReturn(new ResolvedMediaDate(LocalDateTime.of(2024, Month.MAY, 9, 10, 30), DateSource.EXIF));
 
 		var response = service().rebuild(request);
 
@@ -141,8 +136,6 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
 				.thenReturn(metadata);
-		when(mediaDateResolver.resolve(metadata))
-				.thenReturn(new ResolvedMediaDate(LocalDateTime.of(2024, Month.MAY, 9, 10, 30), DateSource.EXIF));
 
 		service().rebuild(request);
 
@@ -268,7 +261,15 @@ class MetadataRebuildServiceTest {
 		verify(catalogFileRepository, times(2)).findForMetadataRebuildByIds(List.of(1L));
 	}
 
+	/**
+	 * The date resolver is exercised for real: it is a pure function of the
+	 * extracted metadata, and stubbing it would only assert that the service
+	 * copies whatever the stub returned.
+	 */
 	private MetadataRebuildService service() {
+		MediaDateResolver mediaDateResolver = new MediaDateResolver(
+				new CaptureDateValidator(Clock.systemDefaultZone()));
+
 		return new MetadataRebuildService(catalogFileRepository, metadataExtractor, mediaDateResolver,
 				transactionManager, Clock.systemDefaultZone());
 	}
@@ -382,8 +383,9 @@ class MetadataRebuildServiceTest {
 
 		return MetadataResult.builder().fileName(file.getFileName().toString()).extension("jpg").sizeBytes(100L)
 				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(captureDate).modifiedAt(captureDate)
-				.subcategory(MediaSubcategory.CAMERA).latitude(-23.5).longitude(-46.6).storedWidth(4000)
-				.storedHeight(3000).displayWidth(4000).displayHeight(3000).orientationCode(1).rotation(0)
+				.captureDate(captureDate).dateSource(DateSource.EXIF).subcategory(MediaSubcategory.CAMERA)
+				.latitude(-23.5).longitude(-46.6).storedWidth(4000).storedHeight(3000).displayWidth(4000)
+				.displayHeight(3000).orientationCode(1).rotation(0)
 				.orientationType(MediaOrientation.LANDSCAPE).manufacturer("Canon").model("R6").metadataJson("{}")
 				.build();
 	}

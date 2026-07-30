@@ -9,7 +9,7 @@ import java.io.IOException;
  * for part of a real library, so callers turn it into "no thumbnail" (HTTP 404)
  * instead of a 500 with a noisy stack trace.
  */
-public class UnsupportedThumbnailException extends IOException {
+class UnsupportedThumbnailException extends IOException {
 
 	private static final long serialVersionUID = -2379152708019014922L;
 

@@ -26,10 +26,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCommitService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.VideoConversionAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCandidateView;
@@ -39,6 +38,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionR
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;

@@ -47,12 +47,12 @@ public class OrganizationWebController extends LocalizedComponent {
 	private static final String FINISHED_WITH_ERRORS = "FINISHED_WITH_ERRORS";
 	private static final String ERROR = "ERROR";
 	private static final String VIEW = "app/organization";
-	static final String LIMIT = "limit";
-	static final String LOCATION_SUBDIVISION = "locationSubdivision";
-	static final String LOCATION_MIN_CONFIDENCE = "locationMinConfidence";
-	static final String LOCATION_FALLBACK = "locationFallback";
-	static final String SOURCE_PATH = "sourcePath";
-	static final String TARGET_PATH = "targetPath";
+	private static final String LIMIT = "limit";
+	private static final String LOCATION_SUBDIVISION = "locationSubdivision";
+	private static final String LOCATION_MIN_CONFIDENCE = "locationMinConfidence";
+	private static final String LOCATION_FALLBACK = "locationFallback";
+	private static final String SOURCE_PATH = "sourcePath";
+	private static final String TARGET_PATH = "targetPath";
 
 	private final OrganizationService organizationService;
 	private final UserPagePreferenceService userPagePreferenceService;

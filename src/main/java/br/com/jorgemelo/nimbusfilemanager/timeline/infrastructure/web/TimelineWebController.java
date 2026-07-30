@@ -40,8 +40,8 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.constants.Timelin
 public class TimelineWebController {
 
 	private static final String ALL = "ALL";
-	static final String GEO_NOTICE_DISMISSED = "geo-notice-dismissed";
-	static final String SUBCATEGORIES_KEY = "subcategories";
+	private static final String GEO_NOTICE_DISMISSED = "geo-notice-dismissed";
+	private static final String SUBCATEGORIES_KEY = "subcategories";
 	private static final Set<String> TIMELINE_TYPES = Set.of(ALL, "PHOTO", "VIDEO");
 
 	private final MediaLocationService mediaLocationService;

@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

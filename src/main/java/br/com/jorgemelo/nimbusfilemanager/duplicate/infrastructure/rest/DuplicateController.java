@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintFailureResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.FingerprintFailureLabels;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
@@ -19,6 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCan
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintFailureResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;

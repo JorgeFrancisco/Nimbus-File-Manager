@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.classifier.MediaSubcategoryRule;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.FileNameDatePatterns;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.filename.rule.AbstractFileNameDateRule;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 

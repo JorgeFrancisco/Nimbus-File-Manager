@@ -10,11 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
 import org.assertj.core.api.Assertions;
-import org.mockito.ArgumentMatchers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;

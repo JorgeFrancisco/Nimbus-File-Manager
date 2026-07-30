@@ -97,14 +97,8 @@ public class CatalogFileMapper {
 			catalogFile.setMetadata(media);
 		}
 
-		ResolvedMediaDate resolvedDate = mediaDateResolver.resolve(metadata);
+		mediaDateResolver.applyTo(media, metadata);
 
-		media.setYear(resolvedDate.year());
-		media.setMonth(resolvedDate.month());
-		media.setDay(resolvedDate.day());
-		media.setYearMonth(resolvedDate.yearMonth());
-		media.setCaptureDate(resolvedDate.captureDate());
-		media.setDateSource(resolvedDate.dateSource());
 		media.setCategory(FileType.categoryOf(metadata.getFileType()));
 		media.setSubcategory(metadata.getSubcategory());
 		media.setStoredWidth(metadata.getStoredWidth());

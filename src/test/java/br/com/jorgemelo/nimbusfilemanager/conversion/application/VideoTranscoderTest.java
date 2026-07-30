@@ -1,25 +1,23 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.function.BooleanSupplier;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntFunction;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
-import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeExecution;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRequest;
@@ -27,6 +25,8 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRe
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.VideoEncoder;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;

@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogResumer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScanOptions;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.scanner.FileScanner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Snapshot;

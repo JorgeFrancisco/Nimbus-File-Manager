@@ -2,19 +2,10 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums;
 
 /**
  * What organization does when a media has no resolved location or its
- * confidence is below the configured minimum.
+ * confidence is below the configured minimum. The label the screen shows lives
+ * in the message bundles, under {@code enum.locationFallback.*}.
  */
 public enum LocationFallbackMode {
 
-	IGNORE("Ignorar localização"), FALLBACK_FOLDER("Usar pasta SEM_LOCALIZACAO_CONFIAVEL");
-
-	private final String label;
-
-	LocationFallbackMode(String label) {
-		this.label = label;
-	}
-
-	public String label() {
-		return label;
-	}
+	IGNORE, FALLBACK_FOLDER
 }

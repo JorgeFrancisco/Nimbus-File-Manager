@@ -35,7 +35,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.Ca
 @Service
 public class CatalogExportService {
 
-	static final int PAGE_SIZE = 1_000;
+	private static final int PAGE_SIZE = 1_000;
 
 	private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 

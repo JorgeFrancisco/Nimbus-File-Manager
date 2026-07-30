@@ -1,5 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows;
 
+import static java.lang.foreign.MemoryLayout.PathElement.groupElement;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.ERROR_JOURNAL_DELETE_IN_PROGRESS;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.ERROR_JOURNAL_ENTRY_DELETED;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.ERROR_JOURNAL_NOT_ACTIVE;
@@ -10,10 +15,6 @@ import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.GENERIC_READ;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.GENERIC_WRITE;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.OPEN_EXISTING;
-import static java.lang.foreign.MemoryLayout.PathElement.groupElement;
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;

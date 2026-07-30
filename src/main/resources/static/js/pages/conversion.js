@@ -31,7 +31,7 @@
 	const labels = document.getElementById('conversionOutcomeLabels');
 	const status = document.getElementById('conversionStatus') || document.getElementById('conversionStatusIdle');
 	const pagination = document.getElementById('conversionPagination');
-	const pageSize = document.getElementById('conversionPageSize');
+	const pageSize = document.getElementById('conversionPageSize');
 	const candidates = document.getElementById('conversionCandidates');
 
 	const checkboxes = Array.prototype.slice.call(document.querySelectorAll('.js-select'));

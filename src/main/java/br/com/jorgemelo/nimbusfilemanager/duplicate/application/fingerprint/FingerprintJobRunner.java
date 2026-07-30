@@ -41,7 +41,7 @@ class FingerprintJobRunner {
 	private final AtomicLong processed = new AtomicLong();
 	private final AtomicLong failed = new AtomicLong();
 	private final AtomicLong startedAtMillis = new AtomicLong();
-	private final AtomicLong pendingAtStart = new AtomicLong();
+	private final AtomicLong pendingAtStart = new AtomicLong();
 	private final AtomicReference<Long> currentRunId = new AtomicReference<>();
 	private final AtomicReference<String> lastError = new AtomicReference<>();
 	private final Clock clock;
@@ -75,7 +75,7 @@ class FingerprintJobRunner {
 		processed.set(0);
 		failed.set(0);
 		startedAtMillis.set(System.currentTimeMillis());
-		pendingAtStart.set(status.pending());
+		pendingAtStart.set(status.pending());
 		lastError.set(null);
 
 		FingerprintJobRun run = jobRunRepository.save(FingerprintJobRun.builder().kind(backlog.kind())

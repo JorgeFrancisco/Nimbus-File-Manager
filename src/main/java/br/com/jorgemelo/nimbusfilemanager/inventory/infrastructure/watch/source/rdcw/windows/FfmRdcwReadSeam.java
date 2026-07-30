@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows;
 
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.ERROR_IO_INCOMPLETE;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.FILE_FLAG_BACKUP_SEMANTICS;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.FILE_FLAG_OVERLAPPED;
@@ -8,8 +11,6 @@ import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.NOTIFY_FILTER;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.OPEN_EXISTING;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.OVERLAPPED_SIZE;
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

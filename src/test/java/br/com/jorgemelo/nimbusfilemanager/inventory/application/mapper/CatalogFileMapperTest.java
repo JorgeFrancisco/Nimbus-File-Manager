@@ -1,7 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.mapper;
 
-import static org.mockito.Mockito.when;
-
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -9,12 +7,9 @@ import java.time.Month;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
@@ -25,11 +20,14 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Photo;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Video;
 
-@ExtendWith(MockitoExtension.class)
 class CatalogFileMapperTest {
 
-	@Mock
-	private MediaDateResolver mediaDateResolver;
+	/**
+	 * Real resolver: it is a pure function of the extracted metadata, so stubbing
+	 * it would only assert that the mapper copies back what the stub returned.
+	 */
+	private final MediaDateResolver mediaDateResolver = new MediaDateResolver(
+			new CaptureDateValidator(Clock.systemDefaultZone()));
 
 	@Test
 	void toEntityShouldRejectAPathWithoutParentDirectory() {
@@ -47,8 +45,6 @@ class CatalogFileMapperTest {
 		LocalDateTime captureDate = LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
 
 		MetadataResult metadata = photoMetadata(captureDate);
-
-		when(mediaDateResolver.resolve(metadata)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.EXIF));
 
 		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone())
 				.toEntity(Path.of("C:/input/photo.jpg"), Path.of("C:/input"), metadata);
@@ -72,8 +68,6 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = videoMetadata(captureDate);
 
-		when(mediaDateResolver.resolve(metadata)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.MEDIA_INFO));
-
 		CatalogFile catalogFile = CatalogFile.builder().fileType(FileType.PHOTO).build();
 
 		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
@@ -95,8 +89,6 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = videoMetadata(captureDate);
 
-		when(mediaDateResolver.resolve(metadata)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.MEDIA_INFO));
-
 		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone())
 				.toEntity(Path.of("C:/input/video.mp4"), Path.of("C:/input"), metadata);
 
@@ -107,8 +99,6 @@ class CatalogFileMapperTest {
 		Assertions.assertThat(catalogFile.getLocation().getInventoryPath()).contains("input");
 
 		MetadataResult updated = photoMetadata(captureDate);
-
-		when(mediaDateResolver.resolve(updated)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.EXIF));
 
 		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
 				Path.of("C:/input/photo.jpg"), Path.of("C:/input"), updated);
@@ -130,9 +120,6 @@ class CatalogFileMapperTest {
 				.captureDate(captureDate).dateSource(DateSource.FILE_CREATED_AT).subcategory(MediaSubcategory.OTHER)
 				.build();
 
-		when(mediaDateResolver.resolve(metadata))
-				.thenReturn(new ResolvedMediaDate(captureDate, DateSource.FILE_CREATED_AT));
-
 		CatalogFile catalogFile = CatalogFile.builder().photo(Photo.builder().build()).video(Video.builder().build())
 				.build();
 
@@ -152,23 +139,17 @@ class CatalogFileMapperTest {
 
 		MetadataResult zeroPair = coordinatesMetadata(captureDate, 0.0, 0.0);
 
-		when(mediaDateResolver.resolve(zeroPair)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.MEDIA_INFO));
-
 		CatalogFile missingGps = mapper.toEntity(Path.of("C:/input/zero.mp4"), Path.of("C:/input"), zeroPair);
 		Assertions.assertThat(missingGps.getMetadata().getLatitude()).isNull();
 		Assertions.assertThat(missingGps.getMetadata().getLongitude()).isNull();
 
 		MetadataResult equator = coordinatesMetadata(captureDate, 0.0, -45.0);
 
-		when(mediaDateResolver.resolve(equator)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.MEDIA_INFO));
-
 		CatalogFile validEquator = mapper.toEntity(Path.of("C:/input/equator.mp4"), Path.of("C:/input"), equator);
 		Assertions.assertThat(validEquator.getMetadata().getLatitude()).isZero();
 		Assertions.assertThat(validEquator.getMetadata().getLongitude()).isEqualTo(-45.0);
 
 		MetadataResult meridian = coordinatesMetadata(captureDate, -23.0, 0.0);
-
-		when(mediaDateResolver.resolve(meridian)).thenReturn(new ResolvedMediaDate(captureDate, DateSource.MEDIA_INFO));
 
 		CatalogFile validMeridian = mapper.toEntity(Path.of("C:/input/meridian.mp4"), Path.of("C:/input"), meridian);
 		Assertions.assertThat(validMeridian.getMetadata().getLatitude()).isEqualTo(-23.0);

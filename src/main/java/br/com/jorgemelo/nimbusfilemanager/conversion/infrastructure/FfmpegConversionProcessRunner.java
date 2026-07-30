@@ -35,7 +35,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeEx
  * {@code VideoConversionCommandBuilder}.
  */
 @Component
-public class FfmpegConversionProcessRunner implements VideoTranscodeRunner {
+class FfmpegConversionProcessRunner implements VideoTranscodeRunner {
 
 	private static final long EXIT_TIMEOUT_SECONDS = 60;
 	private static final long STDERR_DRAIN_TIMEOUT_SECONDS = 5;

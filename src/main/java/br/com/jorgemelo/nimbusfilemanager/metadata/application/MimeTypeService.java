@@ -1,12 +1,13 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 @Service
 public class MimeTypeService {
@@ -30,17 +31,7 @@ public class MimeTypeService {
 	}
 
 	public String detect(Path file) {
-		if (file == null) {
-			throw new IllegalArgumentException("File path must not be null.");
-		}
-
-		if (!Files.exists(file)) {
-			throw new IllegalArgumentException("File does not exist: " + file);
-		}
-
-		if (!Files.isRegularFile(file)) {
-			throw new IllegalArgumentException("Path is not a regular file: " + file);
-		}
+		FileValidationUtils.validateFile(file);
 
 		try {
 			String mimeType = mimeDetector.detect(file);

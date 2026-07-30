@@ -32,8 +32,8 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Phas
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.rest.DuplicateController;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
-import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.rest.ExecutionController;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.rest.ExecutionController;
 import br.com.jorgemelo.nimbusfilemanager.media.application.MediaSearchService;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaSearchCriteria;
 import br.com.jorgemelo.nimbusfilemanager.media.infrastructure.rest.MediaController;

@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExtensionRules;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.FolderMatcher;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.FolderRules;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.QuarantineRule;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;

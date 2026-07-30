@@ -7,9 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.util.function.BooleanSupplier;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;

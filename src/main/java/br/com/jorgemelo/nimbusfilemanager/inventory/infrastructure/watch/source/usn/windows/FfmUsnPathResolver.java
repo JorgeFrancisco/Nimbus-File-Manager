@@ -1,5 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows;
 
+import static java.lang.foreign.MemoryLayout.PathElement.groupElement;
+import static java.lang.foreign.ValueLayout.JAVA_CHAR;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.FILE_FLAG_BACKUP_SEMANTICS;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.FILE_ID_TYPE;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.FILE_NAME_NORMALIZED;
@@ -7,10 +12,6 @@ import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.FILE_SHARE_ALL;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.LONG_PATH_PREFIX;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnConstants.VOLUME_NAME_DOS;
-import static java.lang.foreign.MemoryLayout.PathElement.groupElement;
-import static java.lang.foreign.ValueLayout.JAVA_CHAR;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;

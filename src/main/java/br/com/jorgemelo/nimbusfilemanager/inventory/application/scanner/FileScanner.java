@@ -8,13 +8,13 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScanOptions;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.FolderMatcher;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
@@ -175,12 +175,14 @@ public class FileScanner {
 			return false;
 		}
 
+		List<FolderMatcher> matchers = excludeFolders.stream().map(FolderMatcher::of).toList();
+
 		Path scoped = sourcePath != null && parent.startsWith(sourcePath) ? sourcePath.relativize(parent) : parent;
 
 		for (Path part : scoped) {
 			String folderName = part.toString();
 
-			if (excludeFolders.stream().anyMatch(pattern -> matchesFolder(folderName, pattern))) {
+			if (matchers.stream().anyMatch(matcher -> matcher.matches(folderName))) {
 				return true;
 			}
 		}
@@ -204,30 +206,6 @@ public class FileScanner {
 
 		return patterns.stream().filter(value -> value != null && !value.isBlank()).map(String::trim).distinct()
 				.toList();
-	}
-
-	private boolean matchesFolder(String folderName, String pattern) {
-		if (pattern.contains("*") || pattern.contains("?")) {
-			return folderName.toLowerCase().matches(globRegex(pattern.toLowerCase()));
-		}
-
-		return folderName.equalsIgnoreCase(pattern);
-	}
-
-	private String globRegex(String pattern) {
-		StringBuilder regex = new StringBuilder();
-
-		for (int index = 0; index < pattern.length(); index++) {
-			char value = pattern.charAt(index);
-
-			switch (value) {
-			case '*' -> regex.append(".*");
-			case '?' -> regex.append('.');
-			default -> regex.append(Pattern.quote(String.valueOf(value)));
-			}
-		}
-
-		return regex.toString();
 	}
 
 	private boolean isHidden(Path path) {

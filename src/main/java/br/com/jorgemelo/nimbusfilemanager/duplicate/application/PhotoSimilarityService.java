@@ -42,14 +42,14 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 public class PhotoSimilarityService implements SimilarityGrouping {
 
 	/** Safety cap while grouping remains an in-memory O(n²) operation. */
-	static final int MAX_CANDIDATES = 8000;
+	private static final int MAX_CANDIDATES = 8000;
 
 	/**
 	 * Generous pHash candidate radius, a wide fraction of the hash. SSIM makes the
 	 * final decision, so this stage is intentionally optimized for recall rather
 	 * than precision.
 	 */
-	static final int MAX_PHASH_CANDIDATE_DISTANCE = 96;
+	private static final int MAX_PHASH_CANDIDATE_DISTANCE = 96;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final DuplicateGroupAssembler duplicateGroupAssembler;

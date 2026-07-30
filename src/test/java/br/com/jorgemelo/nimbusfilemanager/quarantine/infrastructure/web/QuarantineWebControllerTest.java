@@ -28,8 +28,8 @@ import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePrefer
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineDeleteResponse;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;

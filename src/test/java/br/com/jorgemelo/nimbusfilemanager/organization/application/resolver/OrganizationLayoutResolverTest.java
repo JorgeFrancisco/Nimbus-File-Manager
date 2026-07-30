@@ -108,10 +108,9 @@ class OrganizationLayoutResolverTest {
 		Assertions.assertThat(values[values.length - 1]).isEqualTo(OrganizationLayout.FLAT);
 	}
 
+	/** The example path is what the dropdown shows beside each layout name. */
 	@Test
-	void shouldExposeLabelDescriptionAndExampleForEveryLayout() {
-		Assertions.assertThat(OrganizationLayout.YEAR_MONTH_DAY.label()).isNotBlank();
-		Assertions.assertThat(OrganizationLayout.YEAR_MONTH_DAY.description()).isNotBlank();
+	void shouldExposeTheExamplePathOfEachLayout() {
 		Assertions.assertThat(OrganizationLayout.YEAR_MONTH_DAY.example()).isEqualTo("2026-07/10");
 	}
 

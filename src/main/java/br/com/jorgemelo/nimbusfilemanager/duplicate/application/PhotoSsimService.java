@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataConstants.SAMPLE_BYTES;
+import static br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataConstants.SAMPLE_SIDE;
+
 import org.springframework.stereotype.Service;
 
 /**
@@ -9,9 +12,6 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class PhotoSsimService {
-
-	static final int SAMPLE_SIDE = 32;
-	static final int SAMPLE_BYTES = SAMPLE_SIDE * SAMPLE_SIDE;
 
 	private static final int WINDOW_SIDE = 8;
 	private static final int WINDOWS_PER_AXIS = SAMPLE_SIDE / WINDOW_SIDE;

@@ -17,7 +17,6 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateRes
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildResponse;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataRebuildCounters;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
@@ -230,7 +229,7 @@ public class MetadataRebuildService {
 		MediaMetadata media = ensureMedia(catalogFile, metadata);
 
 		if (request.shouldRefresh(MetadataRebuildField.DATE)) {
-			applyDate(media, metadata);
+			mediaDateResolver.applyTo(media, metadata);
 		}
 
 		boolean isMedia = metadata.getFileType().isMedia();
@@ -283,17 +282,6 @@ public class MetadataRebuildService {
 		catalogFile.markActive();
 		catalogFile.setLastAnalysis(LocalDateTime.now(clock));
 		catalogFile.setAnalysisVersion("1");
-	}
-
-	private void applyDate(MediaMetadata media, MetadataResult metadata) {
-		ResolvedMediaDate resolvedDate = mediaDateResolver.resolve(metadata);
-
-		media.setYear(resolvedDate.year());
-		media.setMonth(resolvedDate.month());
-		media.setDay(resolvedDate.day());
-		media.setYearMonth(resolvedDate.yearMonth());
-		media.setCaptureDate(resolvedDate.captureDate());
-		media.setDateSource(resolvedDate.dateSource());
 	}
 
 	private Path currentPath(CatalogFile catalogFile) {
