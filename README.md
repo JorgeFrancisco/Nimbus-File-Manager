@@ -1205,17 +1205,25 @@ here. The class-level exclusions mirror the JaCoCo / Sonar coverage exclusions
 Most recent local PIT run:
 
 ```text
-Line coverage for mutated classes: 8088/8658 (93%)
-Generated mutations:              4906
-Killed mutations:                 3951
-Survived mutations:               709
-No coverage:                      246
-Timed out:                        14
+Line coverage for mutated classes: 10578/10919 (97%)
+Generated mutations:              6306
+Killed mutations:                 5248
+Survived mutations:               837
+No coverage:                      196
+Timed out:                        25
 Run error:                        0
-Mutation score:                   81%
-Test strength:                    85%
-Duration:                         10m16s
+Mutation score:                   84%
+Test strength:                    86%
+Duration:                         24m38s
 ```
+
+Where the survivors are: by a wide margin the most common surviving mutator is
+`VoidMethodCallMutator` - a call whose removal no assertion notices, typically a
+progress update, a log-adjacent notification or a cache invalidation that the test
+exercises without checking. The conditional-boundary and math mutators come next,
+in the paging and percentage arithmetic. The single largest block of *no coverage*
+is one icon-mapping utility reached only from templates: a unit test there would
+restate the map rather than verify behaviour, so it stays as declared residue.
 
 Reports:
 
