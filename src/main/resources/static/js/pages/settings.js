@@ -102,12 +102,17 @@
 	// the moment they change - picking a folder and leaving the screen never
 	// discards it, the same contract the conversion screen has.
 	function bindMetadataRebuildPreferences() {
-		var form = document.querySelector('form[action$="/app/settings/metadata/rebuild"]');
-		if (!form) return;
+		// Delegated from the document instead of bound to the form: the panel holding
+		// it is replaced wholesale by the 5s refresh loop above, and a listener on the
+		// old node dies with it - from the first refresh on, changing a field silently
+		// stopped being stored until the user pressed the button.
+		document.addEventListener("change", function (event) {
+			var target = event.target;
+			var form = target && target.closest ? target.closest('form[action$="/app/settings/metadata/rebuild"]') : null;
+			if (!form) return;
 
-		// Serializing the form carries its hidden _csrf field along, which is how
-		// Spring accepts the token on a form-encoded post.
-		form.addEventListener("change", function () {
+			// Serializing the form carries its hidden _csrf field along, which is how
+			// Spring accepts the token on a form-encoded post.
 			fetch("/app/settings/metadata/preferences", {
 				method: "POST",
 				headers: { "Content-Type": "application/x-www-form-urlencoded" },
