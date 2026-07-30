@@ -14,6 +14,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.DashedDate
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.DottedDateMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.GenericMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ImageUuidMediaFamily;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.MonthFirstDateTimeMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PeachyMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.PhotoGridMediaFamily;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.family.ScreenshotMediaFamily;
@@ -149,5 +150,46 @@ class FileNameDateRulesTest {
 	void aLongIdAloneYieldsNoDate() {
 		Assertions.assertThat(new GenericMediaFamily(Clock.systemDefaultZone())
 				.resolve("lv_7556956620933156149.mp4")).isNull();
+	}
+
+	/**
+	 * Early camera phones named the file after MMddyyHHmmss with no separator,
+	 * which the 8-digit families read as an implausible year and dropped; only the
+	 * month-first reading keeps the real capture time of those.
+	 */
+	@Test
+	void monthFirstFamilyShouldReadAPhoneTimestamp() {
+		MonthFirstDateTimeMediaFamily monthFirst = new MonthFirstDateTimeMediaFamily(Clock.systemDefaultZone());
+
+		Assertions.assertThat(monthFirst.supports("012708165237_H265.mp4")).isTrue();
+		Assertions.assertThat(monthFirst.supports("20221110_110848.mp4")).isFalse();
+		Assertions.assertThat(monthFirst.supports(null)).isFalse();
+		// Runs before the generic scan, which reads the first 8 digits as a year.
+		Assertions.assertThat(monthFirst.name()).isLessThan(new GenericMediaFamily(Clock.systemDefaultZone()).name());
+
+		Assertions.assertThat(monthFirst.resolve("012708165237.jpg"))
+				.isEqualTo(LocalDateTime.of(2008, Month.JANUARY, 27, 16, 52, 37));
+		Assertions.assertThat(monthFirst.resolve("012708165237_H265.mp4"))
+				.isEqualTo(LocalDateTime.of(2008, Month.JANUARY, 27, 16, 52, 37));
+		Assertions.assertThat(monthFirst.resolve("020208222901_H265.mp4"))
+				.isEqualTo(LocalDateTime.of(2008, Month.FEBRUARY, 2, 22, 29, 1));
+		Assertions.assertThat(monthFirst.resolve("121507213458.jpg"))
+				.isEqualTo(LocalDateTime.of(2007, Month.DECEMBER, 15, 21, 34, 58));
+	}
+
+	/**
+	 * The same twelve digits also spell ddMMyyyy plus a counter, and nothing in
+	 * the name tells the two apart - so an ambiguous run yields no date rather
+	 * than a guess, and a run that is neither yields none either.
+	 */
+	@Test
+	void monthFirstFamilyShouldRejectTheAmbiguousAndTheInvalid() {
+		MonthFirstDateTimeMediaFamily monthFirst = new MonthFirstDateTimeMediaFamily(Clock.systemDefaultZone());
+
+		Assertions.assertThat(monthFirst.resolve("031120081613 - 01.bmp")).isNull(); // 2008 counter 1613
+		Assertions.assertThat(monthFirst.resolve("100620121090.jpg")).isNull(); // 2012 counter 1090
+		Assertions.assertThat(monthFirst.resolve("012708256237.jpg")).isNull(); // hour 25
+		Assertions.assertThat(monthFirst.resolve("808501710986.jpg")).isNull(); // month 80
+		Assertions.assertThat(monthFirst.resolve("123456789012345.jpg")).isNull(); // 15-digit id
 	}
 }

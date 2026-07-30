@@ -37,7 +37,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 
 - Recursive file inventory with streaming scan.
 - Optional SHA-256 and MD5 calculation in a single file read.
-- Metadata extraction from filesystem, EXIF, filename patterns and video streams. Filename families cover phone and compact-camera sequences (Sony Cyber-shot, Nikon Coolpix, General Imaging, Pentax, Casio, Samsung Digimax, Panasonic, Olympus and the Kodak/Canon DCIM numbering), GoPro (single shots plus the burst/time-lapse sequence), drones, screenshots, WhatsApp and the editors that stamp epoch millis in the name (PhotoGrid, AirBrush, Facebook, FaceApp).
+- Metadata extraction from filesystem, EXIF, filename patterns and video streams. Filename families cover phone and compact-camera sequences (Sony Cyber-shot, Nikon Coolpix, General Imaging, Pentax, Casio, Samsung Digimax, Panasonic, Olympus and the Kodak/Canon DCIM numbering), GoPro (single shots plus the burst/time-lapse sequence), drones, screenshots, WhatsApp, the month-first `MMddyyHHmmss` stamp of early camera phones and the editors that stamp epoch millis in the name (PhotoGrid, AirBrush, Facebook, FaceApp).
 - Metadata rebuild from the settings screen: pick a folder and which fields to reprocess (capture date, MIME, GPS, dimensions, camera, family classification), simulate first if you want, and follow progress with percentage and estimated time while it runs in the background. The same rebuild stays available as a synchronous REST call for scripted use.
 - Fully offline GPS reverse geocoding based on administrative boundaries (point-in-polygon), persisted as reusable media metadata.
 - Duplicate detection using SHA-256, plus visual similarity for photos and videos (perceptual hashing + SSIM).
@@ -1122,8 +1122,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2169 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.43% instruction, 91.66% branch, 98.03% line, 98.67% method, 100.00% class
+Tests:       2171 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.43% instruction, 91.67% branch, 98.03% line, 98.67% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,7 +1135,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.43% instruction, 91.66% branch, 98.03% line, 98.67% method, 100.00% class
+Floor:  98.43% instruction, 91.67% branch, 98.03% line, 98.67% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
