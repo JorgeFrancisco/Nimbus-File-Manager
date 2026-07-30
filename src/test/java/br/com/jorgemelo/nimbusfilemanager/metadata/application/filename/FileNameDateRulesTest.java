@@ -116,4 +116,38 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(new DashedDateTimeMediaFamily(Clock.systemDefaultZone()).resolve("2024-01-02.jpg"))
 				.isNull();
 	}
+	/**
+	 * A share id in front of the timestamp used to cost the whole date: the first
+	 * digit block of the id is not a date, and the rule gave up there instead of
+	 * looking at the next candidate.
+	 */
+	@Test
+	void genericShouldFindTheTimestampBehindALongNumericId() {
+		GenericMediaFamily generic = new GenericMediaFamily(Clock.systemDefaultZone());
+
+		Assertions.assertThat(generic.resolve("lv_7556956620933156149_20260704132915.mp4"))
+				.isEqualTo(LocalDateTime.of(2026, Month.JULY, 4, 13, 29, 15));
+	}
+
+	/**
+	 * A 14-digit run with no separator is a full timestamp; reading only its first
+	 * 8 digits threw away the time of day.
+	 */
+	@Test
+	void familiesShouldReadATimestampWithoutSeparators() {
+		Assertions.assertThat(new GenericMediaFamily(Clock.systemDefaultZone()).resolve("20150524054234.jpg"))
+				.isEqualTo(LocalDateTime.of(2015, Month.MAY, 24, 5, 42, 34));
+		Assertions.assertThat(new AirBrushMediaFamily(Clock.systemDefaultZone()).resolve("AirBrush_20150524054234.jpg"))
+				.isEqualTo(LocalDateTime.of(2015, Month.MAY, 24, 5, 42, 34));
+	}
+
+	/**
+	 * The guard around the 14-digit rule matters: an id of 19 digits contains
+	 * plenty of 14-digit windows, and none of them is a timestamp.
+	 */
+	@Test
+	void aLongIdAloneYieldsNoDate() {
+		Assertions.assertThat(new GenericMediaFamily(Clock.systemDefaultZone())
+				.resolve("lv_7556956620933156149.mp4")).isNull();
+	}
 }

@@ -57,6 +57,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.MediaTypeFilter;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils;
@@ -105,13 +106,15 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private final DuplicateDeletionAsyncRunner duplicateDeletionAsyncRunner;
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final VideoSimilarityWeb videoSimilarityWeb;
+	private final DateSourceLabels dateSourceLabels;
 
 	@Autowired
 	public DuplicatesWebController(DuplicateService duplicateService, PhotoSimilarityService photoSimilarityService,
 			PhashBacklogService phashBacklogService, PhashBacklogAsyncRunner phashBacklogAsyncRunner,
 			UserPagePreferenceService userPagePreferenceService, PhotoSimilarityAsyncRunner photoSimilarityAsyncRunner,
 			DuplicateDeletionAsyncRunner duplicateDeletionAsyncRunner,
-			DuplicateExclusionService duplicateExclusionService, VideoSimilarityWeb videoSimilarityWeb) {
+			DuplicateExclusionService duplicateExclusionService, VideoSimilarityWeb videoSimilarityWeb,
+			DateSourceLabels dateSourceLabels) {
 		this.duplicateService = duplicateService;
 		this.photoSimilarityService = photoSimilarityService;
 		this.phashBacklogService = phashBacklogService;
@@ -121,6 +124,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 		this.duplicateDeletionAsyncRunner = duplicateDeletionAsyncRunner;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.videoSimilarityWeb = videoSimilarityWeb;
+		this.dateSourceLabels = dateSourceLabels;
 	}
 
 	@GetMapping("/app/duplicates")
@@ -657,7 +661,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 				file.modifiedAt(), file.captureDate(), keep, recommendedKeep, image, video, pdf, text, audio,
 				previewUrl, contentUrl, FileTypeIcon.iconClass(file.fileType()), localizedIconLabel(file.fileType()),
 				highlight, highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
-				openTitle(pdf, text, audio), dateSourceLabel(file.dateSource()),
+				openTitle(pdf, text, audio), dateSourceLabels.label(file.dateSource()),
 				dateSourceBadgeClass(file.dateSource()), DateTimeFormatUtils.human(file.captureDate()),
 				DateTimeFormatUtils.human(file.modifiedAt()));
 	}
@@ -728,23 +732,6 @@ public class DuplicatesWebController extends LocalizedComponent {
 		}
 
 		return message("backend.file.open");
-	}
-
-	private String dateSourceLabel(DateSource source) {
-		if (source == null) {
-			return "—";
-		}
-
-		return switch (source) {
-		case EXIF -> "EXIF";
-		case MEDIA_INFO -> message("backend.dateSource.media");
-		case FILE_NAME_CONFIRMED -> message("backend.dateSource.nameConfirmed");
-		case FILE_NAME -> message("backend.dateSource.name");
-		case FOLDER_LAYOUT -> message("backend.dateSource.folder");
-		case FILE_MODIFIED_AT -> message("backend.dateSource.file");
-		case FILE_CREATED_AT -> message("backend.dateSource.created");
-		case UNKNOWN -> message("backend.dateSource.unknown");
-		};
 	}
 
 	/**

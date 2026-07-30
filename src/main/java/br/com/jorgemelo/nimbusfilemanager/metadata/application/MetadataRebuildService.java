@@ -4,7 +4,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.LongConsumer;
 
 import org.springframework.stereotype.Service;
@@ -15,12 +17,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinates;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildPreview;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildResponse;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildSimulation;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataRebuildCounters;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.concurrent.OptimisticLockRetry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -45,6 +51,16 @@ public class MetadataRebuildService {
 	private static final int MAX_BATCH_ATTEMPTS = 3;
 
 	/**
+	 * How many files a dry run opens. Enough for the sample to be representative
+	 * of the folder, small enough that simulating stays a preview instead of
+	 * costing what the run itself costs.
+	 */
+	private static final int PREVIEW_SAMPLE = 50;
+
+	/** How many differences the screen lists; the rest is left to the count. */
+	private static final int PREVIEW_ROWS = 10;
+
+	/**
 	 * Own REQUIRES_NEW template, mirroring
 	 * {@code PhashBacklogService}/{@code InventoryPersistenceService}. Each batch -
 	 * and so each retry attempt - runs in a brand-new physical transaction with a
@@ -57,16 +73,19 @@ public class MetadataRebuildService {
 	private final CatalogFileRepository catalogFileRepository;
 	private final MetadataExtractor metadataExtractor;
 	private final MediaDateResolver mediaDateResolver;
+	private final DateSourceLabels dateSourceLabels;
 	private final Clock clock;
 
 	public MetadataRebuildService(CatalogFileRepository catalogFileRepository, MetadataExtractor metadataExtractor,
-			MediaDateResolver mediaDateResolver, PlatformTransactionManager transactionManager, Clock clock) {
+			MediaDateResolver mediaDateResolver, PlatformTransactionManager transactionManager, Clock clock,
+					DateSourceLabels dateSourceLabels) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.metadataExtractor = metadataExtractor;
 		this.mediaDateResolver = mediaDateResolver;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		this.clock = clock;
+		this.dateSourceLabels = dateSourceLabels;
 	}
 
 	/**
@@ -109,11 +128,7 @@ public class MetadataRebuildService {
 				request.dryRun(), request.safeLimit(), BATCH_SIZE);
 
 		if (request.dryRun()) {
-			var ids = catalogFileRepository.findIdsForMetadataRebuild(sourcePathText, descendantPattern,
-					request.captureDateNull(), request.dateSource(), request.cutoff(), 0L,
-					PageUtils.firstPage(request.safeLimit()));
-
-			return new MetadataRebuildResponse(sourcePathText, true, ids.size(), 0, 0, 0, 0, 0);
+			return simulate(request, sourcePathText, descendantPattern);
 		}
 
 		MetadataRebuildCounters counters = new MetadataRebuildCounters();
@@ -160,7 +175,91 @@ public class MetadataRebuildService {
 
 		return new MetadataRebuildResponse(sourcePathText, false, counters.candidates, counters.rebuilt,
 				counters.skippedMissing, counters.skippedWithoutLocation, counters.skippedUnsupportedType,
-				counters.errors);
+				counters.errors, null);
+	}
+
+	/**
+	 * A dry run answers three things the bare candidate count never did: how many
+	 * files there are, how many the "continue where it stopped" cutoff is hiding,
+	 * and - from a sample, because reading every file would cost what the real run
+	 * costs - which dates would actually change.
+	 */
+	private MetadataRebuildResponse simulate(MetadataRebuildRequest request, String sourcePathText,
+			String descendantPattern) {
+		List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild(sourcePathText, descendantPattern,
+				request.captureDateNull(), request.dateSource(), request.cutoff(), 0L,
+				PageUtils.firstPage(request.safeLimit()));
+
+		int withoutCutoff = catalogFileRepository.findIdsForMetadataRebuild(sourcePathText, descendantPattern,
+				request.captureDateNull(), request.dateSource(), MetadataRebuildRequest.NO_CUTOFF, 0L,
+				PageUtils.firstPage(request.safeLimit())).size();
+
+		MetadataRebuildSimulation simulation = sample(ids.stream().limit(PREVIEW_SAMPLE).toList(), request,
+				withoutCutoff - ids.size());
+
+		return new MetadataRebuildResponse(sourcePathText, true, ids.size(), 0, 0, 0, 0, 0, simulation);
+	}
+
+	/** Extracts the sample without writing anything: the entities are only read. */
+	private MetadataRebuildSimulation sample(List<Long> ids, MetadataRebuildRequest request, int skippedByCutoff) {
+		if (ids.isEmpty()) {
+			return new MetadataRebuildSimulation(skippedByCutoff, 0, 0, List.of());
+		}
+
+		List<MetadataRebuildPreview> differences = new ArrayList<>();
+
+		int examined = 0;
+
+		for (CatalogFile catalogFile : catalogFileRepository.findForMetadataRebuildByIds(ids)) {
+			Path file = currentPath(catalogFile);
+
+			if (file == null || !Files.exists(file) || !Files.isRegularFile(file)) {
+				continue;
+			}
+
+			examined++;
+
+			MetadataRebuildPreview difference = difference(catalogFile, file, request);
+
+			if (difference != null) {
+				differences.add(difference);
+			}
+		}
+
+		return new MetadataRebuildSimulation(skippedByCutoff, examined, differences.size(),
+				differences.stream().limit(PREVIEW_ROWS).toList());
+	}
+
+	/**
+	 * The date this file would end up with, when it differs from the one the
+	 * catalog holds today.
+	 */
+	private MetadataRebuildPreview difference(CatalogFile catalogFile, Path file, MetadataRebuildRequest request) {
+		if (!request.shouldRefresh(MetadataRebuildField.DATE)) {
+			return null;
+		}
+
+		ResolvedMediaDate resolved;
+
+		try {
+			resolved = mediaDateResolver.resolve(metadataExtractor.extract(file, new MetadataOptions(false, true)));
+		} catch (RuntimeException e) {
+			log.debug("Could not simulate the rebuild of {}", file, e);
+
+			return null;
+		}
+
+		MediaMetadata media = catalogFile.getMetadata();
+
+		LocalDateTime current = media == null ? null : media.getCaptureDate();
+
+		if (Objects.equals(current, resolved.captureDate())) {
+			return null;
+		}
+
+		return new MetadataRebuildPreview(PathUtils.normalize(file), current,
+				dateSourceLabels.label(media == null ? null : media.getDateSource()), resolved.captureDate(),
+				dateSourceLabels.label(resolved.dateSource()));
 	}
 
 	private void processBatch(List<Long> ids, MetadataRebuildRequest request, MetadataRebuildCounters counters) {

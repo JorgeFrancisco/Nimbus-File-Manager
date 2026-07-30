@@ -19,13 +19,28 @@ public abstract class AbstractFileNameDateRule implements FileNameDateRule {
 		this.clock = clock;
 	}
 
+	/**
+	 * Walks every match of {@code pattern}, not only the first: a name can carry a
+	 * long numeric id before the date it also carries
+	 * ({@code lv_7556956620933156149_20260704132915.mp4}), and stopping at the
+	 * first digit block would read the head of that id as a date, fail, and drop a
+	 * date the name actually had.
+	 */
 	protected LocalDateTime parse(String fileName, Pattern pattern, String datePattern) {
 		Matcher matcher = pattern.matcher(fileName);
 
-		if (!matcher.find()) {
-			return null;
+		while (matcher.find()) {
+			LocalDateTime date = dateOf(matcher, datePattern);
+
+			if (date != null) {
+				return date;
+			}
 		}
 
+		return null;
+	}
+
+	private LocalDateTime dateOf(Matcher matcher, String datePattern) {
 		StringBuilder value = new StringBuilder();
 
 		for (int i = 1; i <= matcher.groupCount(); i++) {

@@ -1,6 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -8,6 +11,7 @@ import org.springframework.stereotype.Service;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
@@ -60,13 +64,17 @@ public class ConversionCommitService {
 	 * @param quarantineRoot where the original goes, or {@code null} to keep it
 	 */
 	public CommitResult commit(Execution execution, CatalogFile file, Path converted, Path quarantineRoot,
-			ConversionOptions options) {
+			ConversionOptions options, ResolvedMediaDate originalDate) {
 		Path source = Path.of(file.getFileKey());
+
+		FileTime sourceModified = lastModifiedOf(source);
 
 		Path placed;
 
 		try {
 			placed = conversionFilePlacement.place(converted, source, options);
+
+			inheritModifiedTime(placed, sourceModified);
 
 			log.info("Converted {} placed as {}", source.getFileName(), placed.getFileName());
 		} catch (Exception e) {
@@ -78,7 +86,7 @@ public class ConversionCommitService {
 		}
 
 		if (quarantineRoot == null) {
-			return catalogQuietly(placed, false, null);
+			return catalogQuietly(placed, false, null, originalDate);
 		}
 
 		IntakeOutcome outcome = quarantineIntakeService.intake(execution, file, quarantineRoot,
@@ -88,7 +96,7 @@ public class ConversionCommitService {
 			log.warn("The converted file for {} is in place, but the original could not be quarantined ({})", source,
 					outcome);
 
-			return catalogQuietly(placed, false, ConversionFailure.QUARANTINE_FAILED);
+			return catalogQuietly(placed, false, ConversionFailure.QUARANTINE_FAILED, originalDate);
 		}
 
 		// With an affix configured the converted name is the one the user asked for,
@@ -97,7 +105,7 @@ public class ConversionCommitService {
 				? conversionFilePlacement.renameToOriginalName(placed, source)
 				: placed;
 
-		return catalogQuietly(finalPath, true, null);
+		return catalogQuietly(finalPath, true, null, originalDate);
 	}
 
 	/**
@@ -105,9 +113,10 @@ public class ConversionCommitService {
 	 * already where the user expects it, and the watcher/reconciliation would pick
 	 * it up anyway, so a failure here is reported and never undoes the conversion.
 	 */
-	private CommitResult catalogQuietly(Path placed, boolean originalQuarantined, ConversionFailure warning) {
+	private CommitResult catalogQuietly(Path placed, boolean originalQuarantined, ConversionFailure warning,
+			ResolvedMediaDate originalDate) {
 		try {
-			conversionCatalogService.catalog(placed);
+			conversionCatalogService.catalog(placed, originalDate);
 		} catch (Exception e) {
 			log.error("The converted file {} is in the library but could not be cataloged", placed, e);
 
@@ -116,5 +125,35 @@ public class ConversionCommitService {
 
 		return warning == null ? CommitResult.committed(placed, originalQuarantined)
 				: CommitResult.partial(placed, originalQuarantined, warning);
+	}
+
+	private FileTime lastModifiedOf(Path source) {
+		try {
+			return Files.getLastModifiedTime(source);
+		} catch (IOException e) {
+			log.debug("Could not read the modified time of {}", source, e);
+
+			return null;
+		}
+	}
+
+	/**
+	 * The converted file carries the original's modified time. Without it the new
+	 * file looks written today, and a video with no embedded or name date would be
+	 * dated by the conversion instant - the capture date falls back to the oldest
+	 * filesystem timestamp, so restoring this one is what keeps decade-old footage
+	 * out of today's timeline. It also keeps the file honest for Explorer, Photos
+	 * and any backup tool that sorts by date.
+	 */
+	private void inheritModifiedTime(Path placed, FileTime sourceModified) {
+		if (sourceModified == null) {
+			return;
+		}
+
+		try {
+			Files.setLastModifiedTime(placed, sourceModified);
+		} catch (IOException e) {
+			log.debug("Could not carry the modified time over to {}", placed, e);
+		}
 	}
 }

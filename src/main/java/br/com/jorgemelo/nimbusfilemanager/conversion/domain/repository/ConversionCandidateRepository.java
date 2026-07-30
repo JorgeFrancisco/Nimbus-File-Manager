@@ -80,10 +80,13 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 			SELECT new br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource(
 				m.publicId,
 				v.videoCodec,
-				v.durationSeconds
+				v.durationSeconds,
+				md.captureDate,
+				md.dateSource
 			)
 			FROM CatalogFile m
 			LEFT JOIN m.video v
+			LEFT JOIN m.metadata md
 			WHERE m.publicId IN :publicIds
 			""")
 	List<ConversionSource> findSourcesByPublicIdIn(Collection<UUID> publicIds);

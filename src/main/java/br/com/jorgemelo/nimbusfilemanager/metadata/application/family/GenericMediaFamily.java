@@ -35,6 +35,11 @@ public class GenericMediaFamily extends AbstractFileNameDateRule {
 	public LocalDateTime resolve(String fileName) {
 		LocalDateTime date = parse(fileName, FileNameDatePatterns.DATE8_UNDERSCORE_TIME6, "yyyyMMddHHmmss");
 
+		if (date == null) {
+			// No separator between day and time: the whole timestamp is one 14-digit run.
+			date = parse(fileName, FileNameDatePatterns.DATE8_TIME6, "yyyyMMddHHmmss");
+		}
+
 		return date != null ? date : parse(fileName, FileNameDatePatterns.DATE8, "yyyyMMdd");
 	}
 

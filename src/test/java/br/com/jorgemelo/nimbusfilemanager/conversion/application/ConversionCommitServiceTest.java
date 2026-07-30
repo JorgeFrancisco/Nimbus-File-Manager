@@ -9,11 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
@@ -54,14 +58,14 @@ class ConversionCommitServiceTest {
 	void placesTheConvertedFileAndCatalogsItWhenTheOriginalStays() throws Exception {
 		when(conversionFilePlacement.place(converted, source, options)).thenReturn(placed);
 
-		CommitResult result = service.commit(execution, file, converted, null, options);
+		CommitResult result = service.commit(execution, file, converted, null, options, null);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.converted()).isEqualTo(placed);
 		Assertions.assertThat(result.originalQuarantined()).isFalse();
 		Assertions.assertThat(result.failure()).isNull();
 
-		verify(conversionCatalogService).catalog(placed);
+		verify(conversionCatalogService).catalog(placed, null);
 
 		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any());
 	}
@@ -75,13 +79,13 @@ class ConversionCommitServiceTest {
 				.thenReturn(IntakeOutcome.MOVED);
 		when(conversionFilePlacement.renameToOriginalName(placed, source)).thenReturn(renamed);
 
-		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options);
+		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options, null);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.converted()).isEqualTo(renamed);
 		Assertions.assertThat(result.originalQuarantined()).isTrue();
 
-		verify(conversionCatalogService).catalog(renamed);
+		verify(conversionCatalogService).catalog(renamed, null);
 	}
 
 	@Test
@@ -90,7 +94,7 @@ class ConversionCommitServiceTest {
 		when(conversionFilePlacement.place(converted, source, options)).thenReturn(placed);
 		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
-		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options);
+		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options, null);
 
 		// The user asked for that name; taking the original's would throw it away.
 		Assertions.assertThat(result.converted()).isEqualTo(placed);
@@ -103,7 +107,7 @@ class ConversionCommitServiceTest {
 		when(conversionFilePlacement.place(converted, source, options)).thenReturn(placed);
 		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenReturn(IntakeOutcome.ERROR);
 
-		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options);
+		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options, null);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.originalQuarantined()).isFalse();
@@ -116,22 +120,22 @@ class ConversionCommitServiceTest {
 	void neverTouchesTheOriginalWhenTheConvertedFileCannotBePlaced() throws Exception {
 		when(conversionFilePlacement.place(converted, source, options)).thenThrow(new IOException("disk full"));
 
-		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options);
+		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options, null);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.PLACEMENT_FAILED);
 
 		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any());
-		verify(conversionCatalogService, never()).catalog(any());
+		verify(conversionCatalogService, never()).catalog(any(), any());
 		verify(conversionFileNaming).discard(converted);
 	}
 
 	@Test
 	void reportsAFailedCatalogWriteWithoutUndoingTheConversion() throws Exception {
 		when(conversionFilePlacement.place(converted, source, options)).thenReturn(placed);
-		doThrow(new IllegalStateException("db down")).when(conversionCatalogService).catalog(placed);
+		doThrow(new IllegalStateException("db down")).when(conversionCatalogService).catalog(placed, null);
 
-		CommitResult result = service.commit(execution, file, converted, null, options);
+		CommitResult result = service.commit(execution, file, converted, null, options, null);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.converted()).isEqualTo(placed);
@@ -142,7 +146,7 @@ class ConversionCommitServiceTest {
 	void leavesNothingBehindWhenThePlacementItselfFailed() throws Exception {
 		when(conversionFilePlacement.place(converted, source, options)).thenThrow(new IOException("disk full"));
 
-		service.commit(execution, file, converted, null, options);
+		service.commit(execution, file, converted, null, options, null);
 
 		// The temporary file is the only thing that existed, and it goes with the
 		// failure - a successful placement renames it, so there is nothing left to
@@ -163,10 +167,65 @@ class ConversionCommitServiceTest {
 		when(quarantineIntakeService.intake(any(), any(), any(), eq(MovementReason.CONVERTED_QUARANTINED)))
 				.thenReturn(IntakeOutcome.SKIPPED);
 
-		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options);
+		CommitResult result = service.commit(execution, file, converted, quarantineRoot, options, null);
 
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.QUARANTINE_FAILED);
 
-		verify(conversionCatalogService).catalog(placed);
+		verify(conversionCatalogService).catalog(placed, null);
+	}
+	/**
+	 * The converted file is written now, so without carrying the original's
+	 * modified time a video with no embedded or name date would be dated by the
+	 * conversion instant - the capture date falls back to the oldest filesystem
+	 * timestamp.
+	 */
+	@Test
+	void theConvertedFileInheritsTheModifiedTimeOfTheOriginal(@TempDir Path tmp) throws Exception {
+		Path original = Files.writeString(tmp.resolve("old.mp4"), "original");
+		Path output = Files.writeString(tmp.resolve("new.mp4"), "converted");
+
+		FileTime old = FileTime.from(Instant.parse("2011-03-04T18:20:00Z"));
+
+		Files.setLastModifiedTime(original, old);
+
+		CatalogFile catalogFile = CatalogFile.builder().id(9L).fileKey(original.toString()).fileName("old.mp4").build();
+
+		when(conversionFilePlacement.place(output, original, options)).thenReturn(output);
+
+		service.commit(execution, catalogFile, output, null, options, null);
+
+		Assertions.assertThat(Files.getLastModifiedTime(output)).isEqualTo(old);
+	}
+
+	/** A source that is already gone must not stop the conversion from landing. */
+	@Test
+	void aMissingOriginalDoesNotBreakTheCommit(@TempDir Path tmp) throws Exception {
+		Path output = Files.writeString(tmp.resolve("new.mp4"), "converted");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(9L).fileKey(tmp.resolve("gone.mp4").toString())
+				.fileName("gone.mp4").build();
+
+		when(conversionFilePlacement.place(eq(output), any(), eq(options))).thenReturn(output);
+
+		Assertions.assertThat(service.commit(execution, catalogFile, output, null, options, null).successful())
+				.isTrue();
+	}
+
+	/**
+	 * Stamping the date is a courtesy, never a condition: a file that is no longer
+	 * where the placement said it is must not turn a finished conversion into a
+	 * failure.
+	 */
+	@Test
+	void aFailureToStampTheDateDoesNotFailTheConversion(@TempDir Path tmp) throws Exception {
+		Path original = Files.writeString(tmp.resolve("old.mp4"), "original");
+		Path vanished = tmp.resolve("vanished.mp4");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(9L).fileKey(original.toString()).fileName("old.mp4").build();
+
+		when(conversionFilePlacement.place(any(), eq(original), eq(options))).thenReturn(vanished);
+
+		Assertions.assertThat(service.commit(execution, catalogFile, converted, null, options, null).successful())
+				.isTrue();
 	}
 }

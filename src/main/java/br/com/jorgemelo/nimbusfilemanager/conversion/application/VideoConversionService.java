@@ -33,6 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projectio
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -250,7 +251,7 @@ public class VideoConversionService extends LocalizedComponent {
 		}
 
 		CommitResult commit = conversionCommitService.commit(execution, file, transcode.output(), quarantineRoot,
-				options);
+				options, resolvedDateOf(source));
 
 		if (!commit.successful()) {
 			return failed(file, TranscodeResult.failed(commit.failure(), transcode.audioFallback(),
@@ -258,6 +259,18 @@ public class VideoConversionService extends LocalizedComponent {
 		}
 
 		return converted(file, transcode, commit);
+	}
+
+	/**
+	 * The date already resolved for the source, which the converted file
+	 * inherits.
+	 */
+	private ResolvedMediaDate resolvedDateOf(ConversionSource source) {
+		if (source == null || source.captureDate() == null) {
+			return null;
+		}
+
+		return new ResolvedMediaDate(source.captureDate(), source.dateSource());
 	}
 
 	/**

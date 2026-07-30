@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +50,8 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancell
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
@@ -115,7 +119,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
-		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any()))
+		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -151,7 +155,7 @@ class VideoConversionServiceTest {
 		Assertions.assertThat(source).exists();
 		Assertions.assertThat(result.items().getFirst().message()).contains("O original foi mantido");
 
-		verify(conversionCommitService, never()).commit(any(), any(), any(), any(), any());
+		verify(conversionCommitService, never()).commit(any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -164,7 +168,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.failed(ConversionFailure.PLACEMENT_FAILED));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -200,7 +204,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 5));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -273,7 +277,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
@@ -339,7 +343,7 @@ class VideoConversionServiceTest {
 
 			return TranscodeResult.converted(converted, false, false, false, 100);
 		});
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		List<String> reported = new ArrayList<>();
@@ -361,7 +365,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, true, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, true));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -388,7 +392,7 @@ class VideoConversionServiceTest {
 		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.of(tmp.resolve("trash")));
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.partial(converted, false, ConversionFailure.QUARANTINE_FAILED));
 
 		ConversionResult result = service.convert(List.of(mediaId),
@@ -443,7 +447,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -462,7 +466,7 @@ class VideoConversionServiceTest {
 		when(conversionCandidateRepository.findSourcesByPublicIdIn(any())).thenReturn(List.of());
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -481,7 +485,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -505,7 +509,7 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
@@ -673,6 +677,32 @@ class VideoConversionServiceTest {
 
 	private void stubSource(String codec, Double durationSeconds) {
 		when(conversionCandidateRepository.findSourcesByPublicIdIn(any()))
-				.thenReturn(List.of(new ConversionSource(mediaId, codec, durationSeconds)));
+				.thenReturn(List.of(new ConversionSource(mediaId, codec, durationSeconds, null, null)));
+	}
+
+	/**
+	 * The date the source already had travels to the commit, so a video with no
+	 * embedded date is not re-dated to the instant it was converted.
+	 */
+	@Test
+	void handsTheDateOfTheSourceToTheCommit(@TempDir Path tmp) throws Exception {
+		Path source = Files.writeString(tmp.resolve("clip.mp4"), "0123456789");
+		Path converted = Files.writeString(tmp.resolve("clip (H.265).mp4"), "0123");
+
+		LocalDateTime captureDate = LocalDateTime.of(2011, Month.MARCH, 4, 18, 20);
+
+		stubFile(source, 10L);
+
+		when(conversionCandidateRepository.findSourcesByPublicIdIn(any())).thenReturn(
+				List.of(new ConversionSource(mediaId, "h264", 120.0, captureDate, DateSource.FILE_MODIFIED_AT)));
+		when(videoTranscoder.transcode(any(), any(), any()))
+				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
+		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any()))
+				.thenReturn(CommitResult.committed(converted, false));
+
+		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), notCancelled());
+
+		verify(conversionCommitService).commit(any(), any(), eq(converted), isNull(), any(),
+				eq(new ResolvedMediaDate(captureDate, DateSource.FILE_MODIFIED_AT)));
 	}
 }

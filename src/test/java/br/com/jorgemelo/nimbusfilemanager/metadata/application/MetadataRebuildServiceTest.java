@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebui
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
@@ -271,7 +273,8 @@ class MetadataRebuildServiceTest {
 				new CaptureDateValidator(Clock.systemDefaultZone()));
 
 		return new MetadataRebuildService(catalogFileRepository, metadataExtractor, mediaDateResolver,
-				transactionManager, Clock.systemDefaultZone());
+				transactionManager, Clock.systemDefaultZone(),
+				new DateSourceLabels());
 	}
 
 	/**
@@ -388,5 +391,194 @@ class MetadataRebuildServiceTest {
 				.displayHeight(3000).orientationCode(1).rotation(0)
 				.orientationType(MediaOrientation.LANDSCAPE).manufacturer("Canon").model("R6").metadataJson("{}")
 				.build();
+	}
+	/**
+	 * The count alone never said how much of the folder the "continue where it
+	 * stopped" cutoff was hiding, which is exactly what makes someone stare at a
+	 * number and not understand it.
+	 */
+	@Test
+	void dryRunShouldSayHowManyTheContinueCutoffIsHiding() {
+		MetadataRebuildRequest request = new MetadataRebuildRequest(tempDir.toString(),
+				List.of(MetadataRebuildField.DATE), null, null, 10, true,
+				LocalDateTime.of(2026, Month.JULY, 20, 8, 0));
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
+				eq(LocalDateTime.of(2026, Month.JULY, 20, 8, 0)), eq(0L), any(Pageable.class)))
+				.thenReturn(List.of(1L));
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
+				eq(MetadataRebuildRequest.NO_CUTOFF), eq(0L), any(Pageable.class)))
+				.thenReturn(List.of(1L, 2L, 3L));
+
+		var response = service().rebuild(request);
+
+		Assertions.assertThat(response.candidates()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().skippedByCutoff()).isEqualTo(2);
+	}
+
+	/**
+	 * A simulation that only counts cannot be checked against anything. This one
+	 * reports the dates it would write - and writes nothing.
+	 */
+	@Test
+	void dryRunShouldReportWhichDatesWouldChangeWithoutWritingAnything() throws Exception {
+		Path file = Files.writeString(tempDir.resolve("clip.jpg"), "conteudo");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		catalogFile.getMetadata().setCaptureDate(LocalDateTime.of(2026, Month.JULY, 28, 15, 48));
+		catalogFile.getMetadata().setDateSource(DateSource.FILE_MODIFIED_AT);
+
+		MetadataRebuildRequest request = request(true, List.of(MetadataRebuildField.DATE));
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+
+		var response = service().rebuild(request);
+
+		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().wouldChange()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().preview()).singleElement().satisfies(row -> {
+			Assertions.assertThat(row.currentDate()).isEqualTo(LocalDateTime.of(2026, Month.JULY, 28, 15, 48));
+			Assertions.assertThat(row.newDate()).isEqualTo(LocalDateTime.of(2024, Month.MAY, 9, 10, 30));
+			Assertions.assertThat(row.newSourceLabel()).isNotBlank();
+		});
+		Assertions.assertThat(catalogFile.getMetadata().getCaptureDate())
+				.isEqualTo(LocalDateTime.of(2026, Month.JULY, 28, 15, 48));
+
+		verify(transactionManager, never()).getTransaction(any());
+	}
+	/** Nothing to rebuild is an answer too, and the screen has to say it. */
+	@Test
+	void dryRunOverAFolderWithNothingToDoReportsAnEmptySimulation() {
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of());
+
+		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+
+		Assertions.assertThat(response.candidates()).isZero();
+		Assertions.assertThat(response.simulation().examined()).isZero();
+		Assertions.assertThat(response.simulation().preview()).isEmpty();
+	}
+
+	/** A file no longer on disk cannot be examined, nor counted as if it were. */
+	@Test
+	void dryRunDoesNotCountAFileThatIsNoLongerOnDisk() {
+		CatalogFile catalogFile = catalogFile(1L, tempDir.resolve("sumiu.jpg"));
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+
+		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+
+		Assertions.assertThat(response.candidates()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().examined()).isZero();
+	}
+
+	/**
+	 * The preview is about capture dates; simulating a run that does not touch them
+	 * counts the files and promises nothing about what would change.
+	 */
+	@Test
+	void dryRunPreviewsNothingWhenTheDateIsNotBeingRebuilt(@TempDir Path folder) throws Exception {
+		Path file = Files.writeString(folder.resolve("clip.jpg"), "conteudo");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+
+		MetadataRebuildRequest request = new MetadataRebuildRequest(folder.toString(),
+				List.of(MetadataRebuildField.GPS), null, null, 10, true, null);
+
+		var response = service().rebuild(request);
+
+		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().wouldChange()).isZero();
+	}
+
+	/** A file the extractor cannot read leaves the sample, never fails it. */
+	@Test
+	void dryRunSkipsAFileTheExtractorCannotRead(@TempDir Path folder) throws Exception {
+		Path file = Files.writeString(folder.resolve("corrompido.jpg"), "conteudo");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any()))
+				.thenThrow(new IllegalStateException("bad metadata"));
+
+		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
+
+		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().wouldChange()).isZero();
+	}
+
+	/** A file whose date would not move is examined and reported as unchanged. */
+	@Test
+	void dryRunReportsNoChangeWhenTheDateWouldStayTheSame(@TempDir Path folder) throws Exception {
+		Path file = Files.writeString(folder.resolve("clip.jpg"), "conteudo");
+
+		CatalogFile catalogFile = catalogFile(1L, file);
+
+		catalogFile.getMetadata().setCaptureDate(LocalDateTime.of(2024, Month.MAY, 9, 10, 30));
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+
+		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
+
+		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().wouldChange()).isZero();
+		Assertions.assertThat(response.simulation().preview()).isEmpty();
+	}
+	/**
+	 * A catalog row that never had a media row still previews: the rebuild would
+	 * give it one, and the screen shows it as a date appearing from nothing.
+	 */
+	@Test
+	void dryRunPreviewsAFileThatHasNoMediaRowYet(@TempDir Path folder) throws Exception {
+		Path file = Files.writeString(folder.resolve("clip.jpg"), "conteudo");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
+
+		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(file.toString()).build());
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+
+		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
+
+		Assertions.assertThat(response.simulation().wouldChange()).isEqualTo(1);
+		Assertions.assertThat(response.simulation().preview()).singleElement()
+				.satisfies(row -> Assertions.assertThat(row.currentDate()).isNull());
+	}
+
+	/** A catalog row with no path is skipped instead of breaking the sample. */
+	@Test
+	void dryRunSkipsARowWithoutAPath() {
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).metadata(MediaMetadata.builder().build()).build();
+
+		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
+				any(Pageable.class))).thenReturn(List.of(1L));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
+
+		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+
+		Assertions.assertThat(response.simulation().examined()).isZero();
 	}
 }

@@ -269,4 +269,21 @@ class DuplicateKeepPolicyTest {
 		return new Signals(id, false, MediaSubcategory.OTHER, 1000, 1000, dateSource,
 				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
 	}
+	/**
+	 * Between two copies alike in everything else, the one whose name carried the
+	 * time of day is kept: that time came from whatever produced the file, while a
+	 * bare day says nothing about the instant.
+	 */
+	@Test
+	void keepsTheCopyWhoseNameCarriedTheTimeOfDay() {
+		Signals comHora = new Signals(A, false, MediaSubcategory.CAMERA, 4000, 3000, DateSource.FILE_NAME,
+				LocalDateTime.of(2017, Month.OCTOBER, 6, 20, 27, 56), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+		Signals soODia = new Signals(B, false, MediaSubcategory.CAMERA, 4000, 3000, DateSource.FILE_NAME,
+				LocalDateTime.of(2017, Month.OCTOBER, 6, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+
+		Map<UUID, Decision> decisoes = policy.decide(List.of(soODia, comHora), true);
+
+		Assertions.assertThat(decisoes.get(A).verdict()).isEqualTo(Verdict.KEEP);
+		Assertions.assertThat(decisoes.get(B).verdict()).isNotEqualTo(Verdict.KEEP);
+	}
 }

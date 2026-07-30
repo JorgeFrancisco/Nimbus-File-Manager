@@ -27,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Vide
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web.DuplicatesWebController;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web.VideoSimilarityWeb;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 
 /**
  * Test fixture that wires a {@link DuplicatesWebController} over mocked
@@ -63,7 +64,7 @@ public final class Fixture {
 
 	public DuplicatesWebController controller() {
 		return new DuplicatesWebController(duplicates, similarity, phash, phashRunner, preferences,
-				similarityRunner, deletionRunner, exclusions, videoSimilarityWeb());
+				similarityRunner, deletionRunner, exclusions, videoSimilarityWeb(), new DateSourceLabels());
 	}
 
 	private VideoSimilarityWeb videoSimilarityWeb() {

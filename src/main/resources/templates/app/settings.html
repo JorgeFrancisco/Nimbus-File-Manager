@@ -200,6 +200,32 @@
 			</div>
 			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and metadataRebuildResult.dryRun()}" class="alert" role="status"
 					th:text="#{settings.metadata.rebuildSimulated(${#numbers.formatInteger(metadataRebuildResult.candidates(), 1, 'POINT')})}"></div>
+			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and metadataRebuildResult.simulation() != null}">
+				<p class="muted" th:if="${metadataRebuildResult.simulation().skippedByCutoff() > 0}"
+						th:text="#{settings.metadata.simulationSkipped(${#numbers.formatInteger(metadataRebuildResult.simulation().skippedByCutoff(), 1, 'POINT')})}"></p>
+				<p class="muted"
+						th:text="#{settings.metadata.simulationExamined(${metadataRebuildResult.simulation().examined()}, ${metadataRebuildResult.simulation().wouldChange()})}"></p>
+				<div class="table-scroll" th:if="${!metadataRebuildResult.simulation().preview().isEmpty()}">
+					<table>
+						<thead>
+							<tr>
+								<th th:text="#{settings.metadata.simulationFile}">Arquivo</th>
+								<th th:text="#{settings.metadata.simulationCurrent}">Data atual</th>
+								<th th:text="#{settings.metadata.simulationNew}">Data nova</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr th:each="row : ${metadataRebuildResult.simulation().preview()}">
+								<td th:text="${row.path()}"></td>
+								<td th:text="${row.currentDate() == null ? '-' : #temporals.format(row.currentDate(), 'dd/MM/yyyy HH:mm:ss')
+										+ ' (' + row.currentSourceLabel() + ')'}"></td>
+								<td th:text="${row.newDate() == null ? '-' : #temporals.format(row.newDate(), 'dd/MM/yyyy HH:mm:ss')
+										+ ' (' + row.newSourceLabel() + ')'}"></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and !metadataRebuildResult.dryRun()}" class="alert ok" role="status"
 					th:text="#{settings.metadata.rebuildSuccess(${#numbers.formatInteger(metadataRebuildResult.candidates(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.rebuilt(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.skippedMissing(), 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildResult.errors(), 1, 'POINT')})}"></div>
 			<div th:if="${metadataRebuildError != null}" class="alert error" th:text="#{settings.metadata.rebuildFailure(${metadataRebuildError})}"></div>

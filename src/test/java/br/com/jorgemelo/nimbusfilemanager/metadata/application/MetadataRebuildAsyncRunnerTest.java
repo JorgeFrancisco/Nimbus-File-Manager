@@ -58,7 +58,7 @@ class MetadataRebuildAsyncRunnerTest {
 
 	@Test
 	void rebuildStoresResultAndClearsRunningFlag() {
-		MetadataRebuildResponse result = new MetadataRebuildResponse("D:\\photos", false, 5, 4, 1, 0, 0, 0);
+		MetadataRebuildResponse result = new MetadataRebuildResponse("D:\\photos", false, 5, 4, 1, 0, 0, 0, null);
 
 		when(metadataRebuildService.countCandidates(any())).thenReturn(5L);
 		when(metadataRebuildService.rebuild(eq(request), any())).thenReturn(result);
@@ -87,7 +87,7 @@ class MetadataRebuildAsyncRunnerTest {
 		when(metadataRebuildService.rebuild(eq(request), any())).thenAnswer(invocation -> {
 			invocation.getArgument(1, LongConsumer.class).accept(7L);
 
-			return new MetadataRebuildResponse("D:\\photos", false, 10, 7, 3, 0, 0, 0);
+			return new MetadataRebuildResponse("D:\\photos", false, 10, 7, 3, 0, 0, 0, null);
 		});
 
 		runner.start(request);

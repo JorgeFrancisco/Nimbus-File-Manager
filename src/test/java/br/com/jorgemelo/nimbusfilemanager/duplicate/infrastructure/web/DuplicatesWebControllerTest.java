@@ -47,6 +47,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Vide
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
@@ -102,7 +103,7 @@ class DuplicatesWebControllerTest {
 		String view = new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class),
 				phashBacklogService, phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb)
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -147,7 +148,7 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb)
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model.get("groups"))
@@ -186,7 +187,7 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb)
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("videos", 0, null, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("minSimilarity", 95);
@@ -216,7 +217,7 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb)
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		verify(videoSimilarityRunner).run(70);
@@ -242,7 +243,7 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(), preferences,
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb)
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("phashBlocking", true);
@@ -284,7 +285,8 @@ class DuplicatesWebControllerTest {
 		return new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb);
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
+						new DateSourceLabels());
 	}
 
 	@Test
@@ -307,7 +309,8 @@ class DuplicatesWebControllerTest {
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 				.duplicates(new DuplicatesViewRequest("exact", 0, 70, "not-a-real-view", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -346,7 +349,8 @@ class DuplicatesWebControllerTest {
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("similar", 0, 10, "small", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -377,7 +381,8 @@ class DuplicatesWebControllerTest {
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), similarityRunner,
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -402,7 +407,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), similarityRunner,
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("similarityComputing", true);
@@ -423,7 +429,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("activeTab", "exact");
@@ -446,7 +453,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest(null, 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("activeTab", "similar");
@@ -465,7 +473,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", 100, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("pageSize", 100);
@@ -488,7 +497,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("pageSize", 200);
@@ -509,7 +519,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, null, null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("view", "large");
@@ -531,7 +542,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("similar", 0, null, "details", null, null), null, model);
 
 		Assertions.assertThat(model).containsEntry("minSimilarity", 100);
@@ -549,7 +561,8 @@ class DuplicatesWebControllerTest {
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -571,7 +584,7 @@ class DuplicatesWebControllerTest {
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
-				mock(DuplicateExclusionService.class), videoWeb());
+				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels());
 
 		var progress = controller.delete(new DuplicateDeleteRequest(ids));
 
@@ -591,7 +604,7 @@ class DuplicatesWebControllerTest {
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
-				mock(DuplicateExclusionService.class), videoWeb());
+				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels());
 
 		controller.delete(new DuplicateDeleteRequest(List.of(UUID.randomUUID())));
 
@@ -611,7 +624,7 @@ class DuplicatesWebControllerTest {
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), phashRunner(),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class), deletionRunner,
-				mock(DuplicateExclusionService.class), videoWeb());
+				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels());
 
 		var progress = controller.deleteProgress();
 
@@ -628,7 +641,7 @@ class DuplicatesWebControllerTest {
 		String redirect = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				phashBacklogService, phashBacklogAsyncRunner, mock(UserPagePreferenceService.class),
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-						mock(DuplicateExclusionService.class), videoWeb()).retryFingerprints();
+						mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels()).retryFingerprints();
 
 		Assertions.assertThat(redirect).isEqualTo("redirect:/app/duplicates?tab=similar");
 		verify(phashBacklogService).resetFailures();
@@ -641,7 +654,7 @@ class DuplicatesWebControllerTest {
 		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
 				mock(PhashBacklogService.class), runner, mock(UserPagePreferenceService.class),
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-						mock(DuplicateExclusionService.class), videoWeb());
+						mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels());
 
 		Assertions.assertThat(controller.rebuildFingerprints()).isEqualTo("redirect:/app/duplicates?tab=similar");
 		verify(runner).prepareRebuild();
@@ -690,7 +703,7 @@ class DuplicatesWebControllerTest {
 		return new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb);
+				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels());
 	}
 
 	/**
@@ -712,7 +725,7 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
 				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
 				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model.get("deletionBlockedMessage")).asString().isNotBlank();
@@ -732,7 +745,8 @@ class DuplicatesWebControllerTest {
 		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class),
 				phashBacklogService, mock(PhashBacklogAsyncRunner.class),
 				mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(model.get("deletionBlockedMessage")).isNull();
@@ -749,7 +763,8 @@ class DuplicatesWebControllerTest {
 
 		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/duplicates");
@@ -786,7 +801,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		@SuppressWarnings("unchecked")
@@ -825,7 +841,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		@SuppressWarnings("unchecked")
@@ -865,7 +882,8 @@ class DuplicatesWebControllerTest {
 
 		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
 				phashBacklogAsyncRunner, userPagePreferenceService, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb())
+				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
+						new DateSourceLabels())
 						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
 
 		@SuppressWarnings("unchecked")

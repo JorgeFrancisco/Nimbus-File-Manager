@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.Month;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,10 +18,12 @@ import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFacade;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 
 class ConversionCatalogServiceTest {
 
@@ -48,7 +52,7 @@ class ConversionCatalogServiceTest {
 		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
 		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
 
-		service.catalog(converted);
+		service.catalog(converted, null);
 
 		verify(inventoryPersistenceService).save(eq(converted), eq(library), eq(metadata), any());
 	}
@@ -59,7 +63,7 @@ class ConversionCatalogServiceTest {
 		when(appSettingService.booleanValue(SettingsConstants.WATCH_CALCULATE_HASHES, false)).thenReturn(true);
 		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
 
-		service.catalog(converted);
+		service.catalog(converted, null);
 
 		ArgumentCaptor<MetadataOptions> options = ArgumentCaptor.forClass(MetadataOptions.class);
 
@@ -74,8 +78,74 @@ class ConversionCatalogServiceTest {
 		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn("");
 		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
 
-		service.catalog(converted);
+		service.catalog(converted, null);
 
 		verify(inventoryPersistenceService).save(eq(converted), eq(converted.getParent()), eq(metadata), any());
+	}
+
+	/**
+	 * A converted file is written now, so a source with no embedded or name date
+	 * would be re-dated to the conversion instant and jump to the top of the
+	 * timeline. The date the replaced file had wins over that.
+	 */
+	@Test
+	void keepsTheDateOfTheFileItReplacesWhenTheNewOneOnlyHasAFilesystemTimestamp() {
+		LocalDateTime original = LocalDateTime.of(2011, Month.MARCH, 4, 18, 20);
+
+		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4")
+				.captureDate(LocalDateTime.of(2026, Month.JULY, 28, 15, 48)).dateSource(DateSource.FILE_MODIFIED_AT)
+				.build();
+
+		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
+		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+
+		service.catalog(converted, new ResolvedMediaDate(original, DateSource.MEDIA_INFO));
+
+		ArgumentCaptor<MetadataResult> saved = ArgumentCaptor.forClass(MetadataResult.class);
+
+		verify(inventoryPersistenceService).save(any(), any(), saved.capture(), any());
+
+		Assertions.assertThat(saved.getValue().getCaptureDate()).isEqualTo(original);
+		Assertions.assertThat(saved.getValue().getDateSource()).isEqualTo(DateSource.MEDIA_INFO);
+	}
+
+	/**
+	 * The other way round the extraction wins: the converted file kept its embedded
+	 * date, which is more trustworthy than whatever the old row had settled for.
+	 */
+	@Test
+	void keepsTheExtractedDateWhenItIsAtLeastAsTrustworthyAsTheOldOne() {
+		LocalDateTime embedded = LocalDateTime.of(2011, Month.MARCH, 4, 18, 20);
+
+		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4").captureDate(embedded)
+				.dateSource(DateSource.MEDIA_INFO).build();
+
+		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
+		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+
+		service.catalog(converted, new ResolvedMediaDate(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0),
+				DateSource.FILE_NAME));
+
+		ArgumentCaptor<MetadataResult> saved = ArgumentCaptor.forClass(MetadataResult.class);
+
+		verify(inventoryPersistenceService).save(any(), any(), saved.capture(), any());
+
+		Assertions.assertThat(saved.getValue().getCaptureDate()).isEqualTo(embedded);
+		Assertions.assertThat(saved.getValue().getDateSource()).isEqualTo(DateSource.MEDIA_INFO);
+	}
+
+	/** A source row with no date of its own has nothing to lend. */
+	@Test
+	void aSourceWithoutADateLeavesTheExtractionAlone() {
+		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4")
+				.captureDate(LocalDateTime.of(2026, Month.JULY, 28, 15, 48)).dateSource(DateSource.FILE_MODIFIED_AT)
+				.build();
+
+		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
+		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+
+		service.catalog(converted, new ResolvedMediaDate(null, DateSource.UNKNOWN));
+
+		verify(inventoryPersistenceService).save(any(), any(), eq(extracted), any());
 	}
 }

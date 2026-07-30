@@ -120,7 +120,7 @@ public class DuplicateKeepPolicy {
 	private Comparator<Signals> byKeepWorth() {
 		return Comparator.comparing(this::isOriginal).thenComparing(this::isNotDerivative)
 				.thenComparingLong(DuplicateKeepPolicy::pixels)
-				.thenComparingInt(file -> reliabilityRank(file.dateSource()))
+				.thenComparingInt(file -> DateSource.trustOf(file.dateSource(), file.captureDate()))
 				.thenComparing(Signals::captureDate, Comparator.nullsFirst(Comparator.reverseOrder()))
 				.thenComparing(Signals::id, Comparator.reverseOrder());
 	}
@@ -137,22 +137,4 @@ public class DuplicateKeepPolicy {
 		return file.width() == null || file.height() == null ? 0L : (long) file.width() * file.height();
 	}
 
-	/**
-	 * Trust tiers mirroring {@link DateSource}: embedded > name-confirmed >
-	 * name/folder > filesystem.
-	 */
-	private static int reliabilityRank(DateSource source) {
-		if (source == null) {
-			return 0;
-		}
-
-		return switch (source) {
-		case EXIF, MEDIA_INFO -> 5;
-		case FILE_NAME_CONFIRMED -> 4;
-		case FILE_NAME, FOLDER_LAYOUT -> 3;
-		case FILE_MODIFIED_AT -> 2;
-		case FILE_CREATED_AT -> 1;
-		case UNKNOWN -> 0;
-		};
-	}
 }
