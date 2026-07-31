@@ -277,10 +277,345 @@
 		observeNextPages();
 	}
 
+
+	/**
+	 * Card menu: the three-dot button and the right click open the same list, and every
+	 * action reads the entry from the data-* attributes its row or tile carries. Bound to
+	 * the document because infinite scroll appends tiles after load - a listener attached
+	 * to the cards that exist at load time would ignore every page but the first.
+	 */
+	function bindEntryMenu() {
+		var menu = document.getElementById("entryMenu");
+
+		if (!menu) {
+			return;
+		}
+
+		var current = null;
+
+		function entryOf(target) {
+			var host = target.closest ? target.closest("[data-entry-path]") : null;
+
+			if (!host) {
+				return null;
+			}
+
+			return {
+				host: host,
+				path: host.dataset.entryPath,
+				name: host.dataset.entryName,
+				directory: host.dataset.entryDirectory === "true"
+			};
+		}
+
+		function closeMenu() {
+			menu.hidden = true;
+		}
+
+		function openMenu(entry, x, y) {
+			current = entry;
+
+			var root = document.getElementById("explorerRoot");
+			var alreadyHere = folderOf(entry.path) === (root ? root.dataset.path : "");
+
+			menu.querySelectorAll("[data-action]").forEach(function (item) {
+				var action = item.dataset.action;
+
+				// Downloading a folder means nothing, and every listed entry already lives in
+				// the folder on screen - offering to go there would reload the same listing and
+				// read as a broken action.
+				item.hidden = (action === "download" && entry.directory)
+						|| (action === "openFolder" && (entry.directory || alreadyHere));
+			});
+
+			menu.hidden = false;
+
+			// Positioned after unhiding so the measured size is the real one, then pulled
+			// back inside the viewport when the click landed near the right or bottom edge.
+			var rect = menu.getBoundingClientRect();
+
+			menu.style.left = Math.min(x, window.innerWidth - rect.width - 8) + "px";
+			menu.style.top = Math.min(y, window.innerHeight - rect.height - 8) + "px";
+		}
+
+		document.addEventListener("click", function (event) {
+			var trigger = event.target.closest(".tile-menu-open");
+
+			if (!trigger) {
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+			var entry = entryOf(trigger);
+
+			if (entry) {
+				openMenu(entry, event.clientX, event.clientY);
+			}
+		});
+
+		/*
+		 * Closing on pointerdown rather than click, in the capture phase: pressing a card
+		 * starts a navigation and opens the lightbox, and the click that was supposed to
+		 * close the menu never arrived - so the menu sat there over the next screen.
+		 */
+		document.addEventListener("pointerdown", function (event) {
+			if (!event.target.closest("#entryMenu") && !event.target.closest(".tile-menu-open")) {
+				closeMenu();
+			}
+		}, true);
+
+		// The menu is positioned from the click coordinates, so scrolling or resizing
+		// would strand it far from the item it belongs to.
+		window.addEventListener("scroll", closeMenu, true);
+		window.addEventListener("resize", closeMenu);
+
+		document.addEventListener("contextmenu", function (event) {
+			var entry = entryOf(event.target);
+
+			if (!entry) {
+				return;
+			}
+
+			event.preventDefault();
+			openMenu(entry, event.clientX, event.clientY);
+		});
+
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape") {
+				closeMenu();
+			}
+		});
+
+		menu.addEventListener("click", function (event) {
+			var item = event.target.closest("[data-action]");
+
+			if (!item || !current) {
+				return;
+			}
+
+			closeMenu();
+			runAction(item.dataset.action, current);
+		});
+	}
+
+	function csrfToken() {
+		var field = document.querySelector("input[name='_csrf']");
+
+		return field ? field.value : "";
+	}
+
+	function post(url, params) {
+		return fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded", "X-CSRF-TOKEN": csrfToken() },
+			body: new URLSearchParams(params)
+		}).then(function (response) {
+			return response.json();
+		});
+	}
+
+	function browseTo(path) {
+		var root = document.getElementById("explorerRoot");
+		var query = new URLSearchParams({
+			path: path,
+			view: root.dataset.view,
+			size: root.dataset.size,
+			sort: root.dataset.sort
+		});
+
+		// Navigating on the next frame: assigning the location straight away starts the
+		// request before the browser repaints, so the menu stayed visible on screen for
+		// the whole load even though it had already been hidden.
+		window.requestAnimationFrame(function () {
+			window.location.href = "/app/files?" + query.toString();
+		});
+	}
+
+	function dialog(id) {
+		var overlay = document.getElementById(id);
+
+		overlay.hidden = false;
+
+		overlay.querySelectorAll("[data-close]").forEach(function (button) {
+			button.onclick = function () {
+				overlay.hidden = true;
+			};
+		});
+
+		return overlay;
+	}
+
+	/**
+	 * Shows what the server said and reloads on success so the listing matches disk
+	 * again. The sentence is always the backend's: it is the side that knows why an
+	 * action was refused, and a refusal with no explanation reads as a silent no-op.
+	 */
+	function announce(result) {
+		window.alert(result.message);
+
+		if (result.success) {
+			window.location.reload();
+		}
+	}
+
+	function failed() {
+		window.alert(t("js.files.actionFailed"));
+	}
+
+	function folderOf(path) {
+		return path.substring(0, Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/")));
+	}
+
+	/**
+	 * Opening a folder browses into it; opening a file opens the file. The card
+	 * already knows how to show every previewable type through the lightbox, so the
+	 * menu clicks that same link instead of reimplementing the choice - and a type
+	 * with no preview falls back to the raw content in a new tab.
+	 */
+	function openEntry(entry) {
+		if (entry.directory) {
+			browseTo(entry.path);
+			return;
+		}
+
+		var link = entry.host ? entry.host.querySelector("a.media-card-open") : null;
+
+		if (link) {
+			link.click();
+			return;
+		}
+
+		window.open("/app/files/preview?path=" + encodeURIComponent(entry.path), "_blank");
+	}
+
+	function runAction(action, entry) {
+		if (action === "open") {
+			openEntry(entry);
+		} else if (action === "openFolder") {
+			browseTo(folderOf(entry.path));
+		} else if (action === "download") {
+			window.location.href = "/app/files/preview?path=" + encodeURIComponent(entry.path);
+		} else if (action === "copyPath") {
+			copyPath(entry.path);
+		} else if (action === "properties") {
+			showProperties(entry);
+		} else if (action === "rename") {
+			askNewName(entry);
+		} else if (action === "delete") {
+			askDeleteMode(entry);
+		}
+	}
+
+	function copyPath(path) {
+		if (!navigator.clipboard) {
+			window.prompt(t("js.files.copyPath"), path);
+			return;
+		}
+
+		navigator.clipboard.writeText(path).then(function () {
+			window.alert(t("js.files.pathCopied"));
+		}, function () {
+			window.prompt(t("js.files.copyPath"), path);
+		});
+	}
+
+	function loadProperties(path) {
+		return fetch("/api/files/properties?path=" + encodeURIComponent(path)).then(function (response) {
+			return response.json();
+		});
+	}
+
+	function showProperties(entry) {
+		var overlay = dialog("propertiesDialog");
+
+		loadProperties(entry.path).then(function (properties) {
+			document.getElementById("propName").textContent = properties.name;
+			document.getElementById("propLocation").textContent = properties.parentPath || properties.path;
+			document.getElementById("propType").textContent = properties.typeLabel;
+			document.getElementById("propSize").textContent = properties.sizeLabel;
+			document.getElementById("propCreated").textContent = properties.createdAtLabel;
+			document.getElementById("propModified").textContent = properties.modifiedAtLabel;
+			document.getElementById("propCatalog").textContent = properties.catalogLabel || "";
+			document.getElementById("propFiles").textContent = properties.fileCount;
+			document.getElementById("propFolders").textContent = properties.folderCount;
+
+			overlay.querySelectorAll("[data-folder-only]").forEach(function (row) {
+				row.hidden = !properties.directory;
+			});
+
+			overlay.querySelectorAll("[data-file-only]").forEach(function (row) {
+				row.hidden = properties.directory;
+			});
+		}).catch(function () {
+			overlay.hidden = true;
+			failed();
+		});
+	}
+
+	function askNewName(entry) {
+		var overlay = dialog("renameDialog");
+		var input = document.getElementById("renameInput");
+
+		input.value = entry.name;
+		input.focus();
+		input.select();
+
+		document.getElementById("renameConfirm").onclick = function () {
+			overlay.hidden = true;
+
+			post("/api/files/rename", { path: entry.path, newName: input.value }).then(announce).catch(failed);
+		};
+	}
+
+	function askDeleteMode(entry) {
+		var overlay = dialog("deleteDialog");
+
+		document.getElementById("deleteDialogQuestion").textContent = t("js.files.deleteQuestion", entry.name);
+
+		document.getElementById("deleteQuarantine").onclick = function () {
+			overlay.hidden = true;
+
+			post("/api/files/delete", { path: entry.path, mode: "QUARANTINE" }).then(announce).catch(failed);
+		};
+
+		document.getElementById("deletePermanent").onclick = function () {
+			overlay.hidden = true;
+
+			// Erasing a folder takes everything under it, so the amount at stake is stated
+			// in a second dialog before the button that cannot be undone.
+			if (entry.directory) {
+				confirmFolderDeletion(entry);
+			} else {
+				deleteForGood(entry);
+			}
+		};
+	}
+
+	function confirmFolderDeletion(entry) {
+		loadProperties(entry.path).then(function (properties) {
+			var overlay = dialog("folderConfirmDialog");
+
+			document.getElementById("folderConfirmWarning").textContent = t("js.files.folderWarning",
+					properties.fileCount, properties.sizeLabel);
+
+			document.getElementById("folderConfirmAction").onclick = function () {
+				overlay.hidden = true;
+				deleteForGood(entry);
+			};
+		}).catch(failed);
+	}
+
+	function deleteForGood(entry) {
+		post("/api/files/delete", { path: entry.path, mode: "PERMANENT" }).then(announce).catch(failed);
+	}
+
 	document.addEventListener("DOMContentLoaded", function () {
 		bindBackButton();
 		bindBreadcrumb();
 		bindRefreshButton();
 		bindInfiniteScroll();
+		bindEntryMenu();
 	});
 })();

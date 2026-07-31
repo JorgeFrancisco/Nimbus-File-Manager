@@ -105,7 +105,9 @@
 			</tr>
 			</thead>
 			<tbody id="explorerRows" th:fragment="rows">
-			<tr th:each="item : ${explorer.entries()}" th:classappend="${item.missing()} ? 'missing'">
+			<tr th:each="item : ${explorer.entries()}" th:classappend="${item.missing()} ? 'missing'"
+					th:data-entry-path="${item.path()}" th:data-entry-name="${item.name()}"
+					th:data-entry-directory="${item.directory()}">
 				<td class="media-cell" th:title="${item.path()}">
 					<a th:if="${item.directory()}" class="media-card-open"
 							th:href="@{/app/files(path=${item.path()}, view=${explorer.viewMode()}, size=${explorer.size()}, sort=${sort})}">
@@ -142,7 +144,11 @@
 		-->
 		<div id="explorerTiles" th:class="|media-grid ${explorer.viewMode()}|" th:fragment="tiles"
 				th:with="thumbWidth=${explorer.viewMode() == 'xlarge' or explorer.viewMode() == 'large' ? 640 : 320}">
-			<div class="media-tile" th:each="item : ${explorer.entries()}" th:classappend="${item.missing()} ? 'missing'">
+			<div class="media-tile" th:each="item : ${explorer.entries()}" th:classappend="${item.missing()} ? 'missing'"
+					th:data-entry-path="${item.path()}" th:data-entry-name="${item.name()}"
+					th:data-entry-directory="${item.directory()}">
+				<button type="button" class="tile-menu-open" th:title="#{files.menu.title}"
+						th:aria-label="#{files.menu.title}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
 				<span th:if="${!item.missing() and !item.directory()}" class="inventory-dot"
 						th:classappend="${item.registered()} ? 'ok' : 'warn'"
 						th:title="${item.registered()} ? #{files.status.cataloged} : #{files.status.notCataloged}"></span>
@@ -167,6 +173,79 @@
 		<span class="muted explorer-load-status" id="explorerLoadStatus"></span>
 	</div>
 	<div id="explorerSentinel" class="explorer-sentinel" aria-hidden="true"></div>
+
+	<!--
+		Card menu and its dialogs. The markup lives here (not built in JS) so every label goes through
+		the message bundles like the rest of the screen; the script only opens them, fills the values
+		the backend sent and shows the sentence it got back.
+	-->
+	<div id="entryMenu" class="entry-menu" role="menu" hidden>
+		<button type="button" role="menuitem" data-action="open" th:text="#{files.menu.open}">Abrir</button>
+		<button type="button" role="menuitem" data-action="download" th:text="#{files.menu.download}">Baixar</button>
+		<button type="button" role="menuitem" data-action="openFolder" th:text="#{files.menu.openFolder}">Abrir local do arquivo</button>
+		<button type="button" role="menuitem" data-action="copyPath" th:text="#{files.menu.copyPath}">Copiar caminho</button>
+		<button type="button" role="menuitem" data-action="rename" th:text="#{files.menu.rename}">Renomear</button>
+		<button type="button" role="menuitem" data-action="properties" th:text="#{files.menu.properties}">Propriedades</button>
+		<button type="button" role="menuitem" class="danger" data-action="delete" th:text="#{files.menu.delete}">Excluir</button>
+	</div>
+
+	<div class="entry-dialog-overlay" id="deleteDialog" hidden>
+		<div class="entry-dialog" role="alertdialog" aria-modal="true" aria-labelledby="deleteDialogTitle">
+			<h2 id="deleteDialogTitle" th:text="#{files.delete.title}">Excluir</h2>
+			<p id="deleteDialogQuestion"></p>
+			<p class="muted" th:text="#{files.delete.quarantineHint}">A quarentena guarda o item.</p>
+			<p class="muted" th:text="#{files.delete.permanentHint}">A exclusão definitiva não pode ser desfeita.</p>
+			<div class="actions">
+				<button type="button" class="secondary" data-close th:text="#{action.cancel}">Cancelar</button>
+				<button type="button" id="deleteQuarantine" th:text="#{files.delete.quarantine}">Enviar para a quarentena</button>
+				<button type="button" class="danger" id="deletePermanent" th:text="#{files.delete.permanent}">Excluir definitivamente</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="entry-dialog-overlay" id="folderConfirmDialog" hidden>
+		<div class="entry-dialog" role="alertdialog" aria-modal="true" aria-labelledby="folderConfirmTitle">
+			<h2 id="folderConfirmTitle" th:text="#{files.delete.confirmFolder}">Confirmar exclusão definitiva</h2>
+			<p id="folderConfirmWarning"></p>
+			<div class="actions">
+				<button type="button" class="secondary" data-close th:text="#{action.cancel}">Cancelar</button>
+				<button type="button" class="danger" id="folderConfirmAction" th:text="#{files.delete.confirmFolderAction}">Sim, apagar tudo</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="entry-dialog-overlay" id="propertiesDialog" hidden>
+		<div class="entry-dialog" role="dialog" aria-modal="true" aria-labelledby="propertiesDialogTitle">
+			<h2 id="propertiesDialogTitle" th:text="#{files.properties.title}">Propriedades</h2>
+			<dl class="properties-grid">
+				<div><dt th:text="#{files.properties.name}">Nome</dt><dd id="propName"></dd></div>
+				<div><dt th:text="#{files.properties.location}">Local</dt><dd id="propLocation"></dd></div>
+				<div><dt th:text="#{files.properties.type}">Tipo</dt><dd id="propType"></dd></div>
+				<div><dt th:text="#{files.properties.size}">Tamanho</dt><dd id="propSize"></dd></div>
+				<div data-folder-only hidden><dt th:text="#{files.properties.files}">Arquivos</dt><dd id="propFiles"></dd></div>
+				<div data-folder-only hidden><dt th:text="#{files.properties.folders}">Subpastas</dt><dd id="propFolders"></dd></div>
+				<div><dt th:text="#{files.properties.created}">Criado em</dt><dd id="propCreated"></dd></div>
+				<div><dt th:text="#{files.properties.modified}">Modificado em</dt><dd id="propModified"></dd></div>
+				<div data-file-only hidden><dt th:text="#{files.properties.catalog}">Catálogo</dt><dd id="propCatalog"></dd></div>
+			</dl>
+			<p class="muted" data-folder-only hidden th:text="#{files.properties.inventoriedOnly}">Os números da pasta vêm do catálogo.</p>
+			<div class="actions">
+				<button type="button" class="secondary" data-close th:text="#{action.close}">Fechar</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="entry-dialog-overlay" id="renameDialog" hidden>
+		<div class="entry-dialog" role="dialog" aria-modal="true" aria-labelledby="renameDialogTitle">
+			<h2 id="renameDialogTitle" th:text="#{files.rename.title}">Renomear</h2>
+			<label for="renameInput" th:text="#{files.rename.label}">Novo nome</label>
+			<input type="text" id="renameInput" autocomplete="off">
+			<div class="actions">
+				<button type="button" class="secondary" data-close th:text="#{action.cancel}">Cancelar</button>
+				<button type="button" id="renameConfirm" th:text="#{files.rename.confirm}">Renomear</button>
+			</div>
+		</div>
+	</div>
 
 </section>
 </div>

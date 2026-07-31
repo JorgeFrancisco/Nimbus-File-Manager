@@ -48,6 +48,7 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 		case INTEGRITY_CHECK_FAILED -> message("backend.movement.reason.integrityCheckFailed");
 		case UNDONE_BY_USER -> message("backend.movement.reason.undoneByUser");
 		case RESTORED_FROM_QUARANTINE -> message("backend.movement.reason.restoredFromQuarantine");
+		case USER_QUARANTINED -> message("backend.movement.reason.userQuarantined");
 		case USER_CANCELLED -> message("backend.movement.reason.userCancelled");
 		};
 	}

@@ -16,6 +16,7 @@ import org.springframework.data.repository.query.Param;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogExportRow;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FolderInventorySummary;
 
 public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> {
 
@@ -214,4 +215,26 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			order by mf.id
 			""")
 	List<CatalogFile> findForMetadataRebuildByIds(@Param("ids") List<Long> ids);
+
+	/**
+	 * Inventoried totals under a folder, for the properties dialog. Matching
+	 * follows the project's path rule: the folder itself plus a descendant
+	 * {@code like} whose pattern is built by {@code PathUtils} and read with an
+	 * explicit {@code escape}, because a Windows path is full of backslashes and a
+	 * file name may carry {@code %} or {@code _}.
+	 */
+	@Query("""
+			select count(mf) as fileCount,
+			       count(distinct l.currentFolder) as folderCount,
+			       coalesce(sum(mf.sizeBytes), 0) as sizeBytes
+			from CatalogFile mf
+			join mf.location l
+			where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
+			  and (
+			       lower(l.currentFolder) = lower(:folder)
+			       or lower(l.currentPath) like lower(:descendantPattern) escape '\\'
+			  )
+			""")
+	FolderInventorySummary summarizeFolder(@Param("folder") String folder,
+			@Param("descendantPattern") String descendantPattern);
 }

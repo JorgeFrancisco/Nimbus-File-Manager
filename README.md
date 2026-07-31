@@ -56,6 +56,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - In-memory operation lock to avoid conflicting inventory, organization and reconciliation runs on overlapping paths.
 - Local web UI with login, optional TOTP 2FA QR code and application version.
 - File explorer screen with breadcrumb navigation, list/grid views, recent-path suggestions and image/video preview.
+- Per-entry menu in the explorer (three-dot button or right click) for properties, rename, download, copy path, open containing folder and delete. Deleting asks whether to quarantine (recoverable, through the same verified move the duplicate screen uses) or erase for good, and erasing a folder states how many inventoried files and how many bytes go with it before the irreversible step. Every destructive action is confined to the monitored library.
 - Configurable organization folder layouts (date-only, date+category, category-first, ...), described in [Organization Layouts](#organization-layouts).
 - Batch video conversion to H.265/HEVC inside MP4 with FFmpeg, described in [Video Conversion](#video-conversion): two quality profiles, three audio options and a choice of keeping or quarantining the original, carrying over audio, chapters, metadata and every subtitle track MP4 can hold.
 - Role-based web UI: the operational screens (Files, Organization, Duplicates, Quarantine, Conversion, Statistics) and their data/export APIs, plus Users, Access history and system settings, are restricted to `ADMIN` accounts; Dashboard, Timeline and Map stay open to any authenticated user.
@@ -1122,8 +1123,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2182 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.43% instruction, 91.72% branch, 98.03% line, 98.67% method, 100.00% class
+Tests:       2228 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.43% instruction, 91.72% branch, 98.05% line, 98.70% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1135,7 +1136,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.43% instruction, 91.72% branch, 98.03% line, 98.67% method, 100.00% class
+Floor:  98.43% instruction, 91.72% branch, 98.05% line, 98.70% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 

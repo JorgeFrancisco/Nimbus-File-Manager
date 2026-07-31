@@ -10,6 +10,9 @@ public enum MovementReason {
 
 	INTEGRITY_CHECK_FAILED,
 
+	/** A file the user sent to quarantine from the file explorer. */
+	USER_QUARANTINED,
+
 	/** The reverse move an undo writes, so the trail reads in both directions. */
 	UNDONE_BY_USER,
 

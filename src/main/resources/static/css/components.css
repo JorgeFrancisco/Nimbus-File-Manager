@@ -800,3 +800,130 @@ a.button.disabled {
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
+
+/* --------------------------------------------------------------------------
+   Card menu of the file explorer and the dialogs it opens. The menu is fixed
+   because it is positioned from the click coordinates; the dialogs reuse the
+   overlay shape of the session warning so every modal on the app looks alike.
+   -------------------------------------------------------------------------- */
+
+.tile-menu-open {
+	background: transparent;
+	border: none;
+	color: var(--muted);
+	cursor: pointer;
+	display: none;
+	left: 6px;
+	padding: 2px 6px;
+	position: absolute;
+	top: 4px;
+	width: auto;
+	z-index: 1;
+}
+
+.media-tile:hover .tile-menu-open,
+.tile-menu-open:focus-visible {
+	display: block;
+}
+
+.tile-menu-open:hover {
+	color: var(--accent);
+}
+
+.entry-menu {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+	display: flex;
+	flex-direction: column;
+	min-width: 210px;
+	padding: 6px;
+	position: fixed;
+	z-index: 60;
+}
+
+/* Without this the menu can never be hidden: the browser hides [hidden] elements
+   through a user-agent rule that any class rule outranks, and .entry-menu sets
+   display:flex - so hidden stayed on the element while the menu stayed on screen.
+   Same reason .entry-dialog-overlay carries its own [hidden] rule below. */
+.entry-menu[hidden] {
+	display: none;
+}
+
+.entry-menu button {
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	color: var(--text);
+	cursor: pointer;
+	padding: 8px 10px;
+	text-align: left;
+	width: 100%;
+}
+
+.entry-menu button:hover {
+	background: var(--bg-subtle);
+}
+
+.entry-menu button.danger {
+	color: var(--danger);
+}
+
+.entry-dialog-overlay {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.55);
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	position: fixed;
+	z-index: 70;
+}
+
+.entry-dialog-overlay[hidden] {
+	display: none;
+}
+
+.entry-dialog {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	max-width: 560px;
+	padding: 22px;
+	width: calc(100% - 32px);
+}
+
+.entry-dialog h2 {
+	margin-top: 0;
+}
+
+.entry-dialog .actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 18px;
+}
+
+.entry-dialog button.danger {
+	background: var(--danger);
+	border-color: var(--danger);
+	color: #fff;
+}
+
+.properties-grid {
+	display: grid;
+	gap: 10px 18px;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	margin: 0;
+}
+
+.properties-grid dt {
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.properties-grid dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
