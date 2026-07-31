@@ -17,7 +17,21 @@
 			th:with="INVENTORY='nimbus-file-manager.inventory.', SECURITY='nimbus-file-manager.security.',
 			API='nimbus-file-manager.api.', METADATA='nimbus-file-manager.metadata.', TOOLS='nimbus-file-manager.tools.',
 			DUPLICATES='nimbus-file-manager.duplicates.', SCAN='nimbus-file-manager.scan.',
-			LOCATION='nimbus-file-manager.location.', CATALOG='nimbus-file-manager.catalog.'">
+			LOCATION='nimbus-file-manager.location.', CATALOG='nimbus-file-manager.catalog.',
+			TIMEZONE='nimbus-file-manager.timezone', MAP='nimbus-file-manager.map.'">
+		<!--
+			Every group filters the settings list by key prefix, so a setting whose prefix no group
+			claims is stored, read by the application and simply never shown - which is what happened
+			to the time zone and to the whole map group until they got the two panels below.
+		-->
+		<section class="panel section">
+			<h2 th:text="#{settings.sys.general}">Geral</h2>
+			<p class="muted" th:text="#{settings.sys.generalHint}">Parâmetros que valem para a aplicação inteira.</p>
+			<th:block th:each="setting : ${settings}" th:if="${setting.settingKey == TIMEZONE}">
+				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
+			</th:block>
+		</section>
+
 		<section class="panel">
 			<h2 th:text="#{settings.sys.monitoring}">Monitoramento automático</h2>
 			<p class="muted" th:text="#{settings.sys.monitoringHint}">Como o inventário contínuo observa a pasta monitorada.</p>
@@ -78,6 +92,14 @@
 			<p class="muted" th:text="#{settings.sys.scanHint}">O que é ignorado em inventário, reconciliação, arquivos e organização.</p>
 			<th:block th:each="setting : ${settings}"
 					th:if="${#strings.startsWith(setting.settingKey, SCAN)}">
+				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
+			</th:block>
+		</section>
+
+		<section class="panel section">
+			<h2 th:text="#{settings.sys.map}">Mapa</h2>
+			<p class="muted" th:text="#{settings.sys.mapHint}">Camada de tiles e limite de zoom usados pela tela de mapa.</p>
+			<th:block th:each="setting : ${settings}" th:if="${#strings.startsWith(setting.settingKey, MAP)}">
 				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
 			</th:block>
 		</section>

@@ -25,7 +25,7 @@
 			<option value="false" th:selected="${setting.settingValue == 'false'}" th:text="#{common.no}">Não</option>
 		</select>
 		<select name="value" th:if="${setting.settingKey == 'nimbus-file-manager.timezone'}">
-			<option th:if="${#lists.isEmpty(timezones.?[id == setting.settingValue])}" th:value="${setting.settingValue}"
+			<option th:if="${!#lists.contains(timezones.![id], setting.settingValue)}" th:value="${setting.settingValue}"
 					th:text="${setting.settingValue}" selected></option>
 			<option th:each="tz : ${timezones}" th:value="${tz.id}" th:text="${tz.label}"
 					th:selected="${tz.id == setting.settingValue}">São Paulo (Brasília)</option>

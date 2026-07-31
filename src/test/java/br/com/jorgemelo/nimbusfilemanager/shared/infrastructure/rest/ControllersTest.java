@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -213,6 +215,43 @@ class ControllersTest {
 				.doesNotContain("workspace", "backup", "secret");
 		Assertions.assertThat(response.getBody().values())
 				.noneMatch(value -> String.valueOf(value).contains(sensitiveMessage));
+	}
+
+	/**
+	 * A parameter in the wrong shape is the caller's mistake: 400 with the generic
+	 * message, never the 500-with-stack-trace the generic handler produces. A page
+	 * that built {@code ?w=null} for every thumbnail once filled the log with
+	 * identical stacks at ERROR, which is the level reserved for what actually needs
+	 * investigating.
+	 */
+	@Test
+	void aParameterOfTheWrongTypeShouldBeRejectedAsABadRequest() {
+		RestExceptionHandler handler = new RestExceptionHandler();
+		MethodArgumentTypeMismatchException mismatch = mock(MethodArgumentTypeMismatchException.class);
+
+		when(mismatch.getName()).thenReturn("w");
+		when(mismatch.getValue()).thenReturn("null");
+		doReturn(int.class).when(mismatch).getRequiredType();
+
+		var response = handler.typeMismatch(mismatch);
+
+		Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+		Assertions.assertThat(response.getBody()).containsEntry("error", "Requisição inválida.");
+	}
+
+	/**
+	 * The required type is absent for a parameter Spring could not resolve a target
+	 * type for; the log line still has to name the parameter instead of failing on
+	 * a null.
+	 */
+	@Test
+	void aTypeMismatchWithoutARequiredTypeShouldStillBeRejected() {
+		RestExceptionHandler handler = new RestExceptionHandler();
+		MethodArgumentTypeMismatchException mismatch = mock(MethodArgumentTypeMismatchException.class);
+
+		when(mismatch.getName()).thenReturn("page");
+
+		Assertions.assertThat(handler.typeMismatch(mismatch).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 	}
 
 	@Test

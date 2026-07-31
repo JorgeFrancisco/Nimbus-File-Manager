@@ -138,6 +138,37 @@ class SettingsPageRenderTest {
 	}
 
 	/**
+	 * The time zone and the map settings belong to no key-prefix group until a panel
+	 * claims them, and an unclaimed setting is stored, read by the application and
+	 * never rendered. This keeps both panels on screen - and with them the only
+	 * render of the time-zone dropdown, whose matching expression had the same latent
+	 * defect that broke the provider row.
+	 */
+	@Test
+	void rendersTheSettingsThatBelongToNoOtherGroup() throws Exception {
+		when(appSettingService.list()).thenReturn(List.of(
+				setting(SettingsConstants.TIMEZONE, "America/Sao_Paulo", "ZONE_ID"),
+				setting(SettingsConstants.MAP_MAX_ZOOM, "19", "INTEGER")));
+
+		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("America/Sao_Paulo")))
+				.andExpect(content().string(Matchers.containsString("nimbus-file-manager.map.max-zoom")));
+	}
+
+	/**
+	 * A stored time zone the offered list does not carry stays selectable instead of
+	 * being dropped from the dropdown that is about to save over it.
+	 */
+	@Test
+	void keepsAStoredTimeZoneThatIsNotOffered() throws Exception {
+		when(appSettingService.list())
+				.thenReturn(List.of(setting(SettingsConstants.TIMEZONE, "Pacific/Kiritimati", "ZONE_ID")));
+
+		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("Pacific/Kiritimati")));
+	}
+
+	/**
 	 * A value no implemented provider matches survives as its own option instead of
 	 * being silently rewritten to the first entry of the dropdown.
 	 */
