@@ -34,9 +34,12 @@
 			Enum-backed setting: the value is one of the providers the application implements, so it is
 			picked, never typed. The stored value is kept as an extra option when it names no implemented
 			provider (a leftover from an older release), so opening the screen never rewrites it silently.
+			The stored value is matched against a projection of the names rather than inside a selection
+			(?[...]): a selection swaps the SpEL root for the element being tested, and "setting" - a
+			fragment parameter, not a property of LocationProvider - stops resolving there.
 		-->
 		<select name="value" th:if="${setting.settingKey == 'nimbus-file-manager.location.provider'}">
-			<option th:if="${#lists.isEmpty(locationProviders.?[name() == setting.settingValue])}"
+			<option th:if="${!#lists.contains(locationProviders.![name()], setting.settingValue)}"
 					th:value="${setting.settingValue}" th:text="${setting.settingValue}" selected></option>
 			<option th:each="provider : ${locationProviders}" th:value="${provider}"
 					th:text="#{'enum.locationProvider.' + ${provider}}"
