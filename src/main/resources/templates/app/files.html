@@ -133,9 +133,15 @@
 		</div>
 	</div>
 
-	<div class="panel section" th:unless="${explorer.viewMode() == 'details'}"
-			th:with="thumbWidth=${explorer.viewMode() == 'xlarge' or explorer.viewMode() == 'large' ? 640 : 320}">
-		<div id="explorerTiles" th:class="|media-grid ${explorer.viewMode()}|" th:fragment="tiles">
+	<div class="panel section" th:unless="${explorer.viewMode() == 'details'}">
+		<!--
+			thumbWidth lives on the fragment element, not on the panel around it: infinite scroll
+			renders "app/files :: tiles" alone (FileExplorerWebController#items), and a th:with on an
+			ancestor is never evaluated in that partial render - every appended page then asked for
+			?w=null and got a 500 instead of a thumbnail.
+		-->
+		<div id="explorerTiles" th:class="|media-grid ${explorer.viewMode()}|" th:fragment="tiles"
+				th:with="thumbWidth=${explorer.viewMode() == 'xlarge' or explorer.viewMode() == 'large' ? 640 : 320}">
 			<div class="media-tile" th:each="item : ${explorer.entries()}" th:classappend="${item.missing()} ? 'missing'">
 				<span th:if="${!item.missing() and !item.directory()}" class="inventory-dot"
 						th:classappend="${item.registered()} ? 'ok' : 'warn'"
