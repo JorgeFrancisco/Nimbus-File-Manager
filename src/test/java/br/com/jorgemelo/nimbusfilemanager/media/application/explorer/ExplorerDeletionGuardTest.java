@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -31,6 +34,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  */
 class ExplorerDeletionGuardTest {
 
+	private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
+
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final MessageSource messages = messageSource();
 
@@ -45,7 +50,23 @@ class ExplorerDeletionGuardTest {
 	}
 
 	private String expected(String key, Object... arguments) {
-		return messages.getMessage(key, arguments, Locale.forLanguageTag("pt-BR"));
+		return messages.getMessage(key, arguments, PT_BR);
+	}
+
+	/**
+	 * The component under test resolves through LocaleContextHolder, so without
+	 * pinning the language these assertions would compare pt-BR text against
+	 * whatever the machine defaults to - green here and red on an English CI
+	 * runner, which is exactly what happened.
+	 */
+	@BeforeEach
+	void useThePortugueseBundle() {
+		LocaleContextHolder.setLocale(PT_BR);
+	}
+
+	@AfterEach
+	void releaseTheLocale() {
+		LocaleContextHolder.resetLocaleContext();
 	}
 
 	@Test

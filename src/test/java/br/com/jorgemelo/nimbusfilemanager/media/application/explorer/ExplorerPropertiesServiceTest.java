@@ -7,11 +7,15 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
@@ -27,6 +31,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * inventoried, and the folder itself never counts as one of its own subfolders.
  */
 class ExplorerPropertiesServiceTest {
+
+	private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
 
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
 
@@ -52,6 +58,22 @@ class ExplorerPropertiesServiceTest {
 		when(summary.getSizeBytes()).thenReturn(bytes);
 
 		return summary;
+	}
+
+	/**
+	 * The component under test resolves through LocaleContextHolder, so without
+	 * pinning the language these assertions would compare pt-BR text against
+	 * whatever the machine defaults to - green here and red on an English CI
+	 * runner, which is exactly what happened.
+	 */
+	@BeforeEach
+	void useThePortugueseBundle() {
+		LocaleContextHolder.setLocale(PT_BR);
+	}
+
+	@AfterEach
+	void releaseTheLocale() {
+		LocaleContextHolder.resetLocaleContext();
 	}
 
 	@Test
