@@ -20,7 +20,6 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.AppSettingDef
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.repository.AppSettingRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Duplicates;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Security;
@@ -135,6 +134,28 @@ public class AppSettingService implements ApplicationRunner {
 				appSettingRepository.save(newSetting(definition, "system"));
 			}
 		}
+
+		discardUndefined();
+	}
+
+	/**
+	 * Drops rows whose key no longer exists among the definitions. A setting
+	 * dropped from the code stayed in the table forever, and the settings screen
+	 * still listed it - with no message bundle entry behind it, the label rendered
+	 * as the raw {@code ??setting.<key>_pt_BR??} marker, and editing it changed
+	 * nothing anywhere.
+	 */
+	private void discardUndefined() {
+		List<AppSetting> undefined = appSettingRepository.findAllByOrderBySettingKeyAsc().stream()
+				.filter(setting -> !definitionsByKey.containsKey(setting.getSettingKey())).toList();
+
+		if (undefined.isEmpty()) {
+			return;
+		}
+
+		appSettingRepository.deleteAll(undefined);
+
+		undefined.forEach(setting -> valueCache.remove(setting.getSettingKey()));
 	}
 
 	private AppSetting newSetting(AppSettingDefinition definition, String username) {
@@ -202,8 +223,6 @@ public class AppSettingService implements ApplicationRunner {
 
 	private List<AppSettingDefinition> definitions(NimbusFileManagerProperties properties) {
 		return List.of(
-				new AppSettingDefinition(SettingsConstants.DEFAULT_LAYOUT, value(properties.defaultLayout()),
-						VALUE_TYPE_STRING, "Layout padrão usado na organização."),
 				new AppSettingDefinition(SettingsConstants.TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE,
 						VALUE_TYPE_ZONE_ID,
 						"Fuso horário da aplicação, usado para carimbar as datas/horas registradas."),
@@ -215,18 +234,15 @@ public class AppSettingService implements ApplicationRunner {
 						"Caminho do executável ffmpeg."),
 				new AppSettingDefinition(SettingsConstants.TOOL_EXIFTOOL, value(properties.tools(), Tools::exiftool),
 						VALUE_TYPE_STRING, "Caminho do executável exiftool."),
-				new AppSettingDefinition(SettingsConstants.INVENTORY_PROGRESS_INTERVAL,
-						intDefault(properties.inventory(), Inventory::progressInterval), VALUE_TYPE_INTEGER,
-						"Intervalo de atualização de progresso do inventário."),
 				new AppSettingDefinition(SettingsConstants.API_MAX_PAGE_SIZE, intDefault(properties.api(),
 						Api::maxPageSize),
-						VALUE_TYPE_INTEGER, "Tamanho máximo de página nas consultas."),
+						VALUE_TYPE_INTEGER, "Tamanho máximo de página nas consultas, em registros."),
 				new AppSettingDefinition(SettingsConstants.API_DEFAULT_FOLDER_LIMIT,
 						intDefault(properties.api(), Api::defaultFolderLimit), VALUE_TYPE_INTEGER,
-						"Limite padrão de pastas nas estatísticas."),
+						"Limite padrão de pastas nas estatísticas, em pastas."),
 				new AppSettingDefinition(SettingsConstants.API_MAX_FOLDER_LIMIT, intDefault(properties.api(),
 						Api::maxFolderLimit),
-						VALUE_TYPE_INTEGER, "Limite máximo de pastas nas estatísticas."),
+						VALUE_TYPE_INTEGER, "Limite máximo de pastas nas estatísticas, em pastas."),
 				new AppSettingDefinition(SettingsConstants.METADATA_EXIFTOOL_ENABLED,
 						booleanDefault(properties.metadata(), metadata -> metadata.exiftool().enabled()),
 						VALUE_TYPE_BOOLEAN, "Habilita leitura de metadados por exiftool."),
@@ -236,9 +252,6 @@ public class AppSettingService implements ApplicationRunner {
 				new AppSettingDefinition(SettingsConstants.METADATA_FFPROBE_ENABLED,
 						booleanDefault(properties.metadata(), metadata -> metadata.ffprobe().enabled()),
 						VALUE_TYPE_BOOLEAN, "Habilita leitura de metadados por ffprobe."),
-				new AppSettingDefinition(SettingsConstants.DUPLICATES_KEEP_STRATEGY,
-						value(properties.duplicates(), Duplicates::keepStrategy), VALUE_TYPE_STRING,
-						"Estratégia padrão para manter duplicatas."),
 				new AppSettingDefinition(SettingsConstants.TRASH_FOLDER, "", VALUE_TYPE_STRING,
 						"Pasta de quarentena para onde os duplicados excluídos são movidos. Vazio = exclusão desabilitada até configurar."),
 				new AppSettingDefinition(SettingsConstants.TRASH_RETENTION_DAYS, "90", VALUE_TYPE_INTEGER,
@@ -274,7 +287,7 @@ public class AppSettingService implements ApplicationRunner {
 				new AppSettingDefinition(SettingsConstants.LOCATION_ENABLED, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Localização offline: resolver país/estado/cidade a partir do GPS durante o inventário."),
 				new AppSettingDefinition(SettingsConstants.LOCATION_PROVIDER, "ADMIN_BOUNDARIES", VALUE_TYPE_STRING,
-						"Localização offline: provedor de resolução (ADMIN_BOUNDARIES; futuros: GOOGLE_MAPS, OPENSTREETMAP)."),
+						"Localização offline: provedor de resolução, entre os que a aplicação implementa."),
 				new AppSettingDefinition(SettingsConstants.BOUNDARY_ADM0_URL,
 						"https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/main/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.geojson",
 						VALUE_TYPE_STRING,
@@ -306,12 +319,15 @@ public class AppSettingService implements ApplicationRunner {
 						"Mapa: nível máximo de zoom."));
 	}
 
-	private String value(String value) {
-		return value == null ? "" : value;
-	}
-
+	/**
+	 * Seed value of a text setting: an absent section and an absent property inside
+	 * it mean the same thing to the settings table - no configured default - so
+	 * both collapse to the empty string a screen can show and an admin can fill in.
+	 */
 	private <T> String value(T object, Function<T, String> getter) {
-		return object == null ? "" : value(getter.apply(object));
+		String configured = object == null ? null : getter.apply(object);
+
+		return configured == null ? "" : configured;
 	}
 
 	private <T> String intDefault(T object, ToIntFunction<T> getter) {

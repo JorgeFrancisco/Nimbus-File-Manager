@@ -33,8 +33,8 @@ class ExternalToolPathsTest {
 	}
 
 	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(null, null, null,
-				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", "C:/tools/exiftool.exe"), null, null, null,
-				null, null, null);
+		return new NimbusFileManagerProperties(null, null,
+				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", "C:/tools/exiftool.exe"), null, null, null, null,
+				null);
 	}
 }

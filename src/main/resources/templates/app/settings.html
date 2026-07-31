@@ -16,7 +16,7 @@
 	<section class="stack" th:if="${activeTab == 'system'}" th:attr="data-inventory-running=${inventoryRunning}"
 			th:with="INVENTORY='nimbus-file-manager.inventory.', SECURITY='nimbus-file-manager.security.',
 			API='nimbus-file-manager.api.', METADATA='nimbus-file-manager.metadata.', TOOLS='nimbus-file-manager.tools.',
-			DUPLICATES='nimbus-file-manager.duplicates.', LAYOUT='nimbus-file-manager.default-layout', SCAN='nimbus-file-manager.scan.',
+			DUPLICATES='nimbus-file-manager.duplicates.', SCAN='nimbus-file-manager.scan.',
 			LOCATION='nimbus-file-manager.location.', CATALOG='nimbus-file-manager.catalog.'">
 		<section class="panel">
 			<h2 th:text="#{settings.sys.monitoring}">Monitoramento automático</h2>
@@ -32,7 +32,7 @@
 			<p class="muted" th:text="#{settings.sys.organizationHint}">Layout padrão usado para organizar arquivos e critério de duplicados.</p>
 			<div th:if="${quarantineWarning}" class="alert" role="status" th:text="${quarantineWarning}"></div>
 			<th:block th:each="setting : ${settings}"
-					th:if="${#strings.startsWith(setting.settingKey, DUPLICATES) or setting.settingKey == LAYOUT}">
+					th:if="${#strings.startsWith(setting.settingKey, DUPLICATES)}">
 				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
 			</th:block>
 		</section>

@@ -2,6 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properti
 
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
-public record Inventory(int progressInterval, @DefaultValue("false") boolean recursiveWatchDefault,
+public record Inventory(@DefaultValue("false") boolean recursiveWatchDefault,
 		@DefaultValue("60000") long reconciliationIntervalMillis) {
 }

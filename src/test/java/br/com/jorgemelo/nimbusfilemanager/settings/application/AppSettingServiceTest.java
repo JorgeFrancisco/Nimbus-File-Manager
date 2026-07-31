@@ -19,7 +19,6 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.repository.AppSettingRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Duplicates;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Exiftool;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Ffprobe;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
@@ -69,16 +68,16 @@ class AppSettingServiceTest {
 	void updateShouldValidateTypeAndAuditUser() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL)
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.API_MAX_PAGE_SIZE)
 				.settingValue("100").valueType("INTEGER").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL))
+		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE))
 				.thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		service.update(SettingsConstants.INVENTORY_PROGRESS_INTERVAL, "250", "admin");
+		service.update(SettingsConstants.API_MAX_PAGE_SIZE, "250", "admin");
 
 		Assertions.assertThat(setting.getSettingValue()).isEqualTo("250");
 		Assertions.assertThat(setting.getUpdatedByUsername()).isEqualTo("admin");
@@ -174,24 +173,24 @@ class AppSettingServiceTest {
 	void readsAreCachedUntilTheSettingIsUpdated() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.DEFAULT_LAYOUT).settingValue("old")
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.TRASH_FOLDER).settingValue("old")
 				.valueType("STRING").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(SettingsConstants.DEFAULT_LAYOUT)).thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.TRASH_FOLDER)).thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
 		// Second read is served from the cache: the DB is hit only once.
-		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
-		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("old");
+		Assertions.assertThat(service.stringValue(SettingsConstants.TRASH_FOLDER, "fb")).isEqualTo("old");
+		Assertions.assertThat(service.stringValue(SettingsConstants.TRASH_FOLDER, "fb")).isEqualTo("old");
 
-		verify(repository, times(1)).findBySettingKey(SettingsConstants.DEFAULT_LAYOUT);
+		verify(repository, times(1)).findBySettingKey(SettingsConstants.TRASH_FOLDER);
 
 		// update() evicts, so the next read reflects the new committed value.
-		service.update(SettingsConstants.DEFAULT_LAYOUT, "new", "admin");
+		service.update(SettingsConstants.TRASH_FOLDER, "new", "admin");
 
-		Assertions.assertThat(service.stringValue(SettingsConstants.DEFAULT_LAYOUT, "fb")).isEqualTo("new");
+		Assertions.assertThat(service.stringValue(SettingsConstants.TRASH_FOLDER, "fb")).isEqualTo("new");
 	}
 
 	@Test
@@ -301,13 +300,36 @@ class AppSettingServiceTest {
 	void intValueShouldReadAStoredNumberEvenWithSurroundingSpaces() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		when(repository.findBySettingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL))
+		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE))
 				.thenReturn(Optional.of(AppSetting.builder()
-						.settingKey(SettingsConstants.INVENTORY_PROGRESS_INTERVAL).settingValue(" 250 ").build()));
+						.settingKey(SettingsConstants.API_MAX_PAGE_SIZE).settingValue(" 250 ").build()));
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		Assertions.assertThat(service.intValue(SettingsConstants.INVENTORY_PROGRESS_INTERVAL, 100)).isEqualTo(250);
+		Assertions.assertThat(service.intValue(SettingsConstants.API_MAX_PAGE_SIZE, 100)).isEqualTo(250);
+	}
+
+	/**
+	 * A setting dropped from the code used to survive in the table forever, and the
+	 * screen kept listing it with no bundle entry behind it - the label rendered as
+	 * the raw {@code ??setting.<key>??} marker and editing it changed nothing.
+	 * Startup now discards those rows.
+	 */
+	@Test
+	void runShouldDiscardStoredSettingsThatNoDefinitionClaims() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSetting known = AppSetting.builder().settingKey(SettingsConstants.API_MAX_PAGE_SIZE).settingValue("500")
+				.valueType("INTEGER").build();
+		AppSetting undefined = AppSetting.builder().settingKey("nimbus-file-manager.api.default-page-size")
+				.settingValue("50").valueType("INTEGER").build();
+
+		when(repository.findBySettingKey(any())).thenReturn(Optional.of(known));
+		when(repository.findAllByOrderBySettingKeyAsc()).thenReturn(List.of(known, undefined));
+
+		new AppSettingService(repository, properties()).run(null);
+
+		verify(repository).deleteAll(List.of(undefined));
 	}
 
 	/**
@@ -332,7 +354,7 @@ class AppSettingServiceTest {
 	@Test
 	void definitionsSurviveAConfigurationWithoutTheOptionalSections() {
 		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", List.of(), null, null, null,
-				null, null, null, null, null);
+				null, null, null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), bare);
 
@@ -340,15 +362,34 @@ class AppSettingServiceTest {
 				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isNotNull());
 	}
 
+	/**
+	 * A section that exists but leaves a path unset is the same case as no section
+	 * at all: the setting is seeded empty for the operator to fill in on screen,
+	 * never as the literal {@code null} a text field cannot render.
+	 */
+	@Test
+	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
+		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace", List.of(),
+				new Tools(null, null, null), new Inventory(true, 60_000L), new Api(500, 20, 100), null,
+				new Security(5, 5, 15, true, "admin", "admin"), null);
+
+		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
+
+		Assertions.assertThat(service.definitions())
+				.filteredOn(definition -> definition.key().startsWith("nimbus-file-manager.tools."))
+				.isNotEmpty()
+				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isEmpty());
+	}
+
 	private NimbusFileManagerProperties properties() {
 		return properties(true);
 	}
 
 	private NimbusFileManagerProperties properties(boolean recursiveWatchDefault) {
-		return new NimbusFileManagerProperties("C:/workspace", List.of("database", "temp"), "DEFAULT",
+		return new NimbusFileManagerProperties("C:/workspace", List.of("database", "temp"),
 				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", "C:/tools/exiftool.exe"),
-				new Inventory(100, recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
+				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
 				new Metadata(new Exiftool(true), new Mediainfo(true), new Ffprobe(true)),
-				new Duplicates("OLDEST_MODIFIED"), new Security(5, 5, 15, true, "admin", "admin"), null);
+				new Security(5, 5, 15, true, "admin", "admin"), null);
 	}
 }

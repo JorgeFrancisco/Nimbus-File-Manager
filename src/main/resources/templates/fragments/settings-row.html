@@ -30,8 +30,21 @@
 			<option th:each="tz : ${timezones}" th:value="${tz.id}" th:text="${tz.label}"
 					th:selected="${tz.id == setting.settingValue}">São Paulo (Brasília)</option>
 		</select>
+		<!--
+			Enum-backed setting: the value is one of the providers the application implements, so it is
+			picked, never typed. The stored value is kept as an extra option when it names no implemented
+			provider (a leftover from an older release), so opening the screen never rewrites it silently.
+		-->
+		<select name="value" th:if="${setting.settingKey == 'nimbus-file-manager.location.provider'}">
+			<option th:if="${#lists.isEmpty(locationProviders.?[name() == setting.settingValue])}"
+					th:value="${setting.settingValue}" th:text="${setting.settingValue}" selected></option>
+			<option th:each="provider : ${locationProviders}" th:value="${provider}"
+					th:text="#{'enum.locationProvider.' + ${provider}}"
+					th:selected="${provider.name() == setting.settingValue}">Limites administrativos</option>
+		</select>
 		<input type="text" name="value" th:value="${setting.settingValue}"
-				th:unless="${setting.valueType == 'BOOLEAN' or setting.settingKey == 'nimbus-file-manager.timezone'}"
+				th:unless="${setting.valueType == 'BOOLEAN' or setting.settingKey == 'nimbus-file-manager.timezone'
+						or setting.settingKey == 'nimbus-file-manager.location.provider'}"
 				th:id="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'} ? 'watchFolderInput' : (${setting.settingKey == 'nimbus-file-manager.duplicates.trash-folder'} ? 'trashFolderInput' : null)"
 				th:readonly="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'}"
 				th:attr="data-original-value=${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder' ? setting.settingValue : null}">

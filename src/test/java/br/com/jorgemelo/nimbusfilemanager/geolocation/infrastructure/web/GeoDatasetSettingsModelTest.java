@@ -16,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyn
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.ReverseGeocodingStrategyRegistry;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 
@@ -28,8 +29,11 @@ class GeoDatasetSettingsModelTest {
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
+	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry = mock(
+			ReverseGeocodingStrategyRegistry.class);
 	private final GeoDatasetSettingsModel model = new GeoDatasetSettingsModel(offlineGeoDataset, mediaLocationService,
-			geoDatasetAsyncRunner, locationRebuildAsyncRunner, preferences, inventoryRunningState);
+			geoDatasetAsyncRunner, locationRebuildAsyncRunner, preferences, inventoryRunningState,
+			reverseGeocodingStrategyRegistry);
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
 
 	@Test

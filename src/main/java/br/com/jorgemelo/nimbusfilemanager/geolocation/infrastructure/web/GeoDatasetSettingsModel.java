@@ -12,6 +12,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyn
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.ReverseGeocodingStrategyRegistry;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
@@ -34,17 +35,20 @@ public class GeoDatasetSettingsModel {
 	private final LocationRebuildAsyncRunner locationRebuildAsyncRunner;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final InventoryRunningState inventoryRunningState;
+	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry;
 
 	@Autowired
 	public GeoDatasetSettingsModel(OfflineGeoDataset offlineGeoDataset, MediaLocationService mediaLocationService,
 			GeoDatasetAsyncRunner geoDatasetAsyncRunner, LocationRebuildAsyncRunner locationRebuildAsyncRunner,
-			UserPagePreferenceService userPagePreferenceService, InventoryRunningState inventoryRunningState) {
+			UserPagePreferenceService userPagePreferenceService, InventoryRunningState inventoryRunningState,
+			ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry) {
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.mediaLocationService = mediaLocationService;
 		this.geoDatasetAsyncRunner = geoDatasetAsyncRunner;
 		this.locationRebuildAsyncRunner = locationRebuildAsyncRunner;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.inventoryRunningState = inventoryRunningState;
+		this.reverseGeocodingStrategyRegistry = reverseGeocodingStrategyRegistry;
 	}
 
 	public void addTo(Model model, Authentication authentication) {
@@ -65,6 +69,11 @@ public class GeoDatasetSettingsModel {
 		model.addAttribute("geoRebuildError", locationRebuildAsyncRunner.lastError());
 		model.addAttribute("geoRebuildResult", locationRebuildAsyncRunner.lastResult());
 		model.addAttribute("geoRebuildScopes", LocationRebuildScope.values());
+
+		// Feeds the provider dropdown of the location settings row: an implemented
+		// provider is the only value that resolves anything, and a free-text field let
+		// a typo through that silently fell back to the default.
+		model.addAttribute("locationProviders", reverseGeocodingStrategyRegistry.available());
 
 		Map<String, String> geoPreferences = userPagePreferenceService.find(username(authentication),
 				GeolocationConstants.GEO_PAGE_KEY);

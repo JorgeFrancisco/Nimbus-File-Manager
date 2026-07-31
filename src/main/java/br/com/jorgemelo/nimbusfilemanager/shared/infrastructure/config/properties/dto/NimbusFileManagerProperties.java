@@ -8,8 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties(prefix = "nimbus-file-manager")
 public record NimbusFileManagerProperties(
 
-		String workspace, List<String> workspaceFolders, String defaultLayout,
+		String workspace, List<String> workspaceFolders,
 
-		Tools tools, Inventory inventory, Api api, Metadata metadata, Duplicates duplicates, Security security,
-		@DefaultValue Email email) {
+		Tools tools, Inventory inventory, Api api, Metadata metadata, Security security, @DefaultValue Email email) {
 }

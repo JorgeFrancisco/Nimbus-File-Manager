@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.application;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +34,16 @@ public class ReverseGeocodingStrategyRegistry {
 
 	public Optional<ReverseGeocodingStrategy> configured() {
 		return strategyFor(configuredProvider());
+	}
+
+	/**
+	 * Providers that actually have a strategy behind them, in enum order, so the
+	 * settings screen offers only what the application can resolve with - the
+	 * remaining {@link LocationProvider} values name where a location came from,
+	 * not something that can be picked.
+	 */
+	public List<LocationProvider> available() {
+		return Arrays.stream(LocationProvider.values()).filter(strategies::containsKey).toList();
 	}
 
 	Optional<ReverseGeocodingStrategy> strategyFor(LocationProvider provider) {
