@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
@@ -40,6 +41,25 @@ public class RestExceptionHandler extends LocalizedComponent {
 	ResponseEntity<Map<String, Object>> validation(MethodArgumentNotValidException e) {
 		return ResponseEntity.badRequest()
 				.body(Map.of(ERROR, message("backend.api.invalidRequest"), "details", e.getMessage()));
+	}
+
+	/**
+	 * A query/path parameter the caller sent in the wrong shape is the caller's
+	 * mistake, not a server failure: it answers 400, and the log line is a single
+	 * WARN naming the parameter. It used to fall through to the generic handler,
+	 * which meant a 500 plus a full stack trace at ERROR - a template that built
+	 * {@code ?w=null} for every thumbnail on screen once filled the log with
+	 * hundreds of identical stacks, drowning the failures that do need
+	 * investigating.
+	 */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	ResponseEntity<Map<String, Object>> typeMismatch(MethodArgumentTypeMismatchException e) {
+		Class<?> requiredType = e.getRequiredType();
+
+		LOGGER.warn("Rejected {}={} on /api/**: not a valid {}", e.getName(), e.getValue(),
+				requiredType == null ? "value" : requiredType.getSimpleName());
+
+		return ResponseEntity.badRequest().body(Map.of(ERROR, message("backend.api.invalidRequest")));
 	}
 
 	/**
