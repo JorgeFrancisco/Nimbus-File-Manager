@@ -577,6 +577,7 @@ a.button.disabled {
 
 .media-card-open {
 	align-items: center;
+	caret-color: transparent;
 	color: var(--text);
 	display: inline-flex;
 	gap: 9px;
@@ -602,10 +603,18 @@ a.button.disabled {
 	object-fit: cover;
 }
 
+/* The glyph is drawn by the icon font's ::before, so the element itself is empty -
+   and an empty element inside a link is still a valid text position. Clicking the
+   folder icon anchored a blinking caret there, as tall as the icon's font-size and
+   sitting between the icon and the name. The icon is decoration, never content to
+   select, so it opts out; the caret colour is cleared on the whole card as well,
+   since nothing inside it is editable and a caret there only ever means the
+   browser found a text position in something meant to be clicked. */
 .media-symbol {
 	color: var(--muted);
 	font-size: 22px;
 	line-height: 1;
+	user-select: none;
 }
 
 /* Details (table) layout: small inline thumbnail next to the name. */
