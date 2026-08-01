@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.30.0.105</version>
+	<version>5.31.0.106</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -284,6 +284,30 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-antrun-plugin</artifactId>
 				<executions>
+					<!--
+					     jpackage marks the launcher it produces read-only, and neither Ant nor the clean
+					     plugin can delete a read-only file on Windows: after one installer build, every
+					     later "mvn clean" failed on target/installer. Clearing the attribute before clean
+					     runs keeps that out of the way for good, whichever profile produced the image.
+					-->
+					<execution>
+						<id>release-installer-image</id>
+						<phase>pre-clean</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<exec executable="attrib" osfamily="windows" failifexecutionfails="false"
+										dir="${project.build.directory}" failonerror="false">
+									<arg value="-R"/>
+									<arg value="installer\*"/>
+									<arg value="/S"/>
+									<arg value="/D"/>
+								</exec>
+							</target>
+						</configuration>
+					</execution>
 					<execution>
 						<id>verify-executable-jar-manifest</id>
 						<phase>package</phase>
@@ -517,6 +541,122 @@
 							<timestampedReports>false</timestampedReports>
 							<withHistory>false</withHistory>
 						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<!--
+		     Native installer, built by the JDK's own jpackage - no extra tooling to install
+		     and nothing to keep in step with the Java version. Off by default because it
+		     only runs on the platform it targets: mvn -Pinstaller package
+		
+		     The default type is app-image, a self-contained folder that needs nothing else.
+		     Setting installer.type to msi produces a real installer, which on Windows also
+		     requires WiX on the PATH.
+		-->
+		<profile>
+			<id>installer</id>
+			<properties>
+				<installer.type>app-image</installer.type>
+			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>build-helper-maven-plugin</artifactId>
+						<version>3.6.0</version>
+						<executions>
+							<!-- jpackage only accepts major.minor.patch, and the project version carries a
+							     fourth build number. Deriving it here keeps the version single-sourced in
+							     <version> instead of repeated in a property nobody remembers to bump. -->
+							<execution>
+								<id>installer-version</id>
+								<phase>prepare-package</phase>
+								<goals>
+									<goal>regex-property</goal>
+								</goals>
+								<configuration>
+									<name>installer.app.version</name>
+									<value>${project.version}</value>
+									<regex>^(\d+)\.(\d+)\.(\d+).*$</regex>
+									<replacement>$1.$2.$3</replacement>
+									<failIfNoMatch>true</failIfNoMatch>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<!-- jpackage copies every file of its input folder into the image, so the jar gets
+							     a folder of its own instead of dragging the whole target directory along. -->
+							<execution>
+								<id>installer-input</id>
+								<phase>package</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<!-- jpackage refuses to write into a destination that already exists, so the
+										     folder goes first - and it marks the launcher read-only, which neither Ant
+										     nor mvn clean can delete on Windows. Clearing the attribute first is what
+										     keeps a second build (and every later clean) from failing on the leftover
+										     image. The delete is not quiet: failing here beats letting jpackage write a
+										     half image that starts and cannot find its own cfg. -->
+										<exec executable="attrib" osfamily="windows" failifexecutionfails="false"
+												dir="${project.build.directory}">
+											<arg value="-R"/>
+											<arg value="installer\*"/>
+											<arg value="/S"/>
+											<arg value="/D"/>
+										</exec>
+										<delete dir="${project.build.directory}/installer" failonerror="true"/>
+										<mkdir dir="${project.build.directory}/installer/input"/>
+										<copy file="${project.build.directory}/${project.build.finalName}.jar"
+												todir="${project.build.directory}/installer/input"/>
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>jpackage</id>
+								<phase>package</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>${java.home}/bin/jpackage</executable>
+									<arguments>
+										<argument>--type</argument>
+										<argument>${installer.type}</argument>
+										<argument>--name</argument>
+										<argument>Nimbus File Manager</argument>
+										<argument>--app-version</argument>
+										<argument>${installer.app.version}</argument>
+										<argument>--vendor</argument>
+										<argument>Jorge Melo</argument>
+										<argument>--input</argument>
+										<argument>${project.build.directory}/installer/input</argument>
+										<argument>--main-jar</argument>
+										<argument>${project.build.finalName}.jar</argument>
+										<argument>--dest</argument>
+										<argument>${project.build.directory}/installer</argument>
+										<!-- The packaged jar declares this in its manifest, but jpackage launches the
+										     jar through its own launcher, so the flag has to be passed again or the
+										     Windows change source warns on every start. -->
+										<argument>--java-options</argument>
+										<argument>--enable-native-access=ALL-UNNAMED</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
 					</plugin>
 				</plugins>
 			</build>

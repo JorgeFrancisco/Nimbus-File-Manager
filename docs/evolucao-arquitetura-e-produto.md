@@ -65,10 +65,14 @@ menu do explorer (dizer "132 arquivos, 4,2 GB" antes do botão vermelho) deveria
 
 ### Complexidade média — semanas
 
-**P4. Instalar exige Docker ou Maven + PostgreSQL.** O README pede banco criado à mão, com role e
-permissões. Isso é razoável para quem desenvolve e proibitivo para quem só quer organizar fotos.
-*Entrega:* o passo que separa "projeto no GitHub" de "produto". Um executável via `jpackage` com
-Postgres embarcado (ou H2/SQLite como alternativa local) tira a barreira inteira.
+**P4. Instalar ainda exige um PostgreSQL de pé.** O empacotamento por `jpackage` já existe
+(perfil `installer`, com JRE embutido e workspace na pasta do usuário), então Java e
+Maven saíram do caminho. Falta o banco: o README continua pedindo role e permissões criadas à mão,
+razoável para quem desenvolve e proibitivo para quem só quer organizar fotos.
+*Entrega:* o passo que separa "projeto no GitHub" de "produto". Embarcar os binários oficiais do
+PostgreSQL, com a versão maior fixada e ciclo de vida gerenciado pela aplicação. A troca de versão
+maior é assunto separado, decidido quando chegar: dump lógico (`pg_dump`/`pg_restore`), o backup do
+catálogo, ou os dois — preservando o cluster antigo até confirmar que o novo subiu íntegro.
 
 **P5. Não há atualização.** Subir de versão é trocar o jar e torcer para as migrations rodarem. Não
 há verificação de versão nova, nem aviso, nem rollback.

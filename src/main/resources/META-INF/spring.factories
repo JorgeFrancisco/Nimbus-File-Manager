@@ -1,0 +1,5 @@
+# Registers the workspace decision before Logback opens the log file. Loaded from
+# spring.factories, which is what Spring Boot reads for EnvironmentPostProcessor -
+# the META-INF/spring/*.imports form applies to auto-configuration, not to this.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceEnvironmentPostProcessor

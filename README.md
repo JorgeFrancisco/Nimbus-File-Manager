@@ -1138,6 +1138,41 @@ instead, download an official **shared** Windows build (a *static* build's self-
 `ffprobe.exe` fails with `STATUS_DLL_NOT_FOUND` when its DLLs are missing) and place the
 executables together with their DLLs directly under `tools/bin/`.
 
+## Packaging a native application
+
+The `installer` profile builds a self-contained application with the JDK's own `jpackage` — the
+bundled runtime removes Java from the list of things to install first:
+
+```bash
+./mvnw -Pinstaller -DskipTests package
+```
+
+The result is `target/installer/Nimbus File Manager/`, a folder holding the launcher, the
+application jar and a trimmed JRE (~200 MB). It runs from anywhere, copied as it is.
+
+A real installer instead of a folder:
+
+```bash
+./mvnw -Pinstaller -Dinstaller.type=msi -DskipTests package
+```
+
+`msi` (and `exe`) additionally require [WiX](https://wixtoolset.org/) on the `PATH`; without it
+`jpackage` fails with a message naming the missing tool. The default stays `app-image` so the
+profile works on a plain machine.
+
+What is packaged still expects **PostgreSQL to exist** — see [Requirements](#running). Embedding
+the database is a separate step; moving between major versions of the server, when it comes, is its
+own decision.
+
+### Where an installed copy keeps its data
+
+An installation lives in a folder its user cannot write to, so a packaged run puts the workspace
+under `~/Nimbus File Manager/workspace` instead of beside the executable — decided once at
+startup by `WorkspaceLocation`, published as `nimbus-file-manager.workspace` before Logback opens
+its file, and read from there by everything else. Started from a build, the workspace stays next
+to the project as before. Setting `NIMBUS_FILE_MANAGER_WORKSPACE` (or the property) wins over
+both.
+
 ## Organization Safety Notes
 
 - Preview should be reviewed before execute.
@@ -1158,8 +1193,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2355 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.01% branch, 98.07% line, 98.75% method, 100.00% class
+Tests:       2359 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.46% instruction, 92.02% branch, 98.07% line, 98.75% method, 100.00% class
 ```
 
 ### Coverage ratchet
