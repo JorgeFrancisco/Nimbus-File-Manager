@@ -108,7 +108,8 @@
 			</div>
 		</section>
 
-		<section class="panel section">
+		<section class="panel section" data-operation-panel="backup"
+				th:attr="data-operation-running=${backupRunning}">
 			<h2 th:text="#{settings.backup.title}">Backup do catálogo</h2>
 			<p class="muted" th:text="#{settings.backup.intro}">O catálogo guarda o que os arquivos não guardam: metadados extraídos, hashes perceptuais, localizações resolvidas e o histórico que torna a organização reversível.</p>
 
@@ -147,40 +148,30 @@
 
 			<p class="muted" th:if="${backups.isEmpty()}" th:text="#{settings.backup.none}">Nenhum backup ainda.</p>
 
-			<div  th:unless="${backups.isEmpty()}">
-				<table>
-					<thead>
-						<tr>
-							<th th:text="#{settings.backup.file}">Arquivo</th>
-							<th th:text="#{settings.backup.takenAt}">Feito em</th>
-							<th th:text="#{settings.backup.size}">Tamanho</th>
-							<th th:text="#{common.actions}">Ações</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr th:each="backup : ${backups}">
-							<td><code th:text="${backup.name()}"></code></td>
-							<td th:text="${#temporals.format(backup.createdAt(), 'dd/MM/yyyy HH:mm')}"></td>
-							<td th:text="${#numbers.formatDecimal(backup.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB'"></td>
-							<td class="panel-actions">
-								<form th:action="@{/app/settings/backup/restore}" method="post"
-										onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.restoreConfirm}">
-									<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-									<input type="hidden" name="name" th:value="${backup.name()}">
-									<button type="submit" class="secondary" th:disabled="${inventoryRunning or backupRunning}"
-											th:text="#{settings.backup.restore}">Restaurar</button>
-								</form>
-								<form th:action="@{/app/settings/backup/delete}" method="post"
-										onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.deleteConfirm}">
-									<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-									<input type="hidden" name="name" th:value="${backup.name()}">
-									<button type="submit" class="secondary" th:disabled="${backupRunning}" th:text="#{settings.backup.delete}">Excluir</button>
-								</form>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+			<ul class="backup-list" th:unless="${backups.isEmpty()}">
+				<li class="backup-item" th:each="backup : ${backups}">
+					<code class="backup-name" th:text="${backup.name()}"></code>
+					<p class="muted backup-meta"
+						th:text="#{settings.backup.summary(${#temporals.format(backup.createdAt(), 'dd/MM/yyyy HH:mm')},
+							${#numbers.formatDecimal(backup.sizeBytes() / 1048576.0, 1, 1, 'COMMA')})}"></p>
+					<div class="panel-actions">
+						<form th:action="@{/app/settings/backup/restore}" method="post"
+								onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.restoreConfirm}">
+							<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+							<input type="hidden" name="name" th:value="${backup.name()}">
+							<button type="submit" class="secondary" th:disabled="${inventoryRunning or backupRunning}"
+									th:text="#{settings.backup.restore}">Restaurar</button>
+						</form>
+						<form th:action="@{/app/settings/backup/delete}" method="post"
+								onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.deleteConfirm}">
+							<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+							<input type="hidden" name="name" th:value="${backup.name()}">
+							<button type="submit" class="secondary" th:disabled="${backupRunning}"
+									th:text="#{settings.backup.delete}">Excluir</button>
+						</form>
+					</div>
+				</li>
+			</ul>
 
 			<th:block th:each="setting : ${settings}"
 					th:if="${#strings.startsWith(setting.settingKey, BACKUP)}">

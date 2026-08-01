@@ -1219,7 +1219,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       2441 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.38% instruction, 91.94% branch, 97.94% line, 98.75% method, 100.00% class
+JaCoCo:      98.36% instruction, 91.94% branch, 97.90% line, 98.71% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1235,7 +1235,7 @@ Floor:  98.47% instruction, 92.01% branch, 98.08% line, 98.74% method, 100.00% c
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-Method and class sit above the floor; instruction, branch and line sit below it. The gap is 28
+Class sits above the floor; instruction, branch, line and method sit below it. The gap is 28
 lines across the two newest domains that no honest test reaches: the I/O `catch` blocks of the
 PostgreSQL installer, the cluster service, the download and the backup; and the containment check
 that decides whether an archive entry may be written — which the folder filter ahead of it already

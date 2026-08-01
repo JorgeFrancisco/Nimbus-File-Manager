@@ -1,11 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -79,8 +79,7 @@ class CatalogBackupAsyncRunnerTest {
 
 	@Test
 	void keepsTheReasonARestoreFailed() {
-		doThrow(new IllegalArgumentException("newer than this installation")).when(backupService)
-				.restore(anyString());
+		doThrow(new IllegalArgumentException("newer than this installation")).when(backupService).restore(anyString());
 
 		runner.start();
 		runner.restore(NAME);
@@ -103,13 +102,13 @@ class CatalogBackupAsyncRunnerTest {
 	}
 
 	/**
-	 * A restore drops objects to recreate them. Stopping halfway leaves the
-	 * catalog neither as it was nor as it was becoming, so the answer is no -
-	 * and the tool is never even asked.
+	 * A restore drops objects to recreate them. Stopping halfway leaves the catalog
+	 * neither as it was nor as it was becoming, so the answer is no - and the tool
+	 * is never even asked.
 	 */
 	@Test
 	void refusesToCancelARestore() {
-		doAnswer(call -> {
+		doAnswer(_ -> {
 			Assertions.assertThat(runner.cancel()).isFalse();
 
 			return null;

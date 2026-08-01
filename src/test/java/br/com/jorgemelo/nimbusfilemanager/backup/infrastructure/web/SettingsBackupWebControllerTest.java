@@ -30,8 +30,8 @@ class SettingsBackupWebControllerTest {
 
 	private final CatalogBackupAsyncRunner asyncRunner = mock(CatalogBackupAsyncRunner.class);
 
-	private final SettingsBackupWebController controller = new SettingsBackupWebController(catalogBackupService, asyncRunner,
-			inventoryRunningState);
+	private final SettingsBackupWebController controller = new SettingsBackupWebController(
+			catalogBackupService, asyncRunner, inventoryRunningState);
 
 	/**
 	 * The work runs in the background, so the answer says it started rather than
@@ -64,7 +64,8 @@ class SettingsBackupWebControllerTest {
 		verify(asyncRunner, never()).create();
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
-	}
+	}
+
 	/**
 	 * Cancelling costs nothing while a dump is running: the database was only
 	 * read, and the half-written file goes with it.
