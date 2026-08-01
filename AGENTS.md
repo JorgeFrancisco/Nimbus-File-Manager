@@ -62,6 +62,12 @@ A formatação mecânica do Java é responsabilidade **exclusiva** do formatter 
 - Chaves K&R: `{` no fim da linha; `} else {` e `} catch` na mesma linha do `}`.
 - No máximo **1** linha em branco consecutiva; **1** antes de cada método; **nenhuma** entre campos consecutivos; imports em grupos separados por 1 linha em branco.
 - O formatter não insere linha ao final do arquivo (casa com o `editor/.editorconfig`).
+- **Quebras feitas à mão são preservadas** (`join_wrapped_lines=false`). O formatter insere quebras onde as regras
+  mandam, mas não desfaz as que já existem no código. A chave nasceu de um conflito real: com o default `true`, o
+  Eclipse juntava `@Slf4j` e `@Service` numa linha só a cada Ctrl+Shift+F, vencendo o
+  `insert_new_line_after_annotation_on_type=insert` — as duas linhas curtas cabiam numa, então ele as unia. **Uma
+  anotação por linha** é a forma do projeto. Como a chave é global, ela também faz o formatter respeitar qualquer
+  outra quebra manual, em vez de refazê-la.
 - **Argumentos de anotação são quebrados** (`alignment_for_arguments_in_annotation`). Sem essa chave o Eclipse usa seu default — *não quebrar* — e um `@Operation(summary = …, description = …)` do OpenAPI vira uma linha de 200+ colunas a cada Ctrl+Shift+F, desfazendo qualquer quebra feita à mão.
 
 > **Onde o formatter é configurado:** no *project scope*, em `.settings/org.eclipse.jdt.core.prefs` — as chaves `org.eclipse.jdt.core.formatter.*` que o Eclipse aplica por cima do profile do workspace, com o conjunto **completo** gravado (via *Properties → Java Code Style → Formatter → Enable project specific settings*), para que nenhuma chave dependa da máquina de quem abre o projeto. Esses arquivos são **versionados por exceção explícita** no `.gitignore` (`.settings/*` ignorado, com `!` para `org.eclipse.jdt.core.prefs`, `org.eclipse.jdt.ui.prefs` — o `formatter_settings_version` — e `org.eclipse.core.resources.prefs`, que fixa o UTF-8 da regra de codificação); o resto de `.settings/` continua fora, por ser gerado pelo m2e. **Chave ausente cai para o profile do workspace** — foi assim que anotações longas passaram a violar as 120 colunas.

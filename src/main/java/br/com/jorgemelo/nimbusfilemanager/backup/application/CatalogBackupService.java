@@ -9,7 +9,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -42,8 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * schema version, because loading rows into columns that moved is how a rescue
  * becomes the corruption it was meant to prevent.
  */
-@Slf4j
-@Service
+@Slf4j @Service
 public class CatalogBackupService {
 
 	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -57,8 +55,8 @@ public class CatalogBackupService {
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 
-	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository,
-			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock) {
+	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository, BackupFolderResolver backupFolderResolver,
+			ObjectMapper objectMapper, Clock clock) {
 		this.catalogCopyRepository = catalogCopyRepository;
 		this.backupFolderResolver = backupFolderResolver;
 		this.objectMapper = objectMapper;
@@ -74,8 +72,8 @@ public class CatalogBackupService {
 	public BackupFile create() {
 		List<String> tables = catalogCopyRepository.tables();
 
-		Path target = backupFolderResolver.folder().resolve(PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP)
-				+ SUFFIX);
+		Path target = backupFolderResolver.folder()
+				.resolve(PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + SUFFIX);
 
 		try (OutputStream file = Files.newOutputStream(target); ZipOutputStream zip = new ZipOutputStream(file)) {
 			for (String table : tables) {
@@ -132,9 +130,8 @@ public class CatalogBackupService {
 			String current = catalogCopyRepository.schemaVersion();
 
 			if (!current.equals(manifest.schemaVersion())) {
-				throw new IllegalArgumentException(
-						"Backup was taken from schema " + manifest.schemaVersion() + ", this database is on "
-								+ current);
+				throw new IllegalArgumentException("Backup was taken from schema " + manifest.schemaVersion()
+						+ ", this database is on " + current);
 			}
 
 			catalogCopyRepository.truncateAll();

@@ -41,7 +41,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j @Service
+@Slf4j
+@Service
 public class OrganizationExecutor {
 
 	private static final String SKIPPED_LABEL = ", skipped=";
