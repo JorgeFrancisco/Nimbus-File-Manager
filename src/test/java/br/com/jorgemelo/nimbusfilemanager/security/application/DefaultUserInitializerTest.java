@@ -20,6 +20,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 
 class DefaultUserInitializerTest {
 
+	private final FirstAccessCredential credential = mock(FirstAccessCredential.class);
+
 	@Test
 	void shouldRequirePasswordChangeWhenCreatingUserWithDefaultPassword() {
 		AppUserRepository repository = mock(AppUserRepository.class);
@@ -29,7 +31,7 @@ class DefaultUserInitializerTest {
 		when(encoder.encode("admin")).thenReturn("hash");
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		new DefaultUserInitializer(repository, encoder, props("admin@example.com", "admin")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "admin")).run(null);
 
 		var captor = ArgumentCaptor.forClass(AppUser.class);
 
@@ -46,7 +48,7 @@ class DefaultUserInitializerTest {
 
 		when(encoder.encode("strongSecret")).thenReturn("hash");
 
-		new DefaultUserInitializer(repository, encoder, props("admin@example.com", "strongSecret")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "strongSecret")).run(null);
 
 		var captor = ArgumentCaptor.forClass(AppUser.class);
 
@@ -70,7 +72,7 @@ class DefaultUserInitializerTest {
 		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
 		when(encoder.matches("configured-value", "legacy-hash")).thenReturn(true);
 
-		new DefaultUserInitializer(repository, encoder, props("admin@example.com", "configured-value")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value")).run(null);
 
 		Assertions.assertThat(admin.getPasswordChangeRequired()).isTrue();
 
@@ -88,9 +90,107 @@ class DefaultUserInitializerTest {
 		when(repository.count()).thenReturn(1L);
 		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
 
-		new DefaultUserInitializer(repository, encoder, props("admin@example.com", "configured-value")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value")).run(null);
 
 		verify(repository, never()).save(any());
+	}
+
+	/**
+	 * The default case of a fresh installation: nothing configured, so the password
+	 * is generated here and never equals the one of any other installation. The
+	 * change on first login stays required - the generated value is single-use.
+	 */
+	@Test
+	void generatesAPerInstallationPasswordWhenNoneIsConfigured() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		when(credential.generate()).thenReturn("generated-value");
+		when(encoder.encode("generated-value")).thenReturn("hash");
+
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "")).run(null);
+
+		var captor = ArgumentCaptor.forClass(AppUser.class);
+
+		verify(repository).save(captor.capture());
+
+		Assertions.assertThat(captor.getValue().getPasswordHash()).isEqualTo("hash");
+		Assertions.assertThat(captor.getValue().getPasswordChangeRequired()).isTrue();
+
+		verify(credential).publish("admin@example.com", "generated-value");
+	}
+
+	/**
+	 * Provisioning a container or a CI environment needs a password known ahead of
+	 * time, so a configured value still wins - and nothing is generated or
+	 * published for it.
+	 */
+	@Test
+	void keepsUsingAConfiguredPasswordWithoutPublishingAnything() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		when(encoder.encode("provisioned")).thenReturn("hash");
+
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "provisioned"))
+				.run(null);
+
+		verify(repository).save(any());
+		verify(credential, never()).generate();
+		verify(credential, never()).publish(any(), any());
+	}
+
+	/**
+	 * With no configured password there is nothing to compare an existing hash
+	 * against, so the legacy check has to stay away from the account instead of
+	 * guessing.
+	 */
+	@Test
+	void leavesAnExistingAdminAloneWhenNoPasswordIsConfigured() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		when(repository.count()).thenReturn(1L);
+
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "")).run(null);
+
+		verify(repository, never()).findByUsernameIgnoreCase(any());
+		verify(repository, never()).save(any());
+	}
+
+	/**
+	 * Absent and empty are the same intent - nobody provisioned a password - and a
+	 * null must not slip through as if it were one. It reaches here whenever the
+	 * environment variable is simply not set.
+	 */
+	@Test
+	void treatsAnAbsentPasswordLikeAnEmptyOne() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		when(credential.generate()).thenReturn("generated-value");
+		when(encoder.encode("generated-value")).thenReturn("hash");
+
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", null)).run(null);
+
+		verify(repository).save(any());
+		verify(credential).publish("admin@example.com", "generated-value");
+	}
+
+	@Test
+	void leavesAnExistingAdminAloneWhenNoPasswordIsProvisionedAtAll() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		when(repository.count()).thenReturn(1L);
+
+		new DefaultUserInitializer(repository, mock(PasswordEncoder.class), credential,
+				props("admin@example.com", null)).run(null);
+
+		verify(repository, never()).findByUsernameIgnoreCase(any());
 	}
 
 	private NimbusFileManagerProperties props(String username, String password) {

@@ -338,23 +338,37 @@ Health check:
 http://localhost:8088/actuator/health
 ```
 
-Default local login, when no user exists yet:
+First login, when no user exists yet: the very first start creates the administrator and **generates
+a password for this installation**, shown once in the startup log and written to
+`<workspace>/first-access.txt`:
 
 ```text
-email: admin@nimbus-file-manager.local
-password: admin
+=====================================================================
+ Nimbus File Manager - first access
+ user:     admin@nimbus-file-manager.local
+ password: <generated for this installation>
+ This password is shown once and must be changed at first login.
+=====================================================================
 ```
 
-The built-in `admin` password is bootstrap-only. Accounts created with it, including existing
-bootstrap accounts detected on upgrade, are forced to open the Account screen and choose a
-different password before accessing any other application page or API endpoint.
+No password ships with the source. One that did would be identical on every installation and
+published with the repository, so anyone reaching the port could sign in before the owner - and,
+because changing it is mandatory, keep the account. Delete `first-access.txt` once the password has
+been changed.
 
-Override the bootstrap user with:
+The generated password is bootstrap-only. Accounts created with it, and accounts still using a
+configured `NIMBUS_FILE_MANAGER_ADMIN_PASSWORD` detected on upgrade, are forced to open the Account
+screen and choose a different password before accessing any other application page or API endpoint.
+
+Provision the bootstrap user non-interactively - for a container or a CI environment, where the
+password has to be known in advance - with:
 
 ```text
 NIMBUS_FILE_MANAGER_ADMIN_USERNAME=admin@nimbus-file-manager.local
 NIMBUS_FILE_MANAGER_ADMIN_PASSWORD=change-me
 ```
+
+A configured password wins over the generated one, and nothing is written to `first-access.txt`.
 
 The first administrator is created only when the `app_user` table is empty. Changing `NIMBUS_FILE_MANAGER_ADMIN_USERNAME` or `NIMBUS_FILE_MANAGER_ADMIN_PASSWORD` after a user already exists does not update or reset that existing account. After the first login, use the Account screen to change the password and the Users screen to create additional users.
 
@@ -1123,8 +1137,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2228 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.43% instruction, 91.72% branch, 98.05% line, 98.70% method, 100.00% class
+Tests:       2236 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.44% instruction, 91.74% branch, 98.05% line, 98.70% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1136,7 +1150,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.43% instruction, 91.72% branch, 98.05% line, 98.70% method, 100.00% class
+Floor:  98.44% instruction, 91.74% branch, 98.05% line, 98.70% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 

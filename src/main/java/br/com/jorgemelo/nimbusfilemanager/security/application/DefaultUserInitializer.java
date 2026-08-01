@@ -11,48 +11,79 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepo
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Creates the administrator of an empty installation.
+ *
+ * <p>
+ * With no password configured - the default - one is generated for this
+ * installation and shown once by {@link FirstAccessCredential}. A configured
+ * password still wins, because provisioning a container or a CI environment
+ * needs a value known in advance; it is treated as published either way, so the
+ * change on first login stays required.
+ */
 @Slf4j
 @Component
 public class DefaultUserInitializer implements ApplicationRunner {
 
 	private final AppUserRepository appUserRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final FirstAccessCredential firstAccessCredential;
 	private final String username;
-	private final String password;
+	private final String configuredPassword;
 
 	public DefaultUserInitializer(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
-			NimbusFileManagerProperties properties) {
+			FirstAccessCredential firstAccessCredential, NimbusFileManagerProperties properties) {
 		this.appUserRepository = appUserRepository;
 		this.passwordEncoder = passwordEncoder;
+		this.firstAccessCredential = firstAccessCredential;
 		this.username = properties.security().defaultUsername();
-		this.password = properties.security().defaultPassword();
+		this.configuredPassword = properties.security().defaultPassword();
 	}
 
 	@Override
 	public void run(ApplicationArguments args) {
 		if (appUserRepository.count() > 0) {
-			markLegacyDefaultPassword();
+			markConfiguredPasswordStillInUse();
+
 			return;
 		}
 
-		// Seeded with the configured default password
-		// (nimbus-file-manager.security.default-password) -
-		// a known/published value, so a change is always required on first login.
+		boolean generated = configuredPassword == null || configuredPassword.isBlank();
+
+		String password = generated ? firstAccessCredential.generate() : configuredPassword;
+
 		appUserRepository.save(AppUser.builder().username(username).passwordHash(passwordEncoder.encode(password))
 				.displayName("Administrator").role(Role.ADMIN).enabled(true).twoFactorEnabled(false)
 				.passwordChangeRequired(true).build());
 
-		log.warn("Default application user created. username={}. Change the default password immediately.", username);
+		if (generated) {
+			firstAccessCredential.publish(username, password);
+		} else {
+			log.warn("Default application user created with the configured password. username={}. Change it "
+					+ "immediately.", username);
+		}
 	}
 
-	private void markLegacyDefaultPassword() {
+	/**
+	 * An installation seeded before this check, still signing in with the password
+	 * from the configuration, is put back under the change requirement. Only
+	 * possible while a password is configured: a generated one exists nowhere to be
+	 * compared against, which is the whole point of generating it.
+	 */
+	private void markConfiguredPasswordStillInUse() {
+		if (configuredPassword == null || configuredPassword.isBlank()) {
+			return;
+		}
+
 		appUserRepository.findByUsernameIgnoreCase(username)
-				.filter(user -> passwordEncoder.matches(password, user.getPasswordHash()))
+				.filter(user -> passwordEncoder.matches(configuredPassword, user.getPasswordHash()))
 				.filter(user -> !Boolean.TRUE.equals(user.getPasswordChangeRequired())).ifPresent(user -> {
 					user.setPasswordChangeRequired(true);
+
 					appUserRepository.save(user);
-					log.warn("Default password is still in use. Password change is required for username={}.",
-							username);
+
+					log.warn("Configured default password is still in use. Password change is required for "
+							+ "username={}.", username);
 				});
 	}
 }
