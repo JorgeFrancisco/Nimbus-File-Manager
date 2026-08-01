@@ -124,10 +124,27 @@
 		});
 	}
 
+	// Disabling the offline location opens the dialog that asks what to do with the
+	// downloaded data. Purely presentational: both answers post the same form, and the
+	// backend decides what each one means.
+	function bindGeoDisableDialog() {
+		var opener = document.getElementById("geoDisableOpen");
+		var overlay = document.getElementById("geoDisableDialog");
+		if (!opener || !overlay) return;
+		opener.addEventListener("click", function () { overlay.hidden = false; });
+		overlay.addEventListener("click", function (event) {
+			if (event.target === overlay || event.target.hasAttribute("data-close")) overlay.hidden = true;
+		});
+		document.addEventListener("keydown", function (event) {
+			if (event.key === "Escape") overlay.hidden = true;
+		});
+	}
+
 	document.addEventListener("DOMContentLoaded", function () {
 		restoreScrollPosition();
 		monitorOperationPanels();
 		bindMetadataRebuildPreferences();
+		bindGeoDisableDialog();
 		// The shared folder picker (js/folder-picker.js) fills #watchFolderInput;
 		// here we only guard the actual library switch on submit.
 		var input = document.getElementById("watchFolderInput");

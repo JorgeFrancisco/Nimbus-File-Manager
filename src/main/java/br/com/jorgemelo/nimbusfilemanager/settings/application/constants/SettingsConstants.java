@@ -34,6 +34,9 @@ public final class SettingsConstants {
 	public static final String BOUNDARY_ADM1_URL = "nimbus-file-manager.location.boundary.adm1-url";
 	public static final String BOUNDARY_ADM2_URL = "nimbus-file-manager.location.boundary.adm2-url";
 	public static final String BOUNDARY_GBOPEN_API_URL = "nimbus-file-manager.location.boundary.gbopen-api-url";
+	public static final String BOUNDARY_AUTO_UPDATE_ENABLED =
+			"nimbus-file-manager.location.boundary.auto-update-enabled";
+	public static final String BOUNDARY_AUTO_UPDATE_TIME = "nimbus-file-manager.location.boundary.auto-update-time";
 	public static final String BOUNDARY_AUTO_TERRITORIES =
 			"nimbus-file-manager.location.boundary.auto-complete-territories";
 	public static final String MAP_ENABLED = "nimbus-file-manager.map.enabled";

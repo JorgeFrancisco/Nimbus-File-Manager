@@ -45,8 +45,16 @@
 					th:text="#{'enum.locationProvider.' + ${provider}}"
 					th:selected="${provider.name() == setting.settingValue}">Limites administrativos</option>
 		</select>
+		<!--
+			A time-of-day setting is edited through the browser's own time field: it validates the
+			format before the request leaves the page, and the backend still re-parses it, so a
+			crafted POST cannot store something a schedule read would choke on.
+		-->
+		<input type="time" name="value" th:value="${setting.settingValue}" required
+				th:if="${setting.valueType == 'TIME_OF_DAY'}">
 		<input type="text" name="value" th:value="${setting.settingValue}"
-				th:unless="${setting.valueType == 'BOOLEAN' or setting.settingKey == 'nimbus-file-manager.timezone'
+				th:unless="${setting.valueType == 'BOOLEAN' or setting.valueType == 'TIME_OF_DAY'
+						or setting.settingKey == 'nimbus-file-manager.timezone'
 						or setting.settingKey == 'nimbus-file-manager.location.provider'}"
 				th:id="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'} ? 'watchFolderInput' : (${setting.settingKey == 'nimbus-file-manager.duplicates.trash-folder'} ? 'trashFolderInput' : null)"
 				th:readonly="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'}"

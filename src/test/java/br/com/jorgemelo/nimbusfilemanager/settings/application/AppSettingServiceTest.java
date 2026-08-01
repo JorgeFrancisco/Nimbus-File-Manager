@@ -389,4 +389,37 @@ class AppSettingServiceTest {
 				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
 				new Security(5, 5, 15, true, "admin", "admin"), null);
 	}
+
+	/**
+	 * The daily-update time is stored canonical, so whoever reads it to decide
+	 * whether the pass is due never has to guess a format - and a value that is not
+	 * a time is refused instead of silently disabling the update.
+	 */
+	@Test
+	void updateShouldStoreATimeOfDayCanonicalAndRejectWhatIsNotOne() {
+		AppSettingRepository repository = mock(AppSettingRepository.class);
+
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME)
+				.settingValue("04:00").valueType("TIME_OF_DAY").createdByUsername("system").build();
+
+		AppSettingService service = new AppSettingService(repository, properties());
+
+		when(repository.findBySettingKey(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME))
+				.thenReturn(Optional.of(setting));
+		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Assertions
+				.assertThat(service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, " 23:30 ", "admin")
+					.getSettingValue())
+				.isEqualTo("23:30");
+		Assertions
+				.assertThat(service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "07:05:30", "admin")
+					.getSettingValue())
+				.isEqualTo("07:05");
+
+		Assertions
+				.assertThatThrownBy(
+					() -> service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "de manha", "admin"))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
 }

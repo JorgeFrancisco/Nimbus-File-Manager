@@ -1,6 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +35,7 @@ public class AppSettingService implements ApplicationRunner {
 	private static final String VALUE_TYPE_INTEGER = "INTEGER";
 	private static final String VALUE_TYPE_BOOLEAN = "BOOLEAN";
 	private static final String VALUE_TYPE_ZONE_ID = "ZONE_ID";
+	private static final String VALUE_TYPE_TIME_OF_DAY = "TIME_OF_DAY";
 	private static final String VALUE_TRUE = "true";
 	private static final String VALUE_FALSE = "false";
 
@@ -181,8 +185,22 @@ public class AppSettingService implements ApplicationRunner {
 		case VALUE_TYPE_INTEGER -> Integer.toString(parseRequiredInt(normalizedValue));
 		case VALUE_TYPE_BOOLEAN -> Boolean.toString(parseRequiredBoolean(normalizedValue));
 		case VALUE_TYPE_ZONE_ID -> parseRequiredZoneId(normalizedValue);
+		case VALUE_TYPE_TIME_OF_DAY -> parseRequiredTimeOfDay(normalizedValue);
 		default -> normalizedValue;
 		};
+	}
+
+	/**
+	 * Stored canonical as {@code HH:mm} so a schedule read never has to guess a
+	 * format. The screen edits it through a time field, so an invalid value only
+	 * reaches here from a crafted request.
+	 */
+	private String parseRequiredTimeOfDay(String value) {
+		try {
+			return LocalTime.parse(value).truncatedTo(ChronoUnit.MINUTES).format(DateTimeFormatter.ofPattern("HH:mm"));
+		} catch (RuntimeException _) {
+			throw new IllegalArgumentException("Value must be a time of day (HH:mm).");
+		}
 	}
 
 	private String parseRequiredZoneId(String value) {
@@ -302,6 +320,11 @@ public class AppSettingService implements ApplicationRunner {
 						"Base geográfica: URL da API usada para completar territórios sem polígono próprio (ex.: Aruba). Vazio desativa a consulta."),
 				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_TERRITORIES, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Base geográfica: após importar, buscar automaticamente o polígono de cada país ISO ausente (territórios dissolvidos no soberano)."),
+				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_UPDATE_ENABLED, VALUE_TRUE,
+						VALUE_TYPE_BOOLEAN,
+						"Base geográfica: verificar e baixar atualizações automaticamente uma vez por dia."),
+				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "04:00", VALUE_TYPE_TIME_OF_DAY,
+						"Base geográfica: horário da verificação diária. Se o computador estiver desligado no horário, ela roda na primeira oportunidade do dia."),
 				new AppSettingDefinition(SettingsConstants.MAP_ENABLED, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Mapa: habilita a tela de mapa das mídias georreferenciadas."),
 				new AppSettingDefinition(SettingsConstants.MAP_TILE_URL,

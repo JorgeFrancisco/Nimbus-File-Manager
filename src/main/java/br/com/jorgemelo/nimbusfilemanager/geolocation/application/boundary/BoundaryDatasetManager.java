@@ -100,6 +100,11 @@ public class BoundaryDatasetManager implements OfflineGeoDataset {
 
 			imported += completeMissingTerritories();
 
+			// Everything downloaded and imported: only now do the new files replace
+			// the ones resolution reads. Until this line the previous dataset is
+			// still on disk, which is what a failed update falls back to.
+			boundarySource.commit(workspaceManager.geodata());
+
 			// The in-memory geometry/availability cache now points at the previous
 			// dataset (or at "empty"); drop it so resolution reads the fresh import.
 			geometryCache.invalidate();
@@ -113,6 +118,11 @@ public class BoundaryDatasetManager implements OfflineGeoDataset {
 			return status();
 		} catch (RuntimeException e) {
 			log.error("Geographic dataset download/import failed", e);
+
+			// The import runs in its own transaction and rolled back, so the rows are
+			// the previous ones; dropping the staged files puts the disk back in the
+			// same state. Resolution keeps working on the dataset it already had.
+			boundarySource.discard(workspaceManager.geodata());
 
 			metadataStore.read().ifPresentOrElse(existing -> {
 				existing.setLastError(e.getMessage());

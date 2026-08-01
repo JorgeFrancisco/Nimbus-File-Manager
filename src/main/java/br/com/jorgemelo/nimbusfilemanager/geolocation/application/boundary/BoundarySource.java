@@ -32,6 +32,24 @@ public interface BoundarySource {
 		return List.of();
 	}
 
+	/**
+	 * Publishes what {@link #fetch} acquired, replacing the files the application
+	 * reads. Called only after the import succeeded, so the dataset on disk and the
+	 * rows in the database always describe the same version.
+	 */
+	default void commit(Path workspaceFolder) {
+		// A source that acquires nothing (an embedded or local-folder one) has
+		// nothing to publish and nothing to roll back.
+	}
+
+	/**
+	 * Drops what {@link #fetch} acquired, leaving the previous dataset in place.
+	 * Called when the download or the import failed.
+	 */
+	default void discard(Path workspaceFolder) {
+		// Same as commit: nothing acquired, nothing to undo.
+	}
+
 	/** Human-readable provider label for the admin screen. */
 	String providerLabel();
 

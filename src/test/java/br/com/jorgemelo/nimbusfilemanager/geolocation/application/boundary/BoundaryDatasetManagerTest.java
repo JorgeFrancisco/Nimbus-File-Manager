@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,7 @@ import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
@@ -97,6 +99,46 @@ class BoundaryDatasetManagerTest {
 		Assertions.assertThat(status.version()).isEqualTo("v1");
 		Assertions.assertThat(status.importedRecords()).isEqualTo(10);
 		Assertions.assertThat(status.provider()).isEqualTo("geoBoundaries");
+	}
+
+	/**
+	 * The transaction the whole automatic update rests on: the files are published
+	 * only after the import went through, so disk and database always describe the
+	 * same version.
+	 */
+	@Test
+	void publishesTheDownloadedFilesOnlyAfterTheImportSucceeded() {
+		when(boundarySource.fetch(any())).thenReturn(List.of());
+		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
+		when(metadataStore.read()).thenReturn(Optional.of(BoundaryMetadata.builder().importedRecords(100)
+				.importedAt(LocalDateTime.now()).version("v1").build()));
+		when(repository.count()).thenReturn(100L);
+
+		manager.downloadAndImport();
+
+		InOrder order = inOrder(importer, boundarySource);
+
+		order.verify(importer).importDataset(any(), any(), any());
+		order.verify(boundarySource).commit(any());
+
+		verify(boundarySource, never()).discard(any());
+	}
+
+	/**
+	 * And a failed import drops them instead, which is what leaves the previous
+	 * dataset working: the rows rolled back with the transaction, the files never
+	 * left staging.
+	 */
+	@Test
+	void discardsTheDownloadedFilesWhenTheImportFails() {
+		when(boundarySource.fetch(any())).thenReturn(List.of());
+		when(importer.importDataset(any(), any(), any())).thenThrow(new IllegalStateException("broken geojson"));
+
+		Assertions.assertThatIllegalStateException().isThrownBy(() -> manager.downloadAndImport());
+
+		verify(boundarySource).discard(any());
+		verify(boundarySource, never()).commit(any());
+		verify(geometryCache, never()).invalidate();
 	}
 
 	@Test

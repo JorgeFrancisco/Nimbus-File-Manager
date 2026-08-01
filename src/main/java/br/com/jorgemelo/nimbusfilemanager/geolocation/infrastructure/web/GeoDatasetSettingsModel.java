@@ -54,6 +54,7 @@ public class GeoDatasetSettingsModel {
 	public void addTo(Model model, Authentication authentication) {
 		model.addAttribute("inventoryRunning", inventoryRunningState.isRunning());
 		model.addAttribute("geoStatus", offlineGeoDataset.status());
+		model.addAttribute("geoEnabled", mediaLocationService.enabled());
 		model.addAttribute("geoImportRunning", geoDatasetAsyncRunner.isRunning());
 		model.addAttribute("geoImportError", geoDatasetAsyncRunner.lastError());
 		model.addAttribute("geoImportResult", geoDatasetAsyncRunner.lastResult());

@@ -12,29 +12,6 @@ que orienta todas as recomendações é a intenção declarada: **o produto est�
 distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambiente do Jorge" vira
 "primeira impressão de um estranho", e o que hoje é "eu sei que precisa reiniciar" vira suporte.
 
-## Retrato de hoje
-
-| Dimensão | Número |
-| --- | --- |
-| Domínios | 22, hexagonais (`domain` / `application` / `infrastructure`) |
-| Classes de produção | ~750, em ~48 mil linhas |
-| Maiores domínios | `shared` (100 classes), `duplicate` (99), `metadata` (92), `organization` (70) |
-| Testes | 2228, sendo **16 de integração** |
-| Cobertura | 98,4% instrução · 91,7% branch |
-| Telas | 18 |
-| Idiomas | 2 (pt-BR, en) |
-| Migrations | 13 |
-| Empacotamento | Dockerfile + docker-compose |
-
-### O que já está sólido
-
-Vale registrar, porque delimita o que **não** precisa de atenção: a separação por domínio é
-consistente e a direção das dependências é respeitada; a catraca de cobertura funciona; o Sonar está
-zerado; há reconciliação self-healing, quarentena com restauração, undo de organização e trilha de
-execuções. O `SecureFileMove` (hash + verificação + rollback) e o `SelfWrittenPathRegistry` são peças
-maduras, reaproveitadas por organização, dedup, conversão e explorer. Isso é mais infraestrutura de
-segurança de dados do que a maioria dos gerenciadores de arquivos tem.
-
 ---
 
 ## Arquitetura
@@ -44,17 +21,10 @@ segurança de dados do que a maioria dos gerenciadores de arquivos tem.
 **A1. Nenhum teste exercita a interface.** Em uma única sessão de trabalho, seis defeitos de tela
 passaram por build verde, cobertura no piso e Sonar limpo: `?w=null` nas miniaturas, expressão SpEL
 inválida no combo, menu que não fechava por CSS, "Abrir" navegando para a pasta, voltar quebrado e
-pasta não removida. Todos visíveis em dois minutos de uso, invisíveis para 2228 testes.
+pasta não removida. Todos visíveis em dois minutos de uso, invisíveis para a suíte inteira.
 *Entrega:* um punhado de testes de fumaça que renderizam cada tela autenticada e falham em qualquer
 exceção de template — o `SettingsPageRenderTest` criado ontem já é o molde. Cobre o modo de falha
 mais frequente (expressão que não avalia) por um custo baixíssimo.
-
-**A2. `docs/adr/` está vazio.** O AGENTS.md descreve ADRs como parte da hierarquia de documentos, mas
-não há nenhum. Decisões que já foram tomadas e discutidas — JPA como modelo de domínio, quarentena em
-vez de exclusão, catálogo como fonte das propriedades de pasta, exclusão confinada à biblioteca —
-vivem só na memória e em comentários.
-*Entrega:* rastreabilidade. Quando alguém (ou você daqui a um ano) perguntar "por que não usa
-lixeira do sistema?", a resposta existe escrita.
 
 ### Complexidade média — semanas
 

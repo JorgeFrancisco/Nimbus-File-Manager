@@ -301,11 +301,24 @@ their own PostgreSQL via Testcontainers, so only the main database is created he
 
 Nimbus File Manager can resolve GPS coordinates from photos and videos into country, state/province and city without calling an online map service during processing. Resolved locations are global media metadata reused by Files, Timeline and Organization.
 
-The feature is disabled by default. An administrator enables it in the offline-location section of the settings screen and manages the dataset in the geographic-database section of the same screen:
+The feature is disabled by default and turned on from the geographic-database section of the settings
+screen. Enabling it is the only step: the dataset is downloaded in the background when it is missing,
+and checked for updates once a day at a configurable time (04:00 by default). A machine that is off at
+that time runs the check at the first opportunity of the day, because an alarm firing into a sleeping
+computer never runs at all. Both the daily check and its time can be changed on the same screen, and
+the update can still be triggered by hand at any moment.
 
-1. Download/import the database.
-2. Enable `nimbus-file-manager.location.enabled`.
-3. Run the location rebuild for media that was inventoried before the feature was enabled.
+Media inventoried before the feature was enabled keeps its coordinates unresolved until a location
+rebuild is run, which is a separate action on that same screen.
+
+Disabling asks what to do with the roughly 2 GB the dataset occupies: keeping the files makes enabling
+it again nearly instant, deleting them reclaims the space. Nothing is removed without that answer.
+
+An update never leaves the installation worse than it found it. Downloaded files are staged and only
+replace the ones resolution reads after the import succeeds, and the import itself runs in a
+transaction that starts by clearing the previous rows — so a failure at any point leaves the previous
+dataset intact on disk and in the database, still answering queries. A successful update replaces the
+old files in place, leaving no earlier copy behind.
 
 Resolution works by administrative containment (point-in-polygon): the application downloads the [geoBoundaries](https://www.geoboundaries.org/) CGAZ global GeoJSON files (ADM0 countries, ADM1 states/provinces, ADM2 municipalities) into `workspace/geodata` and imports them into PostgreSQL. CGAZ dissolves dependent territories into their sovereign state (e.g. Aruba becomes anonymous Netherlands area), so after the main import the application automatically detects every ISO country left without a polygon of its own, fetches each one individually through the geoBoundaries gbOpen API and imports it additively — the smaller territory polygon then wins resolution over the sovereign's. No hardcoded territory list; the download URLs, the API URL and the auto-completion toggle are runtime settings, in the offline-location section of the settings screen. For development, tests or fully air-gapped installs, `nimbus-file-manager.location.boundary.local-dir` (or `NIMBUS_FILE_MANAGER_BOUNDARY_LOCAL_DIR`) points at a local folder with the GeoJSON files instead of downloading. Downloads and extracted files are runtime data and are not versioned. Updates are conditional: the ETag of each downloaded file is remembered, so updating the dataset reuses files that did not change on the server (the import itself always runs). Updating the database invalidates the resolution cache; existing automatic locations can then be rebuilt for pending, low-confidence or all media.
 
@@ -1145,8 +1158,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2274 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.44% instruction, 91.82% branch, 98.05% line, 98.72% method, 100.00% class
+Tests:       2296 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.44% instruction, 91.86% branch, 98.06% line, 98.73% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1158,7 +1171,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.44% instruction, 91.82% branch, 98.05% line, 98.72% method, 100.00% class
+Floor:  98.44% instruction, 91.86% branch, 98.06% line, 98.73% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 

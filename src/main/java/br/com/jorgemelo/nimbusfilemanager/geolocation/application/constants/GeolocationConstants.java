@@ -13,6 +13,7 @@ public final class GeolocationConstants {
 	public static final String FALLBACK_FOLDER_NAME = "SEM_LOCALIZACAO_CONFIAVEL";
 	public static final String MESSAGE_BLOCKED = "backend.settings.blocked";
 	public static final String MESSAGE_WAIT_REBUILD = "backend.settings.waitGeoRebuild";
+	public static final String MESSAGE_WAIT_IMPORT = "backend.settings.waitGeoImport";
 
 	private GeolocationConstants() {
 	}

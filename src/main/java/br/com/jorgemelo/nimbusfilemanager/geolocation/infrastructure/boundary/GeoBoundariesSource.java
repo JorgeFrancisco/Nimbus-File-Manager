@@ -15,7 +15,9 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
@@ -51,6 +53,8 @@ public class GeoBoundariesSource implements BoundarySource {
 	static final long MAX_DOWNLOAD_BYTES = 3L * 1024 * 1024 * 1024;
 
 	private static final String DOWNLOADS = "downloads";
+	/** Suffix of a file already downloaded but not yet published by commit(). */
+	private static final String STAGED_SUFFIX = ".new";
 	private static final String ETAGS_FILE = "etags.properties";
 	private static final String ADM0_FILE = "geoBoundariesCGAZ_ADM0.geojson";
 	private static final String ADM1_FILE = "geoBoundariesCGAZ_ADM1.geojson";
@@ -66,6 +70,12 @@ public class GeoBoundariesSource implements BoundarySource {
 	private final ObjectMapper objectMapper;
 	private final GeoDatasetProgress progress;
 	private final HttpClient httpClient;
+	/**
+	 * ETag of each staged file, applied only when the update is published. A single
+	 * update runs at a time (GeoDatasetAsyncRunner refuses a second start), so this
+	 * never holds two updates at once.
+	 */
+	private final Map<String, String> pendingEtags = new ConcurrentHashMap<>();
 	private final Clock clock;
 
 	public GeoBoundariesSource(BoundaryDatasetProperties properties, AppSettingService appSettingService,
@@ -293,21 +303,18 @@ public class GeoBoundariesSource implements BoundarySource {
 
 			copyLimited(response.body(), temp, uri.toString());
 
-			Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			// Staged, not published: the file that resolution reads is only replaced by
+			// commit(), once every level downloaded and imported. An update that dies
+			// halfway leaves the previous dataset exactly as it was.
+			Path staged = target.resolveSibling(fileName + STAGED_SUFFIX);
 
-			String etag = response.headers().firstValue("ETag").orElse(null);
+			Files.move(temp, staged, StandardCopyOption.REPLACE_EXISTING);
 
-			if (etag != null) {
-				etags.setProperty(fileName, etag);
-			} else {
-				etags.remove(fileName);
-			}
+			pendingEtags.put(fileName, response.headers().firstValue("ETag").orElse(""));
 
-			saveEtags(targetFolder, etags);
+			log.info("Downloaded {} ({} bytes)", staged.getFileName(), Files.size(staged));
 
-			log.info("Downloaded {} ({} bytes)", target.getFileName(), Files.size(target));
-
-			return target;
+			return staged;
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 
@@ -317,6 +324,61 @@ public class GeoBoundariesSource implements BoundarySource {
 		} finally {
 			deleteQuietly(temp);
 		}
+	}
+
+	/**
+	 * Publishes what was downloaded: every staged file replaces the one resolution
+	 * reads, and only then are the new ETags recorded - so a discarded update never
+	 * leaves an ETag claiming a version that is not on disk. Replacing the file is
+	 * what removes the previous bytes; nothing older survives a successful update.
+	 */
+	@Override
+	public void commit(Path workspaceFolder) {
+		Path downloads = workspaceFolder.resolve(DOWNLOADS);
+
+		if (pendingEtags.isEmpty() || !Files.isDirectory(downloads)) {
+			pendingEtags.clear();
+
+			return;
+		}
+
+		Properties etags = loadEtags(downloads);
+
+		for (Map.Entry<String, String> pending : pendingEtags.entrySet()) {
+			Path staged = downloads.resolve(pending.getKey() + STAGED_SUFFIX);
+
+			if (!Files.isRegularFile(staged)) {
+				continue;
+			}
+
+			try {
+				Files.move(staged, downloads.resolve(pending.getKey()), StandardCopyOption.REPLACE_EXISTING);
+			} catch (IOException e) {
+				throw new IllegalStateException("Could not publish the downloaded file " + staged, e);
+			}
+
+			if (pending.getValue().isBlank()) {
+				etags.remove(pending.getKey());
+			} else {
+				etags.setProperty(pending.getKey(), pending.getValue());
+			}
+		}
+
+		saveEtags(downloads, etags);
+
+		pendingEtags.clear();
+
+		log.info("Geographic dataset files published into {}", downloads);
+	}
+
+	/** Drops what was downloaded, leaving the previous dataset untouched. */
+	@Override
+	public void discard(Path workspaceFolder) {
+		Path downloads = workspaceFolder.resolve(DOWNLOADS);
+
+		pendingEtags.keySet().forEach(fileName -> deleteQuietly(downloads.resolve(fileName + STAGED_SUFFIX)));
+
+		pendingEtags.clear();
 	}
 
 	private Properties loadEtags(Path targetFolder) {

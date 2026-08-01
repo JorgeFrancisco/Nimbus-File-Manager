@@ -46,6 +46,7 @@ class GeoBoundariesSourceTest {
 	private final AtomicInteger requests = new AtomicInteger();
 	private final AtomicInteger fullDownloads = new AtomicInteger();
 	private volatile String currentEtag = "\"v1\"";
+	private volatile byte[] currentBody = BODY;
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 
@@ -70,10 +71,12 @@ class GeoBoundariesSourceTest {
 			fullDownloads.incrementAndGet();
 
 			exchange.getResponseHeaders().add("ETag", currentEtag);
-			exchange.sendResponseHeaders(200, BODY.length);
+			byte[] body = currentBody;
+
+			exchange.sendResponseHeaders(200, body.length);
 
 			try (OutputStream out = exchange.getResponseBody()) {
-				out.write(BODY);
+				out.write(body);
 			}
 		});
 		server.start();
@@ -105,15 +108,23 @@ class GeoBoundariesSourceTest {
 		// First update: nothing on disk yet -> full download.
 		List<LeveledBoundaryFile> first = source.fetch(workspace);
 
+		// The ETag only guards a published file: until commit the download is staged.
+		source.commit(workspace);
+
+		Path published = workspace.resolve("downloads").resolve("geoBoundariesCGAZ_ADM0.geojson");
+
 		Assertions.assertThat(first).hasSize(1);
 		Assertions.assertThat(first.get(0).kind()).isEqualTo(AdminBoundaryKind.COUNTRY);
-		Assertions.assertThat(first.get(0).file()).exists().hasBinaryContent(BODY);
+		Assertions.assertThat(published).exists().hasBinaryContent(BODY);
 		Assertions.assertThat(fullDownloads).hasValue(1);
 
 		// Second update, same ETag on the server -> 304, file reused from disk.
 		List<LeveledBoundaryFile> second = source.fetch(workspace);
 
-		Assertions.assertThat(second.get(0).file()).exists().hasBinaryContent(BODY);
+		source.commit(workspace);
+
+		Assertions.assertThat(second).hasSize(1);
+		Assertions.assertThat(published).exists().hasBinaryContent(BODY);
 		Assertions.assertThat(requests).hasValue(2);
 		Assertions.assertThat(fullDownloads).hasValue(1);
 
@@ -122,6 +133,56 @@ class GeoBoundariesSourceTest {
 		source.fetch(workspace);
 
 		Assertions.assertThat(fullDownloads).hasValue(2);
+	}
+
+	/**
+	 * The guarantee an automatic update depends on: a failed one must leave the
+	 * dataset that was working exactly as it was. Nothing the operator did not ask
+	 * for gets replaced by a download that never completed.
+	 */
+	@Test
+	void keepsThePreviousDatasetWhenTheUpdateIsDiscarded() {
+		GeoBoundariesSource source = source();
+
+		Path published = source.fetch(workspace).get(0).file();
+
+		source.commit(workspace);
+
+		Path target = workspace.resolve("downloads").resolve("geoBoundariesCGAZ_ADM0.geojson");
+
+		Assertions.assertThat(target).exists().hasBinaryContent(BODY);
+
+		currentEtag = "\"v2\"";
+		currentBody = "{\"type\":\"FeatureCollection\",\"features\":[1]}".getBytes(StandardCharsets.UTF_8);
+
+		source.fetch(workspace);
+		source.discard(workspace);
+
+		Assertions.assertThat(target).hasBinaryContent(BODY);
+		Assertions.assertThat(target.resolveSibling(target.getFileName() + ".new")).doesNotExist();
+		Assertions.assertThat(published).isNotEqualTo(target);
+	}
+
+	/** And a successful one replaces it, leaving nothing of the old version. */
+	@Test
+	void replacesThePreviousDatasetWhenTheUpdateIsPublished() {
+		GeoBoundariesSource source = source();
+
+		source.fetch(workspace);
+		source.commit(workspace);
+
+		byte[] updated = "{\"type\":\"FeatureCollection\",\"features\":[2]}".getBytes(StandardCharsets.UTF_8);
+
+		currentEtag = "\"v3\"";
+		currentBody = updated;
+
+		source.fetch(workspace);
+		source.commit(workspace);
+
+		Path target = workspace.resolve("downloads").resolve("geoBoundariesCGAZ_ADM0.geojson");
+
+		Assertions.assertThat(target).hasBinaryContent(updated);
+		Assertions.assertThat(target.resolveSibling(target.getFileName() + ".new")).doesNotExist();
 	}
 
 	@Test
@@ -183,12 +244,16 @@ class GeoBoundariesSourceTest {
 
 		List<LeveledBoundaryFile> files = source.fetchMissingCountries(List.of("ABW", "AAA"), workspace);
 
+		// Published, so the assertion below can read the name the importer will see.
+		source.commit(workspace);
+
 		Assertions.assertThat(files).extracting(LeveledBoundaryFile::kind).containsExactly(AdminBoundaryKind.COUNTRY,
 				AdminBoundaryKind.STATE, AdminBoundaryKind.MUNICIPALITY);
-		Assertions.assertThat(files)
-				.allSatisfy(file -> Assertions.assertThat(file.file()).exists().hasBinaryContent(BODY));
 		Assertions.assertThat(files).extracting(file -> file.file().getFileName().toString()).containsExactly(
-				"geoBoundaries-ABW-ADM0.geojson", "geoBoundaries-ABW-ADM1.geojson", "geoBoundaries-ABW-ADM2.geojson");
+				"geoBoundaries-ABW-ADM0.geojson.new", "geoBoundaries-ABW-ADM1.geojson.new",
+				"geoBoundaries-ABW-ADM2.geojson.new");
+		Assertions.assertThat(workspace.resolve("downloads").resolve("geoBoundaries-ABW-ADM0.geojson")).exists()
+				.hasBinaryContent(BODY);
 	}
 
 	@Test

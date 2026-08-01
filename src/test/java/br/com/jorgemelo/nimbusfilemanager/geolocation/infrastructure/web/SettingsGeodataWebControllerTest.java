@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -25,6 +26,8 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoData
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 
 /**
  * Geographic-dataset admin actions: guards while an inventory, an import or a
@@ -40,9 +43,11 @@ class SettingsGeodataWebControllerTest {
 	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
 
+	private final AppSettingService appSettingService = mock(AppSettingService.class);
+
 	private final SettingsGeodataWebController controller = new SettingsGeodataWebController(preferences,
 			offlineGeoDataset, mediaLocationService, geoDatasetAsyncRunner, locationRebuildAsyncRunner,
-			inventoryRunningState);
+			inventoryRunningState, appSettingService);
 
 	private final TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@x", "pw");
 
@@ -242,5 +247,79 @@ class SettingsGeodataWebControllerTest {
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
 
 		verify(mediaLocationService, never()).clearCache();
+	}
+
+	/**
+	 * Turning it on records the choice and stops there: the dataset is acquired in
+	 * the background by the auto update, which is what keeps a 2 GB download out of
+	 * the operator's way.
+	 */
+	@Test
+	void enablingRecordsTheSettingAndLeavesTheDownloadToTheBackground() {
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.enableLocation(auth, redirect);
+
+		verify(appSettingService).update(eq(SettingsConstants.LOCATION_ENABLED), eq("true"), any());
+		verify(geoDatasetAsyncRunner, never()).downloadAndImport();
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
+	}
+
+	/** Keeping the files is the default answer: nothing is deleted unasked. */
+	@Test
+	void disablingKeepsTheDownloadedFilesUnlessAskedToRemoveThem() {
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.disableLocation(false, auth, redirect);
+
+		verify(appSettingService).update(eq(SettingsConstants.LOCATION_ENABLED), eq("false"), any());
+		verify(offlineGeoDataset, never()).remove();
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
+	}
+
+	@Test
+	void disablingRemovesTheDataWhenThatIsTheAnswer() {
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.disableLocation(true, auth, redirect);
+
+		verify(appSettingService).update(eq(SettingsConstants.LOCATION_ENABLED), eq("false"), any());
+		verify(offlineGeoDataset).remove();
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
+	}
+
+	/**
+	 * Removing the dataset an import is writing, or a rebuild is reading, would
+	 * pull the ground from under it - so the answer is a reason on screen, not a
+	 * half-applied disable.
+	 */
+	@Test
+	void disablingBlockedWhileTheDatasetImportRuns() {
+		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.disableLocation(true, auth, redirect);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
+
+		verify(appSettingService, never()).update(any(), any(), any());
+		verify(offlineGeoDataset, never()).remove();
+	}
+
+	@Test
+	void disablingBlockedWhileARebuildRuns() {
+		when(locationRebuildAsyncRunner.isRunning()).thenReturn(true);
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.disableLocation(false, auth, redirect);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
+
+		verify(appSettingService, never()).update(any(), any(), any());
 	}
 }

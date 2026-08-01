@@ -220,6 +220,14 @@
 					</div>
 				</form>
 				<div class="geo-dataset-actions">
+					<form th:unless="${geoEnabled}" th:action="@{/app/settings/geodata/enable}" method="post">
+						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+						<button type="submit" th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning}"
+								th:text="#{settings.geo.enable}">Ativar</button>
+					</form>
+					<button type="button" class="secondary" id="geoDisableOpen" th:if="${geoEnabled}"
+							th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning}"
+							th:text="#{settings.geo.disable}">Desativar</button>
 					<form th:action="@{/app/settings/geodata/download}" method="post">
 						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 						<button type="submit" th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning}"
@@ -230,6 +238,31 @@
 						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 						<button type="submit" class="secondary" th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning or !geoStatus.available()}" th:text="#{settings.geo.remove}">Remover base</button>
 					</form>
+					<!--
+						Disabling asks about the data in the same breath, because that is the moment it
+						matters: the dataset is measured in gigabytes and whoever turns the feature off has
+						no reason to keep paying for it. Both answers are one submit of the same form, so
+						the decision is never left half-applied.
+					-->
+					<div class="entry-dialog-overlay" id="geoDisableDialog" hidden>
+						<div class="entry-dialog" role="alertdialog" aria-modal="true" aria-labelledby="geoDisableTitle">
+							<h2 id="geoDisableTitle" th:text="#{settings.geo.disableTitle}">Desativar localização offline</h2>
+							<p th:text="#{settings.geo.disableExplanation}">A resolução de país, estado e cidade deixa de funcionar.</p>
+							<form th:action="@{/app/settings/geodata/disable}" method="post">
+								<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+								<p th:if="${geoStatus.sizeBytes() > 0}"
+										th:text="#{settings.geo.disableSize(${#numbers.formatDecimal(geoStatus.sizeBytes() / 1073741824.0, 1, 2, 'COMMA')})}">Os dados ocupam 1,90 GB.</p>
+								<label><input type="radio" name="removeData" value="false" checked>
+									<span th:text="#{settings.geo.disableKeep}">Manter os arquivos</span></label>
+								<label><input type="radio" name="removeData" value="true">
+									<span th:text="#{settings.geo.disableRemove}">Apagar os arquivos agora</span></label>
+								<div class="actions">
+									<button type="button" class="secondary" data-close th:text="#{action.cancel}">Cancelar</button>
+									<button type="submit" th:text="#{settings.geo.disable}">Desativar</button>
+								</div>
+							</form>
+						</div>
+					</div>
 					<form th:action="@{/app/settings/geodata/clear-cache}" method="post">
 						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 						<button type="submit" class="secondary" th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning}" th:text="#{settings.geo.clearCache}">Limpar cache</button>
