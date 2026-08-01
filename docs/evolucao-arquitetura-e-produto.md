@@ -16,19 +16,9 @@ distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambien
 
 ## Arquitetura
 
-### Complexidade baixa — dias
-
-**A1. Nenhum teste exercita a interface.** Em uma única sessão de trabalho, seis defeitos de tela
-passaram por build verde, cobertura no piso e Sonar limpo: `?w=null` nas miniaturas, expressão SpEL
-inválida no combo, menu que não fechava por CSS, "Abrir" navegando para a pasta, voltar quebrado e
-pasta não removida. Todos visíveis em dois minutos de uso, invisíveis para a suíte inteira.
-*Entrega:* um punhado de testes de fumaça que renderizam cada tela autenticada e falham em qualquer
-exceção de template — o `SettingsPageRenderTest` criado ontem já é o molde. Cobre o modo de falha
-mais frequente (expressão que não avalia) por um custo baixíssimo.
-
 ### Complexidade média — semanas
 
-**A4. Apenas 16 testes de integração para um produto que move arquivos.** A lógica está bem coberta
+**A4. Punhado de testes de integração para um produto que move arquivos.** A lógica está bem coberta
 por unidade, mas o que quebra na vida real é o encontro com o sistema de arquivos: atributo
 somente-leitura (visto ontem), caminho longo, arquivo bloqueado, unidade removida no meio da
 operação, acentuação, links. Hoje isso só aparece em produção — na sua máquina.
@@ -153,12 +143,11 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **A1** (fumaça de telas) — antes de crescer, evitar que o crescimento quebre em silêncio.
-2. **P3** (diagnóstico) e **P6** (backup) — o que torna possível dar suporte e sobreviver a um erro.
-3. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
-4. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-5. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-6. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **P3** (diagnóstico) e **P6** (backup) — o que torna possível dar suporte e sobreviver a um erro.
+2. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
+3. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
+4. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+5. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 
