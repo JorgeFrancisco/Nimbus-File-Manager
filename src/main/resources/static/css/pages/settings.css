@@ -207,9 +207,11 @@
 	margin: 0;
 }
 
-/* The external-tools panel puts its parameter rows right under the action buttons, and a
+/* Both admin panels put their parameter rows right under the action buttons, and a
    .setting-row leads with a border-top: without this the line is drawn against the bottom
-   edge of the button, reading as an underline of it rather than as the start of the list. */
+   edge of the buttons, reading as an underline of them rather than as the start of the
+   list. Two selectors because the geo panel wraps its buttons in one more container. */
+.geo-actions + .setting-row,
 .geo-dataset-actions + .setting-row {
 	margin-top: 14px;
 }
