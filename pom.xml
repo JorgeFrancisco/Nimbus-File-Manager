@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.26.2.98</version>
+	<version>5.27.0.100</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -363,6 +363,10 @@
 					     closed", ~30s hang, Surefire fork kill). Production keeps the default. -->
 					<systemPropertyVariables>
 						<nimbus-file-manager.inventory.watch.enabled>false</nimbus-file-manager.inventory.watch.enabled>
+					<!-- No @SpringBootTest may reach for the network: the tool auto-install would
+					     otherwise fetch a ~70 MB archive once per context on a Windows developer
+					     machine. Its own test drives the component directly. -->
+					<nimbus-file-manager.tools.auto-install>false</nimbus-file-manager.tools.auto-install>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

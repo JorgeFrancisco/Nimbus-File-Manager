@@ -57,6 +57,11 @@ public class ExternalToolPaths {
 		this.bundledDirectory = bundledDirectory;
 	}
 
+	/** Where a bundled binary is looked up - and where the installer writes. */
+	Path bundledDirectory() {
+		return bundledDirectory;
+	}
+
 	public String ffmpeg() {
 		return resolve(SettingsConstants.TOOL_FFMPEG, Tools::ffmpeg, "ffmpeg");
 	}
@@ -75,12 +80,14 @@ public class ExternalToolPaths {
 
 	/**
 	 * The bundled binary when it exists, otherwise the bare command name. Both
-	 * extensions are tried instead of branching on the operating system: what
-	 * matters is which file is actually there, and a Windows binary carried into a
-	 * Linux image should not win just because the name matched.
+	 * names are tried instead of branching on the operating system: what matters is
+	 * which file is actually there. The extensionless name comes first so that a
+	 * {@code .exe} left behind by a Windows download does not beat the real binary
+	 * on Linux - on Windows nothing answers to the bare name, so the second
+	 * candidate is the one that matches.
 	 */
 	private String discover(String executable) {
-		for (String candidate : List.of(executable + ".exe", executable)) {
+		for (String candidate : List.of(executable, executable + ".exe")) {
 			Path bundled = bundledDirectory.resolve(candidate);
 
 			if (Files.isRegularFile(bundled)) {

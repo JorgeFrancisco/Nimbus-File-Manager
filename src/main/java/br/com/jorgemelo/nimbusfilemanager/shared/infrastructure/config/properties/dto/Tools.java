@@ -1,4 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto;
 
-public record Tools(String ffprobe, String ffmpeg) {
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+public record Tools(String ffprobe, String ffmpeg, @DefaultValue("true") boolean autoInstall) {
 }

@@ -366,15 +366,16 @@ class AppSettingServiceTest {
 	@Test
 	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
 		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace",
-				new Tools(null, null),
+				new Tools(null, null, true),
 				new Inventory(true, 60_000L), new Api(500, 20, 100), new Security(5, 5, 15, true, "admin", "admin"),
 				null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
 
 		Assertions.assertThat(service.definitions())
-				.filteredOn(definition -> definition.key().startsWith("nimbus-file-manager.tools."))
-				.isNotEmpty()
+				.filteredOn(definition -> List.of(SettingsConstants.TOOL_FFPROBE, SettingsConstants.TOOL_FFMPEG)
+					.contains(definition.key()))
+				.hasSize(2)
 				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isEmpty());
 	}
 
@@ -383,7 +384,8 @@ class AppSettingServiceTest {
 	}
 
 	private NimbusFileManagerProperties properties(boolean recursiveWatchDefault) {
-		return new NimbusFileManagerProperties("C:/workspace", new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe"),
+		return new NimbusFileManagerProperties("C:/workspace",
+				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", true),
 				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
 				new Security(5, 5, 15, true, "admin", "admin"), null);
 	}

@@ -47,7 +47,7 @@ class ExternalToolPathsTest {
 		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, "C:/tools/ffmpeg.exe"))
 				.thenReturn("D:/custom/ffmpeg.exe");
 
-		Tools tools = new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe");
+		Tools tools = new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", true);
 
 		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo("D:/custom/ffmpeg.exe");
 	}
@@ -56,7 +56,7 @@ class ExternalToolPathsTest {
 	void fallsBackToTheConfiguredPathWhenNothingWasSaved(@TempDir Path bundled) {
 		nothingStored();
 
-		Tools tools = new Tools("/usr/bin/ffprobe", "/usr/bin/ffmpeg");
+		Tools tools = new Tools("/usr/bin/ffprobe", "/usr/bin/ffmpeg", true);
 
 		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo("/usr/bin/ffmpeg");
 		Assertions.assertThat(paths(bundled, tools).ffprobe()).isEqualTo("/usr/bin/ffprobe");
@@ -69,7 +69,7 @@ class ExternalToolPathsTest {
 
 		Files.createFile(bundled.resolve("ffmpeg.exe"));
 
-		Assertions.assertThat(paths(bundled, new Tools("", "")).ffmpeg())
+		Assertions.assertThat(paths(bundled, new Tools("", "", true)).ffmpeg())
 				.isEqualTo(bundled.resolve("ffmpeg.exe").toString());
 	}
 
@@ -79,8 +79,23 @@ class ExternalToolPathsTest {
 
 		Files.createFile(bundled.resolve("ffprobe"));
 
-		Assertions.assertThat(paths(bundled, new Tools("", "")).ffprobe())
+		Assertions.assertThat(paths(bundled, new Tools("", "", true)).ffprobe())
 				.isEqualTo(bundled.resolve("ffprobe").toString());
+	}
+
+	/**
+	 * A {@code .exe} left behind by a Windows download sitting next to the real
+	 * binary must not win: on Linux it would be picked and then fail to execute.
+	 */
+	@Test
+	void prefersTheExtensionlessBinaryWhenBothAreBundled(@TempDir Path bundled) throws IOException {
+		nothingStored();
+
+		Files.createFile(bundled.resolve("ffmpeg"));
+		Files.createFile(bundled.resolve("ffmpeg.exe"));
+
+		Assertions.assertThat(paths(bundled, new Tools("", "", true)).ffmpeg())
+				.isEqualTo(bundled.resolve("ffmpeg").toString());
 	}
 
 	/**
@@ -92,7 +107,7 @@ class ExternalToolPathsTest {
 	void fallsBackToTheBareCommandForThePathToResolve(@TempDir Path bundled) {
 		nothingStored();
 
-		ExternalToolPaths paths = paths(bundled, new Tools("", ""));
+		ExternalToolPaths paths = paths(bundled, new Tools("", "", true));
 
 		Assertions.assertThat(paths.ffmpeg()).isEqualTo("ffmpeg");
 		Assertions.assertThat(paths.ffprobe()).isEqualTo("ffprobe");

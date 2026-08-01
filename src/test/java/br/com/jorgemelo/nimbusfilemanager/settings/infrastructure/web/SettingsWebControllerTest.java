@@ -42,8 +42,9 @@ class SettingsWebControllerTest {
 	private final DuplicateExclusionService duplicateExclusions = mock(DuplicateExclusionService.class);
 	private final GeoDatasetSettingsModel geoDatasetSettingsModel = mock(GeoDatasetSettingsModel.class);
 	private final QuarantineFolderPolicy quarantineFolderPolicy = new QuarantineFolderPolicy(settings);
+	private final ExternalToolSettingsModel externalToolSettingsModel = mock(ExternalToolSettingsModel.class);
 	private final SettingsWebController controller = new SettingsWebController(settings, quarantineFolderPolicy,
-			duplicateExclusions, preferences, geoDatasetSettingsModel);
+			duplicateExclusions, preferences, geoDatasetSettingsModel, externalToolSettingsModel);
 
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
 

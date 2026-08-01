@@ -56,16 +56,18 @@ public class SettingsWebController extends LocalizedComponent {
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final GeoDatasetSettingsModel geoDatasetSettingsModel;
+	private final ExternalToolSettingsModel externalToolSettingsModel;
 
 	@Autowired
 	public SettingsWebController(AppSettingService appSettingService, QuarantineFolderPolicy quarantineFolderPolicy,
 			DuplicateExclusionService duplicateExclusionService, UserPagePreferenceService userPagePreferenceService,
-			GeoDatasetSettingsModel geoDatasetSettingsModel) {
+			GeoDatasetSettingsModel geoDatasetSettingsModel, ExternalToolSettingsModel externalToolSettingsModel) {
 		this.appSettingService = appSettingService;
 		this.quarantineFolderPolicy = quarantineFolderPolicy;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.geoDatasetSettingsModel = geoDatasetSettingsModel;
+		this.externalToolSettingsModel = externalToolSettingsModel;
 	}
 
 	@GetMapping("/app/settings")
@@ -78,6 +80,7 @@ public class SettingsWebController extends LocalizedComponent {
 		model.addAttribute("quarantineWarning", quarantineFolderPolicy.warning().orElse(null));
 
 		geoDatasetSettingsModel.addTo(model, authentication);
+		externalToolSettingsModel.addTo(model);
 		addPreferencesModel(model, authentication);
 
 		return "app/settings";

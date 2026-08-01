@@ -25,10 +25,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.OrientationSourc
  *
  * <p>
  * Fixtures live under {@code src/test/resources/photo/**} and are generated
- * with the project's bundled ffmpeg (see docs plan §14); they are
- * intentionally not committed, so each test is skipped
- * ({@link Assumptions#assumeTrue}) when its fixture is absent rather than
- * failing the suite on a clean checkout.
+ * with the project's bundled ffmpeg; they are intentionally not committed, so
+ * each test is skipped ({@link Assumptions#assumeTrue}) when its fixture is
+ * absent rather than failing the suite on a clean checkout.
  */
 class PhotoDecoderFixtureTest {
 

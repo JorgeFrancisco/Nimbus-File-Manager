@@ -49,9 +49,9 @@ HELP.md
 .codex/
 .agents/
 
-# Binarios externos (ffmpeg/ffprobe/exiftool) - grandes demais pra git e com implicacoes de
-# licenca GPL quando a build usa --enable-gpl; ver "External Tools" no README para como obter.
-tools/bin/*.exe
-tools/bin/*.dll
+# Ferramentas externas (ffmpeg/ffprobe) - a pasta inteira e artefato baixado, recriado pela
+# aplicacao; grande demais pra git, e a licenca GPL que vem junto dos binarios nao entra aqui
+# porque este repositorio nao distribui o ffmpeg. Ver "External Tools" no README.
+/tools/
 # Artefatos do mount FUSE (arquivos apagados ainda abertos)
 .fuse_hidden*

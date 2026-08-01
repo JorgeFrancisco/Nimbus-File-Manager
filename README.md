@@ -71,6 +71,14 @@ Requirements:
 - Maven 3.9+
 - PostgreSQL 14+ running locally, with the target database and user already created
 - Docker (only for the integration tests, which use Testcontainers - the app itself does not need it)
+- FFmpeg and FFprobe, for video conversion, video thumbnails and perceptual hashing. Nothing to do
+  on Windows, where the application installs them on the first start that finds them missing; on
+  Linux and macOS install them with the package manager. See [External Tools](#external-tools).
+
+It runs on Windows, Linux and macOS. Two things differ by platform, and both degrade to a working
+default rather than failing: the real-time file-system watcher uses Windows APIs and falls back to
+the portable `WatchService` elsewhere, and the external tools are installed by the application on
+Windows and by the package manager elsewhere.
 
 Create the application role and database while connected as `postgres` or another PostgreSQL administrator:
 
@@ -293,13 +301,13 @@ their own PostgreSQL via Testcontainers, so only the main database is created he
 
 Nimbus File Manager can resolve GPS coordinates from photos and videos into country, state/province and city without calling an online map service during processing. Resolved locations are global media metadata reused by Files, Timeline and Organization.
 
-The feature is disabled by default. An administrator can configure it in **Configurações → Localização offline** and manage the geographic database in **Administração da base geográfica**:
+The feature is disabled by default. An administrator enables it in the offline-location section of the settings screen and manages the dataset in the geographic-database section of the same screen:
 
 1. Download/import the database.
 2. Enable `nimbus-file-manager.location.enabled`.
-3. Use **Reconstruir localizações** for media that was inventoried before the feature was enabled.
+3. Run the location rebuild for media that was inventoried before the feature was enabled.
 
-Resolution works by administrative containment (point-in-polygon): the application downloads the [geoBoundaries](https://www.geoboundaries.org/) CGAZ global GeoJSON files (ADM0 countries, ADM1 states/provinces, ADM2 municipalities) into `workspace/geodata` and imports them into PostgreSQL. CGAZ dissolves dependent territories into their sovereign state (e.g. Aruba becomes anonymous Netherlands area), so after the main import the application automatically detects every ISO country left without a polygon of its own, fetches each one individually through the geoBoundaries gbOpen API and imports it additively — the smaller territory polygon then wins resolution over the sovereign's. No hardcoded territory list; the download URLs, the API URL and the auto-completion toggle are runtime settings (Settings screen, "Localização offline" section). For development, tests or fully air-gapped installs, `nimbus-file-manager.location.boundary.local-dir` (or `NIMBUS_FILE_MANAGER_BOUNDARY_LOCAL_DIR`) points at a local folder with the GeoJSON files instead of downloading. Downloads and extracted files are runtime data and are not versioned. Updates are conditional: the ETag of each downloaded file is remembered, so "Atualizar base" reuses files that did not change on the server (the import itself always runs). Updating the database invalidates the resolution cache; existing automatic locations can then be rebuilt for pending, low-confidence or all media.
+Resolution works by administrative containment (point-in-polygon): the application downloads the [geoBoundaries](https://www.geoboundaries.org/) CGAZ global GeoJSON files (ADM0 countries, ADM1 states/provinces, ADM2 municipalities) into `workspace/geodata` and imports them into PostgreSQL. CGAZ dissolves dependent territories into their sovereign state (e.g. Aruba becomes anonymous Netherlands area), so after the main import the application automatically detects every ISO country left without a polygon of its own, fetches each one individually through the geoBoundaries gbOpen API and imports it additively — the smaller territory polygon then wins resolution over the sovereign's. No hardcoded territory list; the download URLs, the API URL and the auto-completion toggle are runtime settings, in the offline-location section of the settings screen. For development, tests or fully air-gapped installs, `nimbus-file-manager.location.boundary.local-dir` (or `NIMBUS_FILE_MANAGER_BOUNDARY_LOCAL_DIR`) points at a local folder with the GeoJSON files instead of downloading. Downloads and extracted files are runtime data and are not versioned. Updates are conditional: the ETag of each downloaded file is remembered, so updating the dataset reuses files that did not change on the server (the import itself always runs). Updating the database invalidates the resolution cache; existing automatic locations can then be rebuilt for pending, low-confidence or all media.
 
 Organization can optionally subdivide the selected layout by country, country/state or country/state/city, with a minimum-confidence rule and an optional `SEM_LOCALIZACAO_CONFIAVEL` fallback folder. Manual locations are represented in the model and take precedence over automatic results; editing them through the UI is reserved for a future version.
 
@@ -424,8 +432,8 @@ Self-registration (`/register`) creates the account disabled until the confirmat
 
 - Registering creates the account with `enabled=false`, a random confirmation token and a 24-hour expiry (`CONFIRMATION_TOKEN_VALID_HOURS` in `AppUserAccountService`).
 - Opening the confirmation link (`/confirm?token=...`) sets `enabled=true` and clears the token, so the account can log in normally from then on.
-- Trying to log in before confirming shows a dedicated message ("Sua conta ainda não foi confirmada...") instead of the generic "E-mail ou senha inválidos" - `LoginFailureHandler` tells the two apart because Spring Security rejects a disabled account (`DisabledException`) before it ever compares the password.
-- If the link expires (24h) before it's used, opening it shows "Token de confirmação expirado". There's no separate "resend" page - registering again with the same email while the account is still unconfirmed just issues a fresh token/link (and updates the password/name, in case those changed too) instead of failing with "E-mail já cadastrado.". That error is reserved for emails that already belong to a confirmed account.
+- Trying to log in before confirming shows a dedicated message saying the account is still unconfirmed, rather than the generic invalid-credentials one - `LoginFailureHandler` tells the two apart because Spring Security rejects a disabled account (`DisabledException`) before it ever compares the password.
+- If the link expires (24h) before it's used, opening it reports an expired token. There's no separate "resend" page - registering again with the same email while the account is still unconfirmed just issues a fresh token/link (and updates the password/name, in case those changed too) instead of failing with the email-already-registered error. That error is reserved for emails that already belong to a confirmed account.
 
 ### Gmail SMTP Setup
 
@@ -475,13 +483,13 @@ Screens currently available:
 - Access history *(administrators only)*
 - Settings *(administrators only)*
 
-Files, Organization, Duplicates, Quarantine, Conversion, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal Preferencias tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
+Files, Organization, Duplicates, Quarantine, Conversion, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal preferences tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
 
 Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: `InventoryWatchService` calls `OrganizationReconcileService.reconcileAndApply` automatically - once per debounced batch of file-system changes, and again on a fixed 60-second timer regardless of changes - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Although neither has a screen of its own, both are visible in the execution history: a reconcile is persisted as a distinct `RECONCILE` execution only when it actually repairs the catalog (renames, stale-path fixes or missing marks), while the frequent "nothing changed" checks leave only an in-memory heartbeat in the topbar; each execution (inventory and reconcile alike) also records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`.
 
 The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
 
-The Settings screen has two tabs: "Sistema" (admin-only) persists runtime parameters in PostgreSQL, and "Preferencias" (any authenticated user) stores personal defaults - default Arquivos view/page size and default Organizacao layout/checkboxes/page size - reusing the same `UserPagePreferenceService` that Arquivos already relies on to remember your last-used folder, view and sort.
+The settings screen has two tabs. The system tab (admin-only) persists runtime parameters in PostgreSQL; the preferences tab (any authenticated user) stores personal defaults - the file-explorer view and page size, and the organization layout, checkboxes and page size - reusing the same `UserPagePreferenceService` the file explorer already relies on to remember your last-used folder, view and sort.
 
 Each system parameter stores:
 
@@ -899,7 +907,7 @@ The three options are stored per user the moment they change, so reopening the s
 offers what was last used instead of silently resetting - which matters because one of
 them decides whether the original file stays. The file selection is kept in the
 browser and survives pagination and reloads, so a batch can be assembled across pages;
-"Limpar seleção" empties it, and whatever a batch handled leaves it automatically.
+Clearing the selection empties it, and whatever a batch handled leaves it automatically.
 
 Each row uses the same media card as the other screens: a thumbnail that opens the
 video in the shared lightbox player.
@@ -1070,56 +1078,52 @@ ORDER BY installed_rank DESC;
 
 ## External Tools
 
-No path is configured by default, so the tools are looked up in this order: the value saved on the
-Settings screen, then the configured property/environment variable, then discovery — the binary
-bundled under `tools/bin` when it is there, and otherwise the bare command, which the operating
-system resolves through `PATH`.
+FFmpeg and FFprobe power video conversion, video thumbnails and perceptual hashing. ExifTool is
+not used: photo EXIF is read in-process by metadata-extractor.
 
-On Windows that means dropping the executables in place and running:
+### Installing them
 
-```text
-tools/bin/ffprobe.exe
-tools/bin/ffmpeg.exe
-```
+On **Windows**, nothing has to be fetched by hand. A start that finds neither tool installs them
+by itself in the background, and the external-tools section of the settings screen has an
+install/update button for forcing it — including over an existing build, which the automatic run
+never touches. Either way the official FFmpeg package is downloaded, the executables and their
+DLLs are kept under `tools/bin` and the rest is dropped. The package is GPL-licensed and is
+downloaded by the machine that runs the application — it is never shipped inside this project —
+and its `LICENSE.txt` is stored next to the binaries as `FFMPEG-LICENSE.txt`.
 
-On Linux and macOS, installing them system-wide (`apt install ffmpeg`, `brew install ffmpeg`) is
-enough — nothing to configure, since `ffmpeg` and `ffprobe` resolve through `PATH`. The Docker image
-installs them and points the variables at `/usr/bin` explicitly.
+The automatic install can be turned off on the same screen
+(`nimbus-file-manager.tools.auto-install`), for an installation that deliberately points at its
+own build or runs offline.
 
-Pin an absolute path with an environment variable or on the Settings screen:
+On **Linux and macOS**, install them with the package manager (`apt install ffmpeg`,
+`brew install ffmpeg`) - the commands resolve through `PATH` and nothing else is needed. The
+Docker image installs them and points the environment variables at `/usr/bin` explicitly.
+
+### How a path is resolved
+
+No path is configured by default. The tools are looked up in this order: the value saved on the
+settings screen, then the configured property/environment variable, then discovery - the binary
+under `tools/bin` when it is there, and otherwise the bare command, which the operating system
+resolves through `PATH`.
+
+Pin an absolute path with an environment variable or on the settings screen:
 
 ```text
 NIMBUS_FILE_MANAGER_FFPROBE=C:/nimbus-file-manager/tools/bin/ffprobe.exe
 NIMBUS_FILE_MANAGER_FFMPEG=C:/nimbus-file-manager/tools/bin/ffmpeg.exe
 ```
 
+The download address itself is a setting (`nimbus-file-manager.tools.download-url`), so it can be
+pointed at a mirror without a new release.
+
 ### `tools/bin` is not committed to git
 
-`tools/bin/*.exe` and `tools/bin/*.dll` are gitignored (~130 MB total, over GitHub's 50 MB
-per-file warning threshold, and FFmpeg builds with `--enable-gpl` carry GPL obligations that
-don't belong inside this repo's history). Set the folder up locally after cloning:
-
-1. **ffmpeg / ffprobe** - download an official "shared" Windows build from
-   https://www.gyan.dev/ffmpeg/builds/ (or copy the executables + DLLs from another install that
-   already has them, eg. Shutter Encoder's `app/Library` folder). A "shared" build is required -
-   a "static" build's single self-contained `ffprobe.exe` will fail to launch with a
-   `STATUS_DLL_NOT_FOUND` exit code if the dependency DLLs listed below aren't next to it.
-2. Place everything directly under `tools/bin/`:
-
-```text
-tools/bin/ffprobe.exe
-tools/bin/ffmpeg.exe
-tools/bin/avcodec-62.dll
-tools/bin/avdevice-62.dll
-tools/bin/avfilter-11.dll
-tools/bin/avformat-62.dll
-tools/bin/avutil-60.dll
-tools/bin/swresample-6.dll
-tools/bin/swscale-9.dll
-```
-
-(DLL version numbers depend on the specific ffmpeg build; match whatever ships alongside the
-`ffprobe.exe`/`ffmpeg.exe` you downloaded.)
+`tools/bin/*.exe` and `tools/bin/*.dll` are gitignored (over GitHub's 50 MB per-file warning
+threshold, and FFmpeg builds with `--enable-gpl` carry GPL obligations that do not belong inside
+this repo's history). The install button rebuilds the folder on a fresh clone; to fill it by hand
+instead, download an official **shared** Windows build (a *static* build's self-contained
+`ffprobe.exe` fails with `STATUS_DLL_NOT_FOUND` when its DLLs are missing) and place the
+executables together with their DLLs directly under `tools/bin/`.
 
 ## Organization Safety Notes
 
@@ -1141,8 +1145,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2241 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.44% instruction, 91.76% branch, 98.05% line, 98.70% method, 100.00% class
+Tests:       2274 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.44% instruction, 91.82% branch, 98.05% line, 98.72% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1154,7 +1158,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.44% instruction, 91.76% branch, 98.05% line, 98.70% method, 100.00% class
+Floor:  98.44% instruction, 91.82% branch, 98.05% line, 98.72% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 

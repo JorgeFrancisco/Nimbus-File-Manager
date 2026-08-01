@@ -37,6 +37,9 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepo
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ToolInstallSnapshot;
+import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.LocaleConfig;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcConfig;
@@ -54,6 +57,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcCon
 @AutoConfigureMockMvc(addFilters = false)
 class SettingsPageRenderTest {
 
+	private static final ExternalToolStatus MISSING_TOOLS = new ExternalToolStatus(false, "ffmpeg", false,
+			"ffprobe", null, false, true, "C:/app/tools/bin");
+
 	@Autowired
 	private MockMvc mockMvc;
 
@@ -68,6 +74,9 @@ class SettingsPageRenderTest {
 
 	@MockitoBean
 	private GeoDatasetSettingsModel geoDatasetSettingsModel;
+
+	@MockitoBean
+	private ExternalToolSettingsModel externalToolSettingsModel;
 
 	// Dependencies of the MVC interceptors and of the settings advices the slice
 	// always loads, not of the controller under test. The metadata advice is kept
@@ -120,6 +129,17 @@ class SettingsPageRenderTest {
 
 			return null;
 		}).when(geoDatasetSettingsModel).addTo(any(), any());
+
+		doAnswer(invocation -> {
+			Model model = invocation.getArgument(0);
+
+			model.addAttribute("toolStatus", MISSING_TOOLS);
+			model.addAttribute("toolInstallRunning", false);
+			model.addAttribute("toolInstallProgress",
+					new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, -1));
+
+			return null;
+		}).when(externalToolSettingsModel).addTo(any());
 	}
 
 	private AppSetting setting(String key, String value, String valueType) {
@@ -179,5 +199,19 @@ class SettingsPageRenderTest {
 
 		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
 				.andExpect(content().string(Matchers.containsString(LocationProvider.GOOGLE_MAPS.name())));
+	}
+
+	/**
+	 * The external-tools panel offers the install action when nothing is found,
+	 * which is the whole point of the section: a fresh installation must not send
+	 * the operator to the README to fetch ffmpeg by hand.
+	 */
+	@Test
+	void offersTheToolInstallActionWhenNothingIsInstalled() throws Exception {
+		when(appSettingService.list()).thenReturn(List.of());
+
+		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
+				.andExpect(content().string(Matchers.containsString("/app/settings/tools/install")))
+				.andExpect(content().string(Matchers.containsString("C:/app/tools/bin")));
 	}
 }
