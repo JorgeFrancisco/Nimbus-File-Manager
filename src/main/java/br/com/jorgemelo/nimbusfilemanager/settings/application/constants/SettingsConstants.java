@@ -28,6 +28,7 @@ public final class SettingsConstants {
 	public static final String TRASH_FOLDER = "nimbus-file-manager.duplicates.trash-folder";
 	public static final String TRASH_RETENTION_DAYS = "nimbus-file-manager.duplicates.trash-retention-days";
 	public static final String CATALOG_MISSING_RETENTION_DAYS = "nimbus-file-manager.catalog.missing-retention-days";
+	public static final String BACKUP_FOLDER = "nimbus-file-manager.backup.folder";
 	public static final String LOCATION_ENABLED = "nimbus-file-manager.location.enabled";
 	public static final String LOCATION_PROVIDER = "nimbus-file-manager.location.provider";
 	public static final String BOUNDARY_ADM0_URL = "nimbus-file-manager.location.boundary.adm0-url";

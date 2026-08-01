@@ -333,6 +333,20 @@ Como operar a catraca:
 - **Subiu?** Atualizar o piso no README para os valores novos, no mesmo commit. É isso que faz a catraca andar — piso desatualizado permite regredir de graça.
 - **O piso é chão, não meta.** O README também registra a **meta** perseguida; alcançá-la promove a meta a piso e uma nova meta é definida.
 
+### A medição varia entre execuções
+
+Duas execuções seguidas da mesma suíte, sem uma linha alterada, dão números diferentes — observado em até **0,16 ponto** no branch e ~0,03 nas demais. Duas causas, ambas do próprio projeto:
+
+- **Execução paralela.** `src/test/resources/junit-platform.properties` roda classes de teste concorrentemente. Quais ramos de código compartilhado são exercitados muda de execução para execução: cache que ora popula ora acerta, caminho de contenção, timeout que ora dispara.
+- **Testes que se auto-pulam.** Os que dependem do ffmpeg (`@EnabledIf`) pulam quando `tools/bin` não existe, e os métodos que eles cobririam contam como descobertos. A pasta é gitignored, então um worktree ou um clone novo mede diferente da árvore principal.
+
+Como operar diante disso:
+
+- Uma métrica **poucos centésimos** abaixo do piso não é, por si só, regressão. Antes de escrever teste atrás do número, **verificar se o código novo tem parte descoberta** (relatório do JaCoCo por classe/método). Se não tiver, é ruído: **remedir** em vez de inventar teste.
+- Uma queda que **se repete** entre execuções, ou que aponta para classe/método novo sem cobertura, é regressão de verdade e vale a regra acima.
+- **Não baixar o piso** por causa de oscilação, e **não arredondar** a casa decimal: a queda pode ser real, e uma régua mais grossa esconderia justamente o que a catraca existe para pegar.
+- Medir sempre com `clean` e com a árvore principal completa (ver *Piso exige build limpo*); comparar números tirados em condições diferentes produz conclusão errada.
+
 ### Código inalcançável e `@CoverageGenerated`
 
 Código que **nenhum teste honesto alcança** pode sair da medição, anotado com `@CoverageGenerated("motivo")` (em `shared/application`). O nome carrega "Generated" porque esse é o único gancho que o JaCoCo oferece — ele filtra membros anotados com anotação cujo nome simples contenha `Generated` e retenção `CLASS`/`RUNTIME`, o mesmo mecanismo do `lombok.Generated`. Nada ali é gerado.

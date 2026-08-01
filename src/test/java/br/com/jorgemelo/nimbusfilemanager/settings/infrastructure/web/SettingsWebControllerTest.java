@@ -24,6 +24,7 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoDatasetSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationConstants;
@@ -44,7 +45,8 @@ class SettingsWebControllerTest {
 	private final QuarantineFolderPolicy quarantineFolderPolicy = new QuarantineFolderPolicy(settings);
 	private final ExternalToolSettingsModel externalToolSettingsModel = mock(ExternalToolSettingsModel.class);
 	private final SettingsWebController controller = new SettingsWebController(settings, quarantineFolderPolicy,
-			duplicateExclusions, preferences, geoDatasetSettingsModel, externalToolSettingsModel);
+			duplicateExclusions, preferences, geoDatasetSettingsModel, externalToolSettingsModel,
+			mock(BackupSettingsModel.class));
 
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
 

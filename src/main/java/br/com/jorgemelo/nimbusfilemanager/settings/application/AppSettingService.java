@@ -325,6 +325,8 @@ public class AppSettingService implements ApplicationRunner {
 						"Base geográfica: verificar e baixar atualizações automaticamente uma vez por dia."),
 				new AppSettingDefinition(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "04:00", VALUE_TYPE_TIME_OF_DAY,
 						"Base geográfica: horário da verificação diária. Se o computador estiver desligado no horário, ela roda na primeira oportunidade do dia."),
+				new AppSettingDefinition(SettingsConstants.BACKUP_FOLDER, "", VALUE_TYPE_STRING,
+						"Pasta onde os backups do catálogo são gravados. Vazio = a pasta backup do workspace. Prefira um disco diferente do que guarda o banco."),
 				new AppSettingDefinition(SettingsConstants.MAP_ENABLED, VALUE_TRUE, VALUE_TYPE_BOOLEAN,
 						"Mapa: habilita a tela de mapa das mídias georreferenciadas."),
 				new AppSettingDefinition(SettingsConstants.MAP_TILE_URL,

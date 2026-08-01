@@ -22,6 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
@@ -77,6 +78,9 @@ class SettingsPageRenderTest {
 
 	@MockitoBean
 	private ExternalToolSettingsModel externalToolSettingsModel;
+
+	@MockitoBean
+	private BackupSettingsModel backupSettingsModel;
 
 	// Dependencies of the MVC interceptors and of the settings advices the slice
 	// always loads, not of the controller under test. The metadata advice is kept
@@ -140,6 +144,15 @@ class SettingsPageRenderTest {
 
 			return null;
 		}).when(externalToolSettingsModel).addTo(any());
+
+		doAnswer(invocation -> {
+			Model model = invocation.getArgument(0);
+
+			model.addAttribute("backups", List.of());
+			model.addAttribute("backupFolder", "C:/app/workspace/backup");
+
+			return null;
+		}).when(backupSettingsModel).addTo(any());
 	}
 
 	private AppSetting setting(String key, String value, String valueType) {

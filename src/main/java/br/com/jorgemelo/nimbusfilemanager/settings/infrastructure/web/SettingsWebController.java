@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoDatasetSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.FileExplorerService;
@@ -57,17 +58,20 @@ public class SettingsWebController extends LocalizedComponent {
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final GeoDatasetSettingsModel geoDatasetSettingsModel;
 	private final ExternalToolSettingsModel externalToolSettingsModel;
+	private final BackupSettingsModel backupSettingsModel;
 
 	@Autowired
 	public SettingsWebController(AppSettingService appSettingService, QuarantineFolderPolicy quarantineFolderPolicy,
 			DuplicateExclusionService duplicateExclusionService, UserPagePreferenceService userPagePreferenceService,
-			GeoDatasetSettingsModel geoDatasetSettingsModel, ExternalToolSettingsModel externalToolSettingsModel) {
+			GeoDatasetSettingsModel geoDatasetSettingsModel, ExternalToolSettingsModel externalToolSettingsModel,
+			BackupSettingsModel backupSettingsModel) {
 		this.appSettingService = appSettingService;
 		this.quarantineFolderPolicy = quarantineFolderPolicy;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.geoDatasetSettingsModel = geoDatasetSettingsModel;
 		this.externalToolSettingsModel = externalToolSettingsModel;
+		this.backupSettingsModel = backupSettingsModel;
 	}
 
 	@GetMapping("/app/settings")
@@ -81,6 +85,7 @@ public class SettingsWebController extends LocalizedComponent {
 
 		geoDatasetSettingsModel.addTo(model, authentication);
 		externalToolSettingsModel.addTo(model);
+		backupSettingsModel.addTo(model);
 		addPreferencesModel(model, authentication);
 
 		return "app/settings";

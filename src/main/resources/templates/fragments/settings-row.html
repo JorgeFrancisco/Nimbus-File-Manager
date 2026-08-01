@@ -56,7 +56,7 @@
 				th:unless="${setting.valueType == 'BOOLEAN' or setting.valueType == 'TIME_OF_DAY'
 						or setting.settingKey == 'nimbus-file-manager.timezone'
 						or setting.settingKey == 'nimbus-file-manager.location.provider'}"
-				th:id="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'} ? 'watchFolderInput' : (${setting.settingKey == 'nimbus-file-manager.duplicates.trash-folder'} ? 'trashFolderInput' : null)"
+				th:id="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'} ? 'watchFolderInput' : (${setting.settingKey == 'nimbus-file-manager.duplicates.trash-folder'} ? 'trashFolderInput' : (${setting.settingKey == 'nimbus-file-manager.backup.folder'} ? 'backupFolderInput' : null))"
 				th:readonly="${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder'}"
 				th:attr="data-original-value=${setting.settingKey == 'nimbus-file-manager.inventory.watch-folder' ? setting.settingValue : null}">
 		<button type="button" class="secondary folder-picker-open" data-target="#watchFolderInput"
@@ -64,6 +64,8 @@
 				th:disabled="${inventoryRunning}"><i class="bi bi-folder2" aria-hidden="true"></i> <span th:text="#{quarantine.origin.chooseFolder}">Escolher pasta</span></button>
 		<button type="button" class="secondary folder-picker-open" data-target="#trashFolderInput"
 				th:if="${setting.settingKey == 'nimbus-file-manager.duplicates.trash-folder'}"><i class="bi bi-folder2" aria-hidden="true"></i> <span th:text="#{quarantine.origin.chooseFolder}">Escolher pasta</span></button>
+		<button type="button" class="secondary folder-picker-open" data-target="#backupFolderInput"
+				th:if="${setting.settingKey == 'nimbus-file-manager.backup.folder'}"><i class="bi bi-folder2" aria-hidden="true"></i> <span th:text="#{quarantine.origin.chooseFolder}">Escolher pasta</span></button>
 		<button type="submit" th:disabled="${inventoryRunning}" th:text="#{action.save}">Salvar</button>
 	</form>
 	<span class="setting-row-meta muted"

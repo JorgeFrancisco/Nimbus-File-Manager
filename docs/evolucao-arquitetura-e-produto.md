@@ -75,13 +75,6 @@ há verificação de versão nova, nem aviso, nem rollback.
 *Entrega:* ciclo de vida. Software distribuído que não sabe se atualizar envelhece na máquina do
 usuário — e a versão instalada vira a versão eterna.
 
-**P6. O catálogo não tem backup próprio.** Existe exportação (`CatalogExportService`), mas não há
-"faça backup agora" nem restauração guiada. O catálogo é o trabalho acumulado: metadados extraídos,
-hashes, geolocalização, histórico de movimentos. Perder o Postgres é perder tudo isso, mesmo com os
-arquivos intactos.
-*Entrega:* proteção do ativo que o produto constrói. É o que separa "reinstalei e recomecei do zero"
-de "reinstalei e continuei".
-
 **P7. Só duas telas usam o que o catálogo sabe.** Timeline e Mapa exploram metadados; o resto é
 gestão. Há riqueza subaproveitada: câmera, dimensões, duração, subcategoria, data confiável.
 *Entrega:* busca avançada e coleções salvas ("fotos de 2008 sem GPS", "vídeos acima de 1 GB") usam
@@ -136,11 +129,10 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **P6** (backup) — o que torna possível sobreviver a um erro.
-2. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
-3. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-4. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-5. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
+2. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
+3. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+4. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 
