@@ -74,10 +74,10 @@ public class QuarantineOperationLog extends LocalizedComponent {
 	}
 
 	/**
-	 * Closes the row with what actually happened. {@code skipped} carries the
-	 * items that stayed in quarantine waiting for a decision (a name collision, a
-	 * missing origin folder) - they are not failures, so counting them as errors
-	 * would make a restore that needs one click look broken.
+	 * Closes the row with what actually happened. {@code skipped} carries the items
+	 * that stayed in quarantine waiting for a decision (a name collision, a missing
+	 * origin folder) - they are not failures, so counting them as errors would make
+	 * a restore that needs one click look broken.
 	 */
 	public void finish(Execution execution, int selected, int restored, int skipped, int errors, String message) {
 		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
@@ -97,10 +97,10 @@ public class QuarantineOperationLog extends LocalizedComponent {
 	/**
 	 * Closes a row whose loop died on the way. Without this the execution keeps
 	 * {@code finishedAt} null, and the application reads any such row as the
-	 * operation currently running - an operation that crashed would leave a
-	 * phantom running on every screen until someone edited the database. Delegated
-	 * to the shared service because it commits in its own transaction: the caller's
-	 * may be the very thing that just broke.
+	 * operation currently running - an operation that crashed would leave a phantom
+	 * running on every screen until someone edited the database. Delegated to the
+	 * shared service because it commits in its own transaction: the caller's may be
+	 * the very thing that just broke.
 	 */
 	public void fail(Execution execution, String detail) {
 		executionProgressService.fail(execution, ExecutionMessages.operationFailed(detail));

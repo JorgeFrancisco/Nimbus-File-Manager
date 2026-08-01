@@ -21,8 +21,8 @@ public final class ProgressMath {
 	 * <p>
 	 * Two decimals because a long queue moves too slowly for whole numbers to show
 	 * anything: six thousand videos spend minutes on each percent, and a bar that
-	 * never changes reads as a stalled one. The arithmetic lives here alone -
-	 * three other places used to carry their own copy, each rounding differently.
+	 * never changes reads as a stalled one. The arithmetic lives here alone - three
+	 * other places used to carry their own copy, each rounding differently.
 	 */
 	public static double percent(long done, long total) {
 		if (total <= 0) {

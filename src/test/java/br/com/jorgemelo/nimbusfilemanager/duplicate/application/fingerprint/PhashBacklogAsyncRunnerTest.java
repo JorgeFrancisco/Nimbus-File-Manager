@@ -159,8 +159,7 @@ class PhashBacklogAsyncRunnerTest {
 	 * the JaCoCo dump (which happens at JVM exit): sometimes the context is torn
 	 * down first and {@code stop()} is recorded as covered, sometimes JaCoCo dumps
 	 * first and it is recorded as missed. That race made the suite's method
-	 * coverage jitter run-to-run and intermittently dip
-	 * below the mandatory gate.
+	 * coverage jitter run-to-run and intermittently dip below the mandatory gate.
 	 *
 	 * <p>
 	 * Calling {@code stop()} directly here pins its coverage deterministically, and

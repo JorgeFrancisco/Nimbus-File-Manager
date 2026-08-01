@@ -85,8 +85,7 @@ class JavaScriptI18nTest {
 		String quarantine = read("src/main/resources/static/js/pages/quarantine.js");
 
 		assertThat(quarantine).contains("showOutcome(result.message, reloadSoon)")
-				.contains("dialog.addEventListener(\"close\"")
-				.doesNotContain("showOutcome(result.message);");
+				.contains("dialog.addEventListener(\"close\"").doesNotContain("showOutcome(result.message);");
 	}
 
 	/**

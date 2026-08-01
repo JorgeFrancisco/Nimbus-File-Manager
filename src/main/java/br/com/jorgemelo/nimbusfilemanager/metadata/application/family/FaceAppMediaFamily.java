@@ -23,8 +23,7 @@ public class FaceAppMediaFamily extends AbstractFileNameDateRule implements Medi
 	private static final String ORDER = "026_FACEAPP";
 
 	/** Leading digit bounded to a real epoch, as in {@link FacebookMediaFamily}. */
-	private static final Pattern EPOCH_MILLIS = Pattern.compile("FACEAPP[-_]([12]\\d{12})",
-			Pattern.CASE_INSENSITIVE);
+	private static final Pattern EPOCH_MILLIS = Pattern.compile("FACEAPP[-_]([12]\\d{12})", Pattern.CASE_INSENSITIVE);
 
 	public FaceAppMediaFamily(Clock clock) {
 		super(clock);

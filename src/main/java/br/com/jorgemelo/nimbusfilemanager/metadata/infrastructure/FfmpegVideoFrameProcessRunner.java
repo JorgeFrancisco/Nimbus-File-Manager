@@ -43,9 +43,9 @@ public class FfmpegVideoFrameProcessRunner {
 		String filter = "select=" + selectExpression(plan) + ",scale=" + MetadataConstants.SAMPLE_SIDE + ":"
 				+ MetadataConstants.SAMPLE_SIDE + ":flags=lanczos,format=gray";
 
-		List<String> command = List.of(ffmpeg, "-v", "error", "-y", "-i",
-				file.toAbsolutePath().normalize().toString(), "-vf", filter, "-fps_mode", "passthrough", "-frames:v",
-				String.valueOf(plan.frameCount()), "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1");
+		List<String> command = List.of(ffmpeg, "-v", "error", "-y", "-i", file.toAbsolutePath().normalize().toString(),
+				"-vf", filter, "-fps_mode", "passthrough", "-frames:v", String.valueOf(plan.frameCount()), "-f",
+				"rawvideo", "-pix_fmt", "gray", "pipe:1");
 
 		Process process = new ProcessBuilder(command).start();
 

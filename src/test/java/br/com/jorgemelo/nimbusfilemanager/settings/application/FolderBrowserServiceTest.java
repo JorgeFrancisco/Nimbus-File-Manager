@@ -68,8 +68,8 @@ class FolderBrowserServiceTest {
 	void formatRootNameSkipsLabelsThatRepeatTheRootOrAreTooLong() {
 		assertThat(FolderBrowserService.formatRootName("C:\\", " c: ")).isEqualTo("C:\\");
 		assertThat(FolderBrowserService.formatRootName("E:\\", "x".repeat(41))).isEqualTo("E:\\");
-		assertThat(FolderBrowserService.formatRootName("E:\\", "x".repeat(40))).isEqualTo("E:\\ (" + "x".repeat(40)
-				+ ")");
+		assertThat(FolderBrowserService.formatRootName("E:\\", "x".repeat(40)))
+				.isEqualTo("E:\\ (" + "x".repeat(40) + ")");
 	}
 
 	@Test

@@ -32,14 +32,12 @@ public enum FileType {
 					"application/vnd.openxmlformats-officedocument.presentationml.presentation"),
 			List.of("ppt", "pptx")),
 
-	TEXT(FileCategory.DOCUMENT, "TEXTOS",
-			List.of("text/", "application/json", "application/xml", "application/yaml"),
+	TEXT(FileCategory.DOCUMENT, "TEXTOS", List.of("text/", "application/json", "application/xml", "application/yaml"),
 			List.of("txt", "md", "log", "json", "xml", "yaml", "yml")),
 
 	ZIP(FileCategory.ARCHIVE, "ZIP", List.of("application/zip"), List.of("zip")),
 
-	RAR(FileCategory.ARCHIVE, "RAR", List.of("application/vnd.rar", "application/x-rar-compressed"),
-			List.of("rar")),
+	RAR(FileCategory.ARCHIVE, "RAR", List.of("application/vnd.rar", "application/x-rar-compressed"), List.of("rar")),
 
 	SEVEN_Z(FileCategory.ARCHIVE, "7Z", List.of("application/x-7z-compressed"), List.of("7z")),
 

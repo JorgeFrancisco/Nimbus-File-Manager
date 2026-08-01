@@ -136,8 +136,8 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 
 	/**
 	 * Duration is a recall-safe pre-filter, so a video whose duration was never
-	 * extracted must not be filtered out - it falls through to the frame
-	 * comparison instead of being rejected sight unseen.
+	 * extracted must not be filtered out - it falls through to the frame comparison
+	 * instead of being rejected sight unseen.
 	 */
 	@Test
 	void aMissingDurationNeverRejectsThePairOnItsOwn() {

@@ -112,8 +112,8 @@ class SettingsBackupWebControllerTest {
 
 	@Test
 	void aFailedDeleteSaysWhy() {
-		doThrow(new IllegalArgumentException("Not a backup of this installation: x"))
-				.when(catalogBackupService).delete("x");
+		doThrow(new IllegalArgumentException("Not a backup of this installation: x")).when(catalogBackupService)
+				.delete("x");
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 

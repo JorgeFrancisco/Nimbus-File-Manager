@@ -14,9 +14,9 @@ class EmbeddedDatasourcePropertiesTest {
 
 	/**
 	 * The loopback address rather than {@code localhost}: the server was told to
-	 * listen on 127.0.0.1, and a name would leave the connection depending on
-	 * how the machine resolves it - on Windows, often IPv6 first, against a
-	 * server that is not there.
+	 * listen on 127.0.0.1, and a name would leave the connection depending on how
+	 * the machine resolves it - on Windows, often IPv6 first, against a server that
+	 * is not there.
 	 */
 	@Test
 	void pointsTheApplicationAtTheLoopbackAddressAndTheRunningPort() {

@@ -17,8 +17,9 @@ import java.util.Arrays;
  * the decoder was reading past it.
  *
  * <p>
- * Nothing is rebuilt here, unlike {@link AnimatedWebp}: the start of the file is
- * already a complete JPEG, so the only thing needed is to stop where it stops.
+ * Nothing is rebuilt here, unlike {@link AnimatedWebp}: the start of the file
+ * is already a complete JPEG, so the only thing needed is to stop where it
+ * stops.
  */
 public final class JpegMainImage {
 
@@ -40,8 +41,8 @@ public final class JpegMainImage {
 
 	/**
 	 * @return the JPEG alone, without the trailer behind it, or an empty array when
-	 *         there is no trailer to drop - the caller then decodes the original,
-	 *         which is what an ordinary photo needs.
+	 * there is no trailer to drop - the caller then decodes the original, which is
+	 * what an ordinary photo needs.
 	 */
 	public static byte[] withoutTrailer(Path file) throws IOException {
 		byte[] bytes = Files.readAllBytes(file);

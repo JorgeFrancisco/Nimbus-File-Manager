@@ -98,10 +98,11 @@ class VideoConversionServiceTest {
 	void refusesToQuarantineOriginalsWhileNoQuarantineFolderIsConfigured() {
 		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.empty());
 
-		ConversionResult result = service.convert(List.of(mediaId),
-				new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO, OriginalDisposition.QUARANTINE,
-						"", NameAffixPosition.SUFFIX),
-				progress(), notCancelled());
+		ConversionResult result = service
+				.convert(List.of(mediaId),
+						new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+								OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX),
+						progress(), notCancelled());
 
 		Assertions.assertThat(result.configured()).isFalse();
 
@@ -299,10 +300,8 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1));
 
-		service.convert(List.of(mediaId),
-				new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO, OriginalDisposition.QUARANTINE,
-						"", NameAffixPosition.SUFFIX),
-				progress(), notCancelled());
+		service.convert(List.of(mediaId), new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+				OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX), progress(), notCancelled());
 
 		ArgumentCaptor<Path[]> locked = ArgumentCaptor.forClass(Path[].class);
 
@@ -395,10 +394,11 @@ class VideoConversionServiceTest {
 		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.partial(converted, false, ConversionFailure.QUARANTINE_FAILED));
 
-		ConversionResult result = service.convert(List.of(mediaId),
-				new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO, OriginalDisposition.QUARANTINE,
-						"", NameAffixPosition.SUFFIX),
-				progress(), notCancelled());
+		ConversionResult result = service
+				.convert(List.of(mediaId),
+						new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
+								OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX),
+						progress(), notCancelled());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 		Assertions.assertThat(result.items().getFirst().message()).contains("quarentena");

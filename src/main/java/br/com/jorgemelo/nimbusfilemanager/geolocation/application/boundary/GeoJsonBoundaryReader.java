@@ -75,6 +75,7 @@ public class GeoJsonBoundaryReader {
 
 	private InputStream counting(InputStream in, LongConsumer bytesRead) {
 		return new FilterInputStream(in) {
+
 			@Override
 			public int read() throws IOException {
 				int value = super.read();

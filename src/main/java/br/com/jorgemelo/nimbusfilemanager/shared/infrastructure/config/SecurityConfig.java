@@ -54,11 +54,12 @@ public class SecurityConfig {
 				// USER-facing timeline/map lightbox (media, map, timeline) stay operational
 				// under the USER fallback below.
 				.requestMatchers("/app/users/**", "/app/accesses/**").hasRole(Role.ADMIN.name())
-				.requestMatchers("/app/files/**", "/app/organization/**", "/app/duplicates/**",
-						"/app/quarantine/**", "/app/conversion/**", "/app/statistics/**")
+				.requestMatchers("/app/files/**", "/app/organization/**", "/app/duplicates/**", "/app/quarantine/**",
+						"/app/conversion/**", "/app/statistics/**")
 				.hasRole(Role.ADMIN.name())
-				.requestMatchers("/api/organization/**", "/api/duplicates/**", "/api/statistics/**",
-						"/api/catalog/**", "/api/files/**", "/api/diagnostics/**").hasRole(Role.ADMIN.name())
+				.requestMatchers("/api/organization/**", "/api/duplicates/**", "/api/statistics/**", "/api/catalog/**",
+						"/api/files/**", "/api/diagnostics/**")
+				.hasRole(Role.ADMIN.name())
 				// Personal preferences and the shared folder picker are operational even though
 				// they live under /app/settings; the rest of Settings is global system
 				// configuration and maintenance, so it stays ADMIN.

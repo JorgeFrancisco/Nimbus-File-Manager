@@ -83,8 +83,7 @@ class ProcessingCoordinatorBenchmarkTest {
 		ProcessingMetrics metrics = new ProcessingMetrics();
 
 		ProcessingCoordinator coordinator = new ProcessingCoordinator(
-				new ProcessingProperties(workers, ITEMS, 2, 2, 2, 1),
-				metrics);
+				new ProcessingProperties(workers, ITEMS, 2, 2, 2, 1), metrics);
 
 		try {
 			long start = System.nanoTime();

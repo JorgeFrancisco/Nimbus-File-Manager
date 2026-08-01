@@ -16,8 +16,8 @@ import org.springframework.ui.Model;
 public interface SettingsSectionModel {
 
 	/**
-	 * @param authentication the signed-in user, which some sections need to read
-	 *                       a per-user preference and others ignore
+	 * @param authentication the signed-in user, which some sections need to read a
+	 * per-user preference and others ignore
 	 */
 	void addTo(Model model, Authentication authentication);
 }

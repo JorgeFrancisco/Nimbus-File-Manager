@@ -47,11 +47,11 @@ public class CatalogFile {
 	private Long id;
 
 	/**
-	 * Optimistic-lock version. CatalogFile is updated by concurrent,
-	 * non-serialized flows (inventory watcher, metadata rebuild, organization,
-	 * rename detection) - none share a global lock - so a lost update is a real
-	 * risk. Bulk updates (e.g. markMissingByIds) bump this column explicitly so
-	 * already-loaded entities become stale instead of clobbering the change.
+	 * Optimistic-lock version. CatalogFile is updated by concurrent, non-serialized
+	 * flows (inventory watcher, metadata rebuild, organization, rename detection) -
+	 * none share a global lock - so a lost update is a real risk. Bulk updates
+	 * (e.g. markMissingByIds) bump this column explicitly so already-loaded
+	 * entities become stale instead of clobbering the change.
 	 */
 	@Version
 	@Column(name = "version", nullable = false)
@@ -95,8 +95,8 @@ public class CatalogFile {
 	private FileType fileType;
 
 	/**
-	 * Lifecycle state, replacing the former {@code exists_flag} +
-	 * {@code deleted} booleans. See {@link LifecycleStatus} for the invariants.
+	 * Lifecycle state, replacing the former {@code exists_flag} + {@code deleted}
+	 * booleans. See {@link LifecycleStatus} for the invariants.
 	 */
 	@Enumerated(EnumType.STRING)
 	@Column(name = "lifecycle_status", nullable = false, length = 30)

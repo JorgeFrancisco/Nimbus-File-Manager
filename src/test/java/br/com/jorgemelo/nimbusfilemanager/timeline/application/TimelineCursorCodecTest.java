@@ -102,8 +102,9 @@ class TimelineCursorCodecTest {
 	}
 
 	/**
-	 * A cursor that cannot be serialised is a programming fault, not bad user input:
-	 * it has to surface as an illegal state, never as a cursor the screen retries.
+	 * A cursor that cannot be serialised is a programming fault, not bad user
+	 * input: it has to surface as an illegal state, never as a cursor the screen
+	 * retries.
 	 */
 	@Test
 	void encodeFailureSurfacesAsAnIllegalStateAndNotAsAnInvalidCursor() throws Exception {

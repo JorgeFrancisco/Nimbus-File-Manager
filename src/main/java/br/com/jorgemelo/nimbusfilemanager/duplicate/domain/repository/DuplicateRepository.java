@@ -118,6 +118,7 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 				GROUP BY mf.sha256
 				HAVING COUNT(*) > 1
 			) g
-			""", nativeQuery = true)
+			""",
+			nativeQuery = true)
 	DuplicateSummaryProjection summary();
 }

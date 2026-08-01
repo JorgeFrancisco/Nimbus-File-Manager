@@ -140,8 +140,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 
 	/**
 	 * Turns the feature off, optionally reclaiming the disk it uses. The choice is
-	 * asked at this moment because that is when it matters: the dataset is around
-	 * 2 GB and someone who does not want the feature has no reason to keep it.
+	 * asked at this moment because that is when it matters: the dataset is around 2
+	 * GB and someone who does not want the feature has no reason to keep it.
 	 */
 	@PostMapping("/app/settings/geodata/disable")
 	public String disableLocation(@RequestParam(defaultValue = "false") boolean removeData,

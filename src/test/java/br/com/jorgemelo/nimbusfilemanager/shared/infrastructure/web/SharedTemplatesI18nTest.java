@@ -52,8 +52,7 @@ class SharedTemplatesI18nTest {
 				.contains("${activeExecution.percentComplete() != null} ? "
 						+ "${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} "
 						+ ": #{execution.preparing}")
-				.doesNotContain("execution.organization.running")
-				.doesNotContain("+ '%' : #{execution.preparing}}");
+				.doesNotContain("execution.organization.running").doesNotContain("+ '%' : #{execution.preparing}}");
 	}
 
 	@Test

@@ -115,8 +115,7 @@ class OrganizationRenameDetectionServiceTest {
 
 	@Test
 	void shouldDoNothingWhenThereIsNothingMissingOnEitherSide() {
-		OrganizationReconcileResponse noMissingOnDisk = response(List.of(),
-				List.of(issue(null, "C:/media/new.jpg")));
+		OrganizationReconcileResponse noMissingOnDisk = response(List.of(), List.of(issue(null, "C:/media/new.jpg")));
 
 		Assertions.assertThat(service.detectAndApplyRenames(noMissingOnDisk)).isEmpty();
 

@@ -34,8 +34,8 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(rule.supports("Captura_20240102_103045.png")).isTrue();
 		Assertions.assertThat(rule.resolve("Screenshot_20240102_103045.png"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(rule.resolve("Screenshot_20240102.png")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY,
-				2, 0, 0));
+		Assertions.assertThat(rule.resolve("Screenshot_20240102.png"))
+				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
 	}
 
 	@Test
@@ -64,8 +64,8 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(imageUuid.supports("IMAGE_20240102_103045.jpg")).isTrue();
 		Assertions.assertThat(airBrush.resolve("AirBrush_20240102_103045.jpg"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(airBrush.resolve("AirBrush_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY,
-				2, 0, 0));
+		Assertions.assertThat(airBrush.resolve("AirBrush_20240102.jpg"))
+				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
 		Assertions.assertThat(peachy.resolve("Peachy_20240102_103045.jpg"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
 		Assertions.assertThat(imageUuid.resolve("IMAGE_20240102_103045.jpg"))
@@ -88,8 +88,8 @@ class FileNameDateRulesTest {
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
 		Assertions.assertThat(generic.resolve("VID_20240102_103045.mp4"))
 				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 10, 30, 45));
-		Assertions.assertThat(generic.resolve("IMG_20240102.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0,
-				0));
+		Assertions.assertThat(generic.resolve("IMG_20240102.jpg"))
+				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
 	}
 
 	@Test
@@ -117,6 +117,7 @@ class FileNameDateRulesTest {
 		Assertions.assertThat(new DashedDateTimeMediaFamily(Clock.systemDefaultZone()).resolve("2024-01-02.jpg"))
 				.isNull();
 	}
+
 	/**
 	 * A share id in front of the timestamp used to cost the whole date: the first
 	 * digit block of the id is not a date, and the rule gave up there instead of
@@ -148,8 +149,8 @@ class FileNameDateRulesTest {
 	 */
 	@Test
 	void aLongIdAloneYieldsNoDate() {
-		Assertions.assertThat(new GenericMediaFamily(Clock.systemDefaultZone())
-				.resolve("lv_7556956620933156149.mp4")).isNull();
+		Assertions.assertThat(new GenericMediaFamily(Clock.systemDefaultZone()).resolve("lv_7556956620933156149.mp4"))
+				.isNull();
 	}
 
 	/**
@@ -178,9 +179,9 @@ class FileNameDateRulesTest {
 	}
 
 	/**
-	 * The same twelve digits also spell ddMMyyyy plus a counter, and nothing in
-	 * the name tells the two apart - so an ambiguous run yields no date rather
-	 * than a guess, and a run that is neither yields none either.
+	 * The same twelve digits also spell ddMMyyyy plus a counter, and nothing in the
+	 * name tells the two apart - so an ambiguous run yields no date rather than a
+	 * guess, and a run that is neither yields none either.
 	 */
 	@Test
 	void monthFirstFamilyShouldRejectTheAmbiguousAndTheInvalid() {

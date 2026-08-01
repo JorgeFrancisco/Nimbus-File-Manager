@@ -53,8 +53,7 @@ class TwoFactorAuthenticationSuccessHandlerTest {
 		handler.onAuthenticationSuccess(request, response, authentication);
 
 		Assertions.assertThat(response.getRedirectedUrl()).isEqualTo("/login/2fa");
-		Assertions.assertThat(request.getSession().getAttribute(SecurityConstants.PENDING_USERNAME))
-				.isEqualTo("admin");
+		Assertions.assertThat(request.getSession().getAttribute(SecurityConstants.PENDING_USERNAME)).isEqualTo("admin");
 		Assertions.assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
 
 		verify(accountLockService, never()).registerSuccess(any());

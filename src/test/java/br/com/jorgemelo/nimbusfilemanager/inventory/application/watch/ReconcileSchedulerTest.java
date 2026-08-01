@@ -57,9 +57,8 @@ class ReconcileSchedulerTest {
 		scheduler.runOnce();
 
 		verify(organizationReconcileService).reconcileAndApply(any());
-		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER, tempDir.toAbsolutePath()
-				.normalize(),
-				response);
+		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER,
+				tempDir.toAbsolutePath().normalize(), response);
 	}
 
 	/**

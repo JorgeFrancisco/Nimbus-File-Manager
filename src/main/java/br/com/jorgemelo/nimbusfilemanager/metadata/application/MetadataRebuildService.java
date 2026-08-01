@@ -44,16 +44,16 @@ public class MetadataRebuildService {
 	private static final int BATCH_SIZE = 500;
 
 	/**
-	 * Bounded retry: the rebuild batch is idempotent (it re-reads
-	 * every candidate), so an optimistic-lock conflict with a concurrent flow (e.g.
-	 * the inventory watcher) is retried a few times before propagating.
+	 * Bounded retry: the rebuild batch is idempotent (it re-reads every candidate),
+	 * so an optimistic-lock conflict with a concurrent flow (e.g. the inventory
+	 * watcher) is retried a few times before propagating.
 	 */
 	private static final int MAX_BATCH_ATTEMPTS = 3;
 
 	/**
-	 * How many files a dry run opens. Enough for the sample to be representative
-	 * of the folder, small enough that simulating stays a preview instead of
-	 * costing what the run itself costs.
+	 * How many files a dry run opens. Enough for the sample to be representative of
+	 * the folder, small enough that simulating stays a preview instead of costing
+	 * what the run itself costs.
 	 */
 	private static final int PREVIEW_SAMPLE = 50;
 
@@ -78,7 +78,7 @@ public class MetadataRebuildService {
 
 	public MetadataRebuildService(CatalogFileRepository catalogFileRepository, MetadataExtractor metadataExtractor,
 			MediaDateResolver mediaDateResolver, PlatformTransactionManager transactionManager, Clock clock,
-					DateSourceLabels dateSourceLabels) {
+			DateSourceLabels dateSourceLabels) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.metadataExtractor = metadataExtractor;
 		this.mediaDateResolver = mediaDateResolver;
@@ -307,8 +307,8 @@ public class MetadataRebuildService {
 
 		if (media == null) {
 			media = MediaMetadata.builder().catalogFile(catalogFile)
-					.category(FileType.categoryOf(metadata.getFileType()))
-					.subcategory(metadata.getSubcategory()).build();
+					.category(FileType.categoryOf(metadata.getFileType())).subcategory(metadata.getSubcategory())
+					.build();
 
 			catalogFile.setMetadata(media);
 		}

@@ -10,10 +10,10 @@ import java.util.List;
  *
  * <p>
  * The quality knob has a different name and scale on every encoder, so each one
- * carries its own arguments here and nothing else in the application has to know
- * the difference. The hardware entries are declared in the order they are tried:
- * which one a machine can actually use is decided at runtime by probing, never
- * assumed from the card's name or from the encoders ffmpeg lists.
+ * carries its own arguments here and nothing else in the application has to
+ * know the difference. The hardware entries are declared in the order they are
+ * tried: which one a machine can actually use is decided at runtime by probing,
+ * never assumed from the card's name or from the encoders ffmpeg lists.
  */
 public enum VideoEncoder {
 

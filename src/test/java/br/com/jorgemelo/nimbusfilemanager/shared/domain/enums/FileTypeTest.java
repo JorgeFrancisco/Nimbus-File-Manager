@@ -88,8 +88,8 @@ class FileTypeTest {
 	}
 
 	/**
-	 * A media mime is refused in the fallback: the photo and video pipelines key off
-	 * the extension, so a file only sniffed as an image must not enter them.
+	 * A media mime is refused in the fallback: the photo and video pipelines key
+	 * off the extension, so a file only sniffed as an image must not enter them.
 	 */
 	@Test
 	void resolveNeverPromotesAnExtensionlessFileToMedia() {

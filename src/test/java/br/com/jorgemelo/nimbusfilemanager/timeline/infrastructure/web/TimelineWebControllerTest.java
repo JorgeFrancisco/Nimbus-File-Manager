@@ -169,8 +169,7 @@ class TimelineWebControllerTest {
 		when(mediaLocationService.enabled()).thenReturn(false);
 		when(mediaLocationService.pendingCount()).thenReturn(0L);
 		when(userPagePreferenceService.find("bob", "layout")).thenReturn(Map.of());
-		when(userPagePreferenceService.find("bob", "timeline"))
-				.thenReturn(Map.of("subcategories", "CAMERA,WHATSAPP"));
+		when(userPagePreferenceService.find("bob", "timeline")).thenReturn(Map.of("subcategories", "CAMERA,WHATSAPP"));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 

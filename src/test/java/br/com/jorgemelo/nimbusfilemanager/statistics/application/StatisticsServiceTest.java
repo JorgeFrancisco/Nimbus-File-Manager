@@ -73,8 +73,7 @@ class StatisticsServiceTest {
 	 */
 	@Test
 	void codecsShouldCarryMissingFilesApartFromThePresentOnes() {
-		when(statisticsRepository.codecs())
-				.thenReturn(List.of(new CodecStatisticsRawResponse("h264", 0, 1, 0.0, 0)));
+		when(statisticsRepository.codecs()).thenReturn(List.of(new CodecStatisticsRawResponse("h264", 0, 1, 0.0, 0)));
 
 		var codec = service().codecs().getFirst();
 

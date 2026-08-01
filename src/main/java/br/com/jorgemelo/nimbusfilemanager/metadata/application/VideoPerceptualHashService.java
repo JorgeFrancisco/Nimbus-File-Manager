@@ -45,9 +45,8 @@ public class VideoPerceptualHashService {
 	public VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
 			ExternalToolGate externalToolGate, FfmpegVideoFrameProcessRunner processRunner,
 			PhotoPerceptualHashService photoPerceptualHashService) {
-		this(externalToolPaths, videoFrameSampler,
-				(ffmpegPath, file, plan) -> externalToolGate.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME,
-						() -> processRunner.run(ffmpegPath, file, plan)),
+		this(externalToolPaths, videoFrameSampler, (ffmpegPath, file, plan) -> externalToolGate
+				.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME, () -> processRunner.run(ffmpegPath, file, plan)),
 				photoPerceptualHashService);
 	}
 
@@ -111,8 +110,9 @@ public class VideoPerceptualHashService {
 		try {
 			return ffmpegRunner.run(ffmpegPath(), file, plan);
 		} catch (Exception exception) {
-			throw new IllegalStateException("Could not run ffmpeg to sample video frames for file: " + file + ". "
-					+ exception.getMessage(), exception);
+			throw new IllegalStateException(
+					"Could not run ffmpeg to sample video frames for file: " + file + ". " + exception.getMessage(),
+					exception);
 		}
 	}
 

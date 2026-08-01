@@ -94,12 +94,12 @@ class FingerprintBacklogEngine {
 	 * True while an execution the backlog has to step aside for is running.
 	 *
 	 * <p>
-	 * An inventory, because it is about to hand the backlog more work and racing
-	 * it only wastes both. A conversion, because it competes for the very same
-	 * scarce resource - ffmpeg processes and the hardware encoder - on work the
-	 * user is sitting in front of, waiting. Fingerprints have nobody waiting on
-	 * them: stopping costs nothing, since the next run reads what is still pending
-	 * from the database and everything already computed was persisted per batch.
+	 * An inventory, because it is about to hand the backlog more work and racing it
+	 * only wastes both. A conversion, because it competes for the very same scarce
+	 * resource - ffmpeg processes and the hardware encoder - on work the user is
+	 * sitting in front of, waiting. Fingerprints have nobody waiting on them:
+	 * stopping costs nothing, since the next run reads what is still pending from
+	 * the database and everything already computed was persisted per batch.
 	 */
 	public boolean pausedByActiveExecution() {
 		return activeTypeIsOneOf(INVENTORY, CONVERSION);

@@ -26,9 +26,10 @@ class SettingsTemplateTest {
 	}
 
 	/**
-	 * The inventory lock disables the whole Sistema tab, so the screen has to notice
-	 * on its own when the inventory ends: before this it stayed blocked until the
-	 * user reloaded by hand. The flag on the tab is what the poll watches.
+	 * The inventory lock disables the whole Sistema tab, so the screen has to
+	 * notice on its own when the inventory ends: before this it stayed blocked
+	 * until the user reloaded by hand. The flag on the tab is what the poll
+	 * watches.
 	 */
 	@Test
 	void systemTabPublishesTheInventoryLockSoTheScreenUnblocksItself() throws Exception {
@@ -42,8 +43,8 @@ class SettingsTemplateTest {
 
 	/**
 	 * Every control of the rebuild form is locked while a rebuild runs. A control
-	 * that still looks editable promises a change the running pass will not honour -
-	 * it already carries the choices it was started with.
+	 * that still looks editable promises a change the running pass will not honour
+	 * - it already carries the choices it was started with.
 	 */
 	@Test
 	void everyRebuildControlIsDisabledWhileARebuildRuns() throws Exception {

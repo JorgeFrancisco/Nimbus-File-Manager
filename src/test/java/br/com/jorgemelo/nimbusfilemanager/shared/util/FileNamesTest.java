@@ -54,8 +54,7 @@ class FileNamesTest {
 	@Test
 	void treatsALeadingDotAsPartOfTheNameNotAnExtension() {
 		Assertions.assertThat(FileNames.baseName(".gitignore")).isEqualTo(".gitignore");
-		Assertions.assertThat(FileNames.withSuffix(Path.of(".gitignore"), " (2)"))
-				.isEqualTo(Path.of(".gitignore (2)"));
+		Assertions.assertThat(FileNames.withSuffix(Path.of(".gitignore"), " (2)")).isEqualTo(Path.of(".gitignore (2)"));
 	}
 
 	@Test

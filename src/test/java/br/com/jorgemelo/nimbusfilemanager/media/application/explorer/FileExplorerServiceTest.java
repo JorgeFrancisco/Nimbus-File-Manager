@@ -108,8 +108,8 @@ class FileExplorerServiceTest {
 		WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
 
 		FileExplorerView view = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(missing.toString(), "details");
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(missing.toString(),
+						"details");
 
 		Assertions.assertThat(view.exists()).isFalse();
 		Assertions.assertThat(view.entries()).isEmpty();
@@ -166,8 +166,8 @@ class FileExplorerServiceTest {
 		when(repository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of());
 
 		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(folder.toString(), null, 0, 20);
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(folder.toString(),
+						null, 0, 20);
 
 		Assertions.assertThat(view.size()).isEqualTo(20);
 	}
@@ -188,11 +188,10 @@ class FileExplorerServiceTest {
 		when(repository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of());
 
 		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(folder.toString(), null);
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(folder.toString(),
+						null);
 
-		Assertions.assertThat(view.entries()).singleElement().extracting(FileExplorerEntry::fileType)
-				.isEqualTo("FILE");
+		Assertions.assertThat(view.entries()).singleElement().extracting(FileExplorerEntry::fileType).isEqualTo("FILE");
 	}
 
 	@Test
@@ -273,8 +272,8 @@ class FileExplorerServiceTest {
 				.thenReturn(List.of());
 
 		FileExplorerView view = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(folder.toString(), "small", 1, 20);
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(folder.toString(),
+						"small", 1, 20);
 
 		Assertions.assertThat(view.page()).isEqualTo(1);
 		Assertions.assertThat(view.size()).isEqualTo(20);
@@ -418,8 +417,8 @@ class FileExplorerServiceTest {
 				.thenReturn(List.of(location));
 
 		FileExplorerView view = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(folder.toString(), "details");
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(folder.toString(),
+						"details");
 
 		Assertions.assertThat(view.entries()).filteredOn(entry -> entry.name().equals("inventoried.jpg"))
 				.singleElement().extracting(FileExplorerEntry::registered).isEqualTo(true);
@@ -442,8 +441,8 @@ class FileExplorerServiceTest {
 		when(repository.findActiveByCurrentFolder(PathUtils.normalize(folder))).thenReturn(List.of(location));
 
 		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-				.browse(folder.toString(), "large");
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(folder.toString(),
+						"large");
 
 		Assertions.assertThat(view.entries()).singleElement().satisfies(entry -> {
 			Assertions.assertThat(entry.registered()).isTrue();
@@ -476,8 +475,7 @@ class FileExplorerServiceTest {
 		List<String> drives = new FileExplorerService(workspaceManager, catalogFileLocationRepository,
 				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).availableDrives();
 
-		Assertions.assertThat(drives).isNotEmpty()
-				.allSatisfy(drive -> Assertions.assertThat(drive).isNotBlank());
+		Assertions.assertThat(drives).isNotEmpty().allSatisfy(drive -> Assertions.assertThat(drive).isNotBlank());
 	}
 
 	/**
@@ -505,8 +503,8 @@ class FileExplorerServiceTest {
 		when(repository.findActiveByCurrentFolder(PathUtils.normalize(tempDir))).thenReturn(List.of(location));
 
 		FileExplorerView view = new FileExplorerService(mock(WorkspaceManager.class), repository,
-				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class))
-						.browse(file.toString(), "large");
+				mock(ScanExclusionService.class), mock(FileExplorerReconcileService.class)).browse(file.toString(),
+						"large");
 
 		Assertions.assertThat(view.directory()).isFalse();
 		Assertions.assertThat(view.inventoriedCount()).isEqualTo(1);

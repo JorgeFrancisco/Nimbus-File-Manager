@@ -25,9 +25,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "user_page_preference", uniqueConstraints = @UniqueConstraint(name = "uk_user_page_preference",
-		columnNames = {
-		"user_id", "page_key", "preference_key" }))
+@Table(name = "user_page_preference",
+		uniqueConstraints = @UniqueConstraint(name = "uk_user_page_preference",
+				columnNames = { "user_id", "page_key", "preference_key" }))
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class UserPagePreference {
 
@@ -37,9 +37,9 @@ public class UserPagePreference {
 	private Long id;
 
 	/**
-	 * Owner: live data that belongs to a user, referenced by the
-	 * stable app_user id (FK in the database, ON DELETE CASCADE) instead of the
-	 * former username snapshot - so renaming a user never orphans their prefs.
+	 * Owner: live data that belongs to a user, referenced by the stable app_user id
+	 * (FK in the database, ON DELETE CASCADE) instead of the former username
+	 * snapshot - so renaming a user never orphans their prefs.
 	 */
 	@Column(name = "user_id", nullable = false)
 	private Long userId;

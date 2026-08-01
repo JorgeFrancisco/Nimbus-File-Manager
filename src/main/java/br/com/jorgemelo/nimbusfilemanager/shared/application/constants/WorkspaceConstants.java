@@ -15,8 +15,8 @@ public final class WorkspaceConstants {
 	public static final String WORKSPACE_ENVIRONMENT_VARIABLE = "NIMBUS_FILE_MANAGER_WORKSPACE";
 
 	/**
-	 * Set by the launcher of a jpackage image and by nothing else, which is how
-	 * the application tells an installation from a build.
+	 * Set by the launcher of a jpackage image and by nothing else, which is how the
+	 * application tells an installation from a build.
 	 */
 	public static final String INSTALLED_MARKER = "jpackage.app-path";
 

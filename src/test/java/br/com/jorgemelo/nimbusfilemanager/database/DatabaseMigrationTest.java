@@ -47,8 +47,8 @@ class DatabaseMigrationTest {
 	 */
 	@Test
 	void executionErrorCarriesItsNewNameThroughConstraintsAndIndexes() throws Exception {
-		String rename = Files
-				.readString(Path.of("src/main/resources/db/migration/V5__rename_analysis_error_to_execution_error.sql"));
+		String rename = Files.readString(
+				Path.of("src/main/resources/db/migration/V5__rename_analysis_error_to_execution_error.sql"));
 
 		Assertions.assertThat(rename).contains("ALTER TABLE analysis_error RENAME TO execution_error",
 				"RENAME CONSTRAINT uk_analysis_error_public_id TO uk_execution_error_public_id",
@@ -82,18 +82,19 @@ class DatabaseMigrationTest {
 		Assertions.assertThat(migration).contains("ix_catalog_file_location_current_path",
 				"ix_catalog_file_location_lower_current_path", "ix_catalog_file_location_lower_current_folder",
 				"ix_catalog_file_lifecycle_sha256_size", "ix_catalog_file_lifecycle_id",
-						"ix_catalog_file_lower_extension",
-				"ix_media_metadata_rebuild_filters", "ix_video_upper_trim_video_codec",
-				"ix_analysis_error_execution_created", "ix_analysis_error_type_path_created",
-				"ix_analysis_error_lower_path", "ix_execution_finished_status", "ix_execution_step_execution_created");
+				"ix_catalog_file_lower_extension", "ix_media_metadata_rebuild_filters",
+				"ix_video_upper_trim_video_codec", "ix_analysis_error_execution_created",
+				"ix_analysis_error_type_path_created", "ix_analysis_error_lower_path", "ix_execution_finished_status",
+				"ix_execution_step_execution_created");
 	}
 
 	@Test
 	void shouldStoreCoordinatesAndFloatsAsDoublePrecision() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		Assertions.assertThat(migration).contains("latitude DOUBLE PRECISION", "longitude DOUBLE PRECISION",
-				"fps DOUBLE PRECISION", "duration_seconds DOUBLE PRECISION")
+		Assertions.assertThat(migration)
+				.contains("latitude DOUBLE PRECISION", "longitude DOUBLE PRECISION", "fps DOUBLE PRECISION",
+						"duration_seconds DOUBLE PRECISION")
 				.doesNotContain("latitude REAL", "longitude REAL", "fps REAL", "duration_seconds REAL");
 	}
 
@@ -101,8 +102,9 @@ class DatabaseMigrationTest {
 	void shouldModelCatalogFileLocationAsOneToOneSharingCatalogFileId() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		Assertions.assertThat(migration).contains("CREATE TABLE catalog_file_location (",
-				"catalog_file_id BIGINT PRIMARY KEY", "fk_catalog_file_location_file")
+		Assertions
+				.assertThat(migration).contains("CREATE TABLE catalog_file_location (",
+						"catalog_file_id BIGINT PRIMARY KEY", "fk_catalog_file_location_file")
 				.doesNotContain("CREATE TABLE media_location (");
 	}
 
@@ -121,8 +123,8 @@ class DatabaseMigrationTest {
 
 		// unique constraints all use uk_ (the majority prefix); the
 		// former uq_ on the fingerprint tables was aligned.
-		Assertions.assertThat(migration).doesNotContain("CONSTRAINT uq_", " uq_")
-				.contains("uk_media_fingerprint", "uk_fingerprint_failure");
+		Assertions.assertThat(migration).doesNotContain("CONSTRAINT uq_", " uq_").contains("uk_media_fingerprint",
+				"uk_fingerprint_failure");
 	}
 
 	@Test
@@ -152,8 +154,9 @@ class DatabaseMigrationTest {
 	void shouldModelLifecycleStatusWithCheckConstraintAndNoBooleans() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		Assertions.assertThat(migration).contains("lifecycle_status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE'",
-				"ck_catalog_file_lifecycle_status", "CHECK (lifecycle_status IN ('ACTIVE', 'MISSING', 'DELETED'))")
+		Assertions.assertThat(migration)
+				.contains("lifecycle_status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE'", "ck_catalog_file_lifecycle_status",
+						"CHECK (lifecycle_status IN ('ACTIVE', 'MISSING', 'DELETED'))")
 				.doesNotContain("exists_flag BOOLEAN", "deleted BOOLEAN");
 	}
 
@@ -206,11 +209,12 @@ class DatabaseMigrationTest {
 	void shouldCreateSpringBatchJobRepositoryTables() throws Exception {
 		String migration = Files.readString(MIGRATION);
 
-		Assertions.assertThat(migration).contains("CREATE TABLE BATCH_JOB_INSTANCE", "CREATE TABLE BATCH_JOB_EXECUTION",
-				"CREATE TABLE BATCH_JOB_EXECUTION_PARAMS", "CREATE TABLE BATCH_STEP_EXECUTION",
-				"CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT", "CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT",
-				"CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ", "CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ",
-				"CREATE SEQUENCE BATCH_JOB_SEQ")
+		Assertions.assertThat(migration)
+				.contains("CREATE TABLE BATCH_JOB_INSTANCE", "CREATE TABLE BATCH_JOB_EXECUTION",
+						"CREATE TABLE BATCH_JOB_EXECUTION_PARAMS", "CREATE TABLE BATCH_STEP_EXECUTION",
+						"CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT", "CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT",
+						"CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ", "CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ",
+						"CREATE SEQUENCE BATCH_JOB_SEQ")
 				.doesNotContain("BATCH_JOB_INSTANCE_SEQ");
 	}
 
@@ -230,8 +234,7 @@ class DatabaseMigrationTest {
 		Assertions.assertThat(migration)
 				.contains("ix_timeline_capture_date_file", "media_metadata(capture_date DESC, catalog_file_id DESC)",
 						"WHERE capture_date IS NOT NULL", "ix_timeline_active_visual_file",
-								"catalog_file(file_type, id)",
-						"lifecycle_status = 'ACTIVE'", "file_type IN ('PHOTO', 'VIDEO')")
+						"catalog_file(file_type, id)", "lifecycle_status = 'ACTIVE'", "file_type IN ('PHOTO', 'VIDEO')")
 				.doesNotContain("CREATE INDEX CONCURRENTLY", "DROP INDEX", "DROP TABLE");
 	}
 }

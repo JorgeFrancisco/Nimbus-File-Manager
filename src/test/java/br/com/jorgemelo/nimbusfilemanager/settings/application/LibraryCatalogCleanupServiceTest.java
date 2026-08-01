@@ -63,10 +63,10 @@ class LibraryCatalogCleanupServiceTest {
 	}
 
 	/**
-	 * The only routine in the application that empties a workspace subtree. What
-	 * it is pointed at today is built from constants, but a cluster inside the
-	 * tree has to stop it regardless - the catalog is the one thing under the
-	 * workspace that no rebuild brings back.
+	 * The only routine in the application that empties a workspace subtree. What it
+	 * is pointed at today is built from constants, but a cluster inside the tree
+	 * has to stop it regardless - the catalog is the one thing under the workspace
+	 * that no rebuild brings back.
 	 */
 	@Test
 	void clearShouldRefuseToWipeATreeHoldingTheDatabaseCluster() throws Exception {

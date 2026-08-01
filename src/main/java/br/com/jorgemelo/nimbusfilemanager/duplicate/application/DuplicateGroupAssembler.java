@@ -53,7 +53,7 @@ public class DuplicateGroupAssembler {
 	 * deletion candidates and the review candidates, plus the recoverable bytes.
 	 *
 	 * @param exactGroup {@code true} for byte-identical (SHA-256) groups,
-	 *                   {@code false} for similar-photo groups
+	 * {@code false} for similar-photo groups
 	 */
 	GroupParts assemble(List<DuplicateFileResponse> files, Map<UUID, MediaQuality> quality, boolean exactGroup) {
 		List<Signals> signals = files.stream().map(file -> toSignals(file, quality.get(file.id()))).toList();

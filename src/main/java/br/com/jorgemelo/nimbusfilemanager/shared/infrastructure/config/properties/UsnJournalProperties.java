@@ -14,13 +14,12 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * app_setting) because the source is selected before the settings screen is
  * reachable.
  *
- * @param enabled         whether the USN source may be used when the platform
- *                        supports it (default true).
+ * @param enabled whether the USN source may be used when the platform supports
+ * it (default true).
  * @param readBufferBytes size of the buffer handed to
- *                        {@code FSCTL_READ_USN_JOURNAL} per read (default 64
- *                        KiB); larger drains more records per call.
+ * {@code FSCTL_READ_USN_JOURNAL} per read (default 64 KiB); larger drains more
+ * records per call.
  */
 @ConfigurationProperties(prefix = "nimbus-file-manager.inventory.usn")
-public record UsnJournalProperties(@DefaultValue("true") boolean enabled,
-		@DefaultValue("65536") int readBufferBytes) {
+public record UsnJournalProperties(@DefaultValue("true") boolean enabled, @DefaultValue("65536") int readBufferBytes) {
 }

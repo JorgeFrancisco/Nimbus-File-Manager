@@ -94,7 +94,7 @@ class ExecutionQueryServiceTest {
 
 		when(executionRepository
 				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.IN_PROGRESS))
-				.thenReturn(Optional.of(execution));
+						.thenReturn(Optional.of(execution));
 
 		Assertions.assertThat(service().active()).get().extracting(ExecutionResponse::executionId)
 				.isEqualTo(UuidV7.fromLegacy(1L));

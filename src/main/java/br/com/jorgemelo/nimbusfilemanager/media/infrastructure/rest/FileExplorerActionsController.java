@@ -26,10 +26,10 @@ import io.swagger.v3.oas.annotations.Operation;
  * that renders the explorer stays in {@code infrastructure/web}.
  *
  * <p>
- * Restricted to ADMIN in {@code SecurityConfig} alongside the other
- * operational APIs - these three write to the user's own disk. A refused action
- * answers {@code success=false} carrying the reason already localized: the
- * screen shows the sentence it is handed and never composes one.
+ * Restricted to ADMIN in {@code SecurityConfig} alongside the other operational
+ * APIs - these three write to the user's own disk. A refused action answers
+ * {@code success=false} carrying the reason already localized: the screen shows
+ * the sentence it is handed and never composes one.
  */
 @RestController
 @RequestMapping("/api/files")

@@ -65,7 +65,7 @@ class ExternalToolInstallerTest {
 
 	/**
 	 * @param entries names inside the archive; each gets its own name as content so
-	 *                a misplaced file is visible in the assertion.
+	 * a misplaced file is visible in the assertion.
 	 */
 	private Path archive(Path folder, List<String> entries) throws IOException {
 		Path archive = folder.resolve("build.zip");
@@ -111,8 +111,8 @@ class ExternalToolInstallerTest {
 	void leavesBehindWhatTheApplicationNeverCalls(@TempDir Path temp) throws IOException {
 		Path tools = temp.resolve("bin");
 
-		Path archive = archive(temp, List.of(ROOT + "bin/ffmpeg.exe", ROOT + "bin/ffprobe.exe",
-				ROOT + "bin/ffplay.exe", ROOT + "include/libavutil/avutil.h", ROOT + "doc/ffmpeg.html"));
+		Path archive = archive(temp, List.of(ROOT + "bin/ffmpeg.exe", ROOT + "bin/ffprobe.exe", ROOT + "bin/ffplay.exe",
+				ROOT + "include/libavutil/avutil.h", ROOT + "doc/ffmpeg.html"));
 
 		installer(tools, archive).install();
 

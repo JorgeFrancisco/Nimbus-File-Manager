@@ -28,12 +28,12 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
  * <p>
  * An advice instead of a dependency of the settings controller for two reasons:
  * that constructor is already at the seven-parameter limit, and this way the
- * settings domain does not have to know the metadata one - the panel's read side
- * stays in the domain that owns it, which is the direction the geolocation panel
- * would take if it were written today. Bound to the rendering controller rather
- * than to its package, because the folder browser sits in the same package and
- * is a {@code @RestController}: it would pay for the preference lookup on every
- * folder it lists and never use the result.
+ * settings domain does not have to know the metadata one - the panel's read
+ * side stays in the domain that owns it, which is the direction the geolocation
+ * panel would take if it were written today. Bound to the rendering controller
+ * rather than to its package, because the folder browser sits in the same
+ * package and is a {@code @RestController}: it would pay for the preference
+ * lookup on every folder it lists and never use the result.
  */
 @ControllerAdvice(assignableTypes = SettingsWebController.class)
 public class MetadataRebuildSettingsAdvice {
@@ -42,8 +42,8 @@ public class MetadataRebuildSettingsAdvice {
 	 * ALL is left out of the form: it means the same as ticking every box, so
 	 * offering both would let the admin pick two spellings of one choice.
 	 */
-	private static final List<MetadataRebuildField> SELECTABLE_FIELDS = Arrays
-			.stream(MetadataRebuildField.values()).filter(field -> field != MetadataRebuildField.ALL).toList();
+	private static final List<MetadataRebuildField> SELECTABLE_FIELDS = Arrays.stream(MetadataRebuildField.values())
+			.filter(field -> field != MetadataRebuildField.ALL).toList();
 
 	private final MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
 	private final UserPagePreferenceService userPagePreferenceService;
@@ -77,8 +77,10 @@ public class MetadataRebuildSettingsAdvice {
 		model.addAttribute("metadataRebuildLimit", MetadataRebuildRequest.MAX_LIMIT);
 		model.addAttribute("metadataRebuildScopes", MetadataRebuildScope.values());
 		model.addAttribute("metadataRebuildScope",
-				EnumUtils.valueOfOrDefault(MetadataRebuildScope.class,
-						preferences.get(MetadataRebuildPreferences.SCOPE_KEY), MetadataRebuildScope.CONTINUE).name());
+				EnumUtils
+						.valueOfOrDefault(MetadataRebuildScope.class,
+								preferences.get(MetadataRebuildPreferences.SCOPE_KEY), MetadataRebuildScope.CONTINUE)
+						.name());
 		model.addAttribute("metadataRebuildLastRunAt",
 				lastRunAt(preferences.get(MetadataRebuildPreferences.LAST_RUN_KEY)));
 	}

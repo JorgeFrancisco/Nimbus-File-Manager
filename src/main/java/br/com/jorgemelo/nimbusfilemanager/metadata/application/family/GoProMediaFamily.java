@@ -10,8 +10,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
- * GoPro output ({@code GOPR/GH/GX} prefixes or the {@link #BURST} sequence) or a
- * GoPro folder. Subcategory-only family; capture date falls to the
+ * GoPro output ({@code GOPR/GH/GX} prefixes or the {@link #BURST} sequence) or
+ * a GoPro folder. Subcategory-only family; capture date falls to the
  * generic/dashed date families.
  */
 @Component

@@ -2,9 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums;
 
 /**
  * The quality profiles offered on the Conversão screen. The encoder knobs (CRF,
- * preset and which encoder to use) live here and are never shown to or chosen by
- * the user: the screen offers "alta qualidade", "equilibrado" and "rápido", and
- * this enum is the single place that says what those mean in encoder terms.
+ * preset and which encoder to use) live here and are never shown to or chosen
+ * by the user: the screen offers "alta qualidade", "equilibrado" and "rápido",
+ * and this enum is the single place that says what those mean in encoder terms.
  */
 public enum ConversionQuality {
 
@@ -24,10 +24,10 @@ public enum ConversionQuality {
 	FAST_BALANCED(true, 22);
 
 	/**
-	 * The x265 preset every profile encodes with: the balance point between encoding
-	 * time and compression. A slower preset buys a few percent of size for several
-	 * times the time, which a whole-library batch cannot afford. The hardware
-	 * encoders ignore it - their speed is fixed in silicon.
+	 * The x265 preset every profile encodes with: the balance point between
+	 * encoding time and compression. A slower preset buys a few percent of size for
+	 * several times the time, which a whole-library batch cannot afford. The
+	 * hardware encoders ignore it - their speed is fixed in silicon.
 	 */
 	public static final String PRESET = "medium";
 
@@ -65,8 +65,8 @@ public enum ConversionQuality {
 
 	/**
 	 * The software profile of the same quality level, which is what a hardware
-	 * attempt falls back to when the GPU refuses a file. Falling back to a different
-	 * quality than the user picked would silently change the result.
+	 * attempt falls back to when the GPU refuses a file. Falling back to a
+	 * different quality than the user picked would silently change the result.
 	 */
 	public ConversionQuality softwareEquivalent() {
 		return switch (this) {

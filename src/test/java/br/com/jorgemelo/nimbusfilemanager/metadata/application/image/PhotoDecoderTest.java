@@ -28,8 +28,8 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.OrientationSourc
 /**
  * Fixture-free unit tests for {@link PhotoDecoder}. Every input image is
  * generated at runtime with {@code ImageIO.write} so nothing here depends on
- * ffmpeg or a committed binary. WEBP-specific behaviour (needs the
- * plugin + real webp bytes) is covered separately by the fixture-backed tests.
+ * ffmpeg or a committed binary. WEBP-specific behaviour (needs the plugin +
+ * real webp bytes) is covered separately by the fixture-backed tests.
  */
 class PhotoDecoderTest {
 
@@ -188,8 +188,8 @@ class PhotoDecoderTest {
 	}
 
 	/**
-	 * EXIF is user data and holds anything: the unspecified orientation 0 must leave
-	 * the image as it is, never rotate it by guess or fail.
+	 * EXIF is user data and holds anything: the unspecified orientation 0 must
+	 * leave the image as it is, never rotate it by guess or fail.
 	 */
 	@Test
 	void anUnknownOrientationLeavesTheImageUnrotated() {

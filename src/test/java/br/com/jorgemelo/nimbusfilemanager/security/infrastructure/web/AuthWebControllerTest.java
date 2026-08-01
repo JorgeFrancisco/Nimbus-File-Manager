@@ -101,8 +101,7 @@ class AuthWebControllerTest {
 		String view = controller.verifyTwoFactor("123456", request, new ExtendedModelMap());
 
 		Assertions.assertThat(view).isEqualTo("redirect:/login?locked");
-		Assertions.assertThat(request.getSession().getAttribute(SecurityConstants.PENDING_USERNAME))
-				.isNull();
+		Assertions.assertThat(request.getSession().getAttribute(SecurityConstants.PENDING_USERNAME)).isNull();
 		verify(appUserDetailsService, never()).loadUserByUsername(any());
 	}
 

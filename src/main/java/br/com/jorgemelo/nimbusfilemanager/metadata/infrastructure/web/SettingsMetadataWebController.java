@@ -25,9 +25,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
 /**
  * Starts the metadata rebuild from the settings page. The rebuild runs in the
- * background and the panel polls its progress, because a library-wide pass takes
- * far longer than a request should be held open - the REST endpoint of the same
- * service stays synchronous for scripted use.
+ * background and the panel polls its progress, because a library-wide pass
+ * takes far longer than a request should be held open - the REST endpoint of
+ * the same service stays synchronous for scripted use.
  */
 @Controller
 public class SettingsMetadataWebController extends LocalizedComponent {
@@ -49,8 +49,8 @@ public class SettingsMetadataWebController extends LocalizedComponent {
 	/**
 	 * Explicit parameters instead of binding the request record straight from the
 	 * form: an unticked checkbox sends no parameter at all, and the record declares
-	 * {@code dryRun} as a primitive, so constructor binding rejected the post with a
-	 * 400 whenever "simulate" was left off.
+	 * {@code dryRun} as a primitive, so constructor binding rejected the post with
+	 * a 400 whenever "simulate" was left off.
 	 */
 	@PostMapping("/app/settings/metadata/rebuild")
 	public String rebuildMetadata(@RequestParam(required = false) String sourcePath,

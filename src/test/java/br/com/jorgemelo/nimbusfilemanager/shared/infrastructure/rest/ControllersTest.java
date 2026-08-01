@@ -133,8 +133,8 @@ class ControllersTest {
 				.thenReturn(new PageImpl<>(List.of()));
 
 		new MetadataController(metadataRebuildService).rebuild(metadataRequest);
-		new MediaController(mediaSearchService).search(
-				new MediaSearchCriteria(FileType.PHOTO, "h264", "folder", "jpg", 2024, 5, 1L, 10L), pageable);
+		new MediaController(mediaSearchService)
+				.search(new MediaSearchCriteria(FileType.PHOTO, "h264", "folder", "jpg", 2024, 5, 1L, 10L), pageable);
 
 		DuplicateController duplicateController = new DuplicateController(duplicateService, photoSimilarityService,
 				phashBacklogService, videoSimilarityService, videoFingerprintBacklogService,
@@ -221,8 +221,8 @@ class ControllersTest {
 	 * A parameter in the wrong shape is the caller's mistake: 400 with the generic
 	 * message, never the 500-with-stack-trace the generic handler produces. A page
 	 * that built {@code ?w=null} for every thumbnail once filled the log with
-	 * identical stacks at ERROR, which is the level reserved for what actually needs
-	 * investigating.
+	 * identical stacks at ERROR, which is the level reserved for what actually
+	 * needs investigating.
 	 */
 	@Test
 	void aParameterOfTheWrongTypeShouldBeRejectedAsABadRequest() {

@@ -7,10 +7,9 @@ package br.com.jorgemelo.nimbusfilemanager.conversion.application.dto;
  * instead of as three more booleans on a record that already carried a dozen
  * fields.
  *
- * @param audioFallback    the original audio stream was re-encoded to AAC.
+ * @param audioFallback the original audio stream was re-encoded to AAC.
  * @param subtitlesDropped an image-based subtitle track was left behind.
- * @param dataDropped      the camera's telemetry or timecode track was left
- *                         behind.
+ * @param dataDropped the camera's telemetry or timecode track was left behind.
  */
 public record ConversionAdjustments(boolean audioFallback, boolean subtitlesDropped, boolean dataDropped) {
 

@@ -16,10 +16,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
  * property everything else reads.
  *
  * <p>
- * An {@code EnvironmentPostProcessor} rather than a line in
- * {@code main}: this runs for every context - a test slice included - and
- * before Logback is configured, which is the only window where the value can
- * still reach the log file's own path. Deciding it in {@code main} left every
+ * An {@code EnvironmentPostProcessor} rather than a line in {@code main}: this
+ * runs for every context - a test slice included - and before Logback is
+ * configured, which is the only window where the value can still reach the log
+ * file's own path. Deciding it in {@code main} left every
  * {@code @SpringBootTest} without a workspace at all.
  *
  * <p>
@@ -37,7 +37,6 @@ public class WorkspaceEnvironmentPostProcessor implements EnvironmentPostProcess
 		}
 
 		environment.getPropertySources()
-				.addLast(new MapPropertySource(SOURCE_NAME,
-						Map.of(WORKSPACE_PROPERTY, WorkspaceLocation.resolve())));
+				.addLast(new MapPropertySource(SOURCE_NAME, Map.of(WORKSPACE_PROPERTY, WorkspaceLocation.resolve())));
 	}
 }

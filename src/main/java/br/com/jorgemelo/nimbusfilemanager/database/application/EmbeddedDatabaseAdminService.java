@@ -47,9 +47,8 @@ public class EmbeddedDatabaseAdminService {
 
 	/**
 	 * @param serving whether the running application is being served by the
-	 *                embedded cluster rather than by a database configured by
-	 *                hand - which is also what decides whether an install now
-	 *                would have to wait for the next start
+	 * embedded cluster rather than by a database configured by hand - which is also
+	 * what decides whether an install now would have to wait for the next start
 	 */
 	public EmbeddedDatabaseStatus status(boolean serving) {
 		return new EmbeddedDatabaseStatus(layout.binariesPresent(), serving, installedVersion(), directory(),
@@ -60,10 +59,10 @@ public class EmbeddedDatabaseAdminService {
 	 * Fetches or replaces the server.
 	 *
 	 * <p>
-	 * Nothing here refuses to run while the cluster is up, because on Windows
-	 * the executables in use simply cannot be overwritten and the copy fails on
-	 * its own. What the screen has to say instead is that whatever was replaced
-	 * only takes effect on the next start.
+	 * Nothing here refuses to run while the cluster is up, because on Windows the
+	 * executables in use simply cannot be overwritten and the copy fails on its
+	 * own. What the screen has to say instead is that whatever was replaced only
+	 * takes effect on the next start.
 	 */
 	public boolean install() {
 		return installable() && new EmbeddedDatabaseInstaller(layout, archiveSource).install();
@@ -77,9 +76,9 @@ public class EmbeddedDatabaseAdminService {
 
 	/**
 	 * The version the installed binaries were built for, taken from the pinned
-	 * constant rather than by running {@code postgres --version}: the build
-	 * already decided which major version it opens, and spawning a process to
-	 * ask would only add a way for the two to disagree.
+	 * constant rather than by running {@code postgres --version}: the build already
+	 * decided which major version it opens, and spawning a process to ask would
+	 * only add a way for the two to disagree.
 	 */
 	private String installedVersion() {
 		return layout.binariesPresent() ? SUPPORTED_MAJOR_VERSION : null;

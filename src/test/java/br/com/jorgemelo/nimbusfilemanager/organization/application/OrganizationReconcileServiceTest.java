@@ -73,12 +73,11 @@ class OrganizationReconcileServiceTest {
 		Path oldPath = source.resolve("old-name.jpg");
 		Path newPath = Files.writeString(source.resolve("new-name.jpg"), "hello");
 
-		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024,
-				Month.JANUARY, 1, 10, 0));
+		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a",
+				LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0));
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, oldPath, oldPath)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldPath, oldPath)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(fileHashService.hashes(newPath.toAbsolutePath().normalize())).thenReturn(new FileHashes("sha-a", "md5-a"));
 
@@ -99,12 +98,11 @@ class OrganizationReconcileServiceTest {
 
 		Files.writeString(source.resolve("unrelated.jpg"), "a much longer content than the original");
 
-		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a", LocalDateTime.of(2024,
-				Month.JANUARY, 1, 10, 0));
+		CatalogFile catalogFile = catalogFileWithLocation(1L, oldPath, 5L, "sha-a",
+				LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0));
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, oldPath, oldPath)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldPath, oldPath)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 
 		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
@@ -126,9 +124,8 @@ class OrganizationReconcileServiceTest {
 		CatalogFile catalogFileA = catalogFileWithLocation(1L, oldA, 0L, "sha-empty", null);
 		CatalogFile catalogFileB = catalogFileWithLocation(2L, oldB, 0L, "sha-empty", null);
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L)))
 				.thenReturn(List.of(catalogFileA, catalogFileB));
 		when(fileHashService.hashes(any())).thenReturn(new FileHashes("sha-empty", "md5-empty"));
@@ -155,9 +152,8 @@ class OrganizationReconcileServiceTest {
 		CatalogFile catalogFileA = catalogFileWithLocation(1L, oldA, 0L, "sha-empty", createdAtA);
 		CatalogFile catalogFileB = catalogFileWithLocation(2L, oldB, 0L, "sha-empty", createdAtB);
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldA, oldA), row(2L, oldB, oldB)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L)))
 				.thenReturn(List.of(catalogFileA, catalogFileB));
 		when(fileHashService.hashes(any())).thenReturn(new FileHashes("sha-empty", "md5-empty"));
@@ -182,15 +178,13 @@ class OrganizationReconcileServiceTest {
 
 		// catalog_file 3: file_key already points at the real (moved) file on disk, but
 		// current_path still lags on the stale phantom path that no longer exists.
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(3L, organized, phantom)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(3L, organized, phantom)));
 		// Different size -> rename detection cannot content-match, so the
 		// file_key-based
 		// repair (not the rename merge) is what must fix it.
-		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(3L))).thenReturn(
-				List.of(catalogFileWithLocation(3L, phantom, 5L, "sha-x", LocalDateTime.of(2024, Month.JANUARY, 1, 10,
-						0))));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(3L))).thenReturn(List.of(
+				catalogFileWithLocation(3L, phantom, 5L, "sha-x", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0))));
 
 		CatalogFileLocation location = catalogFileWithLocation(3L, phantom, 5L, "sha-x",
 				LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0)).getLocation();
@@ -211,10 +205,10 @@ class OrganizationReconcileServiceTest {
 		Path onlyDisk = Files.writeString(source.resolve("only-disk.jpg"), "disk");
 		Path missingDisk = source.resolve("missing.jpg");
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, ok, ok), row(2L, missingDisk, missingDisk),
-						row(3L, source.resolve("different-key.jpg"), ok)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class)))
+						.thenReturn(List.of(row(1L, ok, ok), row(2L, missingDisk, missingDisk),
+								row(3L, source.resolve("different-key.jpg"), ok)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -243,8 +237,8 @@ class OrganizationReconcileServiceTest {
 
 		CatalogFile catalogFile = catalogFileWithLocation(8L, stale, 7L, "sha", null);
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class))).thenReturn(List.of(row(8L, moved, stale)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(8L, moved, stale)));
 		when(catalogFileLocationRepository.findById(8L)).thenReturn(Optional.of(catalogFile.getLocation()));
 
 		service().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
@@ -268,8 +262,8 @@ class OrganizationReconcileServiceTest {
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), false, false, 10));
 
 		Assertions.assertThat(response.filesOnDisk()).isEqualTo(1);
-		Assertions.assertThat(response.missingInDatabaseSamples()).singleElement().satisfies(sample -> Assertions
-				.assertThat(sample.path()).endsWith("top.jpg"));
+		Assertions.assertThat(response.missingInDatabaseSamples()).singleElement()
+				.satisfies(sample -> Assertions.assertThat(sample.path()).endsWith("top.jpg"));
 	}
 
 	@Test
@@ -278,9 +272,9 @@ class OrganizationReconcileServiceTest {
 		Path missingA = source.resolve("a.jpg");
 		Path missingB = source.resolve("b.jpg");
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, missingA, missingA), row(2L, missingB, missingB)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class)))
+						.thenReturn(List.of(row(1L, missingA, missingA), row(2L, missingB, missingB)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 1));
 
@@ -303,9 +297,9 @@ class OrganizationReconcileServiceTest {
 			return root.toAbsolutePath().normalize().equals(source.toAbsolutePath().normalize())
 					&& candidate.toAbsolutePath().normalize().startsWith(git.toAbsolutePath().normalize());
 		});
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class))).thenReturn(
-						List.of(row(1L, visible, visible), row(2L, ignoredDatabase, ignoredDatabase)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class)))
+						.thenReturn(List.of(row(1L, visible, visible), row(2L, ignoredDatabase, ignoredDatabase)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -323,9 +317,8 @@ class OrganizationReconcileServiceTest {
 		Files.writeString(hidden.resolve("inside.jpg"), "hidden");
 		markHidden(hidden);
 
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, visible, visible)));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, visible, visible)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -340,12 +333,11 @@ class OrganizationReconcileServiceTest {
 		Path quarantine = Files.createDirectory(source.resolve("quarantine"));
 		Files.writeString(quarantine.resolve("dupe.jpg"), "dupe");
 
-		when(scanExclusionService.isWithinQuarantine(any(Path.class))).thenAnswer(invocation -> invocation
-				.getArgument(0, Path.class).toAbsolutePath().normalize()
-				.startsWith(quarantine.toAbsolutePath().normalize()));
-		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()),
-				any(), eq(0L), any(Limit.class)))
-				.thenReturn(List.of(row(1L, visible, visible)));
+		when(scanExclusionService.isWithinQuarantine(any(Path.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0, Path.class).toAbsolutePath().normalize()
+						.startsWith(quarantine.toAbsolutePath().normalize()));
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, visible, visible)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
@@ -373,8 +365,8 @@ class OrganizationReconcileServiceTest {
 
 		OrganizationReconcileRequest fileRequest = request(file);
 
-		Assertions.assertThatThrownBy(() -> service.reconcile(fileRequest))
-				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("not a directory");
+		Assertions.assertThatThrownBy(() -> service.reconcile(fileRequest)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("not a directory");
 
 		Mockito.verifyNoInteractions(catalogFileLocationRepository);
 	}
@@ -440,8 +432,7 @@ class OrganizationReconcileServiceTest {
 
 	private OrganizationReconcileService service() {
 		return new OrganizationReconcileService(catalogFileLocationRepository, scanExclusionService,
-				operationLockService,
-				applier());
+				operationLockService, applier());
 	}
 
 	private OrganizationReconcileService serviceWithRename() {
@@ -449,9 +440,10 @@ class OrganizationReconcileServiceTest {
 	}
 
 	private ReconcileApplier applier() {
-		return new ReconcileApplier(new OrganizationRenameDetectionService(catalogFileRepository, fileHashService,
-				dateSourceService, Clock.systemDefaultZone()), catalogFileLocationRepository, catalogFileRepository,
-				Clock.systemDefaultZone());
+		return new ReconcileApplier(
+				new OrganizationRenameDetectionService(catalogFileRepository, fileHashService, dateSourceService,
+						Clock.systemDefaultZone()),
+				catalogFileLocationRepository, catalogFileRepository, Clock.systemDefaultZone());
 	}
 
 	private CatalogFile catalogFileWithLocation(Long id, Path currentPath, long sizeBytes, String sha256,
@@ -465,9 +457,8 @@ class OrganizationReconcileServiceTest {
 				.fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(normalizedPath)
-				.currentFolder(normalizedFolder).originalPath(normalizedPath).originalFolder(normalizedFolder)
-				.updatedAt(LocalDateTime.now()).build();
+				.currentPath(normalizedPath).currentFolder(normalizedFolder).originalPath(normalizedPath)
+				.originalFolder(normalizedFolder).updatedAt(LocalDateTime.now()).build();
 
 		catalogFile.setLocation(location);
 

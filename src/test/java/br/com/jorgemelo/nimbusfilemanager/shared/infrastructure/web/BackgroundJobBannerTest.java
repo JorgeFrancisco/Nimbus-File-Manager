@@ -26,8 +26,8 @@ class BackgroundJobBannerTest {
 	}
 
 	/**
-	 * The backlogs start on their own - after an inventory, after a conversion -
-	 * so the banner has to appear without a reload, unlike the execution one.
+	 * The backlogs start on their own - after an inventory, after a conversion - so
+	 * the banner has to appear without a reload, unlike the execution one.
 	 */
 	@Test
 	void theBannerPollsEvenWhileNothingIsRunning() throws Exception {

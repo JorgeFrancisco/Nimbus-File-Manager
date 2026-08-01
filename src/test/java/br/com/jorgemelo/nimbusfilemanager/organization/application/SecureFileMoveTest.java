@@ -105,8 +105,8 @@ class SecureFileMoveTest {
 
 	/**
 	 * The other half of the same incident: in both cases the encoded video was
-	 * still sitting under its temporary name after a move that reported success.
-	 * A source that survives its own move is the fact the investigations lacked.
+	 * still sitting under its temporary name after a move that reported success. A
+	 * source that survives its own move is the fact the investigations lacked.
 	 */
 	@Test
 	void warnsWhenTheSourceIsStillThereOnceTheMoveReturned(@TempDir Path dir) throws IOException {
@@ -119,8 +119,8 @@ class SecureFileMoveTest {
 
 		List<ILoggingEvent> events = logsWhileMoving(source, target);
 
-		assertThat(events).anyMatch(event -> event.getLevel() == Level.WARN
-				&& event.getFormattedMessage().contains("stillThere=true"));
+		assertThat(events).anyMatch(
+				event -> event.getLevel() == Level.WARN && event.getFormattedMessage().contains("stillThere=true"));
 	}
 
 	/** A move that landed says nothing: the check is silent when all is well. */

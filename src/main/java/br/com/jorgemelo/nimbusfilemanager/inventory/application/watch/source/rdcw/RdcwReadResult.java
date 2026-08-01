@@ -9,9 +9,8 @@ import java.util.List;
  * drain (too many changes to buffer - the watcher then forces a reconcile).
  *
  * @param relativePaths the changed paths relative to the root (never null;
- *                      empty when nothing changed since the last drain).
- * @param overflowed    whether change events were dropped and a reconcile is
- *                      due.
+ * empty when nothing changed since the last drain).
+ * @param overflowed whether change events were dropped and a reconcile is due.
  */
 public record RdcwReadResult(List<String> relativePaths, boolean overflowed) {
 

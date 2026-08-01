@@ -356,8 +356,8 @@ class ProcessingCoordinatorTest {
 	}
 
 	/**
-	 * Shutting down from an already-interrupted thread must force the executor
-	 * down and hand the interruption back to the caller rather than swallowing it.
+	 * Shutting down from an already-interrupted thread must force the executor down
+	 * and hand the interruption back to the caller rather than swallowing it.
 	 */
 	@Test
 	void shutdownOnAnInterruptedThreadForcesTerminationAndKeepsTheInterruptFlag() {

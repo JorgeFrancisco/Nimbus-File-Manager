@@ -1,9 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums;
 
 /**
- * What a rebuild run covers. A folder larger than the per-run ceiling takes more
- * than one run, so the screen has to say whether this one continues the previous
- * one or starts over.
+ * What a rebuild run covers. A folder larger than the per-run ceiling takes
+ * more than one run, so the screen has to say whether this one continues the
+ * previous one or starts over.
  */
 public enum MetadataRebuildScope {
 

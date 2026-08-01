@@ -38,8 +38,8 @@ public class OrganizationMovementLog {
 	private final CatalogFileRepository catalogFileRepository;
 	private final ExecutionErrorService executionErrorService;
 
-	public OrganizationMovementLog(MovementRepository movementRepository,
-			CatalogFileRepository catalogFileRepository, ExecutionErrorService executionErrorService) {
+	public OrganizationMovementLog(MovementRepository movementRepository, CatalogFileRepository catalogFileRepository,
+			ExecutionErrorService executionErrorService) {
 		this.movementRepository = movementRepository;
 		this.catalogFileRepository = catalogFileRepository;
 		this.executionErrorService = executionErrorService;
@@ -82,11 +82,11 @@ public class OrganizationMovementLog {
 	}
 
 	/**
-	 * A file put back where it came from. The movement being reversed keeps its
-	 * own story - the reason it was moved is not erased - and the reversal is
-	 * appended as a movement of its own, in the opposite direction, belonging to
-	 * the undo. A file organized and undone three times leaves six rows in order
-	 * instead of one row rewritten three times.
+	 * A file put back where it came from. The movement being reversed keeps its own
+	 * story - the reason it was moved is not erased - and the reversal is appended
+	 * as a movement of its own, in the opposite direction, belonging to the undo. A
+	 * file organized and undone three times leaves six rows in order instead of one
+	 * row rewritten three times.
 	 */
 	public void recordUndone(Movement undone, Execution undoExecution) {
 		undone.setStatus(MovementStatus.UNDONE);
@@ -100,8 +100,8 @@ public class OrganizationMovementLog {
 
 	/**
 	 * An undo that could not put a file back: the failure belongs to the undo, and
-	 * the reason lives with every other per-file failure instead of on the
-	 * movement row.
+	 * the reason lives with every other per-file failure instead of on the movement
+	 * row.
 	 */
 	public void recordUndoFailure(Movement movement, Execution undoExecution, MovementReason reason, String message) {
 		movement.setStatus(MovementStatus.UNDO_ERROR);

@@ -104,8 +104,8 @@ class QuarantineFolderPolicyTest {
 	void warnsAboutAQuarantineSharingTheVolumeWithTheLibrary(@TempDir Path tmp) {
 		configure(tmp.resolve("library"), tmp.resolve("trash"));
 
-		Assertions.assertThat(policy.warning()).hasValueSatisfying(
-				warning -> Assertions.assertThat(warning).contains("mesma unidade da biblioteca"));
+		Assertions.assertThat(policy.warning())
+				.hasValueSatisfying(warning -> Assertions.assertThat(warning).contains("mesma unidade da biblioteca"));
 	}
 
 	/**

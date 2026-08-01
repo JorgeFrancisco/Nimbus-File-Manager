@@ -48,8 +48,8 @@ class AuthWebControllerExtraTest {
 		String view = controller(true, "client-id", "client-secret").login(model);
 
 		Assertions.assertThat(view).isEqualTo("auth/login");
-		Assertions.assertThat(model).containsEntry("googleLoginEnabled", true)
-				.containsEntry("googleLoginAvailable", true);
+		Assertions.assertThat(model).containsEntry("googleLoginEnabled", true).containsEntry("googleLoginAvailable",
+				true);
 	}
 
 	@Test

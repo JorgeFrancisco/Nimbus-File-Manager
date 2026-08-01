@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 
 /**
- * Invariants of the {@code lifecycle_status} state machine: the
- * three mutually-exclusive states and the transitions that must never regress -
- * most importantly, that DELETED is never downgraded to MISSING.
+ * Invariants of the {@code lifecycle_status} state machine: the three
+ * mutually-exclusive states and the transitions that must never regress - most
+ * importantly, that DELETED is never downgraded to MISSING.
  */
 class CatalogFileLifecycleTest {
 

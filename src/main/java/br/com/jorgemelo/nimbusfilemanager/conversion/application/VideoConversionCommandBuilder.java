@@ -121,9 +121,9 @@ public class VideoConversionCommandBuilder {
 
 	/**
 	 * The profile asks for hardware; which encoder that means is whatever this
-	 * machine proved it can use. Software answers for the software profiles and also
-	 * when a hardware profile survives on a machine that has no card for it - a
-	 * stored preference must never turn into a command ffmpeg cannot run.
+	 * machine proved it can use. Software answers for the software profiles and
+	 * also when a hardware profile survives on a machine that has no card for it -
+	 * a stored preference must never turn into a command ffmpeg cannot run.
 	 */
 	private VideoEncoder encoderFor(ConversionQuality quality) {
 		if (!quality.requiresHardware()) {

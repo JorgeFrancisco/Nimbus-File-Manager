@@ -12,8 +12,8 @@ import org.springframework.data.domain.Page;
  * fields clients already read (notably {@code content} and {@code last}), so
  * the front-end is untouched while the warning goes away.
  */
-public record PagedResponse<T>(List<T> content, int number, int size, long totalElements, int totalPages,
-		boolean first, boolean last, int numberOfElements, boolean empty) {
+public record PagedResponse<T>(List<T> content, int number, int size, long totalElements, int totalPages, boolean first,
+		boolean last, int numberOfElements, boolean empty) {
 
 	public static <T> PagedResponse<T> from(Page<T> page) {
 		return new PagedResponse<>(page.getContent(), page.getNumber(), page.getSize(), page.getTotalElements(),

@@ -61,8 +61,7 @@ public class OrganizationRenameDetectionService {
 	private final Clock clock;
 
 	public OrganizationRenameDetectionService(CatalogFileRepository catalogFileRepository,
-			FileHashService fileHashService,
-			DateSourceService dateSourceService, Clock clock) {
+			FileHashService fileHashService, DateSourceService dateSourceService, Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.fileHashService = fileHashService;
 		this.dateSourceService = dateSourceService;
@@ -71,7 +70,7 @@ public class OrganizationRenameDetectionService {
 
 	/**
 	 * @return the ids of CatalogFile records that were relocated, so the caller can
-	 *         exclude them from its own "mark missing" pass.
+	 * exclude them from its own "mark missing" pass.
 	 */
 	Set<Long> detectAndApplyRenames(OrganizationReconcileResponse response) {
 		List<OrganizationReconcileIssueResponse> missingIssues = response.missingOnDiskSamples().stream()
@@ -121,10 +120,8 @@ public class OrganizationRenameDetectionService {
 				continue;
 			}
 
-			missingByKey
-					.computeIfAbsent(matchKey(catalogFile.getSizeBytes(), catalogFile.getSha256()),
-							_ -> new ArrayList<>())
-					.add(new MissingEntry(catalogFile, issue.path()));
+			missingByKey.computeIfAbsent(matchKey(catalogFile.getSizeBytes(), catalogFile.getSha256()),
+					_ -> new ArrayList<>()).add(new MissingEntry(catalogFile, issue.path()));
 		}
 
 		return missingByKey;

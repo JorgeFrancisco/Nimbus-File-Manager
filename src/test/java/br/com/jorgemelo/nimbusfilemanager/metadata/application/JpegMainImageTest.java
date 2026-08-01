@@ -116,8 +116,9 @@ class JpegMainImageTest {
 	/** A second start marker and restarts are skipped on the way to the scan. */
 	@Test
 	void markersWithoutASegmentAreSteppedOverWhileReadingTheHeader(@TempDir Path tmp) throws IOException {
-		byte[] header = concat(new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD8, (byte) 0xFF,
-				(byte) 0xD2 }, segment((byte) 0xDA, new byte[] { 3, 4 }));
+		byte[] header = concat(
+				new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD2 },
+				segment((byte) 0xDA, new byte[] { 3, 4 }));
 
 		byte[] image = concat(header, new byte[] { 1, 2, (byte) 0xFF, (byte) 0xD9 });
 

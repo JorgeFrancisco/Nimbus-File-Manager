@@ -188,8 +188,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		catalogFile.setLocation(location);
 
@@ -231,8 +230,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		catalogFile.setLocation(location);
 
@@ -395,8 +393,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
 
@@ -443,8 +440,7 @@ class OrganizationExecutorTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
 
@@ -491,8 +487,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
 
@@ -649,13 +644,11 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 0,
-				0))
-				.build();
+		CatalogFile catalogFile = CatalogFile.builder().id(1L)
+				.modifiedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 0, 0)).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		catalogFile.setLocation(location);
 
@@ -820,8 +813,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
 		OrganizationMovePersistence persistence = mock(OrganizationMovePersistence.class);
@@ -874,8 +866,7 @@ class OrganizationExecutorTest {
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString())
-				.build();
+				.currentPath(source.toString()).build();
 
 		catalogFile.setLocation(location);
 
@@ -1005,8 +996,7 @@ class OrganizationExecutorTest {
 				catalogFileLocationRepository, movementLog(), operationLockService, executionProgressService,
 				executionCancellationService, new SecureFileMove(verifier, pathRegistry),
 				new OrganizationMovePersistence(catalogFileRepository, catalogFileLocationRepository,
-						movementRepository,
-						Clock.systemDefaultZone()),
+						movementRepository, Clock.systemDefaultZone()),
 				new OrganizationPlanStore(), new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
 	}
 

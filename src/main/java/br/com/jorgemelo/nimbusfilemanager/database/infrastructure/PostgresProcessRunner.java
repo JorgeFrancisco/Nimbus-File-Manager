@@ -34,8 +34,8 @@ public class PostgresProcessRunner implements PostgresCommands {
 
 	/**
 	 * A clean stop rolls back open transactions and checkpoints first. Past this
-	 * the caller escalates, so it is a budget for finishing rather than a guess
-	 * at how long that takes.
+	 * the caller escalates, so it is a budget for finishing rather than a guess at
+	 * how long that takes.
 	 */
 	private static final int STOP_TIMEOUT_SECONDS = 30;
 
@@ -67,9 +67,11 @@ public class PostgresProcessRunner implements PostgresCommands {
 
 			Files.writeString(passwordFile, password, StandardCharsets.UTF_8);
 
-			return run("initdb", List.of(layout.executable("initdb").toString(), "-D", layout.cluster().toString(),
-					"-U", DATABASE_USER, "--pwfile=" + passwordFile, "-E", "UTF8", "--locale=C",
-					"--auth-host=scram-sha-256", "--auth-local=trust"), COMMAND_TIMEOUT_SECONDS) == 0;
+			return run("initdb",
+					List.of(layout.executable("initdb").toString(), "-D", layout.cluster().toString(), "-U",
+							DATABASE_USER, "--pwfile=" + passwordFile, "-E", "UTF8", "--locale=C",
+							"--auth-host=scram-sha-256", "--auth-local=trust"),
+					COMMAND_TIMEOUT_SECONDS) == 0;
 		} catch (IOException exception) {
 			log.error("Could not create the embedded database cluster", exception);
 
@@ -80,10 +82,10 @@ public class PostgresProcessRunner implements PostgresCommands {
 	}
 
 	/**
-	 * Starts the server bound to loopback only. A database that exists to serve
-	 * one desktop application has no reason to answer the network, and binding
-	 * it there is what keeps the generated password from being the only thing
-	 * between the catalog and the rest of the office.
+	 * Starts the server bound to loopback only. A database that exists to serve one
+	 * desktop application has no reason to answer the network, and binding it there
+	 * is what keeps the generated password from being the only thing between the
+	 * catalog and the rest of the office.
 	 */
 	@Override
 	public ClusterStartOutcome start(int port) {
@@ -104,15 +106,18 @@ public class PostgresProcessRunner implements PostgresCommands {
 
 	@Override
 	public boolean stop(ClusterStopMode mode) {
-		return run(PG_CTL, List.of(layout.executable(PG_CTL).toString(), "-D", layout.cluster().toString(), "-m",
-				mode.argument(), "-w", "-t", Integer.toString(STOP_TIMEOUT_SECONDS), "stop"),
+		return run(
+				PG_CTL, List.of(layout.executable(PG_CTL).toString(), "-D", layout.cluster().toString(), "-m",
+						mode.argument(), "-w", "-t", Integer.toString(STOP_TIMEOUT_SECONDS), "stop"),
 				STOP_TIMEOUT_SECONDS + 10) == 0;
 	}
 
 	@Override
 	public boolean createDatabase(int port, String password) {
-		return run("createdb", List.of(layout.executable("createdb").toString(), "-h", "127.0.0.1", "-p",
-				Integer.toString(port), "-U", DATABASE_USER, DATABASE_NAME), COMMAND_TIMEOUT_SECONDS, password) == 0;
+		return run(
+				"createdb", List.of(layout.executable("createdb").toString(), "-h", "127.0.0.1", "-p",
+						Integer.toString(port), "-U", DATABASE_USER, DATABASE_NAME),
+				COMMAND_TIMEOUT_SECONDS, password) == 0;
 	}
 
 	/**

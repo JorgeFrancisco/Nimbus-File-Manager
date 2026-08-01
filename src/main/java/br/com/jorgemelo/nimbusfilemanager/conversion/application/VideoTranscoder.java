@@ -37,7 +37,8 @@ import lombok.extern.slf4j.Slf4j;
  * the whole feature safe to retry: it leaves the library exactly as it was,
  * with nothing half-written anywhere.
  */
-@Slf4j @Component
+@Slf4j
+@Component
 public class VideoTranscoder {
 
 	private final VideoConversionCommandBuilder commandBuilder;
@@ -93,8 +94,7 @@ public class VideoTranscoder {
 			// Action cameras carry telemetry and timecode tracks that MP4 has no tag for.
 			// The muxer refuses them before the first frame is encoded, so the video is
 			// perfectly convertible - it just has to travel without them.
-			log.info("Retrying {} without the data tracks: MP4 cannot hold this camera's telemetry",
-					request.source());
+			log.info("Retrying {} without the data tracks: MP4 cannot hold this camera's telemetry", request.source());
 
 			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(),
 					options.includeSubtitles(), false);

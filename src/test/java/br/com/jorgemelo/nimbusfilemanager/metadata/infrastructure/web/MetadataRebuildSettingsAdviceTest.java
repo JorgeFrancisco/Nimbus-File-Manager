@@ -73,8 +73,8 @@ class MetadataRebuildSettingsAdviceTest {
 	@Test
 	void publishesTheScopeAndWhenTheLastRunStarted() {
 		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY))
-				.thenReturn(Map.of(MetadataRebuildPreferences.SCOPE_KEY, "ALL",
-						MetadataRebuildPreferences.LAST_RUN_KEY, "2026-07-26T11:16:13"));
+				.thenReturn(Map.of(MetadataRebuildPreferences.SCOPE_KEY, "ALL", MetadataRebuildPreferences.LAST_RUN_KEY,
+						"2026-07-26T11:16:13"));
 
 		Model model = new ConcurrentModel();
 
@@ -118,16 +118,14 @@ class MetadataRebuildSettingsAdviceTest {
 
 		advice.addTo(model, null);
 
-		Assertions.assertThat(model.getAttribute("metadataRebuildLimit"))
-				.isEqualTo(MetadataRebuildRequest.MAX_LIMIT);
+		Assertions.assertThat(model.getAttribute("metadataRebuildLimit")).isEqualTo(MetadataRebuildRequest.MAX_LIMIT);
 	}
 
 	@Test
 	void reopensTheFormOnTheSavedChoices() {
-		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY))
-				.thenReturn(Map.of(MetadataRebuildPreferences.SOURCE_PATH_KEY, "D:\\photos",
-						MetadataRebuildPreferences.FIELDS_KEY, "GPS,CAMERA",
-						MetadataRebuildPreferences.DRY_RUN_KEY, "true"));
+		when(userPagePreferenceService.find("system", MetadataRebuildPreferences.PAGE_KEY)).thenReturn(
+				Map.of(MetadataRebuildPreferences.SOURCE_PATH_KEY, "D:\\photos", MetadataRebuildPreferences.FIELDS_KEY,
+						"GPS,CAMERA", MetadataRebuildPreferences.DRY_RUN_KEY, "true"));
 
 		Model model = new ConcurrentModel();
 
@@ -139,8 +137,9 @@ class MetadataRebuildSettingsAdviceTest {
 	}
 
 	/**
-	 * With nothing saved yet the form opens on the two fields that answer the reason
-	 * the panel exists, instead of on an empty selection that would rebuild nothing.
+	 * With nothing saved yet the form opens on the two fields that answer the
+	 * reason the panel exists, instead of on an empty selection that would rebuild
+	 * nothing.
 	 */
 	@Test
 	void defaultsToReclassifyingAndRereadingTheDate() {
@@ -148,8 +147,8 @@ class MetadataRebuildSettingsAdviceTest {
 
 		advice.addTo(model, null);
 
-		Assertions.assertThat(model.getAttribute("metadataRebuildSelectedFields")).isEqualTo(List.of("SUBCATEGORY",
-				"DATE"));
+		Assertions.assertThat(model.getAttribute("metadataRebuildSelectedFields"))
+				.isEqualTo(List.of("SUBCATEGORY", "DATE"));
 		Assertions.assertThat(model.getAttribute("metadataRebuildSourcePath")).isEqualTo("");
 		Assertions.assertThat(model.getAttribute("metadataRebuildDryRun")).isEqualTo(false);
 	}

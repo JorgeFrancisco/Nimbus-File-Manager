@@ -45,8 +45,8 @@ public final class AnimatedWebp {
 
 	/**
 	 * @return the first frame as a standalone WebP image, or an empty array when
-	 *         {@code file} is not an animated WebP - the caller then decodes the
-	 *         original, which is what every other image needs.
+	 * {@code file} is not an animated WebP - the caller then decodes the original,
+	 * which is what every other image needs.
 	 */
 	public static byte[] firstFrame(Path file) throws IOException {
 		byte[] bytes = Files.readAllBytes(file);

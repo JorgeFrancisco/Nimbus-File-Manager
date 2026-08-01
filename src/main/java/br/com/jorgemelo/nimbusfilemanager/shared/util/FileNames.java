@@ -23,8 +23,8 @@ public final class FileNames {
 	}
 
 	/**
-	 * {@code foo.jpg} -&gt; {@code foo (1).jpg}, {@code foo (2).jpg}, ... first name
-	 * free on disk. Returns {@code desired} itself when nothing occupies it.
+	 * {@code foo.jpg} -&gt; {@code foo (1).jpg}, {@code foo (2).jpg}, ... first
+	 * name free on disk. Returns {@code desired} itself when nothing occupies it.
 	 */
 	public static Path nextAvailable(Path desired) {
 		if (!Files.exists(desired)) {

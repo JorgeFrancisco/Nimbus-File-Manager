@@ -26,9 +26,9 @@ class BoundarySourceTest {
 	}
 
 	/**
-	 * Publishing is optional too: a source that hands over files it did not
-	 * acquire - an embedded dataset, a local folder - has nothing to swap in and
-	 * nothing to roll back, so both calls are no-ops rather than something every
+	 * Publishing is optional too: a source that hands over files it did not acquire
+	 * - an embedded dataset, a local folder - has nothing to swap in and nothing to
+	 * roll back, so both calls are no-ops rather than something every
 	 * implementation has to write.
 	 */
 	@Test

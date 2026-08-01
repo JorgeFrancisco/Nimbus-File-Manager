@@ -38,8 +38,8 @@ public class ExecutionCancellationService {
 
 	/**
 	 * @return true if a running execution was found and cancellation was requested;
-	 *         false if there is nothing running for that id (already finished, or
-	 *         never started).
+	 * false if there is nothing running for that id (already finished, or never
+	 * started).
 	 */
 	public boolean requestCancellation(Long executionId) {
 		AtomicBoolean flag = executionId == null ? null : flags.get(executionId);

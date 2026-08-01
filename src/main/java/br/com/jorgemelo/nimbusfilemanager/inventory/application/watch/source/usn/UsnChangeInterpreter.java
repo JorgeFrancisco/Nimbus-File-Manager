@@ -52,6 +52,7 @@ public class UsnChangeInterpreter {
 	 * Parent-FRN -> directory path under root, or null when confirmed outside root.
 	 */
 	private final Map<Long, Path> directoryCache = new LinkedHashMap<>(256, 0.75f, true) {
+
 		@Override
 		protected boolean removeEldestEntry(Map.Entry<Long, Path> eldest) {
 			return size() > MAX_CACHE_ENTRIES;
@@ -132,7 +133,7 @@ public class UsnChangeInterpreter {
 
 	/**
 	 * @return the parent directory path when it resolves under the root, else
-	 *         empty.
+	 * empty.
 	 */
 	private Optional<Path> resolveParent(long parentFrn) {
 		if (directoryCache.containsKey(parentFrn)) {

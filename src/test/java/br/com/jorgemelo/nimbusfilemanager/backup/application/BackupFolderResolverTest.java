@@ -59,8 +59,8 @@ class BackupFolderResolverTest {
 
 	/**
 	 * A folder that cannot be created - a drive that is gone, a name taken by a
-	 * file - has to say so at the moment of the backup, not fail silently and
-	 * leave the operator believing they are protected.
+	 * file - has to say so at the moment of the backup, not fail silently and leave
+	 * the operator believing they are protected.
 	 */
 	@Test
 	void failsLoudlyWhenTheFolderCannotBeCreated(@TempDir Path workspace) throws IOException {

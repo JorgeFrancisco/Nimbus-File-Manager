@@ -12,8 +12,8 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDispos
  * under an option the user did not pick.
  *
  * @param nameAffix text the user wants in the converted file's name, or empty
- *                  to keep the source name. Raw here - the naming layer is what
- *                  strips whatever a file name cannot hold
+ * to keep the source name. Raw here - the naming layer is what strips whatever
+ * a file name cannot hold
  */
 public record ConversionOptions(ConversionQuality quality, AudioHandling audio, OriginalDisposition disposition,
 		String nameAffix, NameAffixPosition affixPosition) {

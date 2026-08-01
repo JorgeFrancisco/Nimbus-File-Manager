@@ -56,9 +56,9 @@ class TimelineQueryRepositoryTest {
 
 		Assertions.assertThat(sql.getValue())
 				.contains("mf.lifecycle_status = 'ACTIVE'", "mf.file_type IN ('PHOTO', 'VIDEO')",
-						"m.capture_date IS NOT NULL", "CAST(:fileType AS varchar)",
-						"m.subcategory IN (:subcategories)", "CAST(:cursorDate AS timestamp) IS NULL",
-						"CAST(:cursorId AS bigint)", "ORDER BY m.capture_date DESC, mf.id DESC", "LIMIT :limit")
+						"m.capture_date IS NOT NULL", "CAST(:fileType AS varchar)", "m.subcategory IN (:subcategories)",
+						"CAST(:cursorDate AS timestamp) IS NULL", "CAST(:cursorId AS bigint)",
+						"ORDER BY m.capture_date DESC, mf.id DESC", "LIMIT :limit")
 				.doesNotContain("OFFSET", "media_location", "metadata_json", "m.capture_date < :cursorDate OR");
 		Assertions.assertThat(parameters.getValue().getValue("fileType")).isEqualTo("PHOTO");
 		Assertions.assertThat(parameters.getValue().getValue("subcategories")).isEqualTo(SUBS);
@@ -94,8 +94,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null,
-				120);
+		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null, 120);
 
 		Assertions.assertThat(page).containsExactly(new TimelineItemProjection(42L, publicId, "IMG_0042.JPG",
 				FileType.PHOTO, captureDate, DateSource.EXIF, 4032, 3024, null));
@@ -118,8 +117,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null,
-				120);
+		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null, 120);
 
 		Assertions.assertThat(page.getFirst().durationSeconds()).isEqualTo(92.5D);
 	}
@@ -178,8 +176,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineMonthCount> counts = repository().findMonthCounts(FileType.VIDEO,
-				SUBS);
+		List<TimelineMonthCount> counts = repository().findMonthCounts(FileType.VIDEO, SUBS);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);

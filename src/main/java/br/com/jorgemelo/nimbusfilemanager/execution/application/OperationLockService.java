@@ -31,8 +31,8 @@ public class OperationLockService {
 	 * <p>
 	 * This exists for work the user asked for. Background maintenance that loses
 	 * the lock simply retries on its next pass, so it must not wait; a batch the
-	 * user started has nobody to retry it, and refusing it because a scheduled
-	 * pass happened to start seconds earlier makes the application look broken for
+	 * user started has nobody to retry it, and refusing it because a scheduled pass
+	 * happened to start seconds earlier makes the application look broken for
 	 * something the user cannot see. Waiting weakens no guarantee - the lock is
 	 * still exclusive, and every path is still checked before it is granted.
 	 */
@@ -63,9 +63,9 @@ public class OperationLockService {
 	}
 
 	/**
-	 * Waits for {@code release} to signal, or refuses once the deadline has
-	 * passed. The caller holds the monitor, which {@code timedWait} releases while
-	 * it waits, so a holder on another thread can finish and hand the lock over.
+	 * Waits for {@code release} to signal, or refuses once the deadline has passed.
+	 * The caller holds the monitor, which {@code timedWait} releases while it
+	 * waits, so a holder on another thread can finish and hand the lock over.
 	 */
 	private void awaitRelease(long remainingNanos, OperationLock conflict) {
 		if (remainingNanos <= 0) {

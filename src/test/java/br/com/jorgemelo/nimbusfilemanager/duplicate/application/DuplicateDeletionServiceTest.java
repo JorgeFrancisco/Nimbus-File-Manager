@@ -60,8 +60,8 @@ class DuplicateDeletionServiceTest {
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
 	private final DuplicateDeletionService service = new DuplicateDeletionService(catalogFileRepository,
-			executionRepository, quarantineIntakeService, similarityCaches, operationLockService,
-			executionErrorService, Clock.systemDefaultZone());
+			executionRepository, quarantineIntakeService, similarityCaches, operationLockService, executionErrorService,
+			Clock.systemDefaultZone());
 
 	DuplicateDeletionServiceTest() {
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class))).thenReturn(operationLock);

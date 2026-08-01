@@ -41,8 +41,8 @@ class SettingsToolsWebControllerTest {
 
 	/**
 	 * Replacing a running executable fails on Windows, so an inventory - the
-	 * heaviest ffmpeg user - stops the install with a reason on screen instead of
-	 * a half-written folder.
+	 * heaviest ffmpeg user - stops the install with a reason on screen instead of a
+	 * half-written folder.
 	 */
 	@Test
 	void refusesWhileAnInventoryIsRunning() {

@@ -36,12 +36,11 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>
  * Quarantine reuses the same intake the duplicate screen uses - secure move
- * with hash verification plus the movement record that makes a restore
- * possible - so a file removed here is recoverable exactly like one removed
- * there. A file the catalog does not know cannot be recorded, and therefore
- * cannot be restored later; rather than move it into quarantine as an
- * untraceable orphan, it is left alone and counted, and the message says how
- * many stayed behind.
+ * with hash verification plus the movement record that makes a restore possible
+ * - so a file removed here is recoverable exactly like one removed there. A
+ * file the catalog does not know cannot be recorded, and therefore cannot be
+ * restored later; rather than move it into quarantine as an untraceable orphan,
+ * it is left alone and counted, and the message says how many stayed behind.
  */
 @Slf4j
 @Service
@@ -50,12 +49,12 @@ public class ExplorerDeletionService extends LocalizedComponent {
 	/**
 	 * How long a click waits for a background pass to release the path. The
 	 * inventory watches the whole library, so a scheduled run overlaps every folder
-	 * in it; failing on the first look made the menu answer "busy" for something the
-	 * user cannot see, seconds before the path was free again. Short enough that a
-	 * genuinely long operation still answers quickly instead of hanging the dialog.
+	 * in it; failing on the first look made the menu answer "busy" for something
+	 * the user cannot see, seconds before the path was free again. Short enough
+	 * that a genuinely long operation still answers quickly instead of hanging the
+	 * dialog.
 	 */
 	private static final Duration LOCK_WAIT = Duration.ofSeconds(20);
-
 
 	private final ExplorerDeletionGuard guard;
 	private final QuarantineIntakeService quarantineIntakeService;

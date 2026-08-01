@@ -66,8 +66,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 		RequestClientInfo client = RequestClientInfo.from(request);
 
 		if (Boolean.TRUE.equals(user.getTwoFactorEnabled())) {
-			request.getSession(true).setAttribute(SecurityConstants.PENDING_USERNAME,
-					user.getUsername());
+			request.getSession(true).setAttribute(SecurityConstants.PENDING_USERNAME, user.getUsername());
 
 			userAccessLogService.recordAccess(user.getUsername(), SecurityConstants.LOGIN_2FA_REQUIRED, "SUCCESS",
 					client.ipAddress(), client.userAgent(), AccessMessages.TWO_FACTOR_REQUIRED_GOOGLE);

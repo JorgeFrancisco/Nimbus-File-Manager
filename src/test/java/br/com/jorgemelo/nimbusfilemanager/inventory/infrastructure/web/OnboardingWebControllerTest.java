@@ -103,8 +103,8 @@ class OnboardingWebControllerTest {
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = new OnboardingWebController(appSettingService, inventoryBatchLauncherService,
-				inventoryWatchService)
-				.configure(tempDir.resolve("does-not-exist").toString(), true, false, true, true, null, model);
+				inventoryWatchService).configure(tempDir.resolve("does-not-exist").toString(), true, false, true, true,
+						null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/onboarding");
 		Mockito.verifyNoInteractions(inventoryBatchLauncherService);

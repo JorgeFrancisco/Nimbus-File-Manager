@@ -97,8 +97,8 @@ class CatalogFilePurgeIntegrationTest {
 		catalogFileRetentionService.purgeMissingOlderThan(90);
 
 		Assertions.assertThat(catalogFileRepository.findById(file.getId())).isEmpty();
-		Assertions.assertThat(movementRepository.findById(movement.getId())).get()
-				.extracting(Movement::getCatalogFile).as("movement kept, only detached from the purged file").isNull();
+		Assertions.assertThat(movementRepository.findById(movement.getId())).get().extracting(Movement::getCatalogFile)
+				.as("movement kept, only detached from the purged file").isNull();
 	}
 
 	@Test

@@ -18,11 +18,11 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.filename.rule.Abs
  *
  * <p>
  * Twelve digits are also how the {@code ddMMyyyy} plus four-digit counter
- * layout names instrument and scanner output ({@code 031120081613 - 01.bmp}
- * is item 1613 of 2008-11-03). Both readings can be valid for the same run,
- * and the name carries nothing to break the tie, so a run whose fifth to
- * eighth digits already spell a plausible year is left to the remaining
- * resolvers instead of being dated by a coin flip.
+ * layout names instrument and scanner output ({@code 031120081613 - 01.bmp} is
+ * item 1613 of 2008-11-03). Both readings can be valid for the same run, and
+ * the name carries nothing to break the tie, so a run whose fifth to eighth
+ * digits already spell a plausible year is left to the remaining resolvers
+ * instead of being dated by a coin flip.
  *
  * <p>
  * The two-digit year resolves against base 2000, which is what the format can

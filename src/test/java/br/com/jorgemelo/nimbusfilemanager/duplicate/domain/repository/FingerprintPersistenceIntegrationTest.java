@@ -80,8 +80,10 @@ class FingerprintPersistenceIntegrationTest {
 				.kind(FingerprintKind.PHOTO_PHASH).algorithm(ALGORITHM).attempts(3)
 				.reason(FingerprintFailureReason.DECODER_REFUSED).lastError("decode failed").build());
 
-		Assertions.assertThat(fingerprintFailureRepository.findExhaustedWithPath(FingerprintKind.PHOTO_PHASH, ALGORITHM,
-				3)).anySatisfy(failure -> {
+		Assertions
+				.assertThat(
+						fingerprintFailureRepository.findExhaustedWithPath(FingerprintKind.PHOTO_PHASH, ALGORITHM, 3))
+				.anySatisfy(failure -> {
 					Assertions.assertThat(failure.path()).isEqualTo(file.getLocation().getCurrentPath());
 					Assertions.assertThat(failure.error()).isEqualTo("decode failed");
 				});

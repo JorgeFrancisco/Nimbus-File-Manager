@@ -45,8 +45,7 @@ class PerformanceTelemetryServiceTest {
 
 	private PerformanceTelemetryService service(String version, ZoneId zone) {
 		return new PerformanceTelemetryService(executionRepository, executionMetricsRepository,
-				executionPhaseRepository,
-				version, Clock.system(zone));
+				executionPhaseRepository, version, Clock.system(zone));
 	}
 
 	private ExecutionMetrics savedMetrics() {
@@ -145,8 +144,7 @@ class PerformanceTelemetryServiceTest {
 		// -05:00 -> -04:00). The stored LocalDateTimes are 90 wall-clock minutes apart,
 		// but only 30 minutes of real time elapsed; the zone-aware conversion measures
 		// the real elapsed.
-		Execution execution = Execution.builder().id(21L)
-				.startedAt(LocalDateTime.of(2024, Month.MARCH, 10, 1, 45, 0))
+		Execution execution = Execution.builder().id(21L).startedAt(LocalDateTime.of(2024, Month.MARCH, 10, 1, 45, 0))
 				.finishedAt(LocalDateTime.of(2024, Month.MARCH, 10, 3, 15, 0)).filesFound(10).build();
 
 		when(executionRepository.findById(21L)).thenReturn(Optional.of(execution));
@@ -179,8 +177,8 @@ class PerformanceTelemetryServiceTest {
 		// No finishedAt (so no duration), no config, no counters: nothing to store, so
 		// no execution_metrics row is created - only the execution's version is
 		// stamped.
-		Execution execution = Execution.builder().id(40L)
-				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).filesFound(5).build();
+		Execution execution = Execution.builder().id(40L).startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0))
+				.filesFound(5).build();
 
 		when(executionRepository.findById(40L)).thenReturn(Optional.of(execution));
 
@@ -232,8 +230,8 @@ class PerformanceTelemetryServiceTest {
 
 	@Test
 	void savesNoPhasesWhenNoneWereMeasured() {
-		Execution execution = Execution.builder().id(43L)
-				.startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0)).build();
+		Execution execution = Execution.builder().id(43L).startedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0, 0))
+				.build();
 
 		when(executionRepository.findById(43L)).thenReturn(Optional.of(execution));
 

@@ -143,9 +143,8 @@ class ExecutionMapperTest {
 		Execution execution = execution(ExecutionStatus.PROCESSING_FILES, null, null);
 
 		ExecutionStep step = ExecutionStep.builder().id(10L).execution(execution)
-				.stepType(ExecutionStepType.PROGRESS_UPDATED)
-				.statusMessage(StatusMessage.coded(ExecutionMessages.PROCESSING_FILE,
-						codec.encode(List.of("C:/media/photo.jpg"))))
+				.stepType(ExecutionStepType.PROGRESS_UPDATED).statusMessage(StatusMessage
+						.coded(ExecutionMessages.PROCESSING_FILE, codec.encode(List.of("C:/media/photo.jpg"))))
 				.createdAt(LocalDateTime.now()).build();
 
 		LocaleContextHolder.setLocale(PT_BR);

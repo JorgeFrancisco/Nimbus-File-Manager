@@ -54,7 +54,7 @@ class FingerprintJobRunner {
 
 	/**
 	 * @return false (and starts nothing) when an inventory is active, nothing is
-	 *         pending, or a run is already in progress. Idempotent.
+	 * pending, or a run is already in progress. Idempotent.
 	 */
 	public synchronized boolean start() {
 		if (backlog.pausedByActiveExecution()) {

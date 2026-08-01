@@ -53,9 +53,9 @@ class SettingsWebControllerTest {
 	@Test
 	void shouldRenderSystemAndPreferenceTabsWithSavedValues() {
 		when(preferences.find("Admin@Example.com", "files")).thenReturn(Map.of("view", "large", "size", "100"));
-		when(preferences.find("Admin@Example.com", OrganizationConstants.PAGE_KEY)).thenReturn(
-				Map.of(OrganizationConstants.RECURSIVE, "false", OrganizationConstants.ALLOW_CONFLICTS, "true",
-						OrganizationConstants.OVERWRITE_EXISTING, "true", OrganizationConstants.LAYOUT,
+		when(preferences.find("Admin@Example.com", OrganizationConstants.PAGE_KEY))
+				.thenReturn(Map.of(OrganizationConstants.RECURSIVE, "false", OrganizationConstants.ALLOW_CONFLICTS,
+						"true", OrganizationConstants.OVERWRITE_EXISTING, "true", OrganizationConstants.LAYOUT,
 						OrganizationLayout.SUBCATEGORY_YEAR_MONTH_DAY.name(), OrganizationConstants.SIZE, "20"));
 		when(preferences.find("Admin@Example.com", "layout"))
 				.thenReturn(Map.of(SharedConstants.THEME_PREFERENCE_KEY, SharedConstants.THEME_DARK));
@@ -77,8 +77,8 @@ class SettingsWebControllerTest {
 	void shouldFallBackForMissingAndInvalidSavedValues() {
 		when(preferences.find("system", "files")).thenReturn(Map.of("size", "invalid"));
 		when(preferences.find("system", OrganizationConstants.PAGE_KEY))
-				.thenReturn(Map.of(OrganizationConstants.RECURSIVE, "true", OrganizationConstants.LAYOUT,
-						"invalid", OrganizationConstants.SIZE, " "));
+				.thenReturn(Map.of(OrganizationConstants.RECURSIVE, "true", OrganizationConstants.LAYOUT, "invalid",
+						OrganizationConstants.SIZE, " "));
 		when(preferences.find("system", "layout")).thenReturn(Map.of());
 
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -105,19 +105,19 @@ class SettingsWebControllerTest {
 		verify(preferences).save("Admin@Example.com", "files", "view", "small");
 		verify(preferences).save("Admin@Example.com", "files", "size", "20");
 		verify(preferences).save("Admin@Example.com", "layout", SharedConstants.THEME_PREFERENCE_KEY, "dark");
-		verify(preferences).save("Admin@Example.com", OrganizationConstants.PAGE_KEY,
-				OrganizationConstants.LAYOUT, OrganizationLayout.YEAR_MONTH_DAY.name());
-		verify(preferences).save("Admin@Example.com", OrganizationConstants.PAGE_KEY,
-				OrganizationConstants.SIZE, "100");
+		verify(preferences).save("Admin@Example.com", OrganizationConstants.PAGE_KEY, OrganizationConstants.LAYOUT,
+				OrganizationLayout.YEAR_MONTH_DAY.name());
+		verify(preferences).save("Admin@Example.com", OrganizationConstants.PAGE_KEY, OrganizationConstants.SIZE,
+				"100");
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
 
 	@Test
 	void updatePreferencesShouldAcceptAbsentOptionalValues() {
-		controller.updatePreferences(new UpdatePreferencesForm(null, null, null, false, false, false, null,
-				"unexpected"),
-				null, new RedirectAttributesModelMap());
+		controller.updatePreferences(
+				new UpdatePreferencesForm(null, null, null, false, false, false, null, "unexpected"), null,
+				new RedirectAttributesModelMap());
 
 		verify(preferences).save("system", "layout", SharedConstants.THEME_PREFERENCE_KEY, "light");
 	}

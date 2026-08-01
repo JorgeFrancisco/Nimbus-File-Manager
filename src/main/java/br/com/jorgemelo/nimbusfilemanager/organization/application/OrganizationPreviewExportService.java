@@ -23,8 +23,8 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
  * Builds the ZIP file streamed by
  * {@code POST /api/organization/preview/export}. Extracted out of
  * {@code OrganizationController} so the streaming/JSON-serialization logic is a
- * unit-testable collaborator instead of
- * only reachable end-to-end through the controller.
+ * unit-testable collaborator instead of only reachable end-to-end through the
+ * controller.
  */
 @Service
 public class OrganizationPreviewExportService {

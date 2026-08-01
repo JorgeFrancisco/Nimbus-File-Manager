@@ -60,10 +60,11 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	}
 
 	private void installed(boolean available) {
-		lenient().when(offlineGeoDataset.status()).thenReturn(available
-				? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, null, "C:/geo", null, "geoBoundaries",
-						"CC BY")
-				: OfflineGeoDatasetStatus.unavailable("C:/geo", null));
+		lenient().when(offlineGeoDataset.status())
+				.thenReturn(available
+						? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, null, "C:/geo", null, "geoBoundaries",
+								"CC BY")
+						: OfflineGeoDatasetStatus.unavailable("C:/geo", null));
 	}
 
 	/** The case the whole feature exists for: enabled, nothing on disk. */
@@ -181,8 +182,8 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		locationEnabled(true);
 		when(offlineGeoDataset.status()).thenThrow(new IllegalStateException("dataset unreadable"));
 
-		GeoDatasetAutoUpdateScheduler scheduler = scheduler(Clock.fixed(Instant.parse("2026-08-01T09:15:00Z"),
-				ZoneId.of("UTC")));
+		GeoDatasetAutoUpdateScheduler scheduler = scheduler(
+				Clock.fixed(Instant.parse("2026-08-01T09:15:00Z"), ZoneId.of("UTC")));
 
 		scheduler.runOnce();
 

@@ -126,10 +126,9 @@ class ConversionWebControllerTest {
 	void reopensTheScreenWithTheOptionsTheUserLastUsed() {
 		Model model = new ExtendedModelMap();
 
-		when(preferences.find("jorge", ConversionConstants.PAGE_KEY)).thenReturn(Map.of(
-				ConversionConstants.QUALITY_KEY, ConversionQuality.HIGH_QUALITY.name(), ConversionConstants.AUDIO_KEY,
-				AudioHandling.COPY.name(), ConversionConstants.DISPOSITION_KEY,
-				OriginalDisposition.QUARANTINE.name()));
+		when(preferences.find("jorge", ConversionConstants.PAGE_KEY)).thenReturn(Map.of(ConversionConstants.QUALITY_KEY,
+				ConversionQuality.HIGH_QUALITY.name(), ConversionConstants.AUDIO_KEY, AudioHandling.COPY.name(),
+				ConversionConstants.DISPOSITION_KEY, OriginalDisposition.QUARANTINE.name()));
 
 		controller.conversion(null, null, authentication, model);
 
@@ -274,8 +273,7 @@ class ConversionWebControllerTest {
 
 	@Test
 	void storesTheRecommendedOptionsWhenTheRequestCarriesNone() {
-		Assertions.assertThat(controller.rememberOptions(null, authentication))
-				.isEqualTo(ConversionOptions.defaults());
+		Assertions.assertThat(controller.rememberOptions(null, authentication)).isEqualTo(ConversionOptions.defaults());
 
 		verify(preferences).save("jorge", ConversionConstants.PAGE_KEY, ConversionConstants.QUALITY_KEY,
 				ConversionOptions.defaults().quality().name());
@@ -423,8 +421,8 @@ class ConversionWebControllerTest {
 
 	/**
 	 * A preference outlives the machine it was chosen on: opening the screen where
-	 * there is no card must select the software profile of the same level, not leave
-	 * the form with nothing marked.
+	 * there is no card must select the software profile of the same level, not
+	 * leave the form with nothing marked.
 	 */
 	@Test
 	void downgradesAStoredHardwareChoiceWhereThereIsNoEncoder() {

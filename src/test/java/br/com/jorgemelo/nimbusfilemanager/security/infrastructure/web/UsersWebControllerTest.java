@@ -65,8 +65,8 @@ class UsersWebControllerTest {
 	}
 
 	/**
-	 * A refused creation has to say why on the screen; the operator would
-	 * otherwise be sent back to a list that simply lacks the new user.
+	 * A refused creation has to say why on the screen; the operator would otherwise
+	 * be sent back to a list that simply lacks the new user.
 	 */
 	@Test
 	void usersShouldReportWhyACreationWasRefused() {

@@ -18,8 +18,7 @@ class InventoryRunningStateTest {
 
 	private static ExecutionResponse execution(String type) {
 		return new ExecutionResponse(1L, type, "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1, 0, 0,
-				0,
-				0, null, null, "running", false);
+				0, 0, null, null, "running", false);
 	}
 
 	@Test

@@ -9,9 +9,9 @@ import java.util.Arrays;
  * no more records past the requested USN).
  *
  * @param nextStartUsn the USN to pass to the next read to continue where this
- *                     one stopped.
- * @param records      the concatenated raw record bytes (never null; empty when
- *                     drained).
+ * one stopped.
+ * @param records the concatenated raw record bytes (never null; empty when
+ * drained).
  */
 public record UsnReadResult(long nextStartUsn, byte[] records) {
 

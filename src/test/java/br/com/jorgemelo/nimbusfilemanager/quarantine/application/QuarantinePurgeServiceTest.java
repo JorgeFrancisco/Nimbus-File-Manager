@@ -227,7 +227,7 @@ class QuarantinePurgeServiceTest {
 
 		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
-				.thenReturn(new PageImpl<>(List.of(presentMovement, absentMovement)));
+						.thenReturn(new PageImpl<>(List.of(presentMovement, absentMovement)));
 		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.removed(9L));
 
 		int removed = service.cleanupAbsent();
@@ -343,8 +343,7 @@ class QuarantinePurgeServiceTest {
 		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.notRemoved());
 		when(purgePersistence.deleteCatalogFileIfOrphan(9L)).thenReturn(true);
 
-		QuarantinePurgeResult result = service
-				.purgeSelected(List.of(first.getPublicId(), second.getPublicId()));
+		QuarantinePurgeResult result = service.purgeSelected(List.of(first.getPublicId(), second.getPublicId()));
 
 		Assertions.assertThat(result.scanned()).isEqualTo(2);
 		Assertions.assertThat(result.purged()).isEqualTo(1);
@@ -370,8 +369,8 @@ class QuarantinePurgeServiceTest {
 	}
 
 	/**
-	 * Deleting a user's file for good is the most destructive thing the
-	 * application does; until now it left nothing but a log line.
+	 * Deleting a user's file for good is the most destructive thing the application
+	 * does; until now it left nothing but a log line.
 	 */
 	@Test
 	void aPurgeRunsAsAnExecutionOfItsOwn(@TempDir Path tmp) throws Exception {
@@ -432,8 +431,8 @@ class QuarantinePurgeServiceTest {
 	}
 
 	/**
-	 * A crash mid-loop must not leave the row open: an unfinished execution is
-	 * read everywhere as the operation currently running.
+	 * A crash mid-loop must not leave the row open: an unfinished execution is read
+	 * everywhere as the operation currently running.
 	 */
 	@Test
 	void aCrashMidPurgeStillClosesTheExecution(@TempDir Path tmp) throws Exception {
@@ -484,7 +483,7 @@ class QuarantinePurgeServiceTest {
 
 		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
-				.thenReturn(new PageImpl<>(List.of(overdueMovement(1L, present))));
+						.thenReturn(new PageImpl<>(List.of(overdueMovement(1L, present))));
 
 		Assertions.assertThat(service.cleanupAbsent()).isZero();
 
@@ -525,7 +524,7 @@ class QuarantinePurgeServiceTest {
 	private void overdueReturns(Movement movement) {
 		when(movementRepository.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(movement)));
+						.thenReturn(new PageImpl<>(List.of(movement)));
 	}
 
 	private Movement overdueMovement(long id, Path target) {

@@ -265,16 +265,15 @@ class MetadataRebuildServiceTest {
 
 	/**
 	 * The date resolver is exercised for real: it is a pure function of the
-	 * extracted metadata, and stubbing it would only assert that the service
-	 * copies whatever the stub returned.
+	 * extracted metadata, and stubbing it would only assert that the service copies
+	 * whatever the stub returned.
 	 */
 	private MetadataRebuildService service() {
 		MediaDateResolver mediaDateResolver = new MediaDateResolver(
 				new CaptureDateValidator(Clock.systemDefaultZone()));
 
 		return new MetadataRebuildService(catalogFileRepository, metadataExtractor, mediaDateResolver,
-				transactionManager, Clock.systemDefaultZone(),
-				new DateSourceLabels());
+				transactionManager, Clock.systemDefaultZone(), new DateSourceLabels());
 	}
 
 	/**
@@ -288,8 +287,8 @@ class MetadataRebuildServiceTest {
 
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
-		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(file.toString()).build());
+		catalogFile.setLocation(
+				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).build());
 
 		prepareSingleRebuild(catalogFile, file, metadata(file));
 
@@ -324,9 +323,9 @@ class MetadataRebuildServiceTest {
 	}
 
 	/**
-	 * The total feeds the progress bar of the settings panel, so it is capped by the
-	 * same limit the rebuild honours - promising more files than it will touch would
-	 * leave the bar short of 100%.
+	 * The total feeds the progress bar of the settings panel, so it is capped by
+	 * the same limit the rebuild honours - promising more files than it will touch
+	 * would leave the bar short of 100%.
 	 */
 	@Test
 	void countCandidatesShouldNotPromiseMoreFilesThanTheLimitAllows() {
@@ -388,10 +387,10 @@ class MetadataRebuildServiceTest {
 				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(captureDate).modifiedAt(captureDate)
 				.captureDate(captureDate).dateSource(DateSource.EXIF).subcategory(MediaSubcategory.CAMERA)
 				.latitude(-23.5).longitude(-46.6).storedWidth(4000).storedHeight(3000).displayWidth(4000)
-				.displayHeight(3000).orientationCode(1).rotation(0)
-				.orientationType(MediaOrientation.LANDSCAPE).manufacturer("Canon").model("R6").metadataJson("{}")
-				.build();
+				.displayHeight(3000).orientationCode(1).rotation(0).orientationType(MediaOrientation.LANDSCAPE)
+				.manufacturer("Canon").model("R6").metadataJson("{}").build();
 	}
+
 	/**
 	 * The count alone never said how much of the folder the "continue where it
 	 * stopped" cutoff was hiding, which is exactly what makes someone stare at a
@@ -400,15 +399,12 @@ class MetadataRebuildServiceTest {
 	@Test
 	void dryRunShouldSayHowManyTheContinueCutoffIsHiding() {
 		MetadataRebuildRequest request = new MetadataRebuildRequest(tempDir.toString(),
-				List.of(MetadataRebuildField.DATE), null, null, 10, true,
-				LocalDateTime.of(2026, Month.JULY, 20, 8, 0));
+				List.of(MetadataRebuildField.DATE), null, null, 10, true, LocalDateTime.of(2026, Month.JULY, 20, 8, 0));
 
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
-				eq(LocalDateTime.of(2026, Month.JULY, 20, 8, 0)), eq(0L), any(Pageable.class)))
-				.thenReturn(List.of(1L));
+				eq(LocalDateTime.of(2026, Month.JULY, 20, 8, 0)), eq(0L), any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
-				eq(MetadataRebuildRequest.NO_CUTOFF), eq(0L), any(Pageable.class)))
-				.thenReturn(List.of(1L, 2L, 3L));
+				eq(MetadataRebuildRequest.NO_CUTOFF), eq(0L), any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L));
 
 		var response = service().rebuild(request);
 
@@ -450,6 +446,7 @@ class MetadataRebuildServiceTest {
 
 		verify(transactionManager, never()).getTransaction(any());
 	}
+
 	/** Nothing to rebuild is an answer too, and the screen has to say it. */
 	@Test
 	void dryRunOverAFolderWithNothingToDoReportsAnEmptySimulation() {
@@ -542,6 +539,7 @@ class MetadataRebuildServiceTest {
 		Assertions.assertThat(response.simulation().wouldChange()).isZero();
 		Assertions.assertThat(response.simulation().preview()).isEmpty();
 	}
+
 	/**
 	 * A catalog row that never had a media row still previews: the rebuild would
 	 * give it one, and the screen shows it as a date appearing from nothing.
@@ -552,8 +550,8 @@ class MetadataRebuildServiceTest {
 
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
-		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(file.toString()).build());
+		catalogFile.setLocation(
+				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).build());
 
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));

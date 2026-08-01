@@ -52,32 +52,32 @@ class DuplicateKeepPolicyTest {
 	void keepsOriginalAndMarksWhatsAppCopy() {
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), whatsapp(B, 1600, 1200)), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.WHATSAPP_COPY));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.WHATSAPP_COPY));
 	}
 
 	@Test
 	void keepsOriginalAndMarksEditedCopy() {
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), edited(B, 4000, 3000)), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
 	}
 
 	@Test
 	void keepsOriginalAndMarksPhotoGridCopyAsEdited() {
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), photoGrid(B, 4000, 3000)), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.EDITED_COPY));
 	}
 
 	@Test
 	void keepsOriginalAndMarksScreenshotAsDerivative() {
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), screenshot(B, 4000, 3000)), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.DERIVATIVE));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.DERIVATIVE));
 	}
 
 	@Test
@@ -156,8 +156,8 @@ class DuplicateKeepPolicyTest {
 
 		Map<UUID, Decision> d = policy.decide(List.of(cameraOnly, whatsapp(B, 1600, 1200)), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.WHATSAPP_COPY));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.WHATSAPP_COPY));
 	}
 
 	@Test
@@ -197,8 +197,8 @@ class DuplicateKeepPolicyTest {
 
 		Map<UUID, Decision> d = policy.decide(List.of(original(A, 4000, 3000), plain), false);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.DERIVATIVE));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.ORIGINAL)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.DERIVATIVE));
 	}
 
 	@Test
@@ -212,8 +212,8 @@ class DuplicateKeepPolicyTest {
 
 		Map<UUID, Decision> d = policy.decide(List.of(high, low), true);
 
-		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.BEST_IN_GROUP))
-				.containsEntry(B, new Decision(Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY));
+		Assertions.assertThat(d).containsEntry(A, new Decision(Verdict.KEEP, Reason.BEST_IN_GROUP)).containsEntry(B,
+				new Decision(Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY));
 	}
 
 	@Test
@@ -239,9 +239,8 @@ class DuplicateKeepPolicyTest {
 		// Non-original, non-derivative siblings with identical pixels: the more
 		// reliable date source is kept (exact group -> a candidate is marked, not
 		// REVIEW).
-		Map<UUID, Decision> byModifiedOverCreated = policy
-				.decide(List.of(tiebreak(B, DateSource.FILE_CREATED_AT), tiebreak(A, DateSource.FILE_MODIFIED_AT)),
-						true);
+		Map<UUID, Decision> byModifiedOverCreated = policy.decide(
+				List.of(tiebreak(B, DateSource.FILE_CREATED_AT), tiebreak(A, DateSource.FILE_MODIFIED_AT)), true);
 
 		Assertions.assertThat(byModifiedOverCreated.get(A).verdict()).isEqualTo(Verdict.KEEP);
 		Assertions.assertThat(byModifiedOverCreated.get(B).verdict()).isEqualTo(Verdict.DELETE_CANDIDATE);
@@ -269,6 +268,7 @@ class DuplicateKeepPolicyTest {
 		return new Signals(id, false, MediaSubcategory.OTHER, 1000, 1000, dateSource,
 				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
 	}
+
 	/**
 	 * Between two copies alike in everything else, the one whose name carried the
 	 * time of day is kept: that time came from whatever produced the file, while a

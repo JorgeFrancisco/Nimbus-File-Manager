@@ -42,8 +42,8 @@ class QuarantinePurgeSchedulerTest {
 	}
 
 	/**
-	 * A failure caused by the shutdown itself is expected, so it must not surface as
-	 * an ERROR with a stack trace in the log of a normal application stop.
+	 * A failure caused by the shutdown itself is expected, so it must not surface
+	 * as an ERROR with a stack trace in the log of a normal application stop.
 	 */
 	@Test
 	void swallowsTheFailureOfAPassInterruptedByTheShutdown() {

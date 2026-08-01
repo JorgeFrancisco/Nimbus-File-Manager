@@ -19,9 +19,9 @@ import lombok.extern.slf4j.Slf4j;
  * encodes a few generated frames and believes the result.
  *
  * <p>
- * The answer is cached for the life of the application: hardware does not appear
- * between two conversions, and the probe costs a process spawn that the screen
- * would otherwise pay on every render.
+ * The answer is cached for the life of the application: hardware does not
+ * appear between two conversions, and the probe costs a process spawn that the
+ * screen would otherwise pay on every render.
  */
 @Slf4j
 @Component

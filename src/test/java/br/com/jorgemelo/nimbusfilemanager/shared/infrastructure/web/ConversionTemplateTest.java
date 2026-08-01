@@ -13,12 +13,12 @@ class ConversionTemplateTest {
 	private static final Path SCRIPT = Path.of("src/main/resources/static/js/pages/conversion.js");
 
 	/**
-	 * The batch disables every field while it runs, and a disabled field is left out
-	 * of {@code FormData}. Serialising the form therefore sent the options as nulls,
-	 * and the server replaced each one with its default - so pressing convert
-	 * silently rewrote the user's saved quality, audio, disposition and name affix
-	 * back to the recommended combination. Reading the checked control survives the
-	 * disabling, because a disabled radio still reports what it holds.
+	 * The batch disables every field while it runs, and a disabled field is left
+	 * out of {@code FormData}. Serialising the form therefore sent the options as
+	 * nulls, and the server replaced each one with its default - so pressing
+	 * convert silently rewrote the user's saved quality, audio, disposition and
+	 * name affix back to the recommended combination. Reading the checked control
+	 * survives the disabling, because a disabled radio still reports what it holds.
 	 */
 	@Test
 	void optionsAreReadFromTheControlsSoDisablingTheFormNeverRewritesThem() throws Exception {
@@ -54,8 +54,8 @@ class ConversionTemplateTest {
 	}
 
 	/**
-	 * Paging away mid-batch loses the progress and the final report, and the list is
-	 * about to change anyway - every converted file stops being a candidate. The
+	 * Paging away mid-batch loses the progress and the final report, and the list
+	 * is about to change anyway - every converted file stops being a candidate. The
 	 * server renders the controls blocked when a batch is already running, so a
 	 * reload during one comes back blocked instead of inviting the click.
 	 */

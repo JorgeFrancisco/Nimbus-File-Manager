@@ -103,9 +103,10 @@ class GeoBoundariesPipelineIntegrationTest {
 	}
 
 	/**
-	 * Open water resolves to the fact itself rather than to nothing: no place names,
-	 * the lowest confidence and the flag the screens label from. It used to stay
-	 * unresolved, which left the coordinate being retried by every rebuild forever.
+	 * Open water resolves to the fact itself rather than to nothing: no place
+	 * names, the lowest confidence and the flag the screens label from. It used to
+	 * stay unresolved, which left the coordinate being retried by every rebuild
+	 * forever.
 	 */
 	@Test
 	void openSeaCoordinateShouldResolveAsOpenSea() {

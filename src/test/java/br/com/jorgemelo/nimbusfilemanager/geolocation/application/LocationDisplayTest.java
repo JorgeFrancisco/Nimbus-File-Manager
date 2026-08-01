@@ -35,8 +35,8 @@ class LocationDisplayTest {
 	}
 
 	/**
-	 * Open water has no place name, so the caller's translated wording answers - but
-	 * only when there really is nothing else to show.
+	 * Open water has no place name, so the caller's translated wording answers -
+	 * but only when there really is nothing else to show.
 	 */
 	@Test
 	void openWaterLabelOnlyAnswersWhenThereIsNoPlaceToName() {

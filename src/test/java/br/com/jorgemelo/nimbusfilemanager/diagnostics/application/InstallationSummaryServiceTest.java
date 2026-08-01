@@ -40,15 +40,14 @@ class InstallationSummaryServiceTest {
 	}
 
 	private void toolsInstalled(boolean ffmpeg, boolean ffprobe) {
-		when(externalToolInstaller.status())
-				.thenReturn(new ExternalToolStatus(ffmpeg, "tools/ffmpeg/bin/ffmpeg.exe", ffprobe,
-				"tools/ffmpeg/bin/ffprobe.exe", "ffmpeg version 8.0", true, true, "C:/app/tools/ffmpeg/bin"));
+		when(externalToolInstaller.status()).thenReturn(new ExternalToolStatus(ffmpeg, "tools/ffmpeg/bin/ffmpeg.exe",
+				ffprobe, "tools/ffmpeg/bin/ffprobe.exe", "ffmpeg version 8.0", true, true, "C:/app/tools/ffmpeg/bin"));
 	}
 
 	private void geoAvailable() {
-		when(offlineGeoDataset.status()).thenReturn(
-				new OfflineGeoDatasetStatus(true, "CGAZ-2026", 1_500, 2_000_000_000L,
-					LocalDateTime.now(), LocalDateTime.now(), "C:/geo", null, "geoBoundaries", "CC BY 4.0"));
+		when(offlineGeoDataset.status())
+				.thenReturn(new OfflineGeoDatasetStatus(true, "CGAZ-2026", 1_500, 2_000_000_000L, LocalDateTime.now(),
+						LocalDateTime.now(), "C:/geo", null, "geoBoundaries", "CC BY 4.0"));
 	}
 
 	@Test
@@ -102,9 +101,8 @@ class InstallationSummaryServiceTest {
 		when(buildProperties.getIfAvailable()).thenReturn(null);
 
 		// No tool, so no version to report either - the state of a first run.
-		when(externalToolInstaller.status()).thenReturn(
-				new ExternalToolStatus(false, "ffmpeg", false, "ffprobe", null, false, true,
-						"C:/app/tools/ffmpeg/bin"));
+		when(externalToolInstaller.status()).thenReturn(new ExternalToolStatus(false, "ffmpeg", false, "ffprobe", null,
+				false, true, "C:/app/tools/ffmpeg/bin"));
 
 		when(offlineGeoDataset.status()).thenReturn(OfflineGeoDatasetStatus.unavailable("C:/geo", "download failed"));
 

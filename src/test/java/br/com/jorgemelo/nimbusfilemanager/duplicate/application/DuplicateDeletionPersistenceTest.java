@@ -30,8 +30,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 class DuplicateDeletionPersistenceTest {
 
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
-	private final CatalogFileLocationRepository catalogFileLocationRepository =
-			mock(CatalogFileLocationRepository.class);
+	private final CatalogFileLocationRepository catalogFileLocationRepository = mock(
+			CatalogFileLocationRepository.class);
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final DuplicateDeletionPersistence persistence = new DuplicateDeletionPersistence(catalogFileRepository,
 			catalogFileLocationRepository, movementRepository, Clock.systemDefaultZone());

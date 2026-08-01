@@ -29,8 +29,8 @@ class ClusterProtectionTest {
 	}
 
 	/**
-	 * Deleting a parent destroys the cluster as thoroughly as deleting the
-	 * cluster: a routine handed the workspace root has to be refused too.
+	 * Deleting a parent destroys the cluster as thoroughly as deleting the cluster:
+	 * a routine handed the workspace root has to be refused too.
 	 */
 	@Test
 	void protectsEveryFolderTheClusterLivesUnder(@TempDir Path workspace) throws IOException {

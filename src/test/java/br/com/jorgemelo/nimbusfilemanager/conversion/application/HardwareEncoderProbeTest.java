@@ -109,7 +109,8 @@ class HardwareEncoderProbeTest {
 	 * interrupted probe answers "no encoder" while restoring the interrupt flag
 	 * instead of swallowing it.
 	 */
-	@SuppressWarnings("unchecked") @Test
+	@SuppressWarnings("unchecked")
+	@Test
 	void ignoresProgressAndSurvivesAnInterruptedProbe() throws Exception {
 		when(transcodeRunner.run(any(), any(), any())).thenAnswer(invocation -> {
 			invocation.getArgument(1, Consumer.class).accept("out_time_us=1000");

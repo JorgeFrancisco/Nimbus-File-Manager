@@ -72,12 +72,11 @@ class ExecutionTelemetryQueryIntegrationTest {
 		// with null metrics columns.
 		Assertions.assertThat(executionRepository.findTelemetryById(measuredOld)).get()
 				.extracting(ExecutionTelemetryRow::durationMillis).isEqualTo(1_000L);
-		Assertions.assertThat(executionRepository.findTelemetryById(unmeasured)).get()
-				.satisfies(row -> {
-					Assertions.assertThat(row.id()).isEqualTo(unmeasured);
-					Assertions.assertThat(row.durationMillis()).isNull();
-					Assertions.assertThat(row.applicationVersion()).isEqualTo("3.0.0.3");
-				});
+		Assertions.assertThat(executionRepository.findTelemetryById(unmeasured)).get().satisfies(row -> {
+			Assertions.assertThat(row.id()).isEqualTo(unmeasured);
+			Assertions.assertThat(row.durationMillis()).isNull();
+			Assertions.assertThat(row.applicationVersion()).isEqualTo("3.0.0.3");
+		});
 
 		// LEFT JOIN by ids: all three returned, most recent first, unmeasured with null
 		// metrics.
@@ -100,8 +99,8 @@ class ExecutionTelemetryQueryIntegrationTest {
 	}
 
 	private Execution execution(String version, LocalDateTime startedAt) {
-		return executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.INVENTORY)
-				.status(ExecutionStatus.FINISHED).startedAt(startedAt).finishedAt(startedAt.plusSeconds(1))
-				.applicationVersion(version).build());
+		return executionRepository.saveAndFlush(
+				Execution.builder().executionType(ExecutionType.INVENTORY).status(ExecutionStatus.FINISHED)
+						.startedAt(startedAt).finishedAt(startedAt.plusSeconds(1)).applicationVersion(version).build());
 	}
 }

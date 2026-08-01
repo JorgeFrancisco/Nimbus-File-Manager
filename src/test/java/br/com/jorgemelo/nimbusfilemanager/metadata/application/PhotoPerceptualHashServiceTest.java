@@ -225,7 +225,8 @@ class PhotoPerceptualHashServiceTest {
 		return ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array();
 	}
 
-	private byte[] gradient() {		byte[] pixels = new byte[1024];
+	private byte[] gradient() {
+		byte[] pixels = new byte[1024];
 
 		for (int row = 0; row < 32; row++) {
 			for (int column = 0; column < 32; column++) {
@@ -237,9 +238,9 @@ class PhotoPerceptualHashServiceTest {
 	}
 
 	/**
-	 * ffmpeg reads no animation, so an animated sticker is decoded through its first
-	 * frame: the runner must be handed that frame, not the original file, and the
-	 * frame must be a plain WebP the decoder understands.
+	 * ffmpeg reads no animation, so an animated sticker is decoded through its
+	 * first frame: the runner must be handed that frame, not the original file, and
+	 * the frame must be a plain WebP the decoder understands.
 	 */
 	@Test
 	void computeDecodesAnAnimatedStickerThroughItsFirstFrame() throws Exception {

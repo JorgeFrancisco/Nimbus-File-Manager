@@ -97,8 +97,8 @@ public final class ExecutionMessages {
 	}
 
 	/**
-	 * An operation whose loop died on the way. Shared by every operation that
-	 * opens an execution: what differs between them is the detail, not the fact.
+	 * An operation whose loop died on the way. Shared by every operation that opens
+	 * an execution: what differs between them is the detail, not the fact.
 	 */
 	public static ExecutionMessage operationFailed(String detail) {
 		return of(OPERATION_FAILED, detail);

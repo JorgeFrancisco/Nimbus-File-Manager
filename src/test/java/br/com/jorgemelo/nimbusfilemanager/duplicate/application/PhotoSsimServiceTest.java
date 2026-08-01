@@ -38,8 +38,7 @@ class PhotoSsimServiceTest {
 
 		assertThatThrownBy(() -> service.similarityPercent(sample, new byte[3]))
 				.isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> service.similarityPercent(null, sample))
-				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> service.similarityPercent(null, sample)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	private byte[] filled(int value) {

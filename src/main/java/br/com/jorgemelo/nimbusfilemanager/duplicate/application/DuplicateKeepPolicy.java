@@ -44,10 +44,9 @@ public class DuplicateKeepPolicy {
 			MediaSubcategory.AIRBRUSH, MediaSubcategory.PHOTOGRID, MediaSubcategory.SCREENSHOT);
 
 	/**
-	 * @param files      the whole group (keep + candidates)
+	 * @param files the whole group (keep + candidates)
 	 * @param exactGroup true for byte-identical (SHA-256) groups - deletion is
-	 *                   always safe there, so the "no clear original" guard is
-	 *                   bypassed
+	 * always safe there, so the "no clear original" guard is bypassed
 	 */
 	public Map<UUID, Decision> decide(List<Signals> files, boolean exactGroup) {
 		Map<UUID, Decision> decisions = new HashMap<>();

@@ -107,10 +107,10 @@ class SettingsMetadataWebControllerTest {
 		verify(runner).rebuild(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, null));
 		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.SOURCE_PATH_KEY, FOLDER);
-		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
-				MetadataRebuildPreferences.FIELDS_KEY, "SUBCATEGORY,DATE");
-		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
-				MetadataRebuildPreferences.DRY_RUN_KEY, "false");
+		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.FIELDS_KEY,
+				"SUBCATEGORY,DATE");
+		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.DRY_RUN_KEY,
+				"false");
 		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.SCOPE_KEY,
 				"ALL");
 	}
@@ -158,8 +158,8 @@ class SettingsMetadataWebControllerTest {
 	}
 
 	/**
-	 * The mark is what the next run continues from, so it moves only when a real run
-	 * starts - never on a rejected one, and never on a simulation, which writes
+	 * The mark is what the next run continues from, so it moves only when a real
+	 * run starts - never on a rejected one, and never on a simulation, which writes
 	 * nothing.
 	 */
 	@Test
@@ -197,10 +197,10 @@ class SettingsMetadataWebControllerTest {
 
 		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.SOURCE_PATH_KEY, "");
-		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
-				MetadataRebuildPreferences.FIELDS_KEY, "");
-		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
-				MetadataRebuildPreferences.DRY_RUN_KEY, "true");
+		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.FIELDS_KEY,
+				"");
+		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.DRY_RUN_KEY,
+				"true");
 	}
 
 	private static ExecutionResponse inventoryExecution() {

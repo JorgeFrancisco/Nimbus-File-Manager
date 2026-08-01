@@ -81,8 +81,8 @@ public class QuarantineService extends LocalizedComponent {
 	/**
 	 * Restores a single quarantined file according to {@code options}, as an
 	 * operation of its own - a restore moves user files back into the library, so
-	 * it gets an execution like every other operation. Never overwrites an
-	 * existing file.
+	 * it gets an execution like every other operation. Never overwrites an existing
+	 * file.
 	 */
 	public QuarantineRestoreResult restore(UUID movementId, QuarantineRestoreOptions options) {
 		return restoreAll(List.of(movementId), options).items().getFirst();

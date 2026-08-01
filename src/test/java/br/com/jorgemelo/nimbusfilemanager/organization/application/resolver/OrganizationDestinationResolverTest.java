@@ -57,7 +57,7 @@ class OrganizationDestinationResolverTest {
 
 		Assertions.assertThatThrownBy(() -> resolver.resolve(target, "DEFAULT", candidate))
 				.isInstanceOf(IllegalArgumentException.class)
-						.hasMessageContaining("não pode conter segmentos de caminho");
+				.hasMessageContaining("não pode conter segmentos de caminho");
 	}
 
 	@Test

@@ -35,8 +35,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(FingerprintJobRun.builder().id(7L).build());
-		when(jobRunRepository.findById(7L))
-				.thenReturn(Optional.of(FingerprintJobRun.builder().id(7L).build()));
+		when(jobRunRepository.findById(7L)).thenReturn(Optional.of(FingerprintJobRun.builder().id(7L).build()));
 		when(backlogService.drainPending(any(), any())).thenAnswer(invocation -> {
 			invocation.<ProgressListener>getArgument(1).onProgress(3, 0);
 
@@ -56,8 +55,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 		when(backlogService.pausedByActiveExecution()).thenReturn(false);
 		when(backlogService.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
 		when(jobRunRepository.save(any())).thenReturn(FingerprintJobRun.builder().id(9L).build());
-		when(jobRunRepository.findById(9L))
-				.thenReturn(Optional.of(FingerprintJobRun.builder().id(9L).build()));
+		when(jobRunRepository.findById(9L)).thenReturn(Optional.of(FingerprintJobRun.builder().id(9L).build()));
 		when(backlogService.drainPending(any(), any())).thenThrow(new IllegalStateException("kaboom"));
 
 		runner.start();

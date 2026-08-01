@@ -30,9 +30,9 @@ class ConversionQualityTest {
 	}
 
 	/**
-	 * The hardware numbers are calibrated against the software ones on real footage,
-	 * not copied from them: a GPU encoder needs a lower number, and spends more
-	 * bits, to hold the quality its software counterpart reaches.
+	 * The hardware numbers are calibrated against the software ones on real
+	 * footage, not copied from them: a GPU encoder needs a lower number, and spends
+	 * more bits, to hold the quality its software counterpart reaches.
 	 */
 	@Test
 	void hardwareProfilesAreMarkedAsSuchAndOrderedByQuality() {

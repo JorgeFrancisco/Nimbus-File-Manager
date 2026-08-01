@@ -66,8 +66,7 @@ class PhotoThumbnailServiceTest {
 		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
 				.thenReturn(target);
 
-		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager,
-				new PhotoDecoder());
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
 
 		PhotoThumbnail first = service.get(id, 200).orElseThrow();
 		PhotoThumbnail second = service.get(id, 320).orElseThrow();
@@ -89,8 +88,8 @@ class PhotoThumbnailServiceTest {
 
 		when(repository.findSource(id)).thenReturn(Optional.empty());
 
-		Assertions.assertThat(new PhotoThumbnailService(repository, workspaceManager,
-				new PhotoDecoder()).get(id, 320)).isEmpty();
+		Assertions.assertThat(new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder()).get(id, 320))
+				.isEmpty();
 	}
 
 	@Test
@@ -113,8 +112,8 @@ class PhotoThumbnailServiceTest {
 				.thenReturn(target);
 
 		// Undecodable format (e.g. WEBP/HEIC) must yield "no thumbnail", not a 500.
-		Assertions.assertThat(new PhotoThumbnailService(repository, workspaceManager,
-				new PhotoDecoder()).get(id, 320)).isEmpty();
+		Assertions.assertThat(new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder()).get(id, 320))
+				.isEmpty();
 	}
 
 	/**
@@ -190,8 +189,7 @@ class PhotoThumbnailServiceTest {
 		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
 				.thenReturn(target);
 
-		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager,
-				new PhotoDecoder());
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
 
 		// WEBP now decodes in-JVM (TwelveMonkeys SPI): a real thumbnail is produced...
 		PhotoThumbnail first = service.get(id, 320).orElseThrow();
@@ -274,8 +272,7 @@ class PhotoThumbnailServiceTest {
 
 	@Test
 	void shouldRejectArbitraryThumbnailWidths() {
-		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager,
-				new PhotoDecoder());
+		PhotoThumbnailService service = new PhotoThumbnailService(repository, workspaceManager, new PhotoDecoder());
 
 		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.get(UUID.randomUUID(), 0));
 		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.get(UUID.randomUUID(), 641));

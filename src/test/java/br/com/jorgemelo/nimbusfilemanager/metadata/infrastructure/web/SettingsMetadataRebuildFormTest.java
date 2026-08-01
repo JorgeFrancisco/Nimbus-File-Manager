@@ -43,8 +43,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModel
  * rebuild the wrong thing (or nothing).
  */
 @WebMvcTest(controllers = SettingsMetadataWebController.class,
-		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = { WebMvcConfig.class,
-				LocaleConfig.class, AppViewModelAdvice.class, MetadataRebuildSettingsAdvice.class }))
+		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+				classes = { WebMvcConfig.class, LocaleConfig.class, AppViewModelAdvice.class,
+						MetadataRebuildSettingsAdvice.class }))
 @AutoConfigureMockMvc(addFilters = false)
 class SettingsMetadataRebuildFormTest {
 
@@ -105,8 +106,9 @@ class SettingsMetadataRebuildFormTest {
 	void treatsTheUntickedSimulateBoxAsARealRun() throws Exception {
 		when(metadataRebuildAsyncRunner.start(any())).thenReturn(true);
 
-		mockMvc.perform(post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos").param("refresh",
-				"DATE")).andExpect(status().is3xxRedirection());
+		mockMvc.perform(
+				post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos").param("refresh", "DATE"))
+				.andExpect(status().is3xxRedirection());
 
 		ArgumentCaptor<MetadataRebuildRequest> request = ArgumentCaptor.forClass(MetadataRebuildRequest.class);
 
@@ -121,8 +123,9 @@ class SettingsMetadataRebuildFormTest {
 	 */
 	@Test
 	void storesTheChoicesWithoutStartingARebuild() throws Exception {
-		mockMvc.perform(post("/app/settings/metadata/preferences").param("sourcePath", "D:\\")
-				.param("refresh", "SUBCATEGORY")).andExpect(status().isOk());
+		mockMvc.perform(
+				post("/app/settings/metadata/preferences").param("sourcePath", "D:\\").param("refresh", "SUBCATEGORY"))
+				.andExpect(status().isOk());
 
 		verify(userPagePreferenceService).save("system", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.SOURCE_PATH_KEY, "D:\\");
@@ -137,8 +140,8 @@ class SettingsMetadataRebuildFormTest {
 	void persistsTheChoicesSoThePanelReopensOnThem() throws Exception {
 		when(metadataRebuildAsyncRunner.start(any())).thenReturn(true);
 
-		mockMvc.perform(post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos")
-				.param("refresh", "GPS").param("refresh", "CAMERA")).andExpect(status().is3xxRedirection());
+		mockMvc.perform(post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos").param("refresh", "GPS")
+				.param("refresh", "CAMERA")).andExpect(status().is3xxRedirection());
 
 		verify(userPagePreferenceService).save("system", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.SOURCE_PATH_KEY, "D:\\photos");

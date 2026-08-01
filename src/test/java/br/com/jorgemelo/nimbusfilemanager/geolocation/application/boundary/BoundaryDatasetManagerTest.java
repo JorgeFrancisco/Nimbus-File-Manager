@@ -110,8 +110,8 @@ class BoundaryDatasetManagerTest {
 	void publishesTheDownloadedFilesOnlyAfterTheImportSucceeded() {
 		when(boundarySource.fetch(any())).thenReturn(List.of());
 		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(metadataStore.read()).thenReturn(Optional.of(BoundaryMetadata.builder().importedRecords(100)
-				.importedAt(LocalDateTime.now()).version("v1").build()));
+		when(metadataStore.read()).thenReturn(Optional.of(
+				BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).version("v1").build()));
 		when(repository.count()).thenReturn(100L);
 
 		manager.downloadAndImport();

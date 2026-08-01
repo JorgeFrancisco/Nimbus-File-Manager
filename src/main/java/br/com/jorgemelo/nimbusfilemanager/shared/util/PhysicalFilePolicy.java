@@ -38,7 +38,7 @@ public final class PhysicalFilePolicy {
 
 	/**
 	 * @return {@code true} only for real, physical files/directories safe to
-	 *         process.
+	 * process.
 	 */
 	public static boolean isProcessable(Path path) {
 		if (path == null) {

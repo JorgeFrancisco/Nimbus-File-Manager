@@ -123,9 +123,9 @@ class ExecutionProgressServiceTest {
 		Assertions.assertThat(execution.getStatusMessage().getCode()).isEqualTo(ExecutionMessages.PROGRESS_UPDATED);
 		Assertions.assertThat(execution.getStatusMessage().getArgs()).isNull();
 
-		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.PROGRESS_UPDATED
-				&& step.getPath() == null
-				&& ExecutionMessages.PROGRESS_UPDATED.equals(step.getStatusMessage().getCode())));
+		verify(executionStepRepository)
+				.save(argThat(step -> step.getStepType() == ExecutionStepType.PROGRESS_UPDATED && step.getPath() == null
+						&& ExecutionMessages.PROGRESS_UPDATED.equals(step.getStatusMessage().getCode())));
 	}
 
 	@Test
@@ -249,9 +249,8 @@ class ExecutionProgressServiceTest {
 
 		when(executionRepository.findById(99L)).thenReturn(Optional.empty());
 
-		assertThatIllegalStateException()
-				.isThrownBy(() -> service().updateStatus(execution, ExecutionStatus.ERROR, ExecutionStepType.ERROR,
-						ExecutionMessages.inventoryFailed("missing")))
+		assertThatIllegalStateException().isThrownBy(() -> service().updateStatus(execution, ExecutionStatus.ERROR,
+				ExecutionStepType.ERROR, ExecutionMessages.inventoryFailed("missing")))
 				.withMessage("Execution not found: 99");
 	}
 

@@ -46,14 +46,13 @@ public class OrganizationLayoutResolver {
 		String normalizedLayout = layout == null || layout.isBlank() ? YEAR_MONTH_DAY_SUBCATEGORY_FILE_TYPE : layout;
 
 		return switch (normalizedLayout) {
-		case YEAR_MONTH_DAY_SUBCATEGORY_FILE_TYPE ->
-			appendAll(targetPath.resolve(yearMonth).resolve(day), locationSegments).resolve(subcategory)
-					.resolve(fileType).normalize();
+		case YEAR_MONTH_DAY_SUBCATEGORY_FILE_TYPE -> appendAll(targetPath.resolve(yearMonth).resolve(day),
+				locationSegments).resolve(subcategory).resolve(fileType).normalize();
 		case YEAR_MONTH_DAY -> appendAll(targetPath.resolve(yearMonth).resolve(day), locationSegments).normalize();
 		case YEAR_MONTH_SUBCATEGORY_FILE_TYPE -> appendAll(targetPath.resolve(yearMonth), locationSegments)
 				.resolve(subcategory).resolve(fileType).normalize();
-		case SUBCATEGORY_YEAR_MONTH_DAY ->
-			appendAll(targetPath.resolve(subcategory).resolve(yearMonth).resolve(day), locationSegments).normalize();
+		case SUBCATEGORY_YEAR_MONTH_DAY -> appendAll(targetPath.resolve(subcategory).resolve(yearMonth).resolve(day),
+				locationSegments).normalize();
 		// Flat: everything goes straight into the target folder, no subfolders
 		// (date/category and
 		// even location segments are intentionally ignored).

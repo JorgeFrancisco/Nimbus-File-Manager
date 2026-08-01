@@ -25,8 +25,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Renaming from the file explorer. The rename is a move like any other, so it
  * goes through {@link SecureFileMove} (hash baseline, byte-for-byte verify,
- * roll-back) rather than {@code Files.move}: it is the user's own media, and the
- * project reserves the plain move for regenerable artefacts.
+ * roll-back) rather than {@code Files.move}: it is the user's own media, and
+ * the project reserves the plain move for regenerable artefacts.
  *
  * <p>
  * The catalog row is rewritten in the same transaction. Leaving it to the

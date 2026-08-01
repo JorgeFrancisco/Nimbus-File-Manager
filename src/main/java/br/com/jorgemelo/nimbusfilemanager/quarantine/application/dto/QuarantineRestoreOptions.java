@@ -7,12 +7,11 @@ import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.ConflictResolu
 /**
  * Per-file restore instructions gathered from the Quarentena screen.
  *
- * @param destinationFolder  an alternate folder to restore into (used when the
- *                           original folder vanished, or when the user simply
- *                           wants a different target); {@code null} restores to
- *                           the original path.
+ * @param destinationFolder an alternate folder to restore into (used when the
+ * original folder vanished, or when the user simply wants a different target);
+ * {@code null} restores to the original path.
  * @param conflictResolution what to do if a file already exists at the
- *                           destination.
+ * destination.
  */
 public record QuarantineRestoreOptions(Path destinationFolder, ConflictResolution conflictResolution) {
 

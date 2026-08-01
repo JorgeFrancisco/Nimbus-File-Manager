@@ -18,10 +18,10 @@ public class WorkspaceManager {
 	}
 
 	/**
-	 * Where the application keeps what it owns: database lock files, logs,
-	 * exports, backups, downloaded datasets. The value itself is decided once, at
-	 * startup, by {@link WorkspaceLocation} - here it is only read, so this class
-	 * can never disagree with the folder Logback is already writing into.
+	 * Where the application keeps what it owns: database lock files, logs, exports,
+	 * backups, downloaded datasets. The value itself is decided once, at startup,
+	 * by {@link WorkspaceLocation} - here it is only read, so this class can never
+	 * disagree with the folder Logback is already writing into.
 	 */
 	public Path getWorkspacePath() {
 		return PathUtils.normalizePath(properties.workspace());

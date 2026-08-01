@@ -428,8 +428,8 @@ class InventoryPersistenceServiceTest {
 		}
 
 		return new InventoryPersistenceService(catalogFileRepository, catalogFileMapper, mediaLocationService,
-				coordinator,
-				new ResourcelessTransactionManager(), new ProcessingMetrics(), new ExecutionPhaseTimings());
+				coordinator, new ResourcelessTransactionManager(), new ProcessingMetrics(),
+				new ExecutionPhaseTimings());
 	}
 
 	private String fileKey(Path file) {

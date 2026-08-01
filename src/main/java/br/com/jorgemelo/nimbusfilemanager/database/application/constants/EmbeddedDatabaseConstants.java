@@ -6,9 +6,9 @@ public final class EmbeddedDatabaseConstants {
 	public static final String CLUSTER_FOLDER = "cluster";
 
 	/**
-	 * Written by {@code initdb} into every cluster it creates, and by nothing
-	 * else: its presence is what tells a real cluster from an empty folder, and
-	 * its content is the major version the data belongs to.
+	 * Written by {@code initdb} into every cluster it creates, and by nothing else:
+	 * its presence is what tells a real cluster from an empty folder, and its
+	 * content is the major version the data belongs to.
 	 */
 	public static final String VERSION_FILE = "PG_VERSION";
 

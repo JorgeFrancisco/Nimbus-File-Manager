@@ -112,8 +112,7 @@ class AppUserAccountServiceExtraTest {
 
 		Assertions.assertThat(page.getContent()).containsExactly(user);
 
-		verify(repository)
-				.findAll(ArgumentMatchers.<Pageable>argThat(pageable -> pageable.getPageSize() == 50));
+		verify(repository).findAll(ArgumentMatchers.<Pageable>argThat(pageable -> pageable.getPageSize() == 50));
 	}
 
 	@Test
@@ -122,7 +121,6 @@ class AppUserAccountServiceExtraTest {
 
 		service.searchUsers(null, 0, 100);
 
-		verify(repository)
-				.findAll(ArgumentMatchers.<Pageable>argThat(pageable -> pageable.getPageSize() == 100));
+		verify(repository).findAll(ArgumentMatchers.<Pageable>argThat(pageable -> pageable.getPageSize() == 100));
 	}
 }

@@ -127,8 +127,7 @@ class QuarantineWebControllerTest {
 	void deleteSelectedForwardsIdsToPurgeService() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a)))
-				.thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
+		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
 
 		controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
@@ -144,8 +143,7 @@ class QuarantineWebControllerTest {
 	void deleteSelectedExplainsWhenAnotherOperationIsHoldingTheFiles() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a)))
-				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 1, 0));
+		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 1, 0));
 
 		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
@@ -159,8 +157,7 @@ class QuarantineWebControllerTest {
 	void deleteSelectedExplainsWhenTheDiskRefusedTheDelete() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a)))
-				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 0, 1));
+		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 0, 1));
 
 		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
@@ -176,8 +173,7 @@ class QuarantineWebControllerTest {
 	void deleteSelectedExplainsWhenTheItemLeftQuarantineMeanwhile() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a)))
-				.thenReturn(new QuarantinePurgeResult(1, 0, 0, 1, 0, 0));
+		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 1, 0, 0));
 
 		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
@@ -190,8 +186,7 @@ class QuarantineWebControllerTest {
 	void deleteSelectedCarriesNoMessageWhenEverythingWasDeleted() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a)))
-				.thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
+		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
 
 		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
@@ -270,8 +265,7 @@ class QuarantineWebControllerTest {
 
 		controller.quarantine(0, null, 100, authentication, requestedModel);
 
-		verify(preferences).save("tester", QuarantineConstants.PAGE_KEY, SharedConstants.PAGE_SIZE_KEY,
-				"100");
+		verify(preferences).save("tester", QuarantineConstants.PAGE_KEY, SharedConstants.PAGE_SIZE_KEY, "100");
 
 		Assertions.assertThat(requestedModel.getAttribute("pageSize")).isEqualTo(100);
 	}
@@ -338,7 +332,6 @@ class QuarantineWebControllerTest {
 		return new QuarantineItemResponse(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), name,
 				"C:\\lib\\" + name, "C:\\lib", "C:\\trash\\" + name, "C:\\trash", 100L, "100 B", LocalDateTime.now(),
 				presentInQuarantine, true, false, "PHOTO", "bi-file-earmark-image-fill image", "filetype.image", true,
-						false,
-				false, false, false, "/api/media/x/content");
+				false, false, false, false, "/api/media/x/content");
 	}
 }

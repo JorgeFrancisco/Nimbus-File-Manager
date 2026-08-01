@@ -87,8 +87,9 @@ class QuarantineIntakeServiceTest {
 
 		file.setLifecycleStatus(LifecycleStatus.DELETED);
 
-		Assertions.assertThat(service.intake(execution, file, tmp.resolve("trash"),
-				MovementReason.CONVERTED_QUARANTINED)).isEqualTo(IntakeOutcome.SKIPPED);
+		Assertions
+				.assertThat(service.intake(execution, file, tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED))
+				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(original).exists();
 	}
 
@@ -146,8 +147,9 @@ class QuarantineIntakeServiceTest {
 	void skipsAShortcutInsteadOfMovingWhatItPointsAt(@TempDir Path tmp) throws Exception {
 		Path shortcut = Files.writeString(tmp.resolve("clip.lnk"), "shortcut");
 
-		Assertions.assertThat(service.intake(execution, file(shortcut), tmp.resolve("trash"),
-				MovementReason.CONVERTED_QUARANTINED)).isEqualTo(IntakeOutcome.SKIPPED);
+		Assertions.assertThat(
+				service.intake(execution, file(shortcut), tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED))
+				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(shortcut).exists();
 
 		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());

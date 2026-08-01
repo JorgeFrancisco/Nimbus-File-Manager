@@ -44,8 +44,8 @@ class EmbeddedDatabaseAdminServiceTest {
 	}
 
 	/**
-	 * An update only reaches the running server on the next start, so a run
-	 * being served by the embedded cluster is exactly the one that has to warn.
+	 * An update only reaches the running server on the next start, so a run being
+	 * served by the embedded cluster is exactly the one that has to warn.
 	 */
 	@Test
 	void warnsAboutTheRestartOnlyWhileTheEmbeddedClusterIsServing(@TempDir Path workspace, @TempDir Path server) {
@@ -56,8 +56,8 @@ class EmbeddedDatabaseAdminServiceTest {
 	}
 
 	/**
-	 * Elsewhere the platform has its own PostgreSQL, and the button is not
-	 * offered at all.
+	 * Elsewhere the platform has its own PostgreSQL, and the button is not offered
+	 * at all.
 	 */
 	@Test
 	void offersNothingWherePostgresIsNotShipped(@TempDir Path workspace, @TempDir Path server) {

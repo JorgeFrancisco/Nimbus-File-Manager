@@ -53,10 +53,8 @@ class TimelineServicePageTest {
 
 	@Test
 	void pageRejectsCursorAndFromCombined() {
-		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(
-						() -> service.page(TimelineMediaType.ALL, null, 10, "cursor", LocalDate.of(2026, Month.JULY,
-								1)))
+		Assertions.assertThatIllegalArgumentException().isThrownBy(
+				() -> service.page(TimelineMediaType.ALL, null, 10, "cursor", LocalDate.of(2026, Month.JULY, 1)))
 				.withMessageContaining("cannot be combined");
 	}
 
@@ -111,8 +109,7 @@ class TimelineServicePageTest {
 	void undatedDecodesCursorAndReturnsWithoutNextWhenNoMore() {
 		when(cursorCodec.decodeUndated("uc", TimelineMediaType.PHOTO))
 				.thenReturn(new TimelineUndatedCursor(7L, TimelineMediaType.PHOTO));
-		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), eq(7L), eq(11)))
-				.thenReturn(List.of(item(1, null)));
+		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), eq(7L), eq(11))).thenReturn(List.of(item(1, null)));
 
 		TimelineUndatedPageResponse response = service.undated(TimelineMediaType.PHOTO, null, 10, "uc");
 

@@ -42,10 +42,8 @@ class AdminBoundaryPipStrategyTest {
 	// Curitiba is a wide polygon (centroid far to the west); Pinhais is a small
 	// polygon to the east. The test point sits inside Curitiba but closer to
 	// Pinhais' centroid, so nearest-centroid would be wrong.
-	private static final String CURITIBA =
-			"POLYGON((-49.55 -25.60, -49.18 -25.60, -49.18 -25.35, -49.55 -25.35, -49.55 -25.60))";
-	private static final String PINHAIS =
-			"POLYGON((-49.18 -25.60, -49.10 -25.60, -49.10 -25.35, -49.18 -25.35, -49.18 -25.60))";
+	private static final String CURITIBA = "POLYGON((-49.55 -25.60, -49.18 -25.60, -49.18 -25.35, -49.55 -25.35, -49.55 -25.60))";
+	private static final String PINHAIS = "POLYGON((-49.18 -25.60, -49.10 -25.60, -49.10 -25.35, -49.18 -25.35, -49.18 -25.60))";
 	private static final String PARANA = "POLYGON((-54 -27, -48 -27, -48 -22, -54 -22, -54 -27))";
 	private static final String BRAZIL = "POLYGON((-74 -34, -34 -34, -34 5, -74 5, -74 -34))";
 
@@ -114,8 +112,8 @@ class AdminBoundaryPipStrategyTest {
 						boundary(AdminBoundaryKind.MUNICIPALITY, "Pinhais", PINHAIS)));
 		when(repository.findCandidatesNear(eq(AdminBoundaryKind.MUNICIPALITY), anyDouble(), anyDouble(), anyDouble(),
 				anyDouble()))
-				.thenReturn(List.of(boundary(AdminBoundaryKind.MUNICIPALITY, "Curitiba", CURITIBA),
-						boundary(AdminBoundaryKind.MUNICIPALITY, "Pinhais", PINHAIS)));
+						.thenReturn(List.of(boundary(AdminBoundaryKind.MUNICIPALITY, "Curitiba", CURITIBA),
+								boundary(AdminBoundaryKind.MUNICIPALITY, "Pinhais", PINHAIS)));
 		when(repository.findCandidatesInCountry(eq(AdminBoundaryKind.STATE), eq("BR"), anyDouble(), anyDouble()))
 				.thenReturn(List.of(boundary(AdminBoundaryKind.STATE, "Paraná", PARANA)));
 
@@ -319,8 +317,8 @@ class AdminBoundaryPipStrategyTest {
 
 	/**
 	 * A point whose only container is a state - no country polygon over it and no
-	 * municipality inside it - still resolves, carrying the country denormalized
-	 * on the state row. This is the sparse-coverage case of the worldwide dataset.
+	 * municipality inside it - still resolves, carrying the country denormalized on
+	 * the state row. This is the sparse-coverage case of the worldwide dataset.
 	 */
 	@Test
 	void shouldResolveByStateAloneWhenNoCountryPolygonContainsThePoint() {

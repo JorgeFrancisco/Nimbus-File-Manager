@@ -30,8 +30,8 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void reportsAFileCreatedUnderTheRoot() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_CREATE, false,
-				"photo.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_CREATE, false, "photo.jpg")));
 
 		Assertions.assertThat(result.reconcileNeeded()).isFalse();
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("photo.jpg"));
@@ -39,33 +39,33 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void ignoresChangesOutsideTheRoot() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, OUTSIDE, UsnReason.FILE_CREATE,
-				false, "x.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, OUTSIDE, UsnReason.FILE_CREATE, false, "x.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).isEmpty();
 	}
 
 	@Test
 	void reportsDeletesSoTheReconcileRemovesThem() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_DELETE, false,
-				"gone.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.FILE_DELETE, false, "gone.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("gone.jpg"));
 	}
 
 	@Test
 	void ignoresNonMaterialFileReasons() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.CLOSE, false,
-				"touched.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.CLOSE, false, "touched.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).isEmpty();
 	}
 
 	@Test
 	void renameWithinRootReportsBothOldAndNewPaths() {
-		Interpretation result = interpreter().interpret(List.of(
-				usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "old.jpg"),
-				usnRecord(2L, 100L, SUB_B, UsnReason.RENAME_NEW_NAME, false, "new.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "old.jpg"),
+						usnRecord(2L, 100L, SUB_B, UsnReason.RENAME_NEW_NAME, false, "new.jpg")));
 
 		Assertions.assertThat(result.reconcileNeeded()).isFalse();
 		Assertions.assertThat(result.changedFiles()).containsExactlyInAnyOrder(ROOT.resolve("a").resolve("old.jpg"),
@@ -74,35 +74,35 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void moveOutOfRootReportsOnlyTheOldPath() {
-		Interpretation result = interpreter().interpret(List.of(
-				usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "leaving.jpg"),
-				usnRecord(2L, 100L, OUTSIDE, UsnReason.RENAME_NEW_NAME, false, "leaving.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "leaving.jpg"),
+						usnRecord(2L, 100L, OUTSIDE, UsnReason.RENAME_NEW_NAME, false, "leaving.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("leaving.jpg"));
 	}
 
 	@Test
 	void moveIntoRootReportsOnlyTheNewPath() {
-		Interpretation result = interpreter().interpret(List.of(
-				usnRecord(1L, 100L, OUTSIDE, UsnReason.RENAME_OLD_NAME, false, "arriving.jpg"),
-				usnRecord(2L, 100L, SUB_B, UsnReason.RENAME_NEW_NAME, false, "arriving.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, OUTSIDE, UsnReason.RENAME_OLD_NAME, false, "arriving.jpg"),
+						usnRecord(2L, 100L, SUB_B, UsnReason.RENAME_NEW_NAME, false, "arriving.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("b").resolve("arriving.jpg"));
 	}
 
 	@Test
 	void unpairedOldNameStillReportsTheFileLeftBehind() {
-		Interpretation result = interpreter().interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME,
-				false, "moved.jpg")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 100L, SUB_A, UsnReason.RENAME_OLD_NAME, false, "moved.jpg")));
 
 		Assertions.assertThat(result.changedFiles()).containsExactly(ROOT.resolve("a").resolve("moved.jpg"));
 	}
 
 	@Test
 	void directoryMoveRequestsAReconcileInsteadOfFileEvents() {
-		Interpretation result = interpreter().interpret(List.of(
-				usnRecord(1L, 500L, SUB_A, UsnReason.RENAME_OLD_NAME, true, "2023"),
-				usnRecord(2L, 500L, SUB_B, UsnReason.RENAME_NEW_NAME, true, "2024")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 500L, SUB_A, UsnReason.RENAME_OLD_NAME, true, "2023"),
+						usnRecord(2L, 500L, SUB_B, UsnReason.RENAME_NEW_NAME, true, "2024")));
 
 		Assertions.assertThat(result.reconcileNeeded()).isTrue();
 		Assertions.assertThat(result.changedFiles()).isEmpty();
@@ -110,9 +110,9 @@ class UsnChangeInterpreterTest {
 
 	@Test
 	void directoryCreateAndDeleteNeedNoAction() {
-		Interpretation result = interpreter().interpret(List.of(
-				usnRecord(1L, 500L, SUB_A, UsnReason.FILE_CREATE, true, "newdir"),
-				usnRecord(2L, 501L, SUB_A, UsnReason.FILE_DELETE, true, "olddir")));
+		Interpretation result = interpreter()
+				.interpret(List.of(usnRecord(1L, 500L, SUB_A, UsnReason.FILE_CREATE, true, "newdir"),
+						usnRecord(2L, 501L, SUB_A, UsnReason.FILE_DELETE, true, "olddir")));
 
 		Assertions.assertThat(result.reconcileNeeded()).isFalse();
 		Assertions.assertThat(result.changedFiles()).isEmpty();
@@ -125,9 +125,9 @@ class UsnChangeInterpreterTest {
 	}
 
 	/**
-	 * A folder that left this batch under its old name may have taken any number
-	 * of files with it, and the journal does not list them: only a reconcile can
-	 * tell what moved.
+	 * A folder that left this batch under its old name may have taken any number of
+	 * files with it, and the journal does not list them: only a reconcile can tell
+	 * what moved.
 	 */
 	@Test
 	void aDirectoryThatLeftUnderItsOldNameAsksForAReconcile() {

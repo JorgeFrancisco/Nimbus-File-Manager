@@ -81,8 +81,8 @@ class PhashBacklogServiceTest {
 				.toList();
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
-				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
-				.thenReturn(sixty, List.of());
+				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any())).thenReturn(sixty,
+						List.of());
 		when(photoPerceptualHashService.compute(any()))
 				.thenReturn(new PhotoPerceptualFingerprint(new byte[32], new byte[1024]));
 		when(executionQueryService.active()).thenReturn(Optional.empty());
@@ -102,7 +102,7 @@ class PhashBacklogServiceTest {
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
-				.thenReturn(List.of(good, bad), List.of());
+						.thenReturn(List.of(good, bad), List.of());
 
 		byte[] hash = new byte[32];
 
@@ -215,8 +215,8 @@ class PhashBacklogServiceTest {
 	void statusDerivesCountsFromTheTables() {
 		when(mediaFingerprintRepository.countFingerprintedCatalogFiles(PhashBacklogService.KIND,
 				DuplicateConstants.ALGORITHM)).thenReturn(10L);
-		when(fingerprintFailureRepository.countExhaustedFailures(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM, PhashBacklogService.MAX_ATTEMPTS)).thenReturn(2L);
+		when(fingerprintFailureRepository.countExhaustedFailures(PhashBacklogService.KIND, DuplicateConstants.ALGORITHM,
+				PhashBacklogService.MAX_ATTEMPTS)).thenReturn(2L);
 		when(mediaFingerprintRepository.countPendingPhotos(PhashBacklogService.KIND, DuplicateConstants.ALGORITHM,
 				PhashBacklogService.MAX_ATTEMPTS)).thenReturn(5L);
 
@@ -244,7 +244,7 @@ class PhashBacklogServiceTest {
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
-				.thenReturn(List.of(sticker), List.of());
+						.thenReturn(List.of(sticker), List.of());
 		when(photoPerceptualHashService.compute(Path.of("/tmp/sticker.webp")))
 				.thenThrow(new UnsupportedPhotoFingerprintException("ZIP/Lottie"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
@@ -264,9 +264,8 @@ class PhashBacklogServiceTest {
 
 	@Test
 	void failuresReturnsOnlyTheExhaustedRowsWithTheirPaths() {
-		List<FingerprintFailureDetail> expected = List
-				.of(new FingerprintFailureDetail("C:/photos/broken.jpg", FingerprintFailureReason.DECODER_REFUSED,
-						"decode failed"));
+		List<FingerprintFailureDetail> expected = List.of(new FingerprintFailureDetail("C:/photos/broken.jpg",
+				FingerprintFailureReason.DECODER_REFUSED, "decode failed"));
 
 		when(fingerprintFailureRepository.findExhaustedWithPath(PhashBacklogService.KIND, DuplicateConstants.ALGORITHM,
 				PhashBacklogService.MAX_ATTEMPTS)).thenReturn(expected);

@@ -9,8 +9,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQual
  * data tracks are dropped on a further try when MP4 cannot hold them.
  *
  * @param copyVideo when the source is already H.265, so the video stream is
- *                  remuxed instead of re-encoded and {@code quality} does not
- *                  apply
+ * remuxed instead of re-encoded and {@code quality} does not apply
  */
 public record CommandOptions(ConversionQuality quality, boolean copyVideo, boolean encodeAudioAsAac,
 		boolean includeSubtitles, boolean includeData) {

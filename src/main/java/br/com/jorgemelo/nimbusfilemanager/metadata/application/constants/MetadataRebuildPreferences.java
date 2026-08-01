@@ -15,9 +15,9 @@ public final class MetadataRebuildPreferences {
 	public static final String SCOPE_KEY = "scope";
 
 	/**
-	 * When the last run started, which is the cutoff a continuing run skips by. Kept
-	 * with the choices because it is what makes them mean anything on the next run,
-	 * and it is per user like the rest of the panel.
+	 * When the last run started, which is the cutoff a continuing run skips by.
+	 * Kept with the choices because it is what makes them mean anything on the next
+	 * run, and it is per user like the rest of the panel.
 	 */
 	public static final String LAST_RUN_KEY = "lastRunStartedAt";
 

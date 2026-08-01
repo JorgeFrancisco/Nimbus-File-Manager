@@ -31,9 +31,9 @@ public final class ClusterProtection {
 	}
 
 	/**
-	 * Whether the given tree holds a cluster, either at its root or anywhere
-	 * below it - deleting a parent destroys the cluster just as thoroughly as
-	 * deleting the cluster itself.
+	 * Whether the given tree holds a cluster, either at its root or anywhere below
+	 * it - deleting a parent destroys the cluster just as thoroughly as deleting
+	 * the cluster itself.
 	 */
 	public static boolean holdsCluster(Path directory) {
 		if (directory == null || !Files.isDirectory(directory)) {

@@ -67,14 +67,14 @@ public class CatalogCopyRepository {
 
 	/** Writes one table as CSV with a header row. */
 	public long copyOut(String table, OutputStream output) {
-		return copy(manager -> manager.copyOut("COPY " + quoted(table) + " TO STDOUT WITH (FORMAT csv, HEADER)",
-				output));
+		return copy(
+				manager -> manager.copyOut("COPY " + quoted(table) + " TO STDOUT WITH (FORMAT csv, HEADER)", output));
 	}
 
 	/** Loads one table from CSV with a header row, into an empty table. */
 	public long copyIn(String table, InputStream input) {
-		return copy(manager -> manager.copyIn("COPY " + quoted(table) + " FROM STDIN WITH (FORMAT csv, HEADER)",
-				input));
+		return copy(
+				manager -> manager.copyIn("COPY " + quoted(table) + " FROM STDIN WITH (FORMAT csv, HEADER)", input));
 	}
 
 	/**

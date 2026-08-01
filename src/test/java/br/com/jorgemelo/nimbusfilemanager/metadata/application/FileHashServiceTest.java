@@ -62,8 +62,8 @@ class FileHashServiceTest {
 			throw new IOException("drive went away");
 		});
 
-		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file))
-				.withMessageContaining("unreadable.txt").withMessageContaining("drive went away");
+		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file)).withMessageContaining("unreadable.txt")
+				.withMessageContaining("drive went away");
 	}
 
 	/** A JVM without SHA-256 is not something to guess about; it is reported. */

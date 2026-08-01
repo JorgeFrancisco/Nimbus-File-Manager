@@ -8,12 +8,12 @@ package br.com.jorgemelo.nimbusfilemanager.database.application.dto;
  *
  * @param installed whether the server binaries are in place
  * @param serving whether this run is actually being served by the embedded
- *                cluster, as opposed to a database configured by hand
+ * cluster, as opposed to a database configured by hand
  * @param version the major version of the installed binaries, or {@code null}
  * @param directory where the binaries live, for the screen to show
  * @param installable whether this platform can install them at all
  * @param restartRequired whether an install now would only take effect on the
- *                        next start, because the server it replaces is running
+ * next start, because the server it replaces is running
  */
 public record EmbeddedDatabaseStatus(boolean installed, boolean serving, String version, String directory,
 		boolean installable, boolean restartRequired) {

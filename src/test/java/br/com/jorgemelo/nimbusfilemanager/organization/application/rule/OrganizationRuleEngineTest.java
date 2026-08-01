@@ -125,8 +125,8 @@ class OrganizationRuleEngineTest {
 	 */
 	@Test
 	void shouldClassifyByFolderWhenTheNameNoLongerSaysWhatsApp() {
-		OrganizationRuleResult result = engine.classify(
-				candidate("renamed.jpg", "C:/media/WhatsApp/Media/WhatsApp Images", MediaSubcategory.OTHER));
+		OrganizationRuleResult result = engine
+				.classify(candidate("renamed.jpg", "C:/media/WhatsApp/Media/WhatsApp Images", MediaSubcategory.OTHER));
 
 		Assertions.assertThat(result.rule()).isEqualTo(OrganizationRuleType.WHATSAPP);
 		Assertions.assertThat(result.reason()).isEqualTo(OrganizationRuleReason.FOLDER);

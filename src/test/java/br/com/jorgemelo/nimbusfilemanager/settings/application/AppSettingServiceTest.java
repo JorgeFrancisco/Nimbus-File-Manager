@@ -64,13 +64,12 @@ class AppSettingServiceTest {
 	void updateShouldValidateTypeAndAuditUser() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.API_MAX_PAGE_SIZE)
-				.settingValue("100").valueType("INTEGER").createdByUsername("system").build();
+		AppSetting setting = AppSetting.builder().settingKey(SettingsConstants.API_MAX_PAGE_SIZE).settingValue("100")
+				.valueType("INTEGER").createdByUsername("system").build();
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE))
-				.thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE)).thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
 		service.update(SettingsConstants.API_MAX_PAGE_SIZE, "250", "admin");
@@ -296,9 +295,8 @@ class AppSettingServiceTest {
 	void intValueShouldReadAStoredNumberEvenWithSurroundingSpaces() {
 		AppSettingRepository repository = mock(AppSettingRepository.class);
 
-		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE))
-				.thenReturn(Optional.of(AppSetting.builder()
-						.settingKey(SettingsConstants.API_MAX_PAGE_SIZE).settingValue(" 250 ").build()));
+		when(repository.findBySettingKey(SettingsConstants.API_MAX_PAGE_SIZE)).thenReturn(Optional.of(
+				AppSetting.builder().settingKey(SettingsConstants.API_MAX_PAGE_SIZE).settingValue(" 250 ").build()));
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
@@ -343,14 +341,15 @@ class AppSettingServiceTest {
 	}
 
 	/**
-	 * A configuration file that omits the optional sections still has to produce the
-	 * whole definition list: the settings screen is where the operator fills those
-	 * values in, so failing to seed it would leave nowhere to fix the configuration.
+	 * A configuration file that omits the optional sections still has to produce
+	 * the whole definition list: the settings screen is where the operator fills
+	 * those values in, so failing to seed it would leave nowhere to fix the
+	 * configuration.
 	 */
 	@Test
 	void definitionsSurviveAConfigurationWithoutTheOptionalSections() {
-		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", null, null, null,
-				null, null);
+		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", null, null, null, null,
+				null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), bare);
 
@@ -366,17 +365,15 @@ class AppSettingServiceTest {
 	@Test
 	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
 		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace",
-				new Tools(null, null, true),
-				new Inventory(true, 60_000L), new Api(500, 20, 100), new Security(5, 5, 15, true, "admin", "admin"),
-				null);
+				new Tools(null, null, true), new Inventory(true, 60_000L), new Api(500, 20, 100),
+				new Security(5, 5, 15, true, "admin", "admin"), null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
 
 		Assertions.assertThat(service.definitions())
 				.filteredOn(definition -> List.of(SettingsConstants.TOOL_FFPROBE, SettingsConstants.TOOL_FFMPEG)
-					.contains(definition.key()))
-				.hasSize(2)
-				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isEmpty());
+						.contains(definition.key()))
+				.hasSize(2).allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isEmpty());
 	}
 
 	private NimbusFileManagerProperties properties() {
@@ -404,22 +401,19 @@ class AppSettingServiceTest {
 
 		AppSettingService service = new AppSettingService(repository, properties());
 
-		when(repository.findBySettingKey(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME))
-				.thenReturn(Optional.of(setting));
+		when(repository.findBySettingKey(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME)).thenReturn(Optional.of(setting));
 		when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		Assertions
-				.assertThat(service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, " 23:30 ", "admin")
-					.getSettingValue())
+		Assertions.assertThat(
+				service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, " 23:30 ", "admin").getSettingValue())
 				.isEqualTo("23:30");
-		Assertions
-				.assertThat(service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "07:05:30", "admin")
-					.getSettingValue())
+		Assertions.assertThat(
+				service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "07:05:30", "admin").getSettingValue())
 				.isEqualTo("07:05");
 
 		Assertions
 				.assertThatThrownBy(
-					() -> service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "de manha", "admin"))
+						() -> service.update(SettingsConstants.BOUNDARY_AUTO_UPDATE_TIME, "de manha", "admin"))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 }

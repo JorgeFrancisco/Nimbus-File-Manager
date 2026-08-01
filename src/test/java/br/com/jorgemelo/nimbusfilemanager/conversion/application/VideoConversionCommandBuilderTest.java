@@ -69,8 +69,7 @@ class VideoConversionCommandBuilderTest {
 	void remuxesInsteadOfReEncodingAVideoThatIsAlreadyHevc() {
 		List<String> command = builder.build(input, output, options(true, false, true));
 
-		Assertions.assertThat(command).containsSubsequence("-c:v", "copy").doesNotContain("libx265", "-crf",
-				"-preset");
+		Assertions.assertThat(command).containsSubsequence("-c:v", "copy").doesNotContain("libx265", "-crf", "-preset");
 	}
 
 	@Test
@@ -92,8 +91,8 @@ class VideoConversionCommandBuilderTest {
 	void leavesSubtitlesOutEntirelyWhenMp4CannotHoldThem() {
 		List<String> command = builder.build(input, output, options(false, false, false));
 
-		Assertions.assertThat(command).doesNotContain("0:s?", "-c:s", "mov_text")
-				.containsSubsequence("-map", "0:a?").containsSubsequence("-c:d", "copy");
+		Assertions.assertThat(command).doesNotContain("0:s?", "-c:s", "mov_text").containsSubsequence("-map", "0:a?")
+				.containsSubsequence("-c:d", "copy");
 	}
 
 	@Test
@@ -101,8 +100,8 @@ class VideoConversionCommandBuilderTest {
 		Assertions.assertThat(builder.build(input, output, options(false, false, true)))
 				.containsSubsequence("-tag:v", "hvc1").containsSubsequence("-movflags", "use_metadata_tags");
 
-		Assertions.assertThat(builder.build(input, output, options(true, false, true)))
-				.containsSubsequence("-tag:v", "hvc1");
+		Assertions.assertThat(builder.build(input, output, options(true, false, true))).containsSubsequence("-tag:v",
+				"hvc1");
 	}
 
 	@Test
@@ -131,14 +130,13 @@ class VideoConversionCommandBuilderTest {
 	}
 
 	private CommandOptions options(boolean copyVideo, boolean encodeAudioAsAac, boolean includeSubtitles) {
-		return new CommandOptions(ConversionQuality.BALANCED, copyVideo, encodeAudioAsAac, includeSubtitles,
-				true);
+		return new CommandOptions(ConversionQuality.BALANCED, copyVideo, encodeAudioAsAac, includeSubtitles, true);
 	}
 
 	/**
 	 * The user picks "rápido", not a vendor: the command is built for whichever
-	 * encoder this machine proved it has, each with its own quality knob. Naming one
-	 * here would make the feature work on one card and fail on the next.
+	 * encoder this machine proved it has, each with its own quality knob. Naming
+	 * one here would make the feature work on one card and fail on the next.
 	 */
 	@Test
 	void usesWhicheverGraphicsCardEncoderTheMachineHasWithItsOwnQualityScale() {

@@ -54,7 +54,7 @@ public final class EmbeddedDatabaseActivation {
 	/**
 	 * @param configured the explicit setting, or {@code null} when silent
 	 * @param externalDatabase a host or url configured by hand, or {@code null}
-	 *                         when nothing was
+	 * when nothing was
 	 * @param installedMarker the launcher's marker, or {@code null} for a build
 	 * @param operatingSystem the {@code os.name} of this run
 	 * @param binariesPresent whether the packaged PostgreSQL is where it belongs
@@ -86,7 +86,6 @@ public final class EmbeddedDatabaseActivation {
 
 		return binariesPresent ? ENABLED : BINARIES_MISSING;
 	}
-
 
 	private static boolean isWindows(String operatingSystem) {
 		return operatingSystem != null && operatingSystem.toLowerCase(Locale.ROOT).contains(WINDOWS);

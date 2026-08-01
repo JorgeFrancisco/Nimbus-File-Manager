@@ -15,8 +15,9 @@ class MediaProcessingPolicyTest {
 	@Test
 	void shouldFlagAMediaExtensionCarryingArchiveBytes() {
 		Assertions.assertThat(MediaProcessingPolicy.isArchiveMasqueradingAsMedia("webp", "application/zip")).isTrue();
-		Assertions.assertThat(
-				MediaProcessingPolicy.isArchiveMasqueradingAsMedia("webp", "application/x-zip-compressed")).isTrue();
+		Assertions
+				.assertThat(MediaProcessingPolicy.isArchiveMasqueradingAsMedia("webp", "application/x-zip-compressed"))
+				.isTrue();
 	}
 
 	/**

@@ -5,8 +5,8 @@ import java.util.regex.Pattern;
 /**
  * One configured folder-exclusion pattern, ready to match: a literal name
  * matched case-insensitively, or a glob ({@code *}, {@code ?}) compiled once.
- * Single owner of the glob-to-regex conversion - the scanner and the
- * exclusion service both match here instead of each rebuilding the rule.
+ * Single owner of the glob-to-regex conversion - the scanner and the exclusion
+ * service both match here instead of each rebuilding the rule.
  */
 public record FolderMatcher(String pattern, Pattern compiled) {
 

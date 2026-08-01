@@ -46,8 +46,7 @@ class RegistrationWebControllerTest {
 				redirectAttributes);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/login");
-		Assertions.assertThat(redirectAttributes.getFlashAttributes()).extractingByKey("registered")
-				.isEqualTo(true);
+		Assertions.assertThat(redirectAttributes.getFlashAttributes()).extractingByKey("registered").isEqualTo(true);
 		verify(emailService).sendConfirmationEmail("new@example.com", "http://localhost:8088/confirm?token=tok-123");
 	}
 
@@ -115,8 +114,7 @@ class RegistrationWebControllerTest {
 		String view = controller.confirm("tok-123", redirectAttributes);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/login");
-		Assertions.assertThat(redirectAttributes.getFlashAttributes()).extractingByKey("confirmed")
-				.isEqualTo(true);
+		Assertions.assertThat(redirectAttributes.getFlashAttributes()).extractingByKey("confirmed").isEqualTo(true);
 		verify(appUserAccountService).confirmRegistration("tok-123");
 	}
 

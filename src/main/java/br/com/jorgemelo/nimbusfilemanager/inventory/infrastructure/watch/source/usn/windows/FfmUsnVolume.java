@@ -185,10 +185,8 @@ final class FfmUsnVolume implements UsnVolume {
 					(int) CREATE_USN_JOURNAL_DATA.byteSize(), MemorySegment.NULL, 0, returned, capture);
 
 			if (!ok) {
-				throw new UsnUnavailableException(
-						"Could not create USN journal on " + volumePath + " (error "
-								+ WindowsKernel32.lastError(capture)
-								+ ")");
+				throw new UsnUnavailableException("Could not create USN journal on " + volumePath + " (error "
+						+ WindowsKernel32.lastError(capture) + ")");
 			}
 		}
 	}

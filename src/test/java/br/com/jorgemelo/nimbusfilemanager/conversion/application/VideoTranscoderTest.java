@@ -310,10 +310,8 @@ class VideoTranscoderTest {
 	}
 
 	private TranscodeRequest fastRequest() {
-		return new TranscodeRequest(source, 120.0,
-				new ConversionOptions(ConversionQuality.FAST_BALANCED, AudioHandling.COPY, OriginalDisposition.KEEP, "",
-						NameAffixPosition.SUFFIX),
-				false);
+		return new TranscodeRequest(source, 120.0, new ConversionOptions(ConversionQuality.FAST_BALANCED,
+				AudioHandling.COPY, OriginalDisposition.KEEP, "", NameAffixPosition.SUFFIX), false);
 	}
 
 	private TranscodeRequest request(AudioHandling audio) {
@@ -346,8 +344,7 @@ class VideoTranscoderTest {
 
 	private VideoTranscoder build(VideoTranscodeRunner runner) {
 		return new VideoTranscoder(new VideoConversionCommandBuilder(externalToolPaths, hardwareEncoderProbe), runner,
-				validator,
-				new StreamCompatibilityPolicy(), conversionFileNaming, new FfmpegProgressParser(),
+				validator, new StreamCompatibilityPolicy(), conversionFileNaming, new FfmpegProgressParser(),
 				new ExternalToolGate(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()));
 	}
 }

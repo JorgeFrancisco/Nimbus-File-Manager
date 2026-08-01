@@ -33,8 +33,8 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.constants.Timelin
  * offline geo dataset is installed and the feature is enabled; it links admins
  * straight to the geo section of Settings. The dismissal is a per-user
  * preference (stored under the shared "layout" page key, like the
- * sidebar/theme), so dismissing the banner sticks until the user re-enables
- * it from Preferences.
+ * sidebar/theme), so dismissing the banner sticks until the user re-enables it
+ * from Preferences.
  */
 @Controller
 public class TimelineWebController {

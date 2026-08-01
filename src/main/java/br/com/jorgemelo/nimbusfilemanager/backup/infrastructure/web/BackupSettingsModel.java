@@ -23,8 +23,7 @@ public class BackupSettingsModel implements SettingsSectionModel {
 	private final BackupFolderResolver backupFolderResolver;
 
 	@Autowired
-	public BackupSettingsModel(CatalogBackupService catalogBackupService,
-			BackupFolderResolver backupFolderResolver) {
+	public BackupSettingsModel(CatalogBackupService catalogBackupService, BackupFolderResolver backupFolderResolver) {
 		this.catalogBackupService = catalogBackupService;
 		this.backupFolderResolver = backupFolderResolver;
 	}

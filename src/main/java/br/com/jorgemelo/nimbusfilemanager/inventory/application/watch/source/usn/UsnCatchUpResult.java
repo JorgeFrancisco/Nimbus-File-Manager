@@ -9,7 +9,7 @@ import java.util.List;
  * replayed), plus whether a full reconcile is still needed - because the cursor
  * could not be replayed, or a directory moved within the offline window.
  *
- * @param offlineChanges  the files changed while the app was down.
+ * @param offlineChanges the files changed while the app was down.
  * @param reconcileNeeded whether the catalog must be reconciled anyway.
  */
 public record UsnCatchUpResult(List<Path> offlineChanges, boolean reconcileNeeded) {

@@ -50,9 +50,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcCon
 /**
  * Renders the settings page for real, template included. The controller unit
  * test only proves which view name comes back, so an expression that cannot be
- * evaluated - a fragment parameter referenced inside a SpEL selection, where the
- * root object becomes the element being tested - passed every check and still
- * broke the whole page at runtime.
+ * evaluated - a fragment parameter referenced inside a SpEL selection, where
+ * the root object becomes the element being tested - passed every check and
+ * still broke the whole page at runtime.
  */
 @WebMvcTest(controllers = SettingsWebController.class,
 		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
@@ -60,8 +60,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcCon
 @AutoConfigureMockMvc(addFilters = false)
 class SettingsPageRenderTest {
 
-	private static final ExternalToolStatus MISSING_TOOLS = new ExternalToolStatus(false, "ffmpeg", false,
-			"ffprobe", null, false, true, "C:/app/tools/ffmpeg/bin");
+	private static final ExternalToolStatus MISSING_TOOLS = new ExternalToolStatus(false, "ffmpeg", false, "ffprobe",
+			null, false, true, "C:/app/tools/ffmpeg/bin");
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -144,8 +144,7 @@ class SettingsPageRenderTest {
 
 			model.addAttribute("toolStatus", MISSING_TOOLS);
 			model.addAttribute("toolInstallRunning", false);
-			model.addAttribute("toolInstallProgress",
-					new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, -1));
+			model.addAttribute("toolInstallProgress", new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, -1));
 
 			return null;
 		}).when(externalToolSettingsModel).addTo(any(), any());
@@ -163,15 +162,15 @@ class SettingsPageRenderTest {
 			Model model = invocation.getArgument(0);
 
 			model.addAttribute("embeddedDatabaseStatus",
-				new EmbeddedDatabaseStatus(false, false, null, "C:/app/tools/postgresql", true, false));
+					new EmbeddedDatabaseStatus(false, false, null, "C:/app/tools/postgresql", true, false));
 
 			return null;
 		}).when(embeddedDatabaseSettingsModel).addTo(any(), any());
 	}
 
 	private AppSetting setting(String key, String value, String valueType) {
-		return AppSetting.builder().settingKey(key).settingValue(value).valueType(valueType)
-				.createdByUsername("system").build();
+		return AppSetting.builder().settingKey(key).settingValue(value).valueType(valueType).createdByUsername("system")
+				.build();
 	}
 
 	@Test
@@ -193,9 +192,9 @@ class SettingsPageRenderTest {
 	 */
 	@Test
 	void rendersTheSettingsThatBelongToNoOtherGroup() throws Exception {
-		when(appSettingService.list()).thenReturn(List.of(
-				setting(SettingsConstants.TIMEZONE, "America/Sao_Paulo", "ZONE_ID"),
-				setting(SettingsConstants.MAP_MAX_ZOOM, "19", "INTEGER")));
+		when(appSettingService.list())
+				.thenReturn(List.of(setting(SettingsConstants.TIMEZONE, "America/Sao_Paulo", "ZONE_ID"),
+						setting(SettingsConstants.MAP_MAX_ZOOM, "19", "INTEGER")));
 
 		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
 				.andExpect(content().string(Matchers.containsString("America/Sao_Paulo")))
@@ -203,8 +202,8 @@ class SettingsPageRenderTest {
 	}
 
 	/**
-	 * A stored time zone the offered list does not carry stays selectable instead of
-	 * being dropped from the dropdown that is about to save over it.
+	 * A stored time zone the offered list does not carry stays selectable instead
+	 * of being dropped from the dropdown that is about to save over it.
 	 */
 	@Test
 	void keepsAStoredTimeZoneThatIsNotOffered() throws Exception {

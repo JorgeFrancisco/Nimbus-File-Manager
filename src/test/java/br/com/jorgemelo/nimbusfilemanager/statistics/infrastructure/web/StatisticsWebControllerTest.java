@@ -41,8 +41,8 @@ class StatisticsWebControllerTest {
 	private UserPagePreferenceService userPagePreferenceService;
 
 	private StatisticsWebController controller() {
-		return new StatisticsWebController(statisticsService, executionTelemetryQueryService,
-				userPagePreferenceService, new ExecutionLabels());
+		return new StatisticsWebController(statisticsService, executionTelemetryQueryService, userPagePreferenceService,
+				new ExecutionLabels());
 	}
 
 	@Test
@@ -106,8 +106,8 @@ class StatisticsWebControllerTest {
 
 		Assertions.assertThat(model).containsEntry("selectedVersion", "3.4.0.14");
 
-		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY,
-				StatisticsConstants.VERSION_KEY, "3.4.0.14");
+		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY, StatisticsConstants.VERSION_KEY,
+				"3.4.0.14");
 	}
 
 	@Test
@@ -133,8 +133,8 @@ class StatisticsWebControllerTest {
 
 		Assertions.assertThat(model.get("selectedVersion")).isNull();
 
-		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY,
-				StatisticsConstants.VERSION_KEY, "");
+		verify(userPagePreferenceService).save("system", StatisticsConstants.PAGE_KEY, StatisticsConstants.VERSION_KEY,
+				"");
 	}
 
 	@Test

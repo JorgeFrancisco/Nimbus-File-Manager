@@ -28,14 +28,14 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvi
 public class AdminBoundaryPipStrategy implements ReverseGeocodingStrategy {
 
 	/**
-	 * Tolerance for the nearest-boundary fallback: 12 nautical miles, the breadth of
-	 * the territorial sea under the UN Convention on the Law of the Sea (in Brazil,
-	 * Lei 8.617/1993). Water inside it is national territory, so approximating a
-	 * coordinate there to the coast it belongs to is defensible; beyond it the point
-	 * is genuinely unresolvable, not coastal GPS noise or a boat ride within sight
-	 * of the shore. The administrative polygons themselves stop at the shoreline -
-	 * no state or municipality has a maritime limit of its own - which is why the
-	 * tolerance exists at all.
+	 * Tolerance for the nearest-boundary fallback: 12 nautical miles, the breadth
+	 * of the territorial sea under the UN Convention on the Law of the Sea (in
+	 * Brazil, Lei 8.617/1993). Water inside it is national territory, so
+	 * approximating a coordinate there to the coast it belongs to is defensible;
+	 * beyond it the point is genuinely unresolvable, not coastal GPS noise or a
+	 * boat ride within sight of the shore. The administrative polygons themselves
+	 * stop at the shoreline - no state or municipality has a maritime limit of its
+	 * own - which is why the tolerance exists at all.
 	 */
 	static final double NEAREST_FALLBACK_MAX_KM = 22.2;
 

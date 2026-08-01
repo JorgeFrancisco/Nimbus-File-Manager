@@ -56,8 +56,8 @@ class OrganizationLayoutResolverTest {
 	/** No location at all leaves the layout exactly as it was. */
 	@Test
 	void shouldLeaveTheLayoutUntouchedWithoutLocationSegments() {
-		Path withNull = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA",
-				"IMAGENS", null);
+		Path withNull = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA", "IMAGENS",
+				null);
 		Path withEmpty = resolver.resolveFolder(Path.of("target"), "YEAR_MONTH/DAY", "202405", "09", "CAMERA",
 				"IMAGENS", List.of());
 

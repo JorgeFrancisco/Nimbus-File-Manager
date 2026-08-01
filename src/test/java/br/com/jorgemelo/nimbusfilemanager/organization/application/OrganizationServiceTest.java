@@ -165,8 +165,7 @@ class OrganizationServiceTest {
 		OrganizationPreviewRequest samePathRequest = new OrganizationPreviewRequest("C:/input", "C:/input", true,
 				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
 		OrganizationPreviewRequest nestedTargetRequest = new OrganizationPreviewRequest("C:/input",
-				"C:/input/organized",
-				true, OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
+				"C:/input/organized", true, OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
 
 		Assertions.assertThatThrownBy(() -> service.preview(samePathRequest))
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("devem ser diferentes");
@@ -220,8 +219,7 @@ class OrganizationServiceTest {
 		// Preview is a dry-run execute request now: same type as execute, dryRun=true.
 		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/target", true,
 				OrganizationLayout.DEFAULT, 50, false, null, true, null, null, null, null, false, false,
-				LocationSubdivision.NONE, null,
-				LocationFallbackMode.IGNORE, true);
+				LocationSubdivision.NONE, null, LocationFallbackMode.IGNORE, true);
 
 		when(executionRepository.save(any())).thenAnswer(invocation -> {
 			Execution execution = invocation.getArgument(0);
@@ -290,8 +288,7 @@ class OrganizationServiceTest {
 	void undoPublicShouldTranslateThePublicIdBeforeUndoing() {
 		UUID publicId = UUID.randomUUID();
 
-		OrganizationUndoResponse response = new OrganizationUndoResponse(4L, "FINISHED", 2, 2, 0, 0, "ok",
-				List.of());
+		OrganizationUndoResponse response = new OrganizationUndoResponse(4L, "FINISHED", 2, 2, 0, 0, "ok", List.of());
 
 		when(executionRepository.findByPublicId(publicId))
 				.thenReturn(Optional.of(Execution.builder().id(4L).publicId(publicId).build()));
@@ -309,8 +306,8 @@ class OrganizationServiceTest {
 
 		OrganizationService service = service();
 
-		Assertions.assertThatThrownBy(() -> service.undoPublic(publicId))
-				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining(publicId.toString());
+		Assertions.assertThatThrownBy(() -> service.undoPublic(publicId)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining(publicId.toString());
 	}
 
 	private OrganizationService service() {

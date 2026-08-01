@@ -10,9 +10,9 @@ import java.util.List;
  * same as the real run and defeat the point of simulating.
  *
  * @param skippedByCutoff files inside the folder that the cutoff leaves out.
- * @param examined        files whose metadata was extracted for this preview.
- * @param wouldChange     how many of those would end up with another date.
- * @param preview         the first differences, to show on screen.
+ * @param examined files whose metadata was extracted for this preview.
+ * @param wouldChange how many of those would end up with another date.
+ * @param preview the first differences, to show on screen.
  */
 public record MetadataRebuildSimulation(int skippedByCutoff, int examined, int wouldChange,
 		List<MetadataRebuildPreview> preview) {

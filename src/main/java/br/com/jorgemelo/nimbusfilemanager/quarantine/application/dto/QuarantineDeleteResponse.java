@@ -8,7 +8,7 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto;
  * that made a delete blocked by a running conversion look like a success.
  *
  * @param message null when everything asked for was deleted, and there is
- *                nothing to interrupt the user with.
+ * nothing to interrupt the user with.
  */
 public record QuarantineDeleteResponse(int purged, int catalogsFreed, int skipped, int busy, int errors,
 		String message) {

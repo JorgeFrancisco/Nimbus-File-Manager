@@ -88,8 +88,8 @@ class WhatsAppMediaFamilyTest {
 	void dateFacetShouldResolveDateFromName() {
 		Assertions.assertThat(family.supports("PTT-20190414-WA0009.opus")).isTrue();
 		Assertions.assertThat(family.supports("photo-20240102.jpg")).isFalse();
-		Assertions.assertThat(family.resolve("IMG-20240102-WA0001.jpg")).isEqualTo(LocalDateTime.of(2024, Month.JANUARY,
-				2, 0, 0));
+		Assertions.assertThat(family.resolve("IMG-20240102-WA0001.jpg"))
+				.isEqualTo(LocalDateTime.of(2024, Month.JANUARY, 2, 0, 0));
 		Assertions.assertThat(family.resolve("PTT-20190414-WA0009.opus"))
 				.isEqualTo(LocalDateTime.of(2019, Month.APRIL, 14, 0, 0));
 		Assertions.assertThat(family.resolve("VID_20221231_WA0007.mp4"))

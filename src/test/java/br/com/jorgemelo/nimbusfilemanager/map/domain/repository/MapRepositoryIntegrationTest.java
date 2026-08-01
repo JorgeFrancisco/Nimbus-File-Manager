@@ -78,8 +78,7 @@ class MapRepositoryIntegrationTest {
 
 		// An inactive EXIF media at the busy coordinate must be excluded everywhere.
 		CatalogFile deleted = exif(FileType.PHOTO, -23.55050, -46.63330, LocalDateTime.of(2024, Month.JUNE, 1, 0, 0),
-				null,
-				null);
+				null, null);
 		deleted.setLifecycleStatus(LifecycleStatus.DELETED);
 		catalogFileRepository.saveAndFlush(deleted);
 
@@ -166,8 +165,7 @@ class MapRepositoryIntegrationTest {
 	}
 
 	private CatalogFile exif(FileType fileType, double latitude, double longitude, LocalDateTime captureDate,
-			String city,
-			String state) {
+			String city, String state) {
 		CatalogFile file = persist(fileType, captureDate, latitude, longitude);
 
 		if (city != null) {
@@ -204,11 +202,10 @@ class MapRepositoryIntegrationTest {
 
 	private void resolvePlace(CatalogFile file, String countryCode, String stateName, String cityName) {
 		ResolvedPlace place = ResolvedPlace.builder().countryCode(countryCode).countryName("Brasil")
-				.stateName(stateName)
-				.cityName(cityName).confidence(LocationConfidence.HIGH).provider(LocationProvider.ADMIN_BOUNDARIES)
-				.resolvedAt(LocalDateTime.now()).build();
+				.stateName(stateName).cityName(cityName).confidence(LocationConfidence.HIGH)
+				.provider(LocationProvider.ADMIN_BOUNDARIES).resolvedAt(LocalDateTime.now()).build();
 
-		geoLocationRepository.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).manual(false)
-				.build());
+		geoLocationRepository
+				.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).manual(false).build());
 	}
 }

@@ -63,8 +63,8 @@ public final class Fixture {
 	}
 
 	public DuplicatesWebController controller() {
-		return new DuplicatesWebController(duplicates, similarity, phash, phashRunner, preferences,
-				similarityRunner, deletionRunner, exclusions, videoSimilarityWeb(), new DateSourceLabels());
+		return new DuplicatesWebController(duplicates, similarity, phash, phashRunner, preferences, similarityRunner,
+				deletionRunner, exclusions, videoSimilarityWeb(), new DateSourceLabels());
 	}
 
 	private VideoSimilarityWeb videoSimilarityWeb() {

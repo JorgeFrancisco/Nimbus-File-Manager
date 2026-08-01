@@ -36,9 +36,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModel
 /**
  * Infinite scroll renders {@code app/files :: tiles} on its own, with no page
  * around it. Anything the tiles depend on has to live inside the fragment
- * element: a {@code th:with} on an ancestor is simply not evaluated in a partial
- * render, and the thumbnail width silently became {@code null} - every appended
- * page asked for {@code ?w=null} and got a 500 instead of an image.
+ * element: a {@code th:with} on an ancestor is simply not evaluated in a
+ * partial render, and the thumbnail width silently became {@code null} - every
+ * appended page asked for {@code ?w=null} and got a 500 instead of an image.
  */
 @WebMvcTest(controllers = FileExplorerWebController.class,
 		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,

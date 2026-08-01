@@ -31,7 +31,7 @@ public class ExternalToolInstallProgress {
 
 	/**
 	 * @param totalBytes content length of the archive, or a non-positive value when
-	 *                   the server does not announce one.
+	 * the server does not announce one.
 	 */
 	public synchronized void startDownload(long totalBytes) {
 		phase = ToolInstallPhase.DOWNLOADING;

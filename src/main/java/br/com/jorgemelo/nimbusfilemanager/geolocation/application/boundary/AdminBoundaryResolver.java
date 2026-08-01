@@ -157,8 +157,7 @@ public class AdminBoundaryResolver {
 	 * edge rather than to a centroid, so a wide region does not lose to a small
 	 * neighbour just by being wide.
 	 */
-	private Optional<NearestBoundary> closest(AdminBoundaryKind kind, double latitude, double longitude,
-			double maxKm) {
+	private Optional<NearestBoundary> closest(AdminBoundaryKind kind, double latitude, double longitude, double maxKm) {
 		double latMargin = maxKm / KM_PER_DEGREE_LAT;
 		double lonMargin = maxKm / (KM_PER_DEGREE_LAT * Math.max(0.01, Math.cos(Math.toRadians(latitude))));
 

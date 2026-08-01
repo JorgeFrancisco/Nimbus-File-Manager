@@ -34,8 +34,8 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 
 	/**
 	 * @return folder segments to insert under the layout (possibly the fallback
-	 *         folder), or an empty list when location must not subdivide this
-	 *         media. Manual locations always qualify.
+	 * folder), or an empty list when location must not subdivide this media. Manual
+	 * locations always qualify.
 	 */
 	public List<String> subdivisionSegments(MediaGeoLocation location, LocationSubdivision subdivision,
 			LocationConfidence minimumConfidence, LocationFallbackMode fallback) {

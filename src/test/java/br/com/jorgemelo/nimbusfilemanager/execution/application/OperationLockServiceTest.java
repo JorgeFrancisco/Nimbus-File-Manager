@@ -102,8 +102,8 @@ class OperationLockServiceTest {
 	 * by appending another one produced something no path could start with, so a
 	 * lock on a file did not conflict with a request for the drive holding it: a
 	 * conversion could run while the watcher started an inventory over the same
-	 * tree. The temporary directory gives a real root on both operating systems -
-	 * a literal would be a relative path on the Linux build.
+	 * tree. The temporary directory gives a real root on both operating systems - a
+	 * literal would be a relative path on the Linux build.
 	 */
 	@Test
 	void isBusyShouldSeeThroughADriveRootInEitherDirection(@TempDir Path folder) throws Exception {

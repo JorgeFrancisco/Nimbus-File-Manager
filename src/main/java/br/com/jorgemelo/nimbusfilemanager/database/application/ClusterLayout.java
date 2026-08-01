@@ -54,8 +54,8 @@ public final class ClusterLayout {
 	}
 
 	/**
-	 * The port and generated password, kept beside the cluster rather than in it
-	 * - {@code initdb} owns the contents of PGDATA, and a stray file there is one
+	 * The port and generated password, kept beside the cluster rather than in it -
+	 * {@code initdb} owns the contents of PGDATA, and a stray file there is one
 	 * more thing a future version of PostgreSQL could object to.
 	 */
 	public Path clusterProperties() {
@@ -63,16 +63,15 @@ public final class ClusterLayout {
 	}
 
 	/**
-	 * Where the packaged server is, which is not the same place in a build and
-	 * in an installation.
+	 * Where the packaged server is, which is not the same place in a build and in
+	 * an installation.
 	 *
 	 * <p>
-	 * A relative path is resolved against the working directory, and an
-	 * installed copy is started from wherever its shortcut happens to point -
-	 * the Desktop, {@code C:\Windows\System32}, anywhere. The launcher's own
-	 * path is the one thing that always says where the installation is, so when
-	 * the marker is there the binaries are found beside it rather than beside
-	 * whoever started it.
+	 * A relative path is resolved against the working directory, and an installed
+	 * copy is started from wherever its shortcut happens to point - the Desktop,
+	 * {@code C:\Windows\System32}, anywhere. The launcher's own path is the one
+	 * thing that always says where the installation is, so when the marker is there
+	 * the binaries are found beside it rather than beside whoever started it.
 	 */
 	static Path bundledBinaries(String installedMarker) {
 		Path relative = Path.of(BUNDLED_FOLDER, SERVER_FOLDER, BINARY_FOLDER);
@@ -109,8 +108,8 @@ public final class ClusterLayout {
 	}
 
 	/**
-	 * The major version the existing data belongs to, or {@code null} when there
-	 * is no cluster yet. Opening data written by another major version is what
+	 * The major version the existing data belongs to, or {@code null} when there is
+	 * no cluster yet. Opening data written by another major version is what
 	 * PostgreSQL refuses to do, so this is read before starting rather than
 	 * discovered from a failure afterwards.
 	 */

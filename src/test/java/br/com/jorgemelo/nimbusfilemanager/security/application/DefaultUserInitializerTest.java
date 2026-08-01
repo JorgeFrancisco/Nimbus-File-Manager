@@ -92,7 +92,8 @@ class DefaultUserInitializerTest {
 		when(repository.count()).thenReturn(1L);
 		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
 
-		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value"))
+				.run(null);
 
 		verify(repository, never()).save(any());
 	}

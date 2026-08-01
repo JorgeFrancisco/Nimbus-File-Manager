@@ -30,10 +30,9 @@ class MediaSubcategoryResolverTest {
 	private final MediaSubcategoryResolver resolver = new MediaSubcategoryResolver(
 			new MediaSubcategoryRuleEngine(List.of(new WhatsAppMediaFamily(Clock.systemDefaultZone()),
 					new AirBrushMediaFamily(Clock.systemDefaultZone()),
-							new ScreenshotMediaFamily(Clock.systemDefaultZone()),
-					new DroneMediaFamily(), new GoProMediaFamily(), new CameraMediaFamily(),
-					new PeachyMediaFamily(Clock.systemDefaultZone()),
-							new ImageUuidMediaFamily(Clock.systemDefaultZone()))));
+					new ScreenshotMediaFamily(Clock.systemDefaultZone()), new DroneMediaFamily(),
+					new GoProMediaFamily(), new CameraMediaFamily(), new PeachyMediaFamily(Clock.systemDefaultZone()),
+					new ImageUuidMediaFamily(Clock.systemDefaultZone()))));
 
 	@Test
 	void shouldResolveSubcategoryFromFileNameOrPath() {

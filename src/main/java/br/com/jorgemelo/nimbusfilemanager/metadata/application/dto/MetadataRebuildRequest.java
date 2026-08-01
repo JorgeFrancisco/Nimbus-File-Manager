@@ -34,24 +34,25 @@ public record MetadataRebuildRequest(
 	public static final int MAX_LIMIT = 250_000;
 
 	/**
-	 * Stands in for "no cutoff" when the caller wants every file. The query compares
-	 * against it instead of testing the parameter for null because PostgreSQL cannot
-	 * infer the type of a bare null timestamp parameter and rejects the statement -
-	 * a far-future instant keeps one query, one code path, and every file a
-	 * candidate.
+	 * Stands in for "no cutoff" when the caller wants every file. The query
+	 * compares against it instead of testing the parameter for null because
+	 * PostgreSQL cannot infer the type of a bare null timestamp parameter and
+	 * rejects the statement - a far-future instant keeps one query, one code path,
+	 * and every file a candidate.
 	 */
 	public static final LocalDateTime NO_CUTOFF = LocalDateTime.of(9999, Month.DECEMBER, 31, 23, 59, 59);
 
 	/**
-	 * Request for a whole folder, as the settings panel asks for it: no capture-date
-	 * or date-source filter, and the highest limit the request honours, since a
-	 * screen-driven rebuild is meant to cover the folder rather than a sample.
+	 * Request for a whole folder, as the settings panel asks for it: no
+	 * capture-date or date-source filter, and the highest limit the request
+	 * honours, since a screen-driven rebuild is meant to cover the folder rather
+	 * than a sample.
 	 *
 	 * <p>
 	 * A folder larger than that ceiling takes more than one run, so
-	 * {@code notAnalysedSince} carries the moment the previous run started: files it
-	 * already rebuilt are stamped later than that and drop out of this one, which is
-	 * what makes the next run continue instead of starting over.
+	 * {@code notAnalysedSince} carries the moment the previous run started: files
+	 * it already rebuilt are stamped later than that and drop out of this one,
+	 * which is what makes the next run continue instead of starting over.
 	 */
 	public static MetadataRebuildRequest forFolder(String sourcePath, List<MetadataRebuildField> refresh,
 			boolean dryRun, LocalDateTime notAnalysedSince) {

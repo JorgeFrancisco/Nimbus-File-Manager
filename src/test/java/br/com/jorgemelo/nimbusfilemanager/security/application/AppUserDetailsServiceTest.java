@@ -41,8 +41,8 @@ class AppUserDetailsServiceTest {
 	 * {@code DaoAuthenticationProvider}'s default pre-authentication checks throw
 	 * {@link org.springframework.security.authentication.LockedException} as soon
 	 * as {@code isAccountNonLocked()} is false, <i>before</i> comparing the
-	 * password - this is what lets {@link AccountLockService}-driven lockouts
-	 * block further password guesses without a bespoke check in every login path.
+	 * password - this is what lets {@link AccountLockService}-driven lockouts block
+	 * further password guesses without a bespoke check in every login path.
 	 */
 	@Test
 	void loadUserByUsernameShouldReportAccountLockedWhileLockedUntilIsInTheFuture() {

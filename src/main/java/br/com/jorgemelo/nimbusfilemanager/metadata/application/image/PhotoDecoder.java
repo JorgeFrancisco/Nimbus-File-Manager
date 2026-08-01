@@ -63,13 +63,12 @@ public class PhotoDecoder {
 	/**
 	 * Decodes {@code file} into an oriented, alpha-flattened frame-0 image.
 	 *
-	 * @param file       the photo to read
+	 * @param file the photo to read
 	 * @param dbRotation persisted {@code media_metadata.rotation} in degrees, used
-	 *                   only as a fallback when the file has no EXIF orientation;
-	 *                   may be null
+	 * only as a fallback when the file has no EXIF orientation; may be null
 	 * @throws UnsupportedDecodeException no registered reader can decode this
-	 *                                    format
-	 * @throws IOException                missing, unreadable or corrupt file
+	 * format
+	 * @throws IOException missing, unreadable or corrupt file
 	 */
 	public DecodedPhoto decode(Path file, Integer dbRotation) throws UnsupportedDecodeException, IOException {
 		try (ImageInputStream iis = ImageIO.createImageInputStream(file.toFile())) {

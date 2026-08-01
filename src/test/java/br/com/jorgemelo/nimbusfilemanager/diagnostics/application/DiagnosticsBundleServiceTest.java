@@ -37,8 +37,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.Workspace
  */
 class DiagnosticsBundleServiceTest {
 
-	private static final Clock CLOCK = Clock.fixed(
-			LocalDateTime.parse("2026-08-01T06:00:00").toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+	private static final Clock CLOCK = Clock.fixed(LocalDateTime.parse("2026-08-01T06:00:00").toInstant(ZoneOffset.UTC),
+			ZoneOffset.UTC);
 
 	private final InstallationSummaryService summaryService = mock(InstallationSummaryService.class);
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
@@ -53,8 +53,8 @@ class DiagnosticsBundleServiceTest {
 	}
 
 	private AppSetting setting(String key, String value) {
-		return AppSetting.builder().settingKey(key).settingValue(value).valueType("STRING")
-				.createdByUsername("system").build();
+		return AppSetting.builder().settingKey(key).settingValue(value).valueType("STRING").createdByUsername("system")
+				.build();
 	}
 
 	private Map<String, String> entries(DiagnosticsBundleService service) throws IOException {
@@ -114,10 +114,10 @@ class DiagnosticsBundleServiceTest {
 	void masksAnythingThatNamesItselfASecret(@TempDir Path workspace) throws IOException {
 		when(workspaceManager.resolve(WorkspaceFolders.LOGS, "nimbus-file-manager.log"))
 				.thenReturn(workspace.resolve("absent.log"));
-		when(appSettingService.list()).thenReturn(
-				List.of(setting("nimbus-file-manager.email.gmail.password", "hunter2"),
-					setting("nimbus-file-manager.integration.api-token", "abc123"),
-					setting("nimbus-file-manager.timezone", "America/Sao_Paulo")));
+		when(appSettingService.list())
+				.thenReturn(List.of(setting("nimbus-file-manager.email.gmail.password", "hunter2"),
+						setting("nimbus-file-manager.integration.api-token", "abc123"),
+						setting("nimbus-file-manager.timezone", "America/Sao_Paulo")));
 
 		noExecutions();
 
@@ -144,8 +144,7 @@ class DiagnosticsBundleServiceTest {
 		Map<String, String> files = entries(service());
 
 		Assertions.assertThat(files).containsKey("application.log");
-		Assertions.assertThat(files.get("application.log")).contains("Could not read")
-				.contains("NoSuchFileException");
+		Assertions.assertThat(files.get("application.log")).contains("Could not read").contains("NoSuchFileException");
 	}
 
 	/** Only the tail: a log of weeks is not something anyone will send. */
@@ -197,7 +196,7 @@ class DiagnosticsBundleServiceTest {
 
 	/** An execution still in flight: no end, no message. */
 	private ExecutionResponse running() {
-		return new ExecutionResponse(UUID.randomUUID(), "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(CLOCK),
-				null, "D:/library", null, 3, 1, 0, 0, 0, 0, 3, 33D, null, false);
+		return new ExecutionResponse(UUID.randomUUID(), "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(CLOCK), null,
+				"D:/library", null, 3, 1, 0, 0, 0, 0, 3, 33D, null, false);
 	}
 }

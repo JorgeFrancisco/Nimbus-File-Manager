@@ -34,9 +34,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModel
 
 @WebMvcTest(controllers = OrganizationController.class,
 		properties = "nimbus-file-manager.security.google-login-enabled=false",
-		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {
-		WebMvcConfig.class, LocaleConfig.class, AppViewModelAdvice.class,
-		MetadataRebuildSettingsAdvice.class }))
+		excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = { WebMvcConfig.class,
+				LocaleConfig.class, AppViewModelAdvice.class, MetadataRebuildSettingsAdvice.class }))
 // The real LogoutAwareAccessDeniedHandler (no dependencies) is imported
 // alongside SecurityConfig so the slice context loads and access-denied still
 // yields a real 403 (a mock handler would swallow it and break the isForbidden

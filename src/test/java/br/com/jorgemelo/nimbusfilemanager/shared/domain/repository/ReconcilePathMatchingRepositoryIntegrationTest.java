@@ -128,8 +128,8 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 	@Test
 	void findIdsForMetadataRebuildMatchesEveryDescendantOfAFolderButNotASiblingPrefix() {
 		List<Long> ids = catalogFileRepository.findIdsForMetadataRebuild("D:\\Media",
-				PathUtils.descendantLikePattern("D:\\Media", SEPARATOR), null, null,
-				MetadataRebuildRequest.NO_CUTOFF, 0L, PAGE);
+				PathUtils.descendantLikePattern("D:\\Media", SEPARATOR), null, null, MetadataRebuildRequest.NO_CUTOFF,
+				0L, PAGE);
 
 		List<String> matched = ids.stream().map(this::currentPathOf).toList();
 
@@ -183,8 +183,7 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 
 	private String currentPathOf(Long catalogFileId) {
 		return catalogFileRepository.findById(catalogFileId).map(CatalogFile::getLocation)
-				.map(CatalogFileLocation::getCurrentPath)
-				.orElseThrow();
+				.map(CatalogFileLocation::getCurrentPath).orElseThrow();
 	}
 
 	/**
@@ -206,8 +205,7 @@ class ReconcilePathMatchingRepositoryIntegrationTest {
 
 		// a.jpg was rebuilt by the previous run and drops out; the one analysed before
 		// it and the one never analysed remain.
-		Assertions.assertThat(matched).containsExactlyInAnyOrder("D:\\Media\\IMG_2026_01.jpg",
-				"D:\\Media\\sub\\x.jpg");
+		Assertions.assertThat(matched).containsExactlyInAnyOrder("D:\\Media\\IMG_2026_01.jpg", "D:\\Media\\sub\\x.jpg");
 	}
 
 	private void stampAnalysis(String path, LocalDateTime lastAnalysis) {

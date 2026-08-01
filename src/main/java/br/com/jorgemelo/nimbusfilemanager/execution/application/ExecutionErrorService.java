@@ -34,8 +34,8 @@ public class ExecutionErrorService {
 	 */
 	public void save(Path file, ExecutionErrorType errorType, String errorMessage, Execution execution) {
 		ExecutionError error = ExecutionError.builder().execution(execution)
-				.path(file.toAbsolutePath().normalize().toString()).errorType(errorType)
-				.errorMessage(errorMessage).build();
+				.path(file.toAbsolutePath().normalize().toString()).errorType(errorType).errorMessage(errorMessage)
+				.build();
 
 		executionErrorRepository.save(error);
 	}

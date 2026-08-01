@@ -35,9 +35,9 @@ public final class OptimisticLockRetry {
 	 * Runs {@code attempt} up to {@code maxAttempts} times, retrying only on an
 	 * optimistic-lock conflict and rethrowing once the bound is exhausted.
 	 *
-	 * @param what        short label for logs (the operation being retried)
+	 * @param what short label for logs (the operation being retried)
 	 * @param maxAttempts total attempts allowed (>= 1)
-	 * @param attempt     one independent, transactional, idempotent attempt
+	 * @param attempt one independent, transactional, idempotent attempt
 	 */
 	public static void run(String what, int maxAttempts, Runnable attempt) {
 		int attempts = 0;

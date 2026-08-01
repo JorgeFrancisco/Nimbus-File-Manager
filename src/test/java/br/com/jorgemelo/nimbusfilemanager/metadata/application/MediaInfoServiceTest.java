@@ -163,7 +163,7 @@ class MediaInfoServiceTest {
 				.extract(Path.of("C:/video.mp4"));
 		var quickTimeLocation = service(
 				new FfprobeResult(true, 0, locationJson("com.apple.quicktime.location.ISO6709")))
-				.extract(Path.of("C:/video.mp4"));
+						.extract(Path.of("C:/video.mp4"));
 		var noStreams = service(new FfprobeResult(true, 0, """
 				{ "format": { "tags": {} }, "streams": {} }
 				""")).extract(Path.of("C:/video.mp4"));

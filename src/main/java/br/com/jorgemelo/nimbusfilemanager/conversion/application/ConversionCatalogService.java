@@ -38,7 +38,7 @@ public class ConversionCatalogService {
 
 	/**
 	 * @param originalDate the capture date already resolved for the file this one
-	 *                     replaces, or {@code null} when there is none to inherit.
+	 * replaces, or {@code null} when there is none to inherit.
 	 */
 	public void catalog(Path file, ResolvedMediaDate originalDate) {
 		// forceAnalysis, so a stale row left at this exact path (a file converted,
@@ -68,8 +68,10 @@ public class ConversionCatalogService {
 			return metadata;
 		}
 
-		log.info("Converted file {} keeps the date of the file it replaces ({} from {}) instead of the {} it was"
-				+ " written at", metadata.getFileName(), originalDate.captureDate(), originalDate.dateSource(),
+		log.info(
+				"Converted file {} keeps the date of the file it replaces ({} from {}) instead of the {} it was"
+						+ " written at",
+				metadata.getFileName(), originalDate.captureDate(), originalDate.dateSource(),
 				metadata.getDateSource());
 
 		return metadata.toBuilder().captureDate(originalDate.captureDate()).dateSource(originalDate.dateSource())

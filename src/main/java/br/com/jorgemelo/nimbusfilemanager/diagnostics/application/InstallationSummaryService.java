@@ -90,8 +90,8 @@ public class InstallationSummaryService {
 
 	/**
 	 * Absent when the application runs from an exploded build with no
-	 * {@code build-info.properties} - an IDE launch, typically. Reported as
-	 * unknown rather than failing the export over it.
+	 * {@code build-info.properties} - an IDE launch, typically. Reported as unknown
+	 * rather than failing the export over it.
 	 */
 	private String version() {
 		BuildProperties properties = buildProperties.getIfAvailable();

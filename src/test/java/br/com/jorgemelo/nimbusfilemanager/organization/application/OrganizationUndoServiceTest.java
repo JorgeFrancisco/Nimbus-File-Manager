@@ -88,7 +88,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
 				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
@@ -133,7 +133,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
 				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
@@ -169,7 +169,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(missing, ok));
+						.thenReturn(List.of(missing, ok));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
 				okTarget.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
@@ -210,7 +210,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(withoutCatalog, withoutLocation));
+						.thenReturn(List.of(withoutCatalog, withoutLocation));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(eq(20L), any()))
 				.thenReturn(Optional.empty());
 
@@ -232,7 +232,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 
 		var response = service().undo(1L);
 
@@ -256,7 +256,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 
 		var response = service().undo(1L);
 
@@ -280,7 +280,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 
 		var response = service().undo(1L);
 
@@ -309,11 +309,10 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
 				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
-		doThrow(new IllegalStateException("database down")).when(catalogFileRepository)
-				.save(catalogFile);
+		doThrow(new IllegalStateException("database down")).when(catalogFileRepository).save(catalogFile);
 
 		var response = service().undo(1L);
 
@@ -356,8 +355,7 @@ class OrganizationUndoServiceTest {
 
 		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
 				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
-				operationLockService,
-				new OrganizationPathValidator(mock(AppSettingService.class), workspace),
+				operationLockService, new OrganizationPathValidator(mock(AppSettingService.class), workspace),
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 				mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
@@ -381,12 +379,11 @@ class OrganizationUndoServiceTest {
 		Movement movement = Movement.builder().id(100L).execution(dedup).catalogFile(catalogFile)
 				.sourcePath(original.toAbsolutePath().normalize().toString())
 				.targetPath(quarantineCopy.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED)
-						.build();
+				.build();
 
 		OperationLockService lockService = mock(OperationLockService.class);
 
-		when(lockService.acquire(eq(ExecutionType.UNDO), any(Path[].class)))
-				.thenReturn(mock(OperationLock.class));
+		when(lockService.acquire(eq(ExecutionType.UNDO), any(Path[].class))).thenReturn(mock(OperationLock.class));
 
 		stubUndoExecution();
 
@@ -400,7 +397,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(dedup));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 
 		service.undo(1L);
 
@@ -464,7 +461,7 @@ class OrganizationUndoServiceTest {
 		when(executionRepository.findById(2L)).thenReturn(Optional.of(undoExecution));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
 				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-				.thenReturn(List.of(movement));
+						.thenReturn(List.of(movement));
 
 		OrganizationPathValidator refusingValidator = mock(OrganizationPathValidator.class);
 

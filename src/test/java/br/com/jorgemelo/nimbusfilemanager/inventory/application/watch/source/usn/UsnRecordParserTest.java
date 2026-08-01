@@ -31,8 +31,7 @@ class UsnRecordParserTest {
 	@Test
 	void flagsDirectoryRecordsFromTheAttributes() {
 		byte[] buffer = UsnRecordBuffers.recordBytes(1L, 1L, 2L, UsnReason.RENAME_NEW_NAME,
-				UsnRecordBuffers.ATTR_DIRECTORY,
-				"2024");
+				UsnRecordBuffers.ATTR_DIRECTORY, "2024");
 
 		Assertions.assertThat(UsnRecordParser.parse(buffer)).singleElement()
 				.satisfies(parsed -> Assertions.assertThat(parsed.directory()).isTrue());
@@ -52,12 +51,10 @@ class UsnRecordParserTest {
 
 	@Test
 	void skipsUnsupportedMajorVersionButKeepsSteppingByLength() {
-		byte[] unsupported = UsnRecordBuffers.withMajorVersion(
-				UsnRecordBuffers.recordBytes(1L, 10L, 20L, UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL,
-						"skip.me"), 3);
+		byte[] unsupported = UsnRecordBuffers.withMajorVersion(UsnRecordBuffers.recordBytes(1L, 10L, 20L,
+				UsnReason.FILE_CREATE, UsnRecordBuffers.ATTR_NORMAL, "skip.me"), 3);
 		byte[] supported = UsnRecordBuffers.recordBytes(2L, 11L, 20L, UsnReason.FILE_CREATE,
-				UsnRecordBuffers.ATTR_NORMAL,
-				"keep.jpg");
+				UsnRecordBuffers.ATTR_NORMAL, "keep.jpg");
 
 		Assertions.assertThat(UsnRecordParser.parse(UsnRecordBuffers.concat(unsupported, supported)))
 				.extracting(UsnRecord::fileName).containsExactly("keep.jpg");

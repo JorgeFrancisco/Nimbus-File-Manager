@@ -206,9 +206,9 @@ class InventoryWatchServiceTest {
 	}
 
 	/**
-	 * Regression test for the race condition where {@code reconfigure()} -
-	 * called from the web request thread when an admin changes the monitored folder
-	 * - could swap/close the {@code PhysicalTreeWatcher} while the scheduled poll
+	 * Regression test for the race condition where {@code reconfigure()} - called
+	 * from the web request thread when an admin changes the monitored folder -
+	 * could swap/close the {@code PhysicalTreeWatcher} while the scheduled poll
 	 * thread was still mid-read on it. The fix makes the private {@code
 	 * pollEvents()} synchronize on the same instance monitor as
 	 * {@code reconfigure()}. This test proves that sharing directly: it holds the
@@ -523,8 +523,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-						recorder(),
-				Clock.systemDefaultZone(), watchProps(true));
+				recorder(), Clock.systemDefaultZone(), watchProps(true));
 
 		service.stop();
 
@@ -559,8 +558,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-						recorder(),
-				Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false));
 
 		service.stop();
 
@@ -581,8 +579,7 @@ class InventoryWatchServiceTest {
 		// cancel(true)'d poll thread carries its interrupt into a shutdown-time query.
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-						recorder(),
-				Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false));
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -618,8 +615,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-						recorder(),
-				Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false));
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 

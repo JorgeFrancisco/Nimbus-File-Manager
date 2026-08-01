@@ -180,9 +180,9 @@ class CatalogBackupServiceTest {
 	@Test
 	void skipsATableTheBackupDoesNotCarry(@TempDir Path folder) throws IOException {
 		backup(folder, """
-			{"schemaVersion":"13","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
-			 "tables":["app_setting","table_that_is_not_in_the_file"]}
-			""");
+				{"schemaVersion":"13","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+				 "tables":["app_setting","table_that_is_not_in_the_file"]}
+				""");
 
 		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
 

@@ -90,8 +90,8 @@ class FileScannerTest {
 		Files.writeString(gitFolder.resolve("ignored.jpg"), "git");
 		Files.writeString(cacheFolder.resolve("ignored-too.jpg"), "cache");
 
-		List<Path> files = stream(tempDir, new ScanOptions(true, true, List.of(), List.of(), List.of(".git",
-				"cache-*")));
+		List<Path> files = stream(tempDir,
+				new ScanOptions(true, true, List.of(), List.of(), List.of(".git", "cache-*")));
 
 		Assertions.assertThat(files).extracting(path -> path.getFileName().toString()).containsExactly("photo.jpg");
 	}

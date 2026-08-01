@@ -9,8 +9,7 @@ package br.com.jorgemelo.nimbusfilemanager.database.domain.enums;
  */
 public enum ClusterStopMode {
 
-	FAST("fast"),
-	IMMEDIATE("immediate");
+	FAST("fast"), IMMEDIATE("immediate");
 
 	private final String argument;
 

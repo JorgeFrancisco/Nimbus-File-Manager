@@ -43,9 +43,8 @@ public class PhotoPerceptualHashService {
 	@CoverageGenerated("Spring wiring: forwards to the constructor every test builds directly")
 	public PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, ExternalToolGate externalToolGate,
 			FfmpegPhotoHashProcessRunner processRunner, WorkspaceManager workspaceManager) {
-		this(externalToolPaths, (ffmpegPath, file) -> externalToolGate
-				.run(ExternalToolCategory.FFMPEG_PHOTO_HASH, () -> processRunner.run(ffmpegPath, file)),
-				workspaceManager);
+		this(externalToolPaths, (ffmpegPath, file) -> externalToolGate.run(ExternalToolCategory.FFMPEG_PHOTO_HASH,
+				() -> processRunner.run(ffmpegPath, file)), workspaceManager);
 	}
 
 	PhotoPerceptualHashService(ExternalToolPaths externalToolPaths, FfmpegRunner ffmpegRunner,
@@ -81,11 +80,12 @@ public class PhotoPerceptualHashService {
 	/**
 	 * Decodes the file, or the part of it ffmpeg can read: the first frame of an
 	 * animated sticker, or a photo without the trailer its camera appended. The
-	 * slice is handed over as a file because the runner takes a path, and is deleted
-	 * straight after - a byte-for-byte slice of the original, regenerated whenever
-	 * it is needed again. It is written inside the application workspace, never in
-	 * the system temp: that one is world-writable, and a file another user can
-	 * swap between the write and the read is a file we should not hand to a decoder.
+	 * slice is handed over as a file because the runner takes a path, and is
+	 * deleted straight after - a byte-for-byte slice of the original, regenerated
+	 * whenever it is needed again. It is written inside the application workspace,
+	 * never in the system temp: that one is world-writable, and a file another user
+	 * can swap between the write and the read is a file we should not hand to a
+	 * decoder.
 	 */
 	private byte[] hashOf(Path file) throws Exception {
 		byte[] decodable = decodableBytes(file);

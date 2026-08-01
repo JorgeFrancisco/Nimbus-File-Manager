@@ -100,34 +100,29 @@ class DuplicateExclusionRepositoryIntegrationTest {
 
 	@Test
 	void excludingOneFileDropsOnlyThatCopyAndKeepsTheGroup() {
-		fileExclusionRepository
-				.save(DuplicateFileExclusion.builder().publicId(folderA1.getPublicId()).build());
+		fileExclusionRepository.save(DuplicateFileExclusion.builder().publicId(folderA1.getPublicId()).build());
 
 		Page<DuplicateGroupRawResponse> groups = duplicateRepository.findDuplicateGroups(PHOTOS, PAGE);
 
 		Assertions.assertThat(groups.getContent()).singleElement()
 				.satisfies(group -> Assertions.assertThat(group.files()).isEqualTo(2));
 
-		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA))
-				.extracting(DuplicateFileRawResponse::id)
+		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
 				.containsExactlyInAnyOrder(folderA2.getPublicId(), folderB1.getPublicId());
 
 		Assertions.assertThat(duplicateRepository.findDuplicateFilesForShas(List.of(SHA), PHOTOS))
-				.extracting(DuplicateFileWithShaRawResponse::id)
-				.doesNotContain(folderA1.getPublicId());
+				.extracting(DuplicateFileWithShaRawResponse::id).doesNotContain(folderA1.getPublicId());
 	}
 
 	@Test
 	void excludingAFolderDropsEveryCopyUnderItAndCollapsesTheGroup() {
-		folderExclusionRepository
-				.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a").build());
+		folderExclusionRepository.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a").build());
 
 		// Only the single copy in folder B remains, so the group falls below two and
 		// vanishes.
 		Assertions.assertThat(duplicateRepository.findDuplicateGroups(PHOTOS, PAGE).getContent()).isEmpty();
 
-		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA))
-				.extracting(DuplicateFileRawResponse::id)
+		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
 				.containsExactly(folderB1.getPublicId());
 
 		DuplicateSummaryProjection summary = duplicateRepository.summary();
@@ -140,13 +135,11 @@ class DuplicateExclusionRepositoryIntegrationTest {
 		CatalogFile nested = persist("C:/Media/a/sub");
 		CatalogFile sibling = persist("C:/Media/ab");
 
-		folderExclusionRepository
-				.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a").build());
+		folderExclusionRepository.save(DuplicateFolderExclusion.builder().folderPath("C:/Media/a").build());
 
 		// "C:/Media/a" and "C:/Media/a/sub" are excluded; "C:/Media/ab" only shares a
 		// textual prefix and must stay comparable.
-		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA))
-				.extracting(DuplicateFileRawResponse::id)
+		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
 				.containsExactlyInAnyOrder(folderB1.getPublicId(), sibling.getPublicId())
 				.doesNotContain(nested.getPublicId());
 	}
@@ -193,10 +186,8 @@ class DuplicateExclusionRepositoryIntegrationTest {
 		boolean created = duplicateExclusionService.excludeFolder("C:\\Fotos\\viagem");
 
 		Assertions.assertThat(created).isTrue();
-		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA))
-				.extracting(DuplicateFileRawResponse::id)
-				.doesNotContain(windowsFolder.getPublicId(), windowsSub.getPublicId())
-				.contains(folderB1.getPublicId());
+		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
+				.doesNotContain(windowsFolder.getPublicId(), windowsSub.getPublicId()).contains(folderB1.getPublicId());
 	}
 
 	private CatalogFile persist(String folder) {

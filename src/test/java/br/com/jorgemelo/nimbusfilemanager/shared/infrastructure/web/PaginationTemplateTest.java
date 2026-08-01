@@ -25,8 +25,8 @@ class PaginationTemplateTest {
 
 	@Test
 	void quarantineOffersAllSupportedPageSizes() throws Exception {
-		String controller = Files
-				.readString(Path.of("src/main/java/br/com/jorgemelo/nimbusfilemanager/quarantine/infrastructure/web/QuarantineWebController.java"));
+		String controller = Files.readString(Path.of(
+				"src/main/java/br/com/jorgemelo/nimbusfilemanager/quarantine/infrastructure/web/QuarantineWebController.java"));
 		String html = Files.readString(Path.of("src/main/resources/templates/app/quarantine.html"));
 
 		assertThat(controller).contains("List.of(50, 100, 200)", "PAGE_SIZE_KEY");

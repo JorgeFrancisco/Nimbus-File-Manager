@@ -29,8 +29,8 @@ public class MediaDateResolver {
 	/**
 	 * Resolves the date and writes it onto the media row. Single owner of that
 	 * assignment: the inventory mapper and the metadata rebuild both go through
-	 * here, so a date field added later cannot be filled on one path and
-	 * forgotten on the other.
+	 * here, so a date field added later cannot be filled on one path and forgotten
+	 * on the other.
 	 */
 	public void applyTo(MediaMetadata media, MetadataResult metadata) {
 		ResolvedMediaDate resolvedDate = resolve(metadata);

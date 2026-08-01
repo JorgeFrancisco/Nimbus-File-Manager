@@ -20,8 +20,8 @@ import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerRen
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.ExplorerDeleteMode;
 
 /**
- * The card menu talks to these three handlers, and the only decision they own is
- * which service answers a delete: the mode picked in the dialog is what
+ * The card menu talks to these three handlers, and the only decision they own
+ * is which service answers a delete: the mode picked in the dialog is what
  * separates a recoverable removal from an irreversible one, so it is worth
  * pinning that the destructive path is never taken by default.
  */

@@ -9,11 +9,11 @@ import java.lang.annotation.Target;
  * Marks code no test can reach, so coverage stops asking for it.
  *
  * <p>
- * <b>Why the name carries "Generated":</b> JaCoCo only filters members annotated
- * with an annotation whose simple name contains {@code Generated} and whose
- * retention is {@code CLASS} or {@code RUNTIME} - the same hook Lombok uses for
- * {@code lombok.Generated}. Nothing here is generated; the name is the price of
- * the only filter JaCoCo offers.
+ * <b>Why the name carries "Generated":</b> JaCoCo only filters members
+ * annotated with an annotation whose simple name contains {@code Generated} and
+ * whose retention is {@code CLASS} or {@code RUNTIME} - the same hook Lombok
+ * uses for {@code lombok.Generated}. Nothing here is generated; the name is the
+ * price of the only filter JaCoCo offers.
  *
  * <p>
  * <b>When it applies</b> - only these two, and the reason goes in the
@@ -30,8 +30,8 @@ import java.lang.annotation.Target;
  * <b>When it does not</b>: a one-line delegation, a branch that is merely
  * awkward to set up, or anything a restructure would make reachable. Twice in
  * one afternoon chasing coverage found dead code instead - an unreachable
- * {@code return} and a redundant guard - and deleting those beat hiding them. If
- * the honest options are "annotate" or "restructure", restructure.
+ * {@code return} and a redundant guard - and deleting those beat hiding them.
+ * If the honest options are "annotate" or "restructure", restructure.
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.TYPE })

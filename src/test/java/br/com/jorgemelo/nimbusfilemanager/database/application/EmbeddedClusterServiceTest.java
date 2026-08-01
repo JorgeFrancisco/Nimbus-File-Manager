@@ -97,8 +97,8 @@ class EmbeddedClusterServiceTest {
 	/**
 	 * PostgreSQL will not open data written by another major version, and the
 	 * upgrade is a decision to take deliberately rather than to trigger by
-	 * installing a new build. Refusing leaves the old cluster exactly where it
-	 * is, which is what makes the decision still available afterwards.
+	 * installing a new build. Refusing leaves the old cluster exactly where it is,
+	 * which is what makes the decision still available afterwards.
 	 */
 	@Test
 	void refusesDataWrittenByAnotherMajorVersionWithoutTouchingIt() throws IOException {
@@ -137,9 +137,8 @@ class EmbeddedClusterServiceTest {
 	}
 
 	/**
-	 * An immediate stop leaves the next start replaying the write-ahead log, so
-	 * it only happens after a clean stop has had its chance - never instead of
-	 * one.
+	 * An immediate stop leaves the next start replaying the write-ahead log, so it
+	 * only happens after a clean stop has had its chance - never instead of one.
 	 */
 	@Test
 	void escalatesOnlyAfterACleanStopHasFailed() {

@@ -265,8 +265,7 @@ class AppUserAccountServiceTest {
 		Assertions.assertThatThrownBy(() -> service.changePassword("admin@example.com", "hash", "newSecret"))
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("bloqueada");
 
-		verify(passwordEncoder, never()).matches(ArgumentMatchers.any(),
-				ArgumentMatchers.any());
+		verify(passwordEncoder, never()).matches(ArgumentMatchers.any(), ArgumentMatchers.any());
 		verify(accountLockService, never()).registerFailure(ArgumentMatchers.any(), ArgumentMatchers.any(),
 				ArgumentMatchers.any());
 	}
@@ -367,8 +366,8 @@ class AppUserAccountServiceTest {
 		AppUser user = AppUser.builder().username("admin@example.com").displayName("Admin").build();
 
 		when(repository.findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(
-				ArgumentMatchers.eq("admin"), ArgumentMatchers.eq("admin"),
-				ArgumentMatchers.any(Pageable.class))).thenReturn(new PageImpl<>(List.of(user)));
+				ArgumentMatchers.eq("admin"), ArgumentMatchers.eq("admin"), ArgumentMatchers.any(Pageable.class)))
+						.thenReturn(new PageImpl<>(List.of(user)));
 
 		var page = service.searchUsers(" admin ", -1, 999);
 
@@ -376,7 +375,6 @@ class AppUserAccountServiceTest {
 
 		verify(repository).findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(
 				ArgumentMatchers.eq("admin"), ArgumentMatchers.eq("admin"),
-				ArgumentMatchers
-						.argThat(pageable -> pageable.getPageNumber() == 0 && pageable.getPageSize() == 20));
+				ArgumentMatchers.argThat(pageable -> pageable.getPageNumber() == 0 && pageable.getPageSize() == 20));
 	}
 }

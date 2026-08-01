@@ -36,7 +36,7 @@ public class GeoDatasetProgress {
 
 	/**
 	 * @param totalBytes content length of the file, or a non-positive value when
-	 *                   unknown.
+	 * unknown.
 	 */
 	public synchronized void startDownload(AdminBoundaryKind kind, long totalBytes) {
 		phase = Phase.DOWNLOADING;
@@ -52,7 +52,7 @@ public class GeoDatasetProgress {
 
 	/**
 	 * @param totalBytes size of the file being imported, or non-positive when
-	 *                   unknown.
+	 * unknown.
 	 */
 	public synchronized void startImport(AdminBoundaryKind kind, long totalBytes) {
 		phase = Phase.IMPORTING;

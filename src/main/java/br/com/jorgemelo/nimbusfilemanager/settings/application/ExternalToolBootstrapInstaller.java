@@ -16,10 +16,10 @@ import lombok.extern.slf4j.Slf4j;
  * dead end.
  *
  * <p>
- * It stays quiet whenever the answer is already known: when the tools run,
- * when the platform installs them through a package manager, and when the
- * operator turned the setting off. The manual install/update button on the
- * settings screen remains the way to force it.
+ * It stays quiet whenever the answer is already known: when the tools run, when
+ * the platform installs them through a package manager, and when the operator
+ * turned the setting off. The manual install/update button on the settings
+ * screen remains the way to force it.
  */
 @Slf4j
 @Component

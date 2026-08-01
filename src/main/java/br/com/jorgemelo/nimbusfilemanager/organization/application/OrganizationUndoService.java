@@ -37,7 +37,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j @Service
+@Slf4j
+@Service
 public class OrganizationUndoService extends LocalizedComponent {
 
 	private final ExecutionRepository executionRepository;
@@ -247,10 +248,10 @@ public class OrganizationUndoService extends LocalizedComponent {
 	 */
 	private Execution startUndoExecution(Execution undone, int total) {
 		return executionRepository.save(Execution.builder().executionType(ExecutionType.UNDO)
-				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
-				.sourcePath(undone.getTargetPath()).targetPath(undone.getSourcePath()).recursive(false)
-				.executeFlag(true).statusMessage(StatusMessage.raw(message("backend.undo.started", total)))
-				.filesFound(total).filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build());
+				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock)).sourcePath(undone.getTargetPath())
+				.targetPath(undone.getSourcePath()).recursive(false).executeFlag(true)
+				.statusMessage(StatusMessage.raw(message("backend.undo.started", total))).filesFound(total)
+				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build());
 	}
 
 	/**

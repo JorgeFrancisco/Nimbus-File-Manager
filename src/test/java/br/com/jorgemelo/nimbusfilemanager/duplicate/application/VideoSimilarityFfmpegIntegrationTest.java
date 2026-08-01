@@ -87,8 +87,8 @@ class VideoSimilarityFfmpegIntegrationTest {
 
 	@Test
 	void samplesExactlyFiveFramesAtTenThirtyFiftySeventyNinetyPercent() throws Exception {
-		Path clip = run("base.mp4", "-f", "lavfi", "-i", "testsrc2=size=640x480:rate=30:duration=10", "-c:v",
-				"libx264", "-crf", "18", "-pix_fmt", "yuv420p");
+		Path clip = run("base.mp4", "-f", "lavfi", "-i", "testsrc2=size=640x480:rate=30:duration=10", "-c:v", "libx264",
+				"-crf", "18", "-pix_fmt", "yuv420p");
 
 		VideoPerceptualFingerprint fingerprint = hashService().compute(clip, 10.0,
 				FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES);

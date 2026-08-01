@@ -28,8 +28,7 @@ public interface CatalogFileLocationRepository extends JpaRepository<CatalogFile
 			  and lower(l.currentFolder) = lower(:currentFolder)
 			order by l.catalogFile.fileName asc, l.catalogFile.id asc
 			""")
-	List<FileExplorerLocationProjection> findActiveByCurrentFolder(
-			@Param("currentFolder") String currentFolder);
+	List<FileExplorerLocationProjection> findActiveByCurrentFolder(@Param("currentFolder") String currentFolder);
 
 	/**
 	 * One page of reconcile candidates, walked by key: the caller passes the last

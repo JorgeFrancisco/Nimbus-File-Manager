@@ -14,9 +14,9 @@ import java.nio.file.Path;
  * Three consumers need the same answer and none can ask the others: Logback
  * resolves {@code nimbus-file-manager.workspace} while the log file is being
  * opened, the workspace bootstrap listener creates the folders before the
- * context exists, and the workspace manager answers every path afterwards.
- * So the value is computed here and published as that single property - any of
- * the three deciding for itself is how the log ends up in one folder and the
+ * context exists, and the workspace manager answers every path afterwards. So
+ * the value is computed here and published as that single property - any of the
+ * three deciding for itself is how the log ends up in one folder and the
  * database in another.
  *
  * <p>

@@ -65,17 +65,17 @@ public class OrganizationPathValidator extends LocalizedComponent {
 	}
 
 	/**
-	 * Maps the technical path role passed by callers to its localized label, so
-	 * the surrounding message reads naturally in every language. Unknown roles are
+	 * Maps the technical path role passed by callers to its localized label, so the
+	 * surrounding message reads naturally in every language. Unknown roles are
 	 * echoed back unchanged as a defensive fallback.
 	 */
 	private String roleLabel(String description) {
 		return switch (description) {
-			case "source" -> message("backend.organization.roleSource");
-			case "target" -> message("backend.organization.roleTarget");
-			case "undo source" -> message("backend.organization.roleUndoSource");
-			case "undo target" -> message("backend.organization.roleUndoTarget");
-			default -> description;
+		case "source" -> message("backend.organization.roleSource");
+		case "target" -> message("backend.organization.roleTarget");
+		case "undo source" -> message("backend.organization.roleUndoSource");
+		case "undo target" -> message("backend.organization.roleUndoTarget");
+		default -> description;
 		};
 	}
 

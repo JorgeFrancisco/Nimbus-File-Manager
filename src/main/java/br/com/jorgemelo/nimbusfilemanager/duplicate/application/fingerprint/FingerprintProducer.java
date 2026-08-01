@@ -52,9 +52,9 @@ interface FingerprintProducer<P, R> {
 	void store(P pending, R result);
 
 	/**
-	 * Why this item has no fingerprint. The producer knows where its file is, so
-	 * it is the one that can read the bytes and tell a blank file from a format
-	 * the decoder never supported.
+	 * Why this item has no fingerprint. The producer knows where its file is, so it
+	 * is the one that can read the bytes and tell a blank file from a format the
+	 * decoder never supported.
 	 */
 	FingerprintFailureReason reason(P pending, Throwable error);
 }

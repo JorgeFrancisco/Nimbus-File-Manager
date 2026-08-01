@@ -468,16 +468,15 @@ class QuarantineServiceTest {
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				QuarantineRestoreOptions.defaults());
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 	}
 
 	/**
 	 * Status alone is not enough: a movement can be MOVED and still not be a
-	 * quarantine - a plain organization move, for instance - and restoring one
-	 * of those would put a file back where nobody asked.
+	 * quarantine - a plain organization move, for instance - and restoring one of
+	 * those would put a file back where nobody asked.
 	 */
 	@Test
 	void shouldRefuseAMovementWhoseReasonIsNotQuarantine(@TempDir Path tmp) throws Exception {
@@ -490,8 +489,7 @@ class QuarantineServiceTest {
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				QuarantineRestoreOptions.defaults());
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 	}
@@ -525,9 +523,9 @@ class QuarantineServiceTest {
 	}
 
 	/**
-	 * The worst case of a failed restore: the move left the file at the
-	 * destination and putting it back failed too. Nothing is silently half-done -
-	 * the item is reported as an error and the log names the file to recover.
+	 * The worst case of a failed restore: the move left the file at the destination
+	 * and putting it back failed too. Nothing is silently half-done - the item is
+	 * reported as an error and the log names the file to recover.
 	 */
 	@Test
 	void shouldReportAnErrorWhenNeitherTheMoveNorTheRollbackSucceeded(@TempDir Path tmp) throws Exception {
@@ -552,8 +550,7 @@ class QuarantineServiceTest {
 		QuarantineService orphaning = new QuarantineService(movementRepository, persistence, failing,
 				new OperationLockService(), restoreLog);
 
-		QuarantineRestoreResult result = orphaning.restore(movement.getPublicId(),
-				QuarantineRestoreOptions.defaults());
+		QuarantineRestoreResult result = orphaning.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 
@@ -661,11 +658,11 @@ class QuarantineServiceTest {
 		when(catalogFile.getFileType()).thenReturn(FileType.PHOTO);
 		when(catalogFile.getSizeBytes()).thenReturn(null);
 
-		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution)
-				.catalogFile(catalogFile).sourcePath(PathUtils.normalize(origin.resolve("missing.jpg")))
+		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
+				.sourcePath(PathUtils.normalize(origin.resolve("missing.jpg")))
 				.targetPath(PathUtils.normalize(tmp.resolve("trash").resolve("nowhere.jpg")))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now()).build();
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
+				.build();
 
 		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
@@ -692,7 +689,7 @@ class QuarantineServiceTest {
 
 		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
 				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
-				.thenReturn(new PageImpl<>(List.of(video, pdf, text, audio)));
+						.thenReturn(new PageImpl<>(List.of(video, pdf, text, audio)));
 
 		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
 
@@ -739,8 +736,8 @@ class QuarantineServiceTest {
 
 		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(origin.resolve(fileName))).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now()).build();
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
+				.build();
 	}
 
 	private Movement imageMovement(Path original, Path quarantine, UUID publicId) {
@@ -813,8 +810,7 @@ class QuarantineServiceTest {
 		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				QuarantineRestoreOptions.defaults());
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
 

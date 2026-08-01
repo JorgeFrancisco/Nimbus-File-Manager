@@ -73,10 +73,10 @@ public class ClusterPropertiesStore {
 
 	/**
 	 * A password nobody types and nobody has to remember. It exists because the
-	 * server refuses to authenticate without one, and it is worth generating
-	 * rather than fixing in code: a shipped constant would be the same on every
-	 * installation, and this one guards a server that already listens on
-	 * loopback only.
+	 * server refuses to authenticate without one, and it is worth generating rather
+	 * than fixing in code: a shipped constant would be the same on every
+	 * installation, and this one guards a server that already listens on loopback
+	 * only.
 	 */
 	public String generatePassword() {
 		byte[] bytes = new byte[PASSWORD_BYTES];

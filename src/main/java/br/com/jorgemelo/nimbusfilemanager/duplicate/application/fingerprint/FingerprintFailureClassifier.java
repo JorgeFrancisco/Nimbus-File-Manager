@@ -36,9 +36,9 @@ public final class FingerprintFailureClassifier {
 	private static final byte[] VP8X = { 'V', 'P', '8', 'X' };
 
 	/**
-	 * @return why {@code file} could not be fingerprinted, or {@link
-	 *         FingerprintFailureReason#UNKNOWN} when the bytes say nothing - an
-	 *         unreadable file included, since that may be a mount that comes back.
+	 * @return why {@code file} could not be fingerprinted, or
+	 * {@link FingerprintFailureReason#UNKNOWN} when the bytes say nothing - an
+	 * unreadable file included, since that may be a mount that comes back.
 	 */
 	public static FingerprintFailureReason classify(Path file) {
 		byte[] head;

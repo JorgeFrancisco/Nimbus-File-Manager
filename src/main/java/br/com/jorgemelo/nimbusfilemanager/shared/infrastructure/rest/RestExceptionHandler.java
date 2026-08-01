@@ -82,10 +82,10 @@ public class RestExceptionHandler extends LocalizedComponent {
 	 * ({@code SecurityConfig}), so {@code e.getMessage()} must never go straight to
 	 * the response - a raw JDBC or filesystem exception message routinely contains
 	 * internal file paths, table/column names, or connection details. The full
-	 * exception (with stack trace) is logged server-side with a short
-	 * reference id; the client only gets that id plus a generic message, so an
-	 * admin can still correlate a support report back to the real cause via the
-	 * logs without the caller ever seeing internal details.
+	 * exception (with stack trace) is logged server-side with a short reference id;
+	 * the client only gets that id plus a generic message, so an admin can still
+	 * correlate a support report back to the real cause via the logs without the
+	 * caller ever seeing internal details.
 	 */
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<Map<String, Object>> generic(Exception e) {

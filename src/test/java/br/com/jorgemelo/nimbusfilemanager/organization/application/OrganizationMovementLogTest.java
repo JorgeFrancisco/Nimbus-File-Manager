@@ -87,8 +87,7 @@ class OrganizationMovementLogTest {
 		log.recordUndoFailure(movement, undoExecution, MovementReason.IO_ERROR, "target is read-only");
 
 		verify(movementRepository).save(movement);
-		verify(executionErrorService).save(target, ExecutionErrorType.MOVE_ERROR, "target is read-only",
-				undoExecution);
+		verify(executionErrorService).save(target, ExecutionErrorType.MOVE_ERROR, "target is read-only", undoExecution);
 	}
 
 	/**

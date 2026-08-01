@@ -55,10 +55,8 @@ class SettingsParameterWebControllerTest {
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
-		Assertions.assertThat(
-				controller.update("nimbus-file-manager.inventory.watch-folder", "C:/media", true, authentication,
-						redirect))
-				.isEqualTo("redirect:/app/settings");
+		Assertions.assertThat(controller.update("nimbus-file-manager.inventory.watch-folder", "C:/media", true,
+				authentication, redirect)).isEqualTo("redirect:/app/settings");
 
 		verify(librarySwitch).validateNewFolder("C:/media");
 		verify(librarySwitch).switchLibrary("C:/old-media", "C:/media", "Admin@Example.com");
@@ -85,8 +83,8 @@ class SettingsParameterWebControllerTest {
 		Assertions.assertThat(redirect.getFlashAttributes()).extractingByKey("error")
 				.isEqualTo("Confirme a troca da biblioteca monitorada.");
 
-		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(),
-				ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+				ArgumentMatchers.anyString());
 	}
 
 	@Test
@@ -111,8 +109,8 @@ class SettingsParameterWebControllerTest {
 
 		controller.update(SettingsConstants.WATCH_FOLDER, " C:/media ", false, auth, redirect);
 
-		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(),
-				ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+				ArgumentMatchers.anyString());
 		verify(settings).update(SettingsConstants.WATCH_FOLDER, " C:/media ", "admin@x");
 		verify(watcher).reconfigureAndInventory();
 	}
@@ -128,8 +126,8 @@ class SettingsParameterWebControllerTest {
 
 		Assertions.assertThat(redirect.getFlashAttributes().get("error").toString()).contains("inventário");
 
-		verify(settings, never()).update(ArgumentMatchers.anyString(),
-				ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+		verify(settings, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+				ArgumentMatchers.anyString());
 		verify(watcher, never()).reconfigureAndInventory();
 	}
 
@@ -192,8 +190,7 @@ class SettingsParameterWebControllerTest {
 		Path library = tmp.resolve("library");
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("C:/old-media");
-		when(settings.stringValue(SettingsConstants.TRASH_FOLDER, ""))
-				.thenReturn(library.resolve("trash").toString());
+		when(settings.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn(library.resolve("trash").toString());
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 

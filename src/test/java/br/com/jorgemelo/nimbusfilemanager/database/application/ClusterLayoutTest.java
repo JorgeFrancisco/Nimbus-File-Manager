@@ -25,9 +25,9 @@ class ClusterLayoutTest {
 	}
 
 	/**
-	 * The port and password sit beside the cluster, not inside it: initdb owns
-	 * what is in PGDATA, and a stray file there is one more thing a later
-	 * version of PostgreSQL could object to.
+	 * The port and password sit beside the cluster, not inside it: initdb owns what
+	 * is in PGDATA, and a stray file there is one more thing a later version of
+	 * PostgreSQL could object to.
 	 */
 	@Test
 	void keepsItsOwnFilesOutOfTheDataFolder(@TempDir Path workspace) {
@@ -57,13 +57,12 @@ class ClusterLayoutTest {
 
 	/**
 	 * A build resolves the server against the working directory; an installation
-	 * cannot, because it is started from wherever its shortcut points. The
-	 * launcher path is the only thing that always says where the files are.
+	 * cannot, because it is started from wherever its shortcut points. The launcher
+	 * path is the only thing that always says where the files are.
 	 */
 	@Test
 	void findsThePackagedServerBesideTheLauncherWhenInstalled() {
-		Assertions.assertThat(ClusterLayout.bundledBinaries(null))
-				.isEqualTo(Path.of("tools", "postgresql", "bin"));
+		Assertions.assertThat(ClusterLayout.bundledBinaries(null)).isEqualTo(Path.of("tools", "postgresql", "bin"));
 
 		Path installed = ClusterLayout.bundledBinaries("C:/Program Files/Nimbus/Nimbus.exe");
 
@@ -71,9 +70,9 @@ class ClusterLayoutTest {
 	}
 
 	/**
-	 * A marker that is blank, or that names something with no folder above it,
-	 * says nothing about where the installation is - and a path built from it
-	 * would point at the filesystem root. Both fall back to the build layout.
+	 * A marker that is blank, or that names something with no folder above it, says
+	 * nothing about where the installation is - and a path built from it would
+	 * point at the filesystem root. Both fall back to the build layout.
 	 */
 	@Test
 	void fallsBackToTheBuildLayoutWhenTheMarkerSaysNothingUsable() {

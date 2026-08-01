@@ -62,10 +62,9 @@ class CatalogBackupIntegrationTest {
 	}
 
 	private CatalogFile catalogued(String fileKey) {
-		return catalogFileRepository.save(CatalogFile.builder().fileKey(fileKey).fileName("photo.jpg")
-				.extension("jpg").sizeBytes(1024L).sha256(fileKey).fileType(FileType.PHOTO)
-				.lifecycleStatus(LifecycleStatus.ACTIVE).modifiedAt(LocalDateTime.now()).importedAt(LocalDateTime.now())
-				.build());
+		return catalogFileRepository.save(CatalogFile.builder().fileKey(fileKey).fileName("photo.jpg").extension("jpg")
+				.sizeBytes(1024L).sha256(fileKey).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
+				.modifiedAt(LocalDateTime.now()).importedAt(LocalDateTime.now()).build());
 	}
 
 	@Test
@@ -85,8 +84,8 @@ class CatalogBackupIntegrationTest {
 	}
 
 	/**
-	 * The sequences are restarted by the truncate; without realigning them the
-	 * next insert after a restore collides with a restored id, which would turn a
+	 * The sequences are restarted by the truncate; without realigning them the next
+	 * insert after a restore collides with a restored id, which would turn a
 	 * successful rescue into a broken catalog on the very next file.
 	 */
 	@Test
@@ -122,8 +121,7 @@ class CatalogBackupIntegrationTest {
 
 		catalogBackupService.delete(backup.name());
 
-		Assertions.assertThat(catalogBackupService.list()).extracting(BackupFile::name)
-				.doesNotContain(backup.name());
+		Assertions.assertThat(catalogBackupService.list()).extracting(BackupFile::name).doesNotContain(backup.name());
 	}
 
 	/**

@@ -29,8 +29,7 @@ public class PhotoGridMediaFamily extends AbstractFileNameDateRule implements Me
 	private static final String ORDER = "022_PHOTOGRID";
 
 	/** Leading digit bounded to a real epoch, as in {@link FacebookMediaFamily}. */
-	private static final Pattern EPOCH_MILLIS = Pattern.compile("PHOTOGRID[-_]([12]\\d{12})",
-			Pattern.CASE_INSENSITIVE);
+	private static final Pattern EPOCH_MILLIS = Pattern.compile("PHOTOGRID[-_]([12]\\d{12})", Pattern.CASE_INSENSITIVE);
 
 	public static boolean matchesName(String fileName) {
 		if (fileName == null) {

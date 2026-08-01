@@ -34,8 +34,8 @@ public final class ClockHolder {
 
 	/**
 	 * Installs the application clock. Only the startup initializer
-	 * ({@code ClockHolderInitializer}) should call this; every other component
-	 * must inject {@link Clock} directly.
+	 * ({@code ClockHolderInitializer}) should call this; every other component must
+	 * inject {@link Clock} directly.
 	 */
 	public static void configure(Clock replacement) {
 		clock = replacement != null ? replacement : BOOTSTRAP_CLOCK;

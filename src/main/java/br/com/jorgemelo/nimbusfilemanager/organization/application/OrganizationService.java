@@ -79,8 +79,7 @@ public class OrganizationService {
 	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request) {
 		organizationPathValidator.validate(request.source(), request.target());
 
-		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(),
-				request.target())) {
+		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(), request.target())) {
 			rebuildMetadataIfRequested(request.toPreviewRequest());
 
 			return organizationExecutor.execute(request);
@@ -143,8 +142,7 @@ public class OrganizationService {
 				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
 				.sourcePath(PathUtils.normalize(source)).targetPath(PathUtils.normalize(target)).recursive(recursive)
 				.executeFlag(executeFlag).statusMessage(StatusMessage.code(messageCode)).filesFound(0).filesAnalyzed(0)
-				.cacheHits(0)
-				.filesMoved(0).simulatedFiles(0).errors(0).build();
+				.cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
 
 		return executionRepository.save(execution);
 	}

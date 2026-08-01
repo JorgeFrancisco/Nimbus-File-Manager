@@ -171,8 +171,10 @@ class LocationOrganizationPolicyTest {
 
 	@Test
 	void nullOrPlacelessLocationNeverQualifies() {
-		Assertions.assertThat(policy.subdivisionSegments(null, LocationSubdivision.COUNTRY, LocationConfidence.LOW,
-				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
+		Assertions
+				.assertThat(policy.subdivisionSegments(null, LocationSubdivision.COUNTRY, LocationConfidence.LOW,
+						LocationFallbackMode.FALLBACK_FOLDER))
+				.containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 
 		MediaGeoLocation placeless = MediaGeoLocation.builder().build();
 
@@ -185,16 +187,17 @@ class LocationOrganizationPolicyTest {
 		MediaGeoLocation location = MediaGeoLocation.builder()
 				.place(ResolvedPlace.builder().countryName("..").confidence(LocationConfidence.HIGH).build()).build();
 
-		Assertions.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY,
-				LocationConfidence.MEDIUM,
-				LocationFallbackMode.FALLBACK_FOLDER)).containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
+		Assertions
+				.assertThat(policy.subdivisionSegments(location, LocationSubdivision.COUNTRY, LocationConfidence.MEDIUM,
+						LocationFallbackMode.FALLBACK_FOLDER))
+				.containsExactly(GeolocationConstants.FALLBACK_FOLDER_NAME);
 	}
 
 	@Test
 	void displayLabelSkipsBlankPartsAndIsNullWhenEverythingIsBlank() {
 		MediaGeoLocation allBlank = MediaGeoLocation.builder().place(ResolvedPlace.builder().cityName("  ")
 				.stateName("  ").countryName("  ").countryCode("  ").confidence(LocationConfidence.HIGH).build())
-						.build();
+				.build();
 
 		Assertions.assertThat(policy.displayLabel(allBlank)).isNull();
 

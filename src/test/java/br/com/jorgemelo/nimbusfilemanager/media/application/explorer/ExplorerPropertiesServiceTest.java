@@ -122,8 +122,8 @@ class ExplorerPropertiesServiceTest {
 	}
 
 	/**
-	 * With no extension there is nothing to label the type with, so the dialog falls
-	 * back to a generic word rather than leaving the cell empty.
+	 * With no extension there is nothing to label the type with, so the dialog
+	 * falls back to a generic word rather than leaving the cell empty.
 	 */
 	@Test
 	void labelsAFileWithoutAnExtension(@TempDir Path folder) throws IOException {

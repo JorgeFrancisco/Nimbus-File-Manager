@@ -19,8 +19,7 @@ class PerceptualHashCodecTest {
 	void hashingRefusesASampleThatIsNotThirtyTwoBySquare() {
 		byte[] truncated = new byte[MetadataConstants.SAMPLE_BYTES - 1];
 
-		assertThatThrownBy(() -> PerceptualHashCodec.hash256(truncated))
-				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> PerceptualHashCodec.hash256(truncated)).isInstanceOf(IllegalArgumentException.class);
 		assertThatThrownBy(() -> PerceptualHashCodec.hash256(null)).isInstanceOf(IllegalArgumentException.class);
 	}
 

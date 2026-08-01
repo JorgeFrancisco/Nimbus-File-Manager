@@ -61,7 +61,7 @@ public class LocationRebuildService {
 
 	/**
 	 * @param progressListener receives the running number of processed media (used
-	 *                         by the admin screen to show progress).
+	 * by the admin screen to show progress).
 	 */
 	public LocationRebuildResult rebuild(LocationRebuildScope scope, LongConsumer progressListener) {
 		int parallelism = parallelism();

@@ -123,8 +123,8 @@ class ConversionCatalogServiceTest {
 		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
 		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
 
-		service.catalog(converted, new ResolvedMediaDate(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0),
-				DateSource.FILE_NAME));
+		service.catalog(converted,
+				new ResolvedMediaDate(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0), DateSource.FILE_NAME));
 
 		ArgumentCaptor<MetadataResult> saved = ArgumentCaptor.forClass(MetadataResult.class);
 

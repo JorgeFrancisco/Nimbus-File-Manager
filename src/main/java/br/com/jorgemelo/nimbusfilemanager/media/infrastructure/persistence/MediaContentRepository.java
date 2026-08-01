@@ -63,7 +63,8 @@ public class MediaContentRepository {
 				       m.manufacturer, m.model, m.latitude, m.longitude, v.duration_seconds,
 				       location.current_path,
 				       gl.city_name, gl.state_name, gl.country_name, gl.open_sea, gl.distance_km, gl.confidence, gl.provider
-				""" + BASE;
+				"""
+				+ BASE;
 		List<MediaDetails> rows = jdbcTemplate.query(sql, params(publicId), (rs, _) -> {
 			Number duration = (Number) rs.getObject("duration_seconds");
 			Number latitude = (Number) rs.getObject("latitude");

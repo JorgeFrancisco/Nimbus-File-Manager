@@ -200,9 +200,9 @@ class ExplorerDeletionServiceTest {
 	}
 
 	/**
-	 * A folder is quarantined file by file, and once the last one has gone the empty
-	 * container is removed too - leaving it behind would show an empty folder that
-	 * the user believes they deleted.
+	 * A folder is quarantined file by file, and once the last one has gone the
+	 * empty container is removed too - leaving it behind would show an empty folder
+	 * that the user believes they deleted.
 	 */
 	@Test
 	void quarantinesEveryCatalogedFileUnderAFolderAndRemovesTheEmptyFolder(@TempDir Path parent,
@@ -304,13 +304,13 @@ class ExplorerDeletionServiceTest {
 	}
 
 	/**
-	 * Failing to remove the emptied folder is not worth failing the quarantine over:
-	 * every file already moved, and the leftover container is reported in the log
-	 * rather than turned into an error the user cannot act on.
+	 * Failing to remove the emptied folder is not worth failing the quarantine
+	 * over: every file already moved, and the leftover container is reported in the
+	 * log rather than turned into an error the user cannot act on.
 	 */
 	@Test
-	void keepsTheQuarantineSuccessfulWhenTheEmptiedFolderCannotBeRemoved(@TempDir Path folder,
-			@TempDir Path quarantine) throws IOException {
+	void keepsTheQuarantineSuccessfulWhenTheEmptiedFolderCannotBeRemoved(@TempDir Path folder, @TempDir Path quarantine)
+			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
@@ -374,8 +374,7 @@ class ExplorerDeletionServiceTest {
 		when(catalogFileRepository.findByFileKey(any())).thenAnswer(invocation -> {
 			String key = invocation.getArgument(0);
 
-			return key.equals(PathUtils.normalize(known))
-					? Optional.of(CatalogFile.builder().fileKey(key).build())
+			return key.equals(PathUtils.normalize(known)) ? Optional.of(CatalogFile.builder().fileKey(key).build())
 					: Optional.empty();
 		});
 		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenAnswer(invocation -> {
@@ -392,8 +391,8 @@ class ExplorerDeletionServiceTest {
 
 	/**
 	 * An empty folder is what a previous quarantine leaves behind, and refusing to
-	 * remove it would strand the user with a folder they cannot delete from the very
-	 * screen that emptied it. There is nothing to protect, so it just goes.
+	 * remove it would strand the user with a folder they cannot delete from the
+	 * very screen that emptied it. There is nothing to protect, so it just goes.
 	 */
 	@Test
 	void removesAnEmptyFolderInsteadOfRefusingIt(@TempDir Path parent, @TempDir Path quarantine) throws IOException {

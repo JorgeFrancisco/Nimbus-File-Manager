@@ -127,8 +127,8 @@ class InventoryJobExecutionListenerTest {
 
 		listener().afterJob(jobExecution);
 
-		verify(executionProgressService)
-				.fail(execution, ExecutionMessages.inventoryRejected("Another INVENTORY execution is running."));
+		verify(executionProgressService).fail(execution,
+				ExecutionMessages.inventoryRejected("Another INVENTORY execution is running."));
 	}
 
 	@Test

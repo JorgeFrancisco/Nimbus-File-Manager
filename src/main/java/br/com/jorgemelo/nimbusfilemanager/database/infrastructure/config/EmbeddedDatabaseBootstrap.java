@@ -52,10 +52,10 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	private static final String SOURCE_NAME = "nimbusFileManagerEmbeddedDatabase";
 
 	/**
-	 * The running cluster, for the listener that stops it. A static field
-	 * because the object is created before the context exists and has to be
-	 * reachable from a listener that the context creates - the same bridge the
-	 * application already uses where framework callbacks cannot be injected.
+	 * The running cluster, for the listener that stops it. A static field because
+	 * the object is created before the context exists and has to be reachable from
+	 * a listener that the context creates - the same bridge the application already
+	 * uses where framework callbacks cannot be injected.
 	 */
 	private static EmbeddedClusterService running;
 
@@ -116,11 +116,10 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	 * Fetches the server on the first start that finds it missing.
 	 *
 	 * <p>
-	 * Unlike ffmpeg, which downloads once the application is up and running
-	 * without it, this cannot wait for the context: there is no application
-	 * without a database. So the first start of an installed copy pays for the
-	 * download before it opens, and the settings screen is where a later one is
-	 * asked for.
+	 * Unlike ffmpeg, which downloads once the application is up and running without
+	 * it, this cannot wait for the context: there is no application without a
+	 * database. So the first start of an installed copy pays for the download
+	 * before it opens, and the settings screen is where a later one is asked for.
 	 */
 	private boolean install(ConfigurableEnvironment environment, ClusterLayout layout) {
 		BootstrapProgress.say("the database server is not installed yet");
@@ -134,9 +133,9 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	}
 
 	/**
-	 * Read from the property when the workspace listener has already published
-	 * it, and resolved directly otherwise, so this does not depend on which of
-	 * the two runs first.
+	 * Read from the property when the workspace listener has already published it,
+	 * and resolved directly otherwise, so this does not depend on which of the two
+	 * runs first.
 	 */
 	private Path workspace(ConfigurableEnvironment environment) {
 		String configured = environment.getProperty(WORKSPACE_PROPERTY);

@@ -131,8 +131,8 @@ class OrganizationWebControllerTest {
 
 		controller.organization("D:/SEPARAR/ORGANIZADOS", "D:/SEPARAR/ORGANIZADOS 2", null, model);
 
-		Assertions.assertThat(model).containsEntry("sourcePath", "D:/SEPARAR/ORGANIZADOS")
-				.containsEntry("targetPath", "D:/SEPARAR/ORGANIZADOS 2");
+		Assertions.assertThat(model).containsEntry("sourcePath", "D:/SEPARAR/ORGANIZADOS").containsEntry("targetPath",
+				"D:/SEPARAR/ORGANIZADOS 2");
 	}
 
 	@Test

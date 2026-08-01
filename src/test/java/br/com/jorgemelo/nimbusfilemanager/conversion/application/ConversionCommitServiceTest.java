@@ -173,6 +173,7 @@ class ConversionCommitServiceTest {
 
 		verify(conversionCatalogService).catalog(placed, null);
 	}
+
 	/**
 	 * The converted file is written now, so without carrying the original's
 	 * modified time a video with no embedded or name date would be dated by the

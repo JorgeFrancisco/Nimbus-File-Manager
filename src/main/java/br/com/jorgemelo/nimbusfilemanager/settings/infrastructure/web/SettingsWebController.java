@@ -115,11 +115,10 @@ public class SettingsWebController extends LocalizedComponent {
 				SharedConstants.THEME_DARK.equals(form.theme()) ? SharedConstants.THEME_DARK
 						: SharedConstants.THEME_LIGHT);
 
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
-				OrganizationConstants.RECURSIVE, Boolean.toString(Boolean.TRUE.equals(form.organizationRecursive())));
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.RECURSIVE,
+				Boolean.toString(Boolean.TRUE.equals(form.organizationRecursive())));
 
-		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
-				OrganizationConstants.ALLOW_CONFLICTS,
+		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.ALLOW_CONFLICTS,
 				Boolean.toString(Boolean.TRUE.equals(form.organizationAllowConflicts())));
 
 		userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
@@ -127,8 +126,8 @@ public class SettingsWebController extends LocalizedComponent {
 				Boolean.toString(Boolean.TRUE.equals(form.organizationOverwriteExisting())));
 
 		if (form.organizationLayout() != null) {
-			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY,
-					OrganizationConstants.LAYOUT, form.organizationLayout().name());
+			userPagePreferenceService.save(username, OrganizationConstants.PAGE_KEY, OrganizationConstants.LAYOUT,
+					form.organizationLayout().name());
 		}
 
 		if (form.organizationSize() != null) {

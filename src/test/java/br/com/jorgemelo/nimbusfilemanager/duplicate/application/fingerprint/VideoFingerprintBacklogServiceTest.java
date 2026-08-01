@@ -72,9 +72,8 @@ class VideoFingerprintBacklogServiceTest {
 
 	@Test
 	void failuresReturnsOnlyTheExhaustedRowsWithTheirPaths() {
-		List<FingerprintFailureDetail> expected = List
-				.of(new FingerprintFailureDetail("C:/videos/broken.mp4", FingerprintFailureReason.DECODER_REFUSED,
-						"decode failed"));
+		List<FingerprintFailureDetail> expected = List.of(new FingerprintFailureDetail("C:/videos/broken.mp4",
+				FingerprintFailureReason.DECODER_REFUSED, "decode failed"));
 
 		when(fingerprintFailureRepository.findExhaustedVideoWithPath(FingerprintKind.VIDEO_PHASH, ALGORITHM,
 				VideoFingerprintBacklogService.MAX_ATTEMPTS)).thenReturn(expected);

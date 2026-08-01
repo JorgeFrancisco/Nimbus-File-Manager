@@ -21,7 +21,7 @@ class MapWebControllerTest {
 		when(appSettingService.booleanValue(SettingsConstants.MAP_ENABLED, true)).thenReturn(true);
 		when(appSettingService.stringValue(SettingsConstants.MAP_TILE_URL,
 				"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"))
-				.thenReturn("https://tiles.example.com/{z}/{x}/{y}.png");
+						.thenReturn("https://tiles.example.com/{z}/{x}/{y}.png");
 		when(appSettingService.stringValue(SettingsConstants.MAP_TILE_ATTRIBUTION, "© OpenStreetMap contributors"))
 				.thenReturn("© Example");
 		when(appSettingService.intValue(SettingsConstants.MAP_MAX_ZOOM, 19)).thenReturn(17);

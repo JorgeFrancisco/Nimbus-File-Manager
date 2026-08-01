@@ -41,7 +41,8 @@ import lombok.extern.slf4j.Slf4j;
  * schema version, because loading rows into columns that moved is how a rescue
  * becomes the corruption it was meant to prevent.
  */
-@Slf4j @Service
+@Slf4j
+@Service
 public class CatalogBackupService {
 
 	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");

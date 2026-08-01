@@ -150,11 +150,11 @@ public class ConversionWebController extends LocalizedComponent {
 	}
 
 	/**
-	 * Prunes the selection the browser kept: answers with the subset of
-	 * {@code ids} that is still convertible. The screen holds its selection across
-	 * pagination, so a batch that finished while it was closed left ids behind and
-	 * the counter announced files that no longer exist as candidates. The decision
-	 * is the server's; the screen only shows what comes back.
+	 * Prunes the selection the browser kept: answers with the subset of {@code ids}
+	 * that is still convertible. The screen holds its selection across pagination,
+	 * so a batch that finished while it was closed left ids behind and the counter
+	 * announced files that no longer exist as candidates. The decision is the
+	 * server's; the screen only shows what comes back.
 	 */
 	@PostMapping("/app/conversion/selection")
 	@ResponseBody
@@ -252,10 +252,10 @@ public class ConversionWebController extends LocalizedComponent {
 	}
 
 	/**
-	 * The profile the screen opens on. A stored choice wins, except when it asks for
-	 * a GPU this machine does not have - the equivalent software profile takes over,
-	 * so the form never opens with nothing selected and the batch never silently
-	 * changes quality level.
+	 * The profile the screen opens on. A stored choice wins, except when it asks
+	 * for a GPU this machine does not have - the equivalent software profile takes
+	 * over, so the form never opens with nothing selected and the batch never
+	 * silently changes quality level.
 	 */
 	private ConversionQuality storedQuality(Map<String, String> preferences) {
 		ConversionQuality stored = EnumUtils.valueOfOrNull(ConversionQuality.class,

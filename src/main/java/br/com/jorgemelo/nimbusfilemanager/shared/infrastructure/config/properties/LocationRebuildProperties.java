@@ -13,17 +13,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class LocationRebuildProperties {
 
 	/**
-	 * Number of media resolved concurrently. Kept modest by default so the
-	 * rebuild never starves the shared database connection pool or the rest of
-	 * the application; each worker holds one transaction at a time.
+	 * Number of media resolved concurrently. Kept modest by default so the rebuild
+	 * never starves the shared database connection pool or the rest of the
+	 * application; each worker holds one transaction at a time.
 	 */
 	private int parallelism = 4;
 
 	/**
 	 * Maximum number of parsed boundary geometries kept in memory. Bounds the
-	 * geometry cache so a worldwide dataset is never fully loaded into RAM;
-	 * beyond this size, overflow polygons are parsed on demand without being
-	 * cached.
+	 * geometry cache so a worldwide dataset is never fully loaded into RAM; beyond
+	 * this size, overflow polygons are parsed on demand without being cached.
 	 */
 	private int geometryCacheMaxSize = 50_000;
 

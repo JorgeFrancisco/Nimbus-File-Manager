@@ -22,9 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 public class EmbeddedClusterService {
 
 	/**
-	 * Each attempt costs a process start, and a machine where four consecutive
-	 * free ports are all taken in the moment between choosing and binding has
-	 * something else going on.
+	 * Each attempt costs a process start, and a machine where four consecutive free
+	 * ports are all taken in the moment between choosing and binding has something
+	 * else going on.
 	 */
 	private static final int START_ATTEMPTS = 4;
 
@@ -41,9 +41,9 @@ public class EmbeddedClusterService {
 	/**
 	 * The running cluster's connection, creating it on first run.
 	 *
-	 * @return how to reach it, or {@code null} when it could not be started -
-	 *         the caller falls back to the configured connection rather than
-	 *         taking the application down
+	 * @return how to reach it, or {@code null} when it could not be started - the
+	 * caller falls back to the configured connection rather than taking the
+	 * application down
 	 */
 	public ClusterConnection start() {
 		try {
@@ -60,10 +60,10 @@ public class EmbeddedClusterService {
 	}
 
 	/**
-	 * Refuses data written by another major version instead of letting the
-	 * server refuse it later. PostgreSQL will not open a cluster across major
-	 * versions, and the upgrade path is a decision to be taken deliberately -
-	 * not something to trigger by installing a new build over an old one.
+	 * Refuses data written by another major version instead of letting the server
+	 * refuse it later. PostgreSQL will not open a cluster across major versions,
+	 * and the upgrade path is a decision to be taken deliberately - not something
+	 * to trigger by installing a new build over an old one.
 	 */
 	private ClusterConnection openExisting() throws IOException {
 		String major = layout.majorVersion();
@@ -111,9 +111,9 @@ public class EmbeddedClusterService {
 
 	/**
 	 * Starts on the remembered port, and on another one when something took it
-	 * first. The gap between finding a port free and the server binding it
-	 * cannot be closed - only retried through, which beats refusing to start
-	 * over a port number the user never chose and cannot see.
+	 * first. The gap between finding a port free and the server binding it cannot
+	 * be closed - only retried through, which beats refusing to start over a port
+	 * number the user never chose and cannot see.
 	 */
 	private ClusterConnection startOnAWorkingPort(ClusterConnection connection) throws IOException {
 		ClusterConnection attempt = connection;
@@ -145,8 +145,8 @@ public class EmbeddedClusterService {
 
 	/**
 	 * Asks for a clean stop and escalates only if that does not finish. An
-	 * immediate stop leaves the next start to replay the write-ahead log, which
-	 * is safe but slower, so it is what happens after a clean stop was given its
+	 * immediate stop leaves the next start to replay the write-ahead log, which is
+	 * safe but slower, so it is what happens after a clean stop was given its
 	 * chance - never instead of one.
 	 */
 	public void stop() {
@@ -161,10 +161,9 @@ public class EmbeddedClusterService {
 	}
 
 	/**
-	 * A port the operating system says is free right now. Binding zero and
-	 * reading back what was assigned is the only way to ask; keeping the socket
-	 * open until the server starts is not possible, which is what the retry
-	 * above is for.
+	 * A port the operating system says is free right now. Binding zero and reading
+	 * back what was assigned is the only way to ask; keeping the socket open until
+	 * the server starts is not possible, which is what the retry above is for.
 	 */
 	private int freePort() throws IOException {
 		try (ServerSocket socket = new ServerSocket(0)) {

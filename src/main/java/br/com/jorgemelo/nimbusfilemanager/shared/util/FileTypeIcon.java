@@ -20,12 +20,9 @@ public final class FileTypeIcon {
 		case "EXCEL", "XLS", "XLSX", "CSV" -> "bi-file-earmark-spreadsheet-fill excel";
 		case "POWERPOINT", "PPT", "PPTX" -> "bi-file-earmark-slides-fill powerpoint";
 		case "ZIP", "RAR", "SEVEN_Z", "7Z" -> "bi-file-earmark-zip-fill archive";
-		case "AUDIO", "MP3", "WAV", "FLAC", "AAC", "OGG", "M4A", "WMA", "OPUS", "AMR" ->
-			"bi-file-earmark-music-fill audio";
-		case "VIDEO", "MP4", "MOV", "AVI", "MKV", "WMV", "FLV", "WEBM", "MPEG", "MPG", "3GP", "M4V" ->
-			"bi-file-earmark-play-fill video";
-		case "PHOTO", "JPG", "JPEG", "PNG", "GIF", "BMP", "WEBP", "HEIC", "HEIF", "TIF", "TIFF" ->
-			"bi-file-earmark-image-fill image";
+		case "AUDIO", "MP3", "WAV", "FLAC", "AAC", "OGG", "M4A", "WMA", "OPUS", "AMR" -> "bi-file-earmark-music-fill audio";
+		case "VIDEO", "MP4", "MOV", "AVI", "MKV", "WMV", "FLV", "WEBM", "MPEG", "MPG", "3GP", "M4V" -> "bi-file-earmark-play-fill video";
+		case "PHOTO", "JPG", "JPEG", "PNG", "GIF", "BMP", "WEBP", "HEIC", "HEIF", "TIF", "TIFF" -> "bi-file-earmark-image-fill image";
 		case "TEXT", "TXT", "MD", "LOG", "JSON", "XML", "YAML", "YML" -> "bi-file-earmark-text-fill text";
 		default -> "bi-file-earmark-fill generic";
 		};

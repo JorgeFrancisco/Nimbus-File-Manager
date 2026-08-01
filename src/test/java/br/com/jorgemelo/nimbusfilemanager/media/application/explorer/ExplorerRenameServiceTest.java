@@ -109,9 +109,9 @@ class ExplorerRenameServiceTest {
 	}
 
 	/**
-	 * A filesystem root has no parent to rename inside of. The guard already refuses
-	 * it in production; this pins that the service does not dereference the missing
-	 * parent even when asked directly.
+	 * A filesystem root has no parent to rename inside of. The guard already
+	 * refuses it in production; this pins that the service does not dereference the
+	 * missing parent even when asked directly.
 	 */
 	@Test
 	void refusesRenamingSomethingWithoutAParent(@TempDir Path folder) {
@@ -173,8 +173,8 @@ class ExplorerRenameServiceTest {
 
 	/**
 	 * A folder carries no bytes of its own to verify, so it is moved plainly; the
-	 * catalog rows under it are left to the reconciliation rather than rewritten one
-	 * by one here.
+	 * catalog rows under it are left to the reconciliation rather than rewritten
+	 * one by one here.
 	 */
 	@Test
 	void renamesAFolderWithoutTheSecureMoveAndWithoutTouchingTheCatalog(@TempDir Path parent) throws IOException {
@@ -219,8 +219,7 @@ class ExplorerRenameServiceTest {
 
 		when(operationLockService.acquireWithin(any(), any(), any())).thenThrow(new OperationLockException("busy"));
 
-		Assertions.assertThat(service.rename(file, "holiday.jpg").message())
-				.isEqualTo(expected("backend.files.busy"));
+		Assertions.assertThat(service.rename(file, "holiday.jpg").message()).isEqualTo(expected("backend.files.busy"));
 	}
 
 	private MessageSource messageSource() {

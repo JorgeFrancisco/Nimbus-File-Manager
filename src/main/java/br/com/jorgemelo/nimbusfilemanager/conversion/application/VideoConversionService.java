@@ -151,9 +151,9 @@ public class VideoConversionService extends LocalizedComponent {
 		}
 	}
 
-	private ConversionResult convertRegistered(Execution execution, Collection<UUID> publicIds,
-			List<CatalogFile> files, ConversionOptions options, Path quarantineRoot,
-			ConversionProgressCallback progress, BooleanSupplier cancelled) {
+	private ConversionResult convertRegistered(Execution execution, Collection<UUID> publicIds, List<CatalogFile> files,
+			ConversionOptions options, Path quarantineRoot, ConversionProgressCallback progress,
+			BooleanSupplier cancelled) {
 		int total = publicIds.size();
 
 		Map<UUID, ConversionSource> sources = sourcesById(publicIds);
@@ -262,8 +262,7 @@ public class VideoConversionService extends LocalizedComponent {
 	}
 
 	/**
-	 * The date already resolved for the source, which the converted file
-	 * inherits.
+	 * The date already resolved for the source, which the converted file inherits.
 	 */
 	private ResolvedMediaDate resolvedDateOf(ConversionSource source) {
 		if (source == null || source.captureDate() == null) {

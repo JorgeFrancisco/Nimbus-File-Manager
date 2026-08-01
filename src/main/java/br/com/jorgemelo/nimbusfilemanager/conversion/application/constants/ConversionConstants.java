@@ -40,10 +40,9 @@ public final class ConversionConstants {
 	public static final String DEFAULT_NAME_AFFIX = "_H265";
 
 	/**
-	 * Folder under the workspace temp where an encode is written. It is outside
-	 * the library on purpose: a sync client mirroring the library treats a
-	 * half-written encode as media and reverts the rename that puts the finished
-	 * file in place.
+	 * Folder under the workspace temp where an encode is written. It is outside the
+	 * library on purpose: a sync client mirroring the library treats a half-written
+	 * encode as media and reverts the rename that puts the finished file in place.
 	 */
 	public static final String WORKSPACE_FOLDER = "conversion";
 
@@ -64,9 +63,9 @@ public final class ConversionConstants {
 	 * How long a batch waits for a conflicting operation before giving up. Sized
 	 * for what it actually collides with: the scheduled reconcile, which finishes
 	 * in seconds, and an inventory triggered by an external file event, which on a
-	 * large library takes a few minutes. Waiting costs the user nothing - the
-	 * batch already runs in the background - while refusing costs a click that
-	 * looks like a broken screen.
+	 * large library takes a few minutes. Waiting costs the user nothing - the batch
+	 * already runs in the background - while refusing costs a click that looks like
+	 * a broken screen.
 	 */
 	public static final Duration LOCK_WAIT = Duration.ofMinutes(5);
 

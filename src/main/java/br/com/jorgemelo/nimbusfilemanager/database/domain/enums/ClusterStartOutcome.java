@@ -7,7 +7,5 @@ package br.com.jorgemelo.nimbusfilemanager.database.domain.enums;
  */
 public enum ClusterStartOutcome {
 
-	STARTED,
-	PORT_UNAVAILABLE,
-	FAILED
+	STARTED, PORT_UNAVAILABLE, FAILED
 }

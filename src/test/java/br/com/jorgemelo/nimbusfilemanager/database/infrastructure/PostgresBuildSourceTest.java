@@ -89,8 +89,8 @@ class PostgresBuildSourceTest {
 	}
 
 	/**
-	 * Without a url there is nothing to try. Saying so beats a request to an
-	 * empty address, whose failure would name the wrong problem.
+	 * Without a url there is nothing to try. Saying so beats a request to an empty
+	 * address, whose failure would name the wrong problem.
 	 */
 	@Test
 	void reportsAMissingUrlWithoutTryingToConnect() {

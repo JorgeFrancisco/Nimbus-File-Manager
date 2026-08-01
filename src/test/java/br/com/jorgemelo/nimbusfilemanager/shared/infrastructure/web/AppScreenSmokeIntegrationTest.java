@@ -81,10 +81,10 @@ class AppScreenSmokeIntegrationTest {
 	private ExecutionRepository executionRepository;
 
 	/**
-	 * A configured library and a real row for the signed-in user: without the
-	 * first every screen answers a redirect instead of a page, and without the
-	 * second the account screen fails for a reason that has nothing to do with
-	 * what is under test.
+	 * A configured library and a real row for the signed-in user: without the first
+	 * every screen answers a redirect instead of a page, and without the second the
+	 * account screen fails for a reason that has nothing to do with what is under
+	 * test.
 	 */
 	@BeforeEach
 	void configureTheInstallation(@TempDir Path library) {
@@ -110,9 +110,9 @@ class AppScreenSmokeIntegrationTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = { "/app", "/app/timeline", "/app/map", "/app/files", "/app/organization",
-			"/app/duplicates", "/app/quarantine", "/app/conversion", "/app/statistics", "/app/settings",
-			"/app/settings/preferences", "/app/users", "/app/accesses", "/app/account" })
+	@ValueSource(strings = { "/app", "/app/timeline", "/app/map", "/app/files", "/app/organization", "/app/duplicates",
+			"/app/quarantine", "/app/conversion", "/app/statistics", "/app/settings", "/app/settings/preferences",
+			"/app/users", "/app/accesses", "/app/account" })
 	@WithMockUser(username = ADMIN, roles = { "ADMIN", "USER" })
 	void everyScreenRendersForAnAdministrator(String url) throws Exception {
 		renders(url);
@@ -170,9 +170,8 @@ class AppScreenSmokeIntegrationTest {
 	private long finishedExecution() {
 		return executionRepository.save(Execution.builder().executionType(ExecutionType.INVENTORY)
 				.status(ExecutionStatus.FINISHED).startedAt(LocalDateTime.now()).finishedAt(LocalDateTime.now())
-				.sourcePath("D:/library").recursive(true).executeFlag(true).filesFound(0).filesAnalyzed(0)
-				.cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).statusMessage(StatusMessage.raw("done"))
-				.build()).getId();
+				.sourcePath("D:/library").recursive(true).executeFlag(true).filesFound(0).filesAnalyzed(0).cacheHits(0)
+				.filesMoved(0).simulatedFiles(0).errors(0).statusMessage(StatusMessage.raw("done")).build()).getId();
 	}
 
 	/**

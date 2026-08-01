@@ -22,11 +22,11 @@ import lombok.extern.slf4j.Slf4j;
  * It used to be written next to the source, to make the final step a rename
  * instead of a copy, and that was a mistake: a file-sync client mirroring the
  * library uploads the half-written encode as if it were media, and when the
- * finished file is renamed into place mid-upload the client reverts the
- * rename - restoring its copy of the intermediate and deleting the real
- * output. It happened four times in one evening. Out of the library the
- * intermediate is invisible to whatever watches it, and the copy back costs a
- * fraction of the encode that produced it.
+ * finished file is renamed into place mid-upload the client reverts the rename
+ * - restoring its copy of the intermediate and deleting the real output. It
+ * happened four times in one evening. Out of the library the intermediate is
+ * invisible to whatever watches it, and the copy back costs a fraction of the
+ * encode that produced it.
  *
  * <p>
  * The converted file only takes its real name once it is validated, so a file

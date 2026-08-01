@@ -14,17 +14,18 @@ class DuplicatesTemplateTest {
 	void visibleDuplicateScreenCopyUsesMessageBundleKeys() throws Exception {
 		String html = Files.readString(Path.of("src/main/resources/templates/app/duplicates.html"));
 
-		assertThat(html).contains("th:lang=\"${#locale.toLanguageTag()}\"", "common(#{duplicates.title}, 'duplicates')",
-				"app(~{::section}, #{duplicates.title})", "th:text=\"#{duplicates.tab.exact}\"",
-				"th:text=\"#{duplicates.tab.similar}\"", "th:text=\"#{duplicates.tab.videos}\"",
-				"#{duplicates.rebuild.confirm}", "#{duplicates.rebuild.confirm.videos}",
-				"#{duplicates.progress(${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)})}",
-				"#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}",
-				"th:text=\"#{duplicates.delete.confirm.title}\"", "th:text=\"#{duplicates.folder.clear.description}\"",
-				"id=\"clearSelectionButton\"", "th:text=\"#{duplicates.selection.clear}\"",
-				"th:title=\"#{duplicates.selection.clear.title}\"")
+		assertThat(html)
+				.contains("th:lang=\"${#locale.toLanguageTag()}\"", "common(#{duplicates.title}, 'duplicates')",
+						"app(~{::section}, #{duplicates.title})", "th:text=\"#{duplicates.tab.exact}\"",
+						"th:text=\"#{duplicates.tab.similar}\"", "th:text=\"#{duplicates.tab.videos}\"",
+						"#{duplicates.rebuild.confirm}", "#{duplicates.rebuild.confirm.videos}",
+						"#{duplicates.progress(${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)})}",
+						"#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}",
+						"th:text=\"#{duplicates.delete.confirm.title}\"",
+						"th:text=\"#{duplicates.folder.clear.description}\"", "id=\"clearSelectionButton\"",
+						"th:text=\"#{duplicates.selection.clear}\"", "th:title=\"#{duplicates.selection.clear.title}\"")
 				.doesNotContain("${phashFailed} + ' foto(s)", "aria-label=|Progresso:",
-				"th:text=\"|${totalElements} grupo(s)|\"");
+						"th:text=\"|${totalElements} grupo(s)|\"");
 	}
 
 	@Test
@@ -40,8 +41,7 @@ class DuplicatesTemplateTest {
 				// The dialog is shared by the tabs, so the list it loads is rendered into it.
 				// Hard-coding the photo endpoint in the script made the Videos tab show photos.
 				.contains("data-failures-url=${failuresUrl}");
-		assertThat(javascript).contains("failuresDialog.dataset.failuresUrl")
-				.contains("let failuresLoaded = false")
+		assertThat(javascript).contains("failuresDialog.dataset.failuresUrl").contains("let failuresLoaded = false")
 				// A deletion updates the current page in place (rows/groups removed
 				// client-side) as the
 				// primary path; a full reload is only the fallback when removing groups empties
@@ -79,8 +79,7 @@ class DuplicatesTemplateTest {
 		// select and the "Tipo" filter had no explicit height and rode higher, breaking
 		// the toolbar's vertical line.
 		assertThat(css).contains("align-items: center;", ".explorer-size select {",
-				".duplicates-type-filter > summary {",
-				"height: 38px;");
+				".duplicates-type-filter > summary {", "height: 38px;");
 	}
 
 	@Test

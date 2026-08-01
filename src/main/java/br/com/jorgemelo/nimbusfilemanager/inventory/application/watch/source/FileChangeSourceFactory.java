@@ -22,16 +22,15 @@ public class FileChangeSourceFactory {
 	private final FileChangeSourceProvider provider;
 	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
 
-	public FileChangeSourceFactory(FileChangeSourceProvider provider,
-			SelfWrittenPathRegistry selfWrittenPathRegistry) {
+	public FileChangeSourceFactory(FileChangeSourceProvider provider, SelfWrittenPathRegistry selfWrittenPathRegistry) {
 		this.provider = provider;
 		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
 	}
 
 	/**
 	 * @param recursive whether the {@code WatchService} fallback registers the
-	 *                  whole subtree; ignored by the USN source, which is
-	 *                  inherently recursive without per-directory handles.
+	 * whole subtree; ignored by the USN source, which is inherently recursive
+	 * without per-directory handles.
 	 */
 	public FileChangeSource create(Path root, boolean recursive) throws IOException {
 		Optional<FileChangeSource> provided = provider.open(root);

@@ -30,8 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.Workspace
 class ConversionFilePlacementTest {
 
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
-	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming(
-			mock(WorkspaceManager.class));
+	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming(mock(WorkspaceManager.class));
 	private final ConversionFilePlacement placement = new ConversionFilePlacement(
 			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 			conversionFileNaming);
@@ -74,8 +73,8 @@ class ConversionFilePlacementTest {
 		ConversionOptions suffixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 				OriginalDisposition.KEEP, "_H265", NameAffixPosition.SUFFIX);
 
-		Assertions.assertThat(placement.place(converted, source, suffixed))
-				.isEqualTo(library.resolve("clip_H265.mp4")).hasContent("converted");
+		Assertions.assertThat(placement.place(converted, source, suffixed)).isEqualTo(library.resolve("clip_H265.mp4"))
+				.hasContent("converted");
 		Assertions.assertThat(source).hasContent("original");
 	}
 
@@ -88,8 +87,7 @@ class ConversionFilePlacementTest {
 		ConversionOptions prefixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 				OriginalDisposition.KEEP, "H265_", NameAffixPosition.PREFIX);
 
-		Assertions.assertThat(placement.place(converted, source, prefixed))
-				.isEqualTo(library.resolve("H265_clip.mp4"));
+		Assertions.assertThat(placement.place(converted, source, prefixed)).isEqualTo(library.resolve("H265_clip.mp4"));
 	}
 
 	@Test

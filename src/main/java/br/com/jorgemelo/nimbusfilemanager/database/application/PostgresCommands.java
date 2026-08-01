@@ -28,8 +28,8 @@ public interface PostgresCommands {
 	 * <p>
 	 * A port that is taken has to come back as its own outcome rather than as a
 	 * failure: between choosing a free port and the server binding it, anything
-	 * else on the machine may have taken it, and the answer to that is another
-	 * port rather than an error on screen.
+	 * else on the machine may have taken it, and the answer to that is another port
+	 * rather than an error on screen.
 	 */
 	ClusterStartOutcome start(int port);
 

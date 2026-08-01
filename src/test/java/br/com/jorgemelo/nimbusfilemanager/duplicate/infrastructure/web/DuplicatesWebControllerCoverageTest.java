@@ -75,8 +75,8 @@ class DuplicatesWebControllerCoverageTest {
 				.containsExactlyInAnyOrder("PHOTO", "VIDEO");
 
 		verify(fixture.similarity).cachedPage(85, PageRequest.of(2, 100));
-		verify(fixture.preferences).save("system", DuplicateConstants.PAGE_KEY,
-				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,VIDEO");
+		verify(fixture.preferences).save("system", DuplicateConstants.PAGE_KEY, DuplicateConstants.TYPE_FILTER_KEY,
+				"PHOTO,VIDEO");
 	}
 
 	@Test
@@ -88,8 +88,7 @@ class DuplicatesWebControllerCoverageTest {
 		MockMvc mockMvc = MockMvcBuilders.standaloneSetup(fixture.controller())
 				.setViewResolvers(new InternalResourceViewResolver()).build();
 
-		mockMvc.perform(get("/app/duplicates").param("tab", "similar").param("size", "100"))
-				.andExpect(status().isOk());
+		mockMvc.perform(get("/app/duplicates").param("tab", "similar").param("size", "100")).andExpect(status().isOk());
 
 		verify(fixture.similarity).cachedPage(anyInt(), eq(PageRequest.of(0, 100)));
 	}
@@ -98,10 +97,9 @@ class DuplicatesWebControllerCoverageTest {
 	void invalidSavedPreferencesFallBackSafelyForAnAuthenticatedUserAndKeepPaginationState() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("alice", DuplicateConstants.PAGE_KEY)).thenReturn(
-				Map.of(DuplicateConstants.TAB_KEY, "invalid", SharedConstants.PAGE_SIZE_KEY, "also-invalid",
-						DuplicateConstants.MIN_SIMILARITY_KEY, "invalid-too", DuplicateConstants.VIEW_KEY,
-						"unknown"));
+		when(fixture.preferences.find("alice", DuplicateConstants.PAGE_KEY))
+				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, "invalid", SharedConstants.PAGE_SIZE_KEY, "also-invalid",
+						DuplicateConstants.MIN_SIMILARITY_KEY, "invalid-too", DuplicateConstants.VIEW_KEY, "unknown"));
 		when(fixture.duplicates.candidates(eq(PageRequest.of(1, 50)), any()))
 				.thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 50), 101));
 
@@ -111,8 +109,7 @@ class DuplicatesWebControllerCoverageTest {
 				new TestingAuthenticationToken("alice", "password"), model);
 
 		Assertions.assertThat(model).containsEntry("activeTab", "exact").containsEntry("view", "details")
-				.containsEntry("pageSize", 50)
-				.containsEntry("minSimilarity", DuplicateConstants.MIN_SIMILARITY_PERCENT)
+				.containsEntry("pageSize", 50).containsEntry("minSimilarity", DuplicateConstants.MIN_SIMILARITY_PERCENT)
 				.containsEntry("hasPrevious", true).containsEntry("hasNext", true);
 	}
 
@@ -120,17 +117,16 @@ class DuplicatesWebControllerCoverageTest {
 	void invalidNumericPreferenceValuesAreClampedOrIgnoredWithoutChangingTheRequestedScreen() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.preferences.find("system", DuplicateConstants.PAGE_KEY)).thenReturn(Map.of(
-				SharedConstants.PAGE_SIZE_KEY, "75",
-				DuplicateConstants.MIN_SIMILARITY_KEY, "999"));
+		when(fixture.preferences.find("system", DuplicateConstants.PAGE_KEY))
+				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "75", DuplicateConstants.MIN_SIMILARITY_KEY, "999"));
 		when(fixture.duplicates.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(Page.empty());
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		fixture.controller().duplicates(new DuplicatesViewRequest("exact", 0, null, "details", 75, null), null, model);
 
-		Assertions.assertThat(model).containsEntry("pageSize", 50)
-				.containsEntry("minSimilarity", DuplicateConstants.MAX_SIMILARITY_PERCENT);
+		Assertions.assertThat(model).containsEntry("pageSize", 50).containsEntry("minSimilarity",
+				DuplicateConstants.MAX_SIMILARITY_PERCENT);
 	}
 
 	@Test
@@ -141,12 +137,13 @@ class DuplicatesWebControllerCoverageTest {
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		fixture.controller().duplicates(new DuplicatesViewRequest("exact", 0, null, "details", null,
-				List.of(MediaTypeFilter.PHOTO, MediaTypeFilter.DOCS)),
+		fixture.controller().duplicates(
+				new DuplicatesViewRequest("exact", 0, null, "details", null,
+						List.of(MediaTypeFilter.PHOTO, MediaTypeFilter.DOCS)),
 				new TestingAuthenticationToken("alice", "password"), model);
 
-		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY,
-				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,DOCS");
+		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY, DuplicateConstants.TYPE_FILTER_KEY,
+				"PHOTO,DOCS");
 		verify(fixture.duplicates).candidates(PageRequest.of(0, 50),
 				MediaTypeFilter.fileTypesOf(List.of(MediaTypeFilter.PHOTO, MediaTypeFilter.DOCS)));
 		Assertions.assertThat(model.get("selectedTypeFilters"))
@@ -165,8 +162,8 @@ class DuplicatesWebControllerCoverageTest {
 		fixture.controller().duplicates(new DuplicatesViewRequest("exact", 0, null, "details", null, List.of()),
 				new TestingAuthenticationToken("alice", "password"), model);
 
-		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY,
-				DuplicateConstants.TYPE_FILTER_KEY, "PHOTO,VIDEO,AUDIO,DOCS,OTHERS");
+		verify(fixture.preferences).save("alice", DuplicateConstants.PAGE_KEY, DuplicateConstants.TYPE_FILTER_KEY,
+				"PHOTO,VIDEO,AUDIO,DOCS,OTHERS");
 		Assertions.assertThat(model.get("selectedTypeFilters"))
 				.asInstanceOf(InstanceOfAssertFactories.iterable(String.class))
 				.containsExactlyInAnyOrder("PHOTO", "VIDEO", "AUDIO", "DOCS", "OTHERS");
@@ -286,8 +283,8 @@ class DuplicatesWebControllerCoverageTest {
 		Fixture fixture = new Fixture();
 
 		when(fixture.preferences.find("system", DuplicateConstants.PAGE_KEY))
-				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, " ", SharedConstants.PAGE_SIZE_KEY,
-						" ", DuplicateConstants.MIN_SIMILARITY_KEY, " ", DuplicateConstants.VIEW_KEY, " "));
+				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, " ", SharedConstants.PAGE_SIZE_KEY, " ",
+						DuplicateConstants.MIN_SIMILARITY_KEY, " ", DuplicateConstants.VIEW_KEY, " "));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -319,8 +316,8 @@ class DuplicatesWebControllerCoverageTest {
 
 		fixture.controller().duplicates(new DuplicatesViewRequest(null, 0, null, "details", null, null), null, model);
 
-		Assertions.assertThat(model).containsEntry("activeTab", "exact")
-				.containsEntry("minSimilarity", DuplicateConstants.MIN_SIMILARITY_PERCENT);
+		Assertions.assertThat(model).containsEntry("activeTab", "exact").containsEntry("minSimilarity",
+				DuplicateConstants.MIN_SIMILARITY_PERCENT);
 	}
 
 	@Test
@@ -346,9 +343,8 @@ class DuplicatesWebControllerCoverageTest {
 		DuplicateCandidateFileResponse keep = file(1, "keep.jpg", "jpg", "PHOTO");
 		DuplicateCandidateFileResponse candidate = file(2, "candidate.jpg", "jpg", "PHOTO");
 
-		when(fixture.similarity.cachedPage(70, PageRequest.of(0, 50)))
-				.thenReturn(Optional.of(new PageImpl<>(List.of(new SimilarPhotoGroupResponse("similar", 2, 90,
-						SizeResponse.of(10), keep, List.of(candidate))))));
+		when(fixture.similarity.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.of(new PageImpl<>(List
+				.of(new SimilarPhotoGroupResponse("similar", 2, 90, SizeResponse.of(10), keep, List.of(candidate))))));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 

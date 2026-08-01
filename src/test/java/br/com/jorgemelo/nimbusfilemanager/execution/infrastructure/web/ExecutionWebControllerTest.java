@@ -45,8 +45,8 @@ class ExecutionWebControllerTest {
 
 		Assertions.assertThat(view).isEqualTo("app/execution-detail");
 		Assertions.assertThat(model.get("execution")).isNotNull();
-		Assertions.assertThat(model).containsKeys("steps", "errors", "movements")
-				.containsEntry("canUndo", false).containsEntry("canReprocess", false)
+		Assertions.assertThat(model).containsKeys("steps", "errors", "movements").containsEntry("canUndo", false)
+				.containsEntry("canReprocess", false)
 				.containsKeys("movementStatusLabels", "movementReasonLabels", "executionErrorTypeLabels");
 	}
 
