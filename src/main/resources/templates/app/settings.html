@@ -96,15 +96,6 @@
 			</th:block>
 		</section>
 
-		<section class="panel section">
-			<h2 th:text="#{settings.sys.location}">Localização offline</h2>
-			<p class="muted" th:text="#{settings.sys.locationHint}">Resolução de país/estado/cidade a partir do GPS das mídias, totalmente offline.</p>
-			<th:block th:each="setting : ${settings}"
-					th:if="${#strings.startsWith(setting.settingKey, LOCATION) and setting.settingKey != LOCATION_ENABLED}">
-				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
-			</th:block>
-		</section>
-
 		<section id="tools-admin" class="panel section" data-operation-panel="tools"
 				th:attr="data-operation-running=${toolInstallRunning}">
 			<h2 th:text="#{settings.tools.title}">Ferramentas externas</h2>
@@ -149,7 +140,8 @@
 		</section>
 		<section id="geo-admin" class="panel section geo-admin-panel" data-operation-panel="geo"
 				th:attr="data-operation-running=${geoImportRunning or geoRebuildRunning}">
-			<h2 th:text="#{settings.geo.title}">Administração da base geográfica</h2>
+			<h2 th:text="#{settings.sys.location}">Localização offline</h2>
+			<p class="muted" th:text="#{settings.sys.locationHint}">Resolução de país/estado/cidade a partir do GPS das mídias, totalmente offline.</p>
 			<p class="muted"><span th:text="#{settings.geo.intro.before}">Base offline de limites administrativos usada na resolução de localização (país, estado e município) por contenção geográfica. Dados de</span> <a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a> <span th:text="#{settings.geo.intro.after}">(CC BY 4.0); a atribuição é obrigatória.</span></p>
 
 			<div th:if="${inventoryRunning}" class="alert" role="status" th:text="#{settings.geo.inventoryBlocked}">Inventário em andamento — as ações da base geográfica ficam bloqueadas até ele terminar.</div>
@@ -269,6 +261,11 @@
 					</form>
 				</div>
 			</div>
+
+			<th:block th:each="setting : ${settings}"
+					th:if="${#strings.startsWith(setting.settingKey, LOCATION) and setting.settingKey != LOCATION_ENABLED}">
+				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
+			</th:block>
 		</section>
 
 		<section id="metadata-admin" class="panel section" data-operation-panel="metadata"
