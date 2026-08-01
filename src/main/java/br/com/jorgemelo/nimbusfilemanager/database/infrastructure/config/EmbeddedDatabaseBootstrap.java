@@ -16,6 +16,7 @@ import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
+import br.com.jorgemelo.nimbusfilemanager.database.application.BootstrapProgress;
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterLayout;
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterPropertiesStore;
 import br.com.jorgemelo.nimbusfilemanager.database.application.EmbeddedClusterService;
@@ -69,7 +70,7 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 		}
 
 		if (!decision.active()) {
-			log.info("Embedded database not started: {}", decision);
+			BootstrapProgress.say("embedded database not started: " + decision);
 
 			return;
 		}
@@ -80,7 +81,7 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 		ClusterConnection connection = service.start();
 
 		if (connection == null) {
-			log.error("Falling back to the configured database connection");
+			BootstrapProgress.say("could not start the embedded database; using the configured connection");
 
 			return;
 		}
@@ -122,7 +123,7 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	 * asked for.
 	 */
 	private boolean install(ConfigurableEnvironment environment, ClusterLayout layout) {
-		log.info("The embedded PostgreSQL is not installed yet; fetching it before starting");
+		BootstrapProgress.say("the database server is not installed yet");
 
 		return new EmbeddedDatabaseInstaller(layout,
 				new PostgresBuildSource(environment.getProperty(DOWNLOAD_URL_PROPERTY))).install();

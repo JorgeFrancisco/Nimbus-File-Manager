@@ -88,7 +88,7 @@ public class EmbeddedClusterService {
 	}
 
 	private ClusterConnection create() throws IOException {
-		log.info("Creating the embedded database at {}", layout.cluster());
+		BootstrapProgress.say("creating the database at " + layout.cluster());
 
 		String password = store.generatePassword();
 
@@ -124,7 +124,7 @@ public class EmbeddedClusterService {
 			if (outcome == ClusterStartOutcome.STARTED) {
 				store.save(attempt);
 
-				log.info("Embedded database listening on port {}", attempt.port());
+				BootstrapProgress.say("database ready on port " + attempt.port());
 
 				return attempt;
 			}

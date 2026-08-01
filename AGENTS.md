@@ -338,7 +338,7 @@ Como operar a catraca:
 Duas execuções seguidas da mesma suíte, sem uma linha alterada, dão números diferentes — observado em até **0,16 ponto** no branch e ~0,03 nas demais. Duas causas, ambas do próprio projeto:
 
 - **Execução paralela.** `src/test/resources/junit-platform.properties` roda classes de teste concorrentemente. Quais ramos de código compartilhado são exercitados muda de execução para execução: cache que ora popula ora acerta, caminho de contenção, timeout que ora dispara.
-- **Testes que se auto-pulam.** Os que dependem do ffmpeg (`@EnabledIf`) pulam quando `tools/bin` não existe, e os métodos que eles cobririam contam como descobertos. A pasta é gitignored, então um worktree ou um clone novo mede diferente da árvore principal.
+- **Testes que se auto-pulam.** Os que dependem do ffmpeg (`@EnabledIf`) pulam quando `tools/ffmpeg/bin` não existe, e os métodos que eles cobririam contam como descobertos. A pasta é gitignored, então um worktree ou um clone novo mede diferente da árvore principal.
 
 Como operar diante disso:
 

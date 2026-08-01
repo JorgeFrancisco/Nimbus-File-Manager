@@ -21,8 +21,8 @@ import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase
  */
 class ExternalToolSettingsModelTest {
 
-	private static final ExternalToolStatus STATUS = new ExternalToolStatus(true, "tools/bin/ffmpeg.exe", true,
-			"tools/bin/ffprobe.exe", "ffmpeg version 8.0", true, true, "C:/app/tools/bin");
+	private static final ExternalToolStatus STATUS = new ExternalToolStatus(true, "tools/ffmpeg/bin/ffmpeg.exe", true,
+			"tools/ffmpeg/bin/ffprobe.exe", "ffmpeg version 8.0", true, true, "C:/app/tools/ffmpeg/bin");
 
 	private final ExternalToolInstaller installer = mock(ExternalToolInstaller.class);
 	private final ExternalToolInstallAsyncRunner runner = mock(ExternalToolInstallAsyncRunner.class);

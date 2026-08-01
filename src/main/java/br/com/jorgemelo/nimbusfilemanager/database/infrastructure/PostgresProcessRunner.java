@@ -144,7 +144,21 @@ public class PostgresProcessRunner implements PostgresCommands {
 		Process process = null;
 
 		try {
-			ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true);
+			// The output goes to a file rather than to a pipe. "pg_ctl start" leaves the
+			// server running as a child that inherits the pipe, so draining it would only
+			// end when the server does - reading before waiting for the command hung the
+			// whole startup, with a server up, nothing recorded and no log to say so
+			// (this runs before logging is configured).
+			// Beside the cluster rather than in the system temp folder, for the same
+			// reason as the password file: what these commands print is about this
+			// installation, and a world-writable directory is readable by everything on
+			// the machine.
+			Path output = layout.cluster().resolveSibling("nimbus-" + name + ".log");
+
+			Files.createDirectories(output.getParent());
+
+			ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true)
+					.redirectOutput(output.toFile());
 
 			if (password != null) {
 				builder.environment().put("PGPASSWORD", password);
@@ -152,17 +166,17 @@ public class PostgresProcessRunner implements PostgresCommands {
 
 			process = builder.start();
 
-			String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
 			if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
 				process.destroyForcibly();
 
-				log.error("{} did not finish within {} seconds", name, timeoutSeconds);
+				deleteQuietly(output);
 
 				return -1;
 			}
 
-			logOutcome(name, process.exitValue(), output);
+			logOutcome(name, process.exitValue(), read(output));
+
+			deleteQuietly(output);
 
 			return process.exitValue();
 		} catch (IOException exception) {
@@ -182,14 +196,22 @@ public class PostgresProcessRunner implements PostgresCommands {
 		}
 	}
 
+	private String read(Path output) {
+		try {
+			return Files.readString(output, StandardCharsets.UTF_8).strip();
+		} catch (IOException _) {
+			return "";
+		}
+	}
+
 	private void logOutcome(String name, int exit, String output) {
 		if (exit == 0) {
-			log.debug("{} finished: {}", name, output.strip());
+			log.debug("{} finished: {}", name, output);
 
 			return;
 		}
 
-		log.error("{} failed with exit code {}: {}", name, exit, output.strip());
+		log.error("{} failed with exit code {}: {}", name, exit, output);
 	}
 
 	private void deleteQuietly(Path path) {

@@ -33,7 +33,7 @@ class ExternalToolBootstrapInstallerTest {
 
 	private ExternalToolStatus status(boolean ffmpeg, boolean ffprobe, boolean installable) {
 		return new ExternalToolStatus(ffmpeg, "ffmpeg", ffprobe, "ffprobe", null, false, installable,
-				"C:/app/tools/bin");
+				"C:/app/tools/ffmpeg/bin");
 	}
 
 	@Test

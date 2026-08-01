@@ -28,7 +28,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - OpenAPI / Swagger
 - JaCoCo
 - PIT Mutation Testing
-- FFprobe / FFmpeg (bundled in `tools/bin` or resolved through `PATH`)
+- FFprobe / FFmpeg (bundled in `tools/ffmpeg/bin` or resolved through `PATH`)
 - TwelveMonkeys ImageIO (WebP thumbnail decoding, via the ImageIO SPI)
 - Leaflet (interactive media map, via WebJar; OpenStreetMap tiles by default)
 - Java Foreign Function &amp; Memory API (Windows-only real-time change source: `ReadDirectoryChangesW` + NTFS USN journal catch-up, via `java.lang.foreign`; inert on other platforms)
@@ -1100,7 +1100,7 @@ On **Windows**, nothing has to be fetched by hand. A start that finds neither to
 by itself in the background, and the external-tools section of the settings screen has an
 install/update button for forcing it — including over an existing build, which the automatic run
 never touches. Either way the official FFmpeg package is downloaded, the executables and their
-DLLs are kept under `tools/bin` and the rest is dropped. The package is GPL-licensed and is
+DLLs are kept under `tools/ffmpeg/bin` and the rest is dropped. The package is GPL-licensed and is
 downloaded by the machine that runs the application — it is never shipped inside this project —
 and its `LICENSE.txt` is stored next to the binaries as `FFMPEG-LICENSE.txt`.
 
@@ -1116,27 +1116,27 @@ Docker image installs them and points the environment variables at `/usr/bin` ex
 
 No path is configured by default. The tools are looked up in this order: the value saved on the
 settings screen, then the configured property/environment variable, then discovery - the binary
-under `tools/bin` when it is there, and otherwise the bare command, which the operating system
+under `tools/ffmpeg/bin` when it is there, and otherwise the bare command, which the operating system
 resolves through `PATH`.
 
 Pin an absolute path with an environment variable or on the settings screen:
 
 ```text
-NIMBUS_FILE_MANAGER_FFPROBE=C:/nimbus-file-manager/tools/bin/ffprobe.exe
-NIMBUS_FILE_MANAGER_FFMPEG=C:/nimbus-file-manager/tools/bin/ffmpeg.exe
+NIMBUS_FILE_MANAGER_FFPROBE=C:/nimbus-file-manager/tools/ffmpeg/bin/ffprobe.exe
+NIMBUS_FILE_MANAGER_FFMPEG=C:/nimbus-file-manager/tools/ffmpeg/bin/ffmpeg.exe
 ```
 
 The download address itself is a setting (`nimbus-file-manager.tools.download-url`), so it can be
 pointed at a mirror without a new release.
 
-### `tools/bin` is not committed to git
+### `tools/ffmpeg/bin` is not committed to git
 
-`tools/bin/*.exe` and `tools/bin/*.dll` are gitignored (over GitHub's 50 MB per-file warning
+`tools/ffmpeg/bin/*.exe` and `tools/ffmpeg/bin/*.dll` are gitignored (over GitHub's 50 MB per-file warning
 threshold, and FFmpeg builds with `--enable-gpl` carry GPL obligations that do not belong inside
 this repo's history). The install button rebuilds the folder on a fresh clone; to fill it by hand
 instead, download an official **shared** Windows build (a *static* build's self-contained
 `ffprobe.exe` fails with `STATUS_DLL_NOT_FOUND` when its DLLs are missing) and place the
-executables together with their DLLs directly under `tools/bin/`.
+executables together with their DLLs directly under `tools/ffmpeg/bin/`.
 
 ## Packaging a native application
 

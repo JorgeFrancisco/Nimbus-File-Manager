@@ -61,7 +61,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcCon
 class SettingsPageRenderTest {
 
 	private static final ExternalToolStatus MISSING_TOOLS = new ExternalToolStatus(false, "ffmpeg", false,
-			"ffprobe", null, false, true, "C:/app/tools/bin");
+			"ffprobe", null, false, true, "C:/app/tools/ffmpeg/bin");
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -239,6 +239,6 @@ class SettingsPageRenderTest {
 
 		mockMvc.perform(get("/app/settings").with(csrf())).andExpect(status().isOk())
 				.andExpect(content().string(Matchers.containsString("/app/settings/tools/install")))
-				.andExpect(content().string(Matchers.containsString("C:/app/tools/bin")));
+				.andExpect(content().string(Matchers.containsString("C:/app/tools/ffmpeg/bin")));
 	}
 }

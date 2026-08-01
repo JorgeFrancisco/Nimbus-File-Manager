@@ -24,8 +24,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
  * Three sources, in order: the value edited on the Configurações screen, then
  * the application properties - which is how a container points at
  * {@code /usr/bin} - and finally discovery. Discovery exists because the
- * properties used to ship a Windows path ({@code ./tools/bin/ffmpeg.exe}), so a
- * clone on Linux or macOS failed until someone found the setting to change,
+ * properties used to ship a Windows path ({@code ./tools/ffmpeg/bin/ffmpeg.exe}),
+ * so a clone on Linux or macOS failed until someone found the setting to
+ * change,
  * while the Docker image quietly overrode it. The default now names no
  * platform: the bundled binary is used when it is there, and otherwise the bare
  * command, which the operating system resolves through PATH.
@@ -34,7 +35,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 public class ExternalToolPaths {
 
 	/** Where the packaged binaries live, relative to the working directory. */
-	private static final Path BUNDLED_DIRECTORY = Path.of("tools", "bin");
+	private static final Path BUNDLED_DIRECTORY = Path.of("tools", "ffmpeg", "bin");
 
 	private final AppSettingService appSettingService;
 	private final NimbusFileManagerProperties properties;

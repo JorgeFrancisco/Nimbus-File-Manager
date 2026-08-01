@@ -101,7 +101,7 @@ class ExternalToolPathsTest {
 	/**
 	 * Nothing configured and nothing bundled - a clone on Linux or macOS. The bare
 	 * command lets the operating system resolve it through PATH, which the old
-	 * {@code ./tools/bin/ffmpeg.exe} default made impossible.
+	 * {@code ./tools/ffmpeg/bin/ffmpeg.exe} default made impossible.
 	 */
 	@Test
 	void fallsBackToTheBareCommandForThePathToResolve(@TempDir Path bundled) {

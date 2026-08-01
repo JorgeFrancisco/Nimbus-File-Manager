@@ -14,6 +14,7 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.database.application.BootstrapProgress;
 import br.com.jorgemelo.nimbusfilemanager.database.application.PostgresArchiveSource;
 import lombok.extern.slf4j.Slf4j;
 
@@ -56,7 +57,7 @@ public class PostgresBuildSource implements PostgresArchiveSource {
 
 		Path archive = targetFolder.resolve(ARCHIVE_FILE);
 
-		log.info("Downloading the embedded PostgreSQL from {}", url);
+		BootstrapProgress.say("downloading PostgreSQL (this happens once, and takes a few minutes)");
 
 		try {
 			HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(REQUEST_TIMEOUT).GET().build();
@@ -73,7 +74,7 @@ public class PostgresBuildSource implements PostgresArchiveSource {
 				copy(body, archive);
 			}
 
-			log.info("Downloaded the embedded PostgreSQL: {} bytes", Files.size(archive));
+			BootstrapProgress.say("downloaded " + Files.size(archive) / 1048576 + " MB; unpacking");
 
 			return archive;
 		} catch (IOException exception) {

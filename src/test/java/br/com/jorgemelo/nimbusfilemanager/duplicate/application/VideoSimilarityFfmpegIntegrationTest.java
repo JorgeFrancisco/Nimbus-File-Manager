@@ -37,7 +37,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
  * generates synthetic clips, runs the actual frame extraction + pHash pipeline
  * and asserts the robustness targets. Runs only where the bundled Windows
  * ffmpeg is present (like every other external-process glue, it is skipped on
- * the Linux CI, which has no {@code tools/bin/ffmpeg.exe}); this is the
+ * the Linux CI, which has no {@code tools/ffmpeg/bin/ffmpeg.exe}); this is the
  * manual/local verification the {@code *ProcessRunner} coverage exclusion
  * refers to.
  *
@@ -48,7 +48,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 @EnabledIf("ffmpegAvailable")
 class VideoSimilarityFfmpegIntegrationTest {
 
-	private static final Path FFMPEG = Path.of("tools", "bin", "ffmpeg.exe");
+	private static final Path FFMPEG = Path.of("tools", "ffmpeg", "bin", "ffmpeg.exe");
 	private static final int THRESHOLD = 70;
 
 	@TempDir
