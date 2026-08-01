@@ -28,7 +28,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - OpenAPI / Swagger
 - JaCoCo
 - PIT Mutation Testing
-- FFprobe / FFmpeg / ExifTool bundled in `tools/bin`
+- FFprobe / FFmpeg (bundled in `tools/bin` or resolved through `PATH`)
 - TwelveMonkeys ImageIO (WebP thumbnail decoding, via the ImageIO SPI)
 - Leaflet (interactive media map, via WebJar; OpenStreetMap tiles by default)
 - Java Foreign Function &amp; Memory API (Windows-only real-time change source: `ReadDirectoryChangesW` + NTFS USN journal catch-up, via `java.lang.foreign`; inert on other platforms)
@@ -391,9 +391,9 @@ NIMBUS_FILE_MANAGER_GOOGLE_LOGIN_ENABLED=false
 
 ## Running with Docker
 
-An alternative to installing Java/Maven/Postgres/FFmpeg/ExifTool manually: `Dockerfile` builds the
-app (multi-stage: Maven+JDK to build, a slim JRE image with `ffmpeg` and `libimage-exiftool-perl`
-installed from apt to run), and `docker-compose.yml` wires it up with a Postgres container.
+An alternative to installing Java/Maven/Postgres/FFmpeg manually: `Dockerfile` builds the app
+(multi-stage: Maven+JDK to build, a slim JRE image with `ffmpeg` installed from apt to run), and
+`docker-compose.yml` wires it up with a Postgres container.
 
 ```bash
 cp .env.example .env
@@ -1070,20 +1070,27 @@ ORDER BY installed_rank DESC;
 
 ## External Tools
 
-The project expects these executables under `tools/bin`:
+No path is configured by default, so the tools are looked up in this order: the value saved on the
+Settings screen, then the configured property/environment variable, then discovery — the binary
+bundled under `tools/bin` when it is there, and otherwise the bare command, which the operating
+system resolves through `PATH`.
+
+On Windows that means dropping the executables in place and running:
 
 ```text
 tools/bin/ffprobe.exe
 tools/bin/ffmpeg.exe
-tools/bin/exiftool.exe
 ```
 
-They can still be overridden by environment variables or by the Settings screen:
+On Linux and macOS, installing them system-wide (`apt install ffmpeg`, `brew install ffmpeg`) is
+enough — nothing to configure, since `ffmpeg` and `ffprobe` resolve through `PATH`. The Docker image
+installs them and points the variables at `/usr/bin` explicitly.
+
+Pin an absolute path with an environment variable or on the Settings screen:
 
 ```text
 NIMBUS_FILE_MANAGER_FFPROBE=C:/nimbus-file-manager/tools/bin/ffprobe.exe
 NIMBUS_FILE_MANAGER_FFMPEG=C:/nimbus-file-manager/tools/bin/ffmpeg.exe
-NIMBUS_FILE_MANAGER_EXIFTOOL=C:/nimbus-file-manager/tools/bin/exiftool.exe
 ```
 
 ### `tools/bin` is not committed to git
@@ -1097,14 +1104,11 @@ don't belong inside this repo's history). Set the folder up locally after clonin
    already has them, eg. Shutter Encoder's `app/Library` folder). A "shared" build is required -
    a "static" build's single self-contained `ffprobe.exe` will fail to launch with a
    `STATUS_DLL_NOT_FOUND` exit code if the dependency DLLs listed below aren't next to it.
-2. **exiftool** - download from https://exiftool.org and rename `exiftool(-k).exe` to
-   `exiftool.exe`.
-3. Place everything directly under `tools/bin/`:
+2. Place everything directly under `tools/bin/`:
 
 ```text
 tools/bin/ffprobe.exe
 tools/bin/ffmpeg.exe
-tools/bin/exiftool.exe
 tools/bin/avcodec-62.dll
 tools/bin/avdevice-62.dll
 tools/bin/avfilter-11.dll
@@ -1137,8 +1141,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2236 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.44% instruction, 91.74% branch, 98.05% line, 98.70% method, 100.00% class
+Tests:       2241 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.44% instruction, 91.76% branch, 98.05% line, 98.70% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1150,7 +1154,7 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.44% instruction, 91.74% branch, 98.05% line, 98.70% method, 100.00% class
+Floor:  98.44% instruction, 91.76% branch, 98.05% line, 98.70% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 

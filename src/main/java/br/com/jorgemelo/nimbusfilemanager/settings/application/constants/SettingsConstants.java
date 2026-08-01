@@ -10,7 +10,6 @@ public final class SettingsConstants {
 
 	public static final String DEFAULT_TIMEZONE = "America/Sao_Paulo";
 	public static final String TIMEZONE = "nimbus-file-manager.timezone";
-	public static final String TOOL_EXIFTOOL = "nimbus-file-manager.tools.exiftool";
 	public static final String TOOL_FFPROBE = "nimbus-file-manager.tools.ffprobe";
 	public static final String TOOL_FFMPEG = "nimbus-file-manager.tools.ffmpeg";
 	public static final String API_MAX_PAGE_SIZE = "nimbus-file-manager.api.max-page-size";
@@ -24,9 +23,6 @@ public final class SettingsConstants {
 	public static final String WATCH_INCLUDE_HIDDEN = "nimbus-file-manager.inventory.watch-include-hidden";
 	public static final String WATCH_CALCULATE_HASHES = "nimbus-file-manager.inventory.watch-calculate-hashes";
 	public static final String WATCH_FORCE_ANALYSIS = "nimbus-file-manager.inventory.watch-force-analysis";
-	public static final String METADATA_EXIFTOOL_ENABLED = "nimbus-file-manager.metadata.exiftool.enabled";
-	public static final String METADATA_MEDIAINFO_ENABLED = "nimbus-file-manager.metadata.mediainfo.enabled";
-	public static final String METADATA_FFPROBE_ENABLED = "nimbus-file-manager.metadata.ffprobe.enabled";
 	public static final String TRASH_FOLDER = "nimbus-file-manager.duplicates.trash-folder";
 	public static final String TRASH_RETENTION_DAYS = "nimbus-file-manager.duplicates.trash-retention-days";
 	public static final String CATALOG_MISSING_RETENTION_DAYS = "nimbus-file-manager.catalog.missing-retention-days";

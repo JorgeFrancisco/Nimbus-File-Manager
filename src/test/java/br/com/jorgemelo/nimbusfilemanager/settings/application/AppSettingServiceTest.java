@@ -19,11 +19,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.repository.AppSettingRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Exiftool;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Ffprobe;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Mediainfo;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Metadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Security;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
@@ -353,8 +349,8 @@ class AppSettingServiceTest {
 	 */
 	@Test
 	void definitionsSurviveAConfigurationWithoutTheOptionalSections() {
-		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", List.of(), null, null, null,
-				null, null, null);
+		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", null, null, null,
+				null, null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), bare);
 
@@ -369,9 +365,10 @@ class AppSettingServiceTest {
 	 */
 	@Test
 	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
-		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace", List.of(),
-				new Tools(null, null, null), new Inventory(true, 60_000L), new Api(500, 20, 100), null,
-				new Security(5, 5, 15, true, "admin", "admin"), null);
+		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace",
+				new Tools(null, null),
+				new Inventory(true, 60_000L), new Api(500, 20, 100), new Security(5, 5, 15, true, "admin", "admin"),
+				null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
 
@@ -386,10 +383,8 @@ class AppSettingServiceTest {
 	}
 
 	private NimbusFileManagerProperties properties(boolean recursiveWatchDefault) {
-		return new NimbusFileManagerProperties("C:/workspace", List.of("database", "temp"),
-				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", "C:/tools/exiftool.exe"),
+		return new NimbusFileManagerProperties("C:/workspace", new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe"),
 				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
-				new Metadata(new Exiftool(true), new Mediainfo(true), new Ffprobe(true)),
 				new Security(5, 5, 15, true, "admin", "admin"), null);
 	}
 }

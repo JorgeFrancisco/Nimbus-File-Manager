@@ -17,11 +17,10 @@ RUN mvn -B -q -DskipTests clean package
 # ---- Runtime stage -----------------------------------------------------------
 FROM eclipse-temurin:25-jre-jammy
 
-# ffmpeg provides both ffmpeg and ffprobe; libimage-exiftool-perl provides exiftool.
-# These are the same tools the Windows setup downloads manually (see README, "External
-# Tools") - here they come from Debian's package repos instead.
+# ffmpeg provides both ffmpeg and ffprobe - the same tools the Windows setup downloads
+# manually (see README, "External Tools"), here from Debian's package repos instead.
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ffmpeg libimage-exiftool-perl \
+	&& apt-get install -y --no-install-recommends ffmpeg \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /usr/sbin/nologin nimbus-file-manager
@@ -38,8 +37,7 @@ USER nimbus-file-manager
 
 ENV NIMBUS_FILE_MANAGER_WORKSPACE=/workspace \
 	NIMBUS_FILE_MANAGER_FFPROBE=/usr/bin/ffprobe \
-	NIMBUS_FILE_MANAGER_FFMPEG=/usr/bin/ffmpeg \
-	NIMBUS_FILE_MANAGER_EXIFTOOL=/usr/bin/exiftool
+	NIMBUS_FILE_MANAGER_FFMPEG=/usr/bin/ffmpeg
 
 EXPOSE 8088
 VOLUME ["/workspace"]

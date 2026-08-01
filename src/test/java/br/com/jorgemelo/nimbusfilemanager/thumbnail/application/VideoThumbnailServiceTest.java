@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -157,7 +156,7 @@ class VideoThumbnailServiceTest {
 	}
 
 	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(temp.toString(), List.of(), new Tools(null, "ffmpeg", null),
-				new Inventory(true, 60_000L), new Api(100, 2, 50), null, null, null);
+		return new NimbusFileManagerProperties(temp.toString(), new Tools(null, "ffmpeg"), new Inventory(true, 60_000L),
+				new Api(100, 2, 50), null, null);
 	}
 }

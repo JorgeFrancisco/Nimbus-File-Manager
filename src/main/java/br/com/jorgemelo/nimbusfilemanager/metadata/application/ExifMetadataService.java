@@ -19,17 +19,25 @@ import com.drew.metadata.jpeg.JpegDirectory;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata;
 
+/**
+ * Reads a photo's EXIF block into {@link PhotoMetadata}. Everything happens
+ * in-process through metadata-extractor - no external binary is spawned, which
+ * is why the class no longer carries the exiftool name it was born with: the
+ * name promised a tool the code never called, and an unused
+ * {@code tools.exiftool} path sat on the settings screen for anyone to edit
+ * with no effect.
+ */
 @Service
-public class ExifToolService {
+public class ExifMetadataService {
 
 	private final MetadataReader metadataReader;
 
 	@Autowired
-	public ExifToolService() {
+	public ExifMetadataService() {
 		this(file -> ImageMetadataReader.readMetadata(file.toFile()));
 	}
 
-	ExifToolService(MetadataReader metadataReader) {
+	ExifMetadataService(MetadataReader metadataReader) {
 		this.metadataReader = metadataReader;
 	}
 

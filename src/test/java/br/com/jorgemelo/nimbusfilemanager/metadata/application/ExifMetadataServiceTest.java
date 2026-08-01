@@ -14,7 +14,7 @@ import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
 import com.drew.metadata.jpeg.JpegDirectory;
 
-class ExifToolServiceTest {
+class ExifMetadataServiceTest {
 
 	@Test
 	void extractShouldMapExifMetadataAndJson() {
@@ -148,7 +148,7 @@ class ExifToolServiceTest {
 		metadata.addDirectory(subIfd);
 
 		var invalidDate = service(metadata).extract(Path.of("C:/photo.jpg"));
-		var failure = new ExifToolService(_ -> {
+		var failure = new ExifMetadataService(_ -> {
 			throw new IllegalStateException("bad");
 		}).extract(Path.of("C:/photo.jpg"));
 
@@ -157,7 +157,7 @@ class ExifToolServiceTest {
 		Assertions.assertThat(failure.exifJson()).isNull();
 	}
 
-	private ExifToolService service(Metadata metadata) {
-		return new ExifToolService(_ -> metadata);
+	private ExifMetadataService service(Metadata metadata) {
+		return new ExifMetadataService(_ -> metadata);
 	}
 }

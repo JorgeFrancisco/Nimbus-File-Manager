@@ -1,40 +1,111 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 /**
- * The tool paths are editable on the settings screen, so what the operator
- * saved there wins over the value shipped in the configuration file - which is
- * only the default offered while the setting was never touched.
+ * Resolution order of the external tools: what the operator saved on the
+ * settings screen, then the configured value, then discovery. Discovery is the
+ * part worth pinning - it is what lets a clone run on any platform without
+ * anyone editing a path, which the hardcoded {@code .exe} default prevented.
  */
 class ExternalToolPathsTest {
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 
-	@Test
-	void theSavedSettingWinsOverTheConfiguredDefault() {
-		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, "C:/tools/ffmpeg.exe"))
-				.thenReturn("D:/custom/ffmpeg.exe");
-		when(appSettingService.stringValue(SettingsConstants.TOOL_FFPROBE, "C:/tools/ffprobe.exe"))
-				.thenReturn("C:/tools/ffprobe.exe");
-
-		ExternalToolPaths paths = new ExternalToolPaths(appSettingService, properties());
-
-		Assertions.assertThat(paths.ffmpeg()).isEqualTo("D:/custom/ffmpeg.exe");
-		Assertions.assertThat(paths.ffprobe()).isEqualTo("C:/tools/ffprobe.exe");
+	private ExternalToolPaths paths(Path bundled, Tools tools) {
+		return new ExternalToolPaths(appSettingService, properties(tools), bundled);
 	}
 
-	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(null, null,
-				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", "C:/tools/exiftool.exe"), null, null, null, null,
-				null);
+	private NimbusFileManagerProperties properties(Tools tools) {
+		return new NimbusFileManagerProperties(null, tools, null, null, null, null);
+	}
+
+	/**
+	 * Answers the caller's own fallback, mirroring an AppSettingService with
+	 * nothing stored for the key.
+	 */
+	private void nothingStored() {
+		when(appSettingService.stringValue(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+	}
+
+	@Test
+	void theSavedSettingWinsOverEverythingElse(@TempDir Path bundled) {
+		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, "C:/tools/ffmpeg.exe"))
+				.thenReturn("D:/custom/ffmpeg.exe");
+
+		Tools tools = new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe");
+
+		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo("D:/custom/ffmpeg.exe");
+	}
+
+	@Test
+	void fallsBackToTheConfiguredPathWhenNothingWasSaved(@TempDir Path bundled) {
+		nothingStored();
+
+		Tools tools = new Tools("/usr/bin/ffprobe", "/usr/bin/ffmpeg");
+
+		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo("/usr/bin/ffmpeg");
+		Assertions.assertThat(paths(bundled, tools).ffprobe()).isEqualTo("/usr/bin/ffprobe");
+	}
+
+	/** The Windows case: nothing configured, packaged binary right there. */
+	@Test
+	void findsTheBundledWindowsBinary(@TempDir Path bundled) throws IOException {
+		nothingStored();
+
+		Files.createFile(bundled.resolve("ffmpeg.exe"));
+
+		Assertions.assertThat(paths(bundled, new Tools("", "")).ffmpeg())
+				.isEqualTo(bundled.resolve("ffmpeg.exe").toString());
+	}
+
+	@Test
+	void findsTheBundledBinaryWithoutAnExtension(@TempDir Path bundled) throws IOException {
+		nothingStored();
+
+		Files.createFile(bundled.resolve("ffprobe"));
+
+		Assertions.assertThat(paths(bundled, new Tools("", "")).ffprobe())
+				.isEqualTo(bundled.resolve("ffprobe").toString());
+	}
+
+	/**
+	 * Nothing configured and nothing bundled - a clone on Linux or macOS. The bare
+	 * command lets the operating system resolve it through PATH, which the old
+	 * {@code ./tools/bin/ffmpeg.exe} default made impossible.
+	 */
+	@Test
+	void fallsBackToTheBareCommandForThePathToResolve(@TempDir Path bundled) {
+		nothingStored();
+
+		ExternalToolPaths paths = paths(bundled, new Tools("", ""));
+
+		Assertions.assertThat(paths.ffmpeg()).isEqualTo("ffmpeg");
+		Assertions.assertThat(paths.ffprobe()).isEqualTo("ffprobe");
+	}
+
+	/**
+	 * A configuration with no tools section at all still resolves, instead of
+	 * failing on the missing record.
+	 */
+	@Test
+	void survivesAConfigurationWithoutAToolsSection(@TempDir Path bundled) {
+		nothingStored();
+
+		Assertions.assertThat(paths(bundled, null).ffmpeg()).isEqualTo("ffmpeg");
 	}
 }

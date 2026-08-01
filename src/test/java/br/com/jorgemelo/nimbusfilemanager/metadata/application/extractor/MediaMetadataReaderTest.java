@@ -8,19 +8,19 @@ import java.nio.file.Path;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExifToolService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExifMetadataService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
 
 class MediaMetadataReaderTest {
 
-	private final ExifToolService exifToolService = mock(ExifToolService.class);
+	private final ExifMetadataService exifToolService = mock(ExifMetadataService.class);
 	private final MediaInfoService mediaInfoService = mock(MediaInfoService.class);
 	private final MediaMetadataReader reader = new MediaMetadataReader(exifToolService, mediaInfoService);
 
 	@Test
-	void photoShouldDelegateToTheExifToolService() {
+	void photoShouldDelegateToTheExifMetadataService() {
 		Path file = Path.of("C:/media/photo.jpg");
 		PhotoMetadata photo = new PhotoMetadata(4000, 3000, null, null, 1, null, null, null, null, null, null, null,
 				null, null, null, null, null, null, null);

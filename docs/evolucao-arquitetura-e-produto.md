@@ -56,11 +56,6 @@ vivem só na memória e em comentários.
 *Entrega:* rastreabilidade. Quando alguém (ou você daqui a um ano) perguntar "por que não usa
 lixeira do sistema?", a resposta existe escrita.
 
-**A3. Configuração default é Windows-first, mas o Docker é Linux.** `application.properties` aponta
-para `./tools/bin/ffmpeg.exe`; o Dockerfile instala `ffmpeg` do apt. Funciona, porque a imagem
-sobrescreve por variável de ambiente, mas o default do arquivo mente sobre o alvo.
-*Entrega:* menos armadilha para quem clonar o repositório em Linux/macOS e rodar direto.
-
 ### Complexidade média — semanas
 
 **A4. Apenas 16 testes de integração para um produto que move arquivos.** A lógica está bem coberta
@@ -188,13 +183,12 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **A3** (defaults de configuração) — pré-requisito de qualquer distribuição e custa horas.
-2. **A1** (fumaça de telas) — antes de crescer, evitar que o crescimento quebre em silêncio.
-3. **P3** (diagnóstico) e **P6** (backup) — o que torna possível dar suporte e sobreviver a um erro.
-4. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
-5. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-6. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-7. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **A1** (fumaça de telas) — antes de crescer, evitar que o crescimento quebre em silêncio.
+2. **P3** (diagnóstico) e **P6** (backup) — o que torna possível dar suporte e sobreviver a um erro.
+3. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
+4. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
+5. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+6. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 
