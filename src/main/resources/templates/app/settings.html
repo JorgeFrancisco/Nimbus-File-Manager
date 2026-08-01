@@ -96,6 +96,18 @@
 			</th:block>
 		</section>
 
+		<section class="panel section">
+			<h2 th:text="#{settings.diagnostics.title}">Diagnóstico</h2>
+			<p class="muted" th:text="#{settings.diagnostics.intro}">Reúne num único arquivo o que uma investigação precisa: resumo da instalação, configurações, últimas execuções e o final do log.</p>
+
+			<p class="muted" th:text="#{settings.diagnostics.privacy}">Senhas e segredos são mascarados, e o histórico de acessos não entra. Confira o conteúdo antes de enviar a alguém.</p>
+
+			<div class="geo-dataset-actions">
+				<a class="button secondary" th:href="@{/api/diagnostics/export}" download
+					th:text="#{settings.diagnostics.download}">Exportar diagnóstico</a>
+			</div>
+		</section>
+
 		<section id="tools-admin" class="panel section" data-operation-panel="tools"
 				th:attr="data-operation-running=${toolInstallRunning}">
 			<h2 th:text="#{settings.tools.title}">Ferramentas externas</h2>

@@ -58,7 +58,7 @@ public class SecurityConfig {
 						"/app/quarantine/**", "/app/conversion/**", "/app/statistics/**")
 				.hasRole(Role.ADMIN.name())
 				.requestMatchers("/api/organization/**", "/api/duplicates/**", "/api/statistics/**",
-						"/api/catalog/**", "/api/files/**").hasRole(Role.ADMIN.name())
+						"/api/catalog/**", "/api/files/**", "/api/diagnostics/**").hasRole(Role.ADMIN.name())
 				// Personal preferences and the shared folder picker are operational even though
 				// they live under /app/settings; the rest of Settings is global system
 				// configuration and maintenance, so it stays ADMIN.

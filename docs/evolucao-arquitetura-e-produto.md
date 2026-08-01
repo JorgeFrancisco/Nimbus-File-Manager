@@ -63,13 +63,6 @@ duplicados, purgar quarentena e desfazer organização são irreversíveis ou cu
 menu do explorer (dizer "132 arquivos, 4,2 GB" antes do botão vermelho) deveria ser o padrão.
 *Entrega:* consistência e menos arrependimento — barato de fazer, alto valor percebido.
 
-**P3. Não há como exportar um diagnóstico.** Quando algo falha, a evidência está espalhada entre log,
-tela de execuções e banco. Ontem, achar a causa exigiu ler `workspace/logs`, consultar o Postgres e
-cruzar com atributos de arquivo no disco.
-*Entrega:* um botão "exportar diagnóstico" (versão, configurações não sensíveis, últimas execuções,
-trecho de log) transforma um relato vago de usuário em algo acionável. Sem isso, suporte à distância
-é adivinhação.
-
 ### Complexidade média — semanas
 
 **P4. Instalar exige Docker ou Maven + PostgreSQL.** O README pede banco criado à mão, com role e
@@ -143,7 +136,7 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **P3** (diagnóstico) e **P6** (backup) — o que torna possível dar suporte e sobreviver a um erro.
+1. **P6** (backup) — o que torna possível sobreviver a um erro.
 2. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
 3. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
 4. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.

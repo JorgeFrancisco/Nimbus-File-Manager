@@ -16,6 +16,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 @RestControllerAdvice(basePackages = { "br.com.jorgemelo.nimbusfilemanager.catalog.infrastructure.rest",
+		"br.com.jorgemelo.nimbusfilemanager.diagnostics.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.map.infrastructure.rest",
