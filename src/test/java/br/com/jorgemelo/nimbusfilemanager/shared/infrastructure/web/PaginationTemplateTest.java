@@ -39,14 +39,14 @@ class PaginationTemplateTest {
 
 		assertThat(html).contains(
 				"<section class=\"panel section\" th:if=\"${activeTab == 'preferences'}\">\n\t\t<h2 th:text=\"#{preferences.language.label}\"")
-				.contains("th:if=\"${activeTab == 'preferences'}\" class=\"stack section\"");
+				.contains("th:if=\"${activeTab == 'preferences'}\" class=\"section\"");
 	}
 
 	@Test
 	void absentQuarantineItemsKeepTheirAlignmentWithoutAnOpenAction() throws Exception {
 		String html = Files.readString(Path.of("src/main/resources/templates/app/quarantine.html"));
 
-		assertThat(html).contains("th:if=\"${item.presentInQuarantine()}\"", "quarantine-media-absent")
+		assertThat(html).contains("th:if=\"${item.presentInQuarantine()}\"", "media-card-open static")
 				.doesNotContain("th:if=\"${item.presentInQuarantine()}\" th:replace=");
 	}
 }

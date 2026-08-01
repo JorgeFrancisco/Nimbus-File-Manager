@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{nav.statistics}, 'statistics')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{nav.statistics})}">
-	<section class="stack">
+	<section>
 
 		<section class="panel">
 			<h2 th:text="#{statistics.library}">Biblioteca</h2>
@@ -64,7 +64,7 @@
 					Duração de cada etapa da execução mais recente.</p>
 				<p class="chart-caption muted" th:unless="${latestExecution.startedAt() != null}"
 						th:text="#{statistics.phaseCaption(${executionTypeLabels.get(latestExecution.executionType())})}"></p>
-				<div class="chart" th:if="${!latestPhases.isEmpty() and maxLatestPhaseMillis > 0}">
+				<div class="chart" th:if="${!latestPhases.isEmpty() and maxLatestPhaseMillis> 0}">
 					<div class="chart-row" th:each="phase : ${latestPhases}">
 						<span class="chart-label" th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</span>
 						<span class="chart-track"><span class="chart-bar" th:style="'width:' + ${phase.durationMillis * 100.0 / maxLatestPhaseMillis} + '%'"></span></span>
@@ -74,7 +74,7 @@
 				<p class="muted" th:if="${latestPhases.isEmpty()}" th:text="#{statistics.noPhases}">Sem fases registradas para a última execução.</p>
 			</div>
 
-			<div class="chart-block" th:if="${maxFilesPerSecond > 0}">
+			<div class="chart-block" th:if="${maxFilesPerSecond> 0}">
 				<h3 class="chart-title" th:text="#{statistics.filesPerSecTitle}">Arquivos/s por execução</h3>
 				<p class="chart-caption muted" th:text="#{statistics.filesPerSecHint}">Velocidade de processamento das execuções mais recentes (barra maior = mais rápida). Rótulo = data de início.</p>
 				<div class="chart">
@@ -86,7 +86,7 @@
 				</div>
 			</div>
 
-			<div class="chart-block" th:if="${maxDurationMillis > 0}">
+			<div class="chart-block" th:if="${maxDurationMillis> 0}">
 				<h3 class="chart-title" th:text="#{statistics.durationTitle}">Duração por execução</h3>
 				<p class="chart-caption muted" th:text="#{statistics.durationHint}">Tempo total das execuções mais recentes (barra maior = demorou mais). Rótulo = data de início.</p>
 				<div class="chart">
@@ -98,7 +98,7 @@
 				</div>
 			</div>
 
-			<form method="get" th:action="@{/app/statistics}" class="form-inline">
+			<form method="get" th:action="@{/app/statistics}">
 				<label><span th:text="#{statistics.version}">Versão</span>
 					<select name="version">
 						<option value="" th:selected="${selectedVersion == null or selectedVersion.isEmpty()}" th:text="#{statistics.allVersions}">Todas</option>

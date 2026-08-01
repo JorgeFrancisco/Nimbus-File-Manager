@@ -157,7 +157,7 @@ class SettingsPageRenderTest {
 			model.addAttribute("backups", List.of());
 			model.addAttribute("backupFolder", "C:/app/workspace/backup");
 			model.addAttribute("backupRunning", false);
-			model.addAttribute("backupProgress", new BackupSnapshot(BackupPhase.IDLE, null, 0, 0, -1));
+			model.addAttribute("backupProgress", new BackupSnapshot(BackupPhase.IDLE, 0));
 
 			return null;
 		}).when(backupSettingsModel).addTo(any(), any());

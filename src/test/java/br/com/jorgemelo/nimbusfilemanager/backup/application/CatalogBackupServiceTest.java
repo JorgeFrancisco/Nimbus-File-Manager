@@ -166,6 +166,7 @@ class CatalogBackupServiceTest {
 
 			return true;
 		});
+		when(catalogDump.readable(any())).thenReturn(true);
 
 		Assertions.assertThat(service(folder).create().name()).isEqualTo("nimbus-catalog-20260801-060000.zip");
 	}
@@ -241,6 +242,25 @@ class CatalogBackupServiceTest {
 	}
 
 	/**
+	 * A dump that cannot be read back is discarded rather than kept. A backup is
+	 * trusted exactly when nobody is in a position to check it, so a file that
+	 * fails now would fail on the day it is needed instead.
+	 */
+	@Test
+	void discardsADumpThatCannotBeReadBack(@TempDir Path folder) {
+		when(catalogCopyRepository.tables()).thenReturn(List.of());
+		when(catalogDump.dump(any())).thenReturn(true);
+		when(catalogDump.readable(any())).thenReturn(false);
+
+		CatalogBackupService service = service(folder);
+
+		Assertions.assertThatIllegalStateException().isThrownBy(service::create)
+				.withMessageContaining("could not be read back");
+
+		Assertions.assertThat(service.list()).isEmpty();
+	}
+
+	/**
 	 * A folder that vanished under the write has to name the file that failed:
 	 * the operator is the one who has to act on it.
 	 */
@@ -248,6 +268,7 @@ class CatalogBackupServiceTest {
 	void reportsTheFileWhenTheBackupCannotBeWritten(@TempDir Path folder) {
 		when(catalogCopyRepository.tables()).thenReturn(List.of());
 		when(catalogDump.dump(any())).thenReturn(true);
+		when(catalogDump.readable(any())).thenReturn(true);
 
 		CatalogBackupService service = service(folder.resolve("folder-that-is-not-there"));
 

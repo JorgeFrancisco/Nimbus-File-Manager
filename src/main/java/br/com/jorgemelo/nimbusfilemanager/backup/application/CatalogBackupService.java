@@ -89,17 +89,22 @@ public class CatalogBackupService {
 
 		Path dump = folder.resolve(PREFIX + "working.dump");
 
-		progress.start(BackupPhase.EXPORTING, 1);
-		progress.startTable(catalogCopyRepository.schemaVersion());
+		progress.start(BackupPhase.EXPORTING, dump);
 
 		try {
 			if (!catalogDump.dump(dump)) {
 				throw new IllegalStateException("The database could not be dumped");
 			}
 
+			// Read back before it is kept. A backup is trusted precisely when nobody is
+			// in a position to check it, so the check happens now, while the alternative
+			// is simply taking it again.
+			if (!catalogDump.readable(dump)) {
+				throw new IllegalStateException("The dump could not be read back and was discarded");
+			}
+
 			pack(dump, target);
 
-			progress.finishTable();
 		} catch (IOException exception) {
 			deleteQuietly(target);
 
@@ -133,8 +138,7 @@ public class CatalogBackupService {
 
 			refuseWhenNewerThanThisBuild(manifest);
 
-			progress.start(BackupPhase.IMPORTING, 1);
-			progress.startTable(manifest.schemaVersion());
+			progress.start(BackupPhase.IMPORTING, dump);
 
 			unpack(zip, dump);
 
@@ -142,7 +146,6 @@ public class CatalogBackupService {
 				throw new IllegalStateException("The backup " + name + " could not be loaded");
 			}
 
-			progress.finishTable();
 
 			log.info("Catalog restored from {}", file);
 
@@ -152,6 +155,15 @@ public class CatalogBackupService {
 		} finally {
 			deleteQuietly(dump);
 		}
+	}
+
+	/**
+	 * Ends a backup in flight. Nothing to undo afterwards: the half-written file
+	 * is deleted by the run that was interrupted, and the database was only ever
+	 * read.
+	 */
+	public boolean cancel() {
+		return catalogDump.cancelDump();
 	}
 
 	public List<BackupFile> list() {

@@ -32,7 +32,7 @@
 			</button>
 		</div>
 
-		<form class="explorer-drive" th:action="@{/app/files}" method="get" th:if="${drives != null and drives.size() > 1}">
+		<form class="explorer-drive" th:action="@{/app/files}" method="get" th:if="${drives != null and drives.size()> 1}">
 			<input type="hidden" name="view" th:value="${explorer.viewMode()}">
 			<input type="hidden" name="size" th:value="${explorer.size()}">
 			<input type="hidden" name="sort" th:value="${sort}">
@@ -168,7 +168,7 @@
 		<p class="muted" th:if="${explorer.entries().isEmpty() and !explorer.accessDenied()}" th:text="#{files.empty}">Nenhum item nesta pasta.</p>
 	</div>
 
-	<div class="panel section table-toolbar explorer-items-toolbar" th:if="${explorer.totalItems() > 0}">
+	<div class="panel section table-toolbar explorer-items-toolbar" th:if="${explorer.totalItems()> 0}">
 		<span th:text="#{files.itemCount(${explorer.totalItems()})}">0 itens</span>
 		<span class="muted explorer-load-status" id="explorerLoadStatus"></span>
 	</div>

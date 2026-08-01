@@ -1,7 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 
@@ -9,9 +14,9 @@ import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
  * What the screen shows while the catalog is being written or replaced.
  *
  * <p>
- * The phases are not decoration: emptying the catalog is the point of no
- * return, and a screen that goes quiet there is the one somebody closes the
- * browser on.
+ * The size is read from the file at the moment the screen asks, because the
+ * work happens inside one external command that reports nothing until it
+ * exits - the file growing on disk is the only honest signal there is.
  */
 class BackupProgressTest {
 
@@ -20,56 +25,51 @@ class BackupProgressTest {
 	@Test
 	void reportsNothingBeforeAnythingStarts() {
 		Assertions.assertThat(progress.snapshot().phase()).isEqualTo(BackupPhase.IDLE);
-		Assertions.assertThat(progress.snapshot().percent()).isNegative();
+		Assertions.assertThat(progress.snapshot().bytes()).isZero();
 	}
 
 	@Test
-	void advancesAsTablesAreFinished() {
-		progress.start(BackupPhase.EXPORTING, 4);
-		progress.startTable("catalog_file");
+	void reportsHowMuchOfTheFileExistsSoFar(@TempDir Path folder) throws IOException {
+		Path file = folder.resolve("catalog.dump");
 
-		Assertions.assertThat(progress.snapshot().table()).isEqualTo("catalog_file");
+		progress.start(BackupPhase.EXPORTING, file);
+
 		Assertions.assertThat(progress.snapshot().exporting()).isTrue();
+		Assertions.assertThat(progress.snapshot().bytes()).isZero();
 
-		progress.finishTable();
+		Files.write(file, new byte[3 * 1048576]);
 
-		Assertions.assertThat(progress.snapshot().tablesDone()).isEqualTo(1);
-		Assertions.assertThat(progress.snapshot().percent()).isEqualTo(25.0);
-		Assertions.assertThat(progress.snapshot().table()).isNull();
+		Assertions.assertThat(progress.snapshot().megabytes()).isEqualTo(3);
 	}
 
-	/** Each phase has to be distinguishable, because they read differently. */
+	/**
+	 * The two phases read differently on screen: one is being written, the other
+	 * is replacing the catalog and cannot be stopped.
+	 */
 	@Test
-	void tellsTheRestorePhasesApart() {
-		progress.start(BackupPhase.CLEARING, 1);
-
-		Assertions.assertThat(progress.snapshot().clearing()).isTrue();
-		Assertions.assertThat(progress.snapshot().importing()).isFalse();
-
-		progress.start(BackupPhase.IMPORTING, 1);
+	void tellsTheTwoPhasesApart(@TempDir Path folder) {
+		progress.start(BackupPhase.IMPORTING, folder.resolve("catalog.dump"));
 
 		Assertions.assertThat(progress.snapshot().importing()).isTrue();
-		Assertions.assertThat(progress.snapshot().clearing()).isFalse();
+		Assertions.assertThat(progress.snapshot().exporting()).isFalse();
 	}
 
-	/** Nothing to divide by is not zero percent - it is no percentage at all. */
+	/** A file that is not there yet answers zero rather than failing the screen. */
 	@Test
-	void reportsNoPercentageWhenThereIsNothingToCount() {
-		progress.start(BackupPhase.EXPORTING, 0);
+	void answersZeroWhileTheFileDoesNotExist(@TempDir Path folder) {
+		progress.start(BackupPhase.EXPORTING, folder.resolve("not-written-yet.dump"));
 
-		Assertions.assertThat(progress.snapshot().percent()).isNegative();
+		Assertions.assertThat(progress.snapshot().bytes()).isZero();
 	}
 
 	@Test
-	void clearsWhatThePreviousRunLeftBehind() {
-		progress.start(BackupPhase.EXPORTING, 2);
-		progress.startTable("catalog_file");
-		progress.finishTable();
+	void clearsWhatThePreviousRunLeftBehind(@TempDir Path folder) throws IOException {
+		Path file = Files.writeString(folder.resolve("catalog.dump"), "content");
 
+		progress.start(BackupPhase.EXPORTING, file);
 		progress.reset();
 
 		Assertions.assertThat(progress.snapshot().phase()).isEqualTo(BackupPhase.IDLE);
-		Assertions.assertThat(progress.snapshot().tablesDone()).isZero();
-		Assertions.assertThat(progress.snapshot().table()).isNull();
+		Assertions.assertThat(progress.snapshot().bytes()).isZero();
 	}
 }

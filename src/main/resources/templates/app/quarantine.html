@@ -12,7 +12,7 @@
 
 	<div id="quarantineStatus" class="alert section" role="status" hidden></div>
 
-	<div class="panel section quarantine-toolbar pagination-toolbar" th:if="${totalElements > 0}">
+	<div class="panel section quarantine-toolbar pagination-toolbar" th:if="${totalElements> 0}">
 		<div class="quarantine-select">
 			<label class="quarantine-select-all">
 				<input type="checkbox" id="quarantineSelectAll"> <span th:text="#{quarantine.selectAll}">Selecionar todos</span>
@@ -29,7 +29,7 @@
 			</button>
 		</div>
 		<div class="quarantine-controls">
-			<nav class="pagination" th:if="${totalPages > 1}" th:aria-label="#{pagination.label}">
+			<nav class="pagination" th:if="${totalPages> 1}" th:aria-label="#{pagination.label}">
 				<a class="button secondary small" th:if="${hasPrevious}"
 						th:href="@{/app/quarantine(view=${viewMode}, size=${pageSize}, page=0)}" th:text="#{pagination.first}">Primeira</a>
 				<span class="button secondary small disabled" th:unless="${hasPrevious}" th:text="#{pagination.first}">Primeira</span>
@@ -84,7 +84,7 @@
 						<th:block th:if="${item.presentInQuarantine()}">
 							<th:block th:replace="~{fragments/media-cards :: card(${item}, ${thumbWidth})}"></th:block>
 						</th:block>
-						<span class="media-card-open static quarantine-media-absent" th:unless="${item.presentInQuarantine()}">
+						<span class="media-card-open static" th:unless="${item.presentInQuarantine()}">
 							<i class="media-symbol bi" th:classappend="${item.iconClass()}" th:title="${#messages.msg(item.iconLabelKey())}"></i>
 							<span class="media-card-name" th:text="${item.name()}">arquivo ausente</span>
 						</span>
@@ -125,7 +125,7 @@
 				<th:block th:if="${item.presentInQuarantine()}">
 					<th:block th:replace="~{fragments/media-cards :: card(${item}, ${thumbWidth})}"></th:block>
 				</th:block>
-				<span class="media-card-open static quarantine-media-absent" th:unless="${item.presentInQuarantine()}">
+				<span class="media-card-open static" th:unless="${item.presentInQuarantine()}">
 					<i class="media-symbol bi" th:classappend="${item.iconClass()}" th:title="${#messages.msg(item.iconLabelKey())}"></i>
 					<span class="media-card-name" th:text="${item.name()}">arquivo ausente</span>
 				</span>

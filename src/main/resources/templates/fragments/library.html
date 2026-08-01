@@ -18,7 +18,7 @@
 		<div class="panel"><div class="metric" th:text="#{category.others}">Outros</div><div class="value" th:text="${summary.others()}">0</div></div>
 		<div class="panel"><div class="metric" th:text="#{library.totalSize}">Tamanho total</div><div class="value" th:text="${summary.totalSize().formatted()}">0 B</div></div>
 	</div>
-	<div class="chart-block" th:if="${summary.totalFiles() > 0}" th:with="total=${summary.totalFiles()}">
+	<div class="chart-block" th:if="${summary.totalFiles()> 0}" th:with="total=${summary.totalFiles()}">
 		<h3 class="chart-title" th:text="#{library.proportionTitle}">Proporção por categoria</h3>
 		<p class="chart-caption muted" th:text="#{library.proportionCaption}">Quanto cada categoria representa do total de arquivos catalogados. A parte pintada de cada barra é a fatia da categoria; a contagem e o percentual aparecem dentro da barra.</p>
 		<div class="prop-chart">

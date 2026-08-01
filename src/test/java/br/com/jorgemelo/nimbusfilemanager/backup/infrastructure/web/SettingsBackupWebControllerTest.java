@@ -64,6 +64,35 @@ class SettingsBackupWebControllerTest {
 		verify(asyncRunner, never()).create();
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
+	}
+	/**
+	 * Cancelling costs nothing while a dump is running: the database was only
+	 * read, and the half-written file goes with it.
+	 */
+	@Test
+	void cancelsARunningBackup() {
+		when(asyncRunner.cancel()).thenReturn(true);
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.cancelBackup(redirect);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey(SharedConstants.ATTR_SUCCESS);
+	}
+
+	/**
+	 * A restore drops objects to recreate them, so it is never cancellable - and
+	 * the screen has to say why rather than appear to have done nothing.
+	 */
+	@Test
+	void explainsWhenThereIsNothingToCancel() {
+		when(asyncRunner.cancel()).thenReturn(false);
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.cancelBackup(redirect);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
 	}
 
 	/**

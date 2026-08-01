@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{statistics.executionTitle}, 'statistics')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{statistics.executionTitle})}">
-	<section class="stack">
+	<section>
 
 		<div>
 			<a class="button secondary small" th:href="@{/app/statistics}">&larr; <span th:text="#{statistics.back}">Voltar às estatísticas</span></a>
@@ -35,7 +35,7 @@
 
 		<section class="panel section" th:with="totalPhaseMillis=${#aggregates.sum(phases.![durationMillis])}">
 			<h2 th:text="#{statistics.phaseTime}">Tempo por fase</h2>
-			<div class="chart" th:if="${!phases.isEmpty() and maxPhaseMillis > 0}">
+			<div class="chart" th:if="${!phases.isEmpty() and maxPhaseMillis> 0}">
 				<div class="chart-row" th:each="phase : ${phases}">
 					<span class="chart-label" th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</span>
 					<span class="chart-track"><span class="chart-bar" th:style="'width:' + ${phase.durationMillis * 100.0 / maxPhaseMillis} + '%'"></span></span>
@@ -49,7 +49,7 @@
 					<tr th:each="phase : ${phases}">
 						<td th:text="${phaseLabels.get(phase.phase)}">EXTRACTION</td>
 						<td th:text="${#numbers.formatDecimal(phase.durationMillis / 1000.0, 1, 2, 'COMMA')} + ' s'">0 s</td>
-						<td th:text="${totalPhaseMillis > 0 ? #numbers.formatDecimal(phase.durationMillis * 100.0 / totalPhaseMillis, 1, 1, 'COMMA') + '%' : '—'}">—</td>
+						<td th:text="${totalPhaseMillis> 0 ? #numbers.formatDecimal(phase.durationMillis * 100.0 / totalPhaseMillis, 1, 1, 'COMMA') + '%' : '—'}">—</td>
 						<td th:text="${phase.items}">0</td>
 					</tr>
 					<tr th:if="${phases.isEmpty()}"><td colspan="4" th:text="#{statistics.noPhasesExec}">Sem fases registradas para esta execução.</td></tr>

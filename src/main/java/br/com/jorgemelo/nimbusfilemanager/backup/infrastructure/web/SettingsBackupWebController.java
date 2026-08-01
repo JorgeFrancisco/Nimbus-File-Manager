@@ -74,6 +74,26 @@ public class SettingsBackupWebController extends LocalizedComponent {
 		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
+	/**
+	 * Ends a backup in flight. Only a backup: a restore has already dropped
+	 * objects to recreate them, so stopping it would leave the catalog neither
+	 * as it was nor as it was becoming.
+	 */
+	@PostMapping("/app/settings/backup/cancel")
+	public String cancelBackup(RedirectAttributes redirectAttributes) {
+		if (!asyncRunner.cancel()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message("backend.settings.backupNotCancellable"));
+
+			return SharedConstants.REDIRECT_SETTINGS;
+		}
+
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.backupCancelled"));
+
+		return SharedConstants.REDIRECT_SETTINGS;
+	}
+
 	@PostMapping("/app/settings/backup/delete")
 	public String deleteBackup(@RequestParam String name, RedirectAttributes redirectAttributes) {
 		try {

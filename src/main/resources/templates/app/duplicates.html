@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{duplicates.title}, 'duplicates')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{duplicates.title})}">
-<section class="stack">
+<section>
 	<!-- Whole screen blocked while an inventory runs: results would be partial and this
 	     screen previews/executes deletions, so acting on them could delete the wrong file. -->
 	<section class="panel section" id="duplicatesInventoryProgress" th:if="${inventoryActive}" role="status"
@@ -36,7 +36,7 @@
 	</form>
 
 	<th:block th:unless="${phashBlocking}">
-	<div class="alert" th:if="${(activeTab == 'similar' or activeTab == 'videos') and phashFailed > 0}" role="status">
+	<div class="alert" th:if="${(activeTab == 'similar' or activeTab == 'videos') and phashFailed> 0}" role="status">
 		<span th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.failed.videos(${phashFailed})} : #{duplicates.fingerprint.failed(${phashFailed})}">0 foto(s) não puderam ter impressão digital gerada.</span>
 		<button type="button" class="secondary small fingerprint-failures-open" th:text="#{duplicates.viewFiles}">Ver arquivos</button>
 		<form th:action="@{${retryAction}}" method="post" style="display:inline">
@@ -93,7 +93,7 @@
 	<!-- Similar grouping runs in the background: this panel shows progress and polls until the
 	     compute finishes, at which point the region disappears from the fresh HTML and app.js falls
 	     back to a full reload that renders the groups. The page is never blocked while it computes. -->
-	<section class="panel section fingerprint-progress" id="similarityProgressRegion"
+	<section class="panel section" id="similarityProgressRegion"
 			th:if="${similarityComputing}" role="status" data-refresh-ms="3000">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.similarity.calculatingVideos} : #{duplicates.similarity.calculating}">Calculando fotos semelhantes…</h2>
 		<p class="muted" th:text="#{duplicates.similarity.calculating.description}">O agrupamento por semelhança roda em segundo plano para não travar a página. Este painel se atualiza automaticamente a cada 3 segundos e os grupos aparecem assim que o cálculo terminar.</p>
@@ -102,8 +102,8 @@
 				th:attr="aria-valuenow=${similarityPercent},aria-valuemin=0,aria-valuemax=100">
 			<div class="fingerprint-progress-fill" th:style="|width: ${similarityPercent}%|"></div>
 		</div>
-		<p th:if="${similarityTotal > 0}"><strong th:text="${similarityProcessed}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong th:text="${similarityTotal}">0</strong> <span th:text="${activeTab == 'videos'} ? #{duplicates.videosCompared} : #{duplicates.photosCompared}">fotos comparadas</span></p>
-		<p th:unless="${similarityTotal > 0}" class="muted" th:text="#{duplicates.similarity.preparing}">Preparando a comparação…</p>
+		<p th:if="${similarityTotal> 0}"><strong th:text="${similarityProcessed}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong th:text="${similarityTotal}">0</strong> <span th:text="${activeTab == 'videos'} ? #{duplicates.videosCompared} : #{duplicates.photosCompared}">fotos comparadas</span></p>
+		<p th:unless="${similarityTotal> 0}" class="muted" th:text="#{duplicates.similarity.preparing}">Preparando a comparação…</p>
 	</section>
 
 	<div class="panel section" th:if="${groups.isEmpty() and !similarityComputing}">
@@ -112,7 +112,7 @@
 		<p th:if="${activeTab == 'videos'}" th:text="#{duplicates.empty.videos}">Nenhum grupo de vídeos semelhantes encontrado com esse nível de semelhança.</p>
 	</div>
 
-	<div class="panel section table-toolbar pagination-toolbar" th:if="${totalElements > 0}">
+	<div class="panel section table-toolbar pagination-toolbar" th:if="${totalElements> 0}">
 		<span th:text="#{duplicates.groups(${totalElements})}">0 grupos</span>
 		<nav class="pagination" th:aria-label="#{pagination.label}">
 			<a class="button secondary small" th:if="${hasPrevious}"
@@ -147,7 +147,7 @@
 				<colgroup>
 					<col class="duplicate-selection-column">
 					<col class="duplicate-file-column">
-					<col class="duplicate-folder-column">
+					<col>
 					<col class="duplicate-size-column">
 					<col class="duplicate-resolution-column">
 					<col class="duplicate-date-column">
@@ -299,14 +299,14 @@
 	<!-- Whole-library progress stays below the screen content, matching the other jobs.
 	     Auto-refresh is limited to the blocked similar tab, so browsing exact duplicates
 	     is not interrupted. -->
-	<section class="panel section fingerprint-progress" id="fingerprintProgressRegion"
-			th:if="${phashPending > 0}" role="status"
+	<section class="panel section" id="fingerprintProgressRegion"
+			th:if="${phashPending> 0}" role="status"
 			th:attr="data-refresh-ms=${phashBlocking ? 4000 : null}">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos} : #{duplicates.fingerprint.calculating}">Calculando impressões digitais das fotos…</h2>
 		<p class="muted"><span th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos.description} : #{duplicates.fingerprint.calculating.description}">A comparação por semelhança fica disponível quando todas as fotos tiverem sua impressão digital.</span><span th:if="${phashBlocking}" th:text="#{duplicates.fingerprint.calculating.refresh}"> Este painel se atualiza automaticamente a cada 4 segundos.</span></p>
 		<p class="progress-text"><strong th:text="${#numbers.formatPercent(phashPercent / 100.0, 1, 2)}">0%</strong>
-			<span th:if="${phashEtaSeconds >= 60}" th:text="#{duplicates.eta.minutes(${phashEtaSeconds / 60})}">· tempo estimado</span>
-			<span th:if="${phashEtaSeconds >= 0 and phashEtaSeconds < 60}" th:text="#{duplicates.eta.lessThanMinute}">· menos de 1 min restante</span>
+			<span th:if="${phashEtaSeconds>= 60}" th:text="#{duplicates.eta.minutes(${phashEtaSeconds / 60})}">· tempo estimado</span>
+			<span th:if="${phashEtaSeconds>= 0 and phashEtaSeconds < 60}" th:text="#{duplicates.eta.lessThanMinute}">· menos de 1 min restante</span>
 			<span th:if="${phashEtaSeconds < 0 and phashRunning}" th:text="#{duplicates.eta.calculating}">· calculando tempo estimado…</span>
 		</p>
 		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}"
@@ -316,11 +316,11 @@
 		<p><strong th:text="${phashDone}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong th:text="${phashTotal}">0</strong> <span th:text="#{duplicates.completed}">concluídas</span>
 			· <span th:text="${phashPending}">0</span> <span th:text="#{duplicates.pending}">pendentes</span>
 			· <span th:text="${phashFailed}">0</span> <span th:text="#{duplicates.failures}">falhas</span>
-			<button th:if="${phashFailed > 0}" type="button" class="secondary small fingerprint-failures-open">
+			<button th:if="${phashFailed> 0}" type="button" class="secondary small fingerprint-failures-open">
 				<span th:text="#{duplicates.viewFiles}">Ver arquivos</span>
 			</button>
 		</p>
-		<form th:if="${phashFailed > 0}" th:action="@{${retryAction}}" method="post">
+		<form th:if="${phashFailed> 0}" th:action="@{${retryAction}}" method="post">
 			<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 			<button type="submit" class="secondary" th:text="#{duplicates.retryFailures}">Tentar novamente as falhas</button>
 		</form>

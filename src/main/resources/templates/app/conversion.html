@@ -12,7 +12,7 @@
 		<p class="muted" th:text="#{conversion.subtitles}">Legendas de texto são convertidas; as de imagem não cabem em MP4.</p>
 	</div>
 
-	<form class="panel section conversion-options" id="conversionOptions"
+	<form class="panel section" id="conversionOptions"
 			th:attr="data-running=${conversionRunning}">
 		<h3 th:text="#{conversion.options.title}">Como converter</h3>
 		<div class="conversion-option-groups">
@@ -98,7 +98,7 @@
 					<span>
 						<strong th:text="#{conversion.after.quarantine}">Mover original para a quarentena</strong>
 						<small th:text="#{conversion.after.quarantine.hint}">O original sai da biblioteca, mas continua guardado no disco.</small>
-						<small class="conversion-warning" th:if="${quarantineRetentionDays > 0}"
+						<small class="conversion-warning" th:if="${quarantineRetentionDays> 0}"
 								th:text="#{conversion.after.quarantine.retention(${quarantineRetentionDays})}">(atenção: o arquivo é apagado de vez depois desse prazo)</small>
 					</span>
 				</label>
@@ -140,7 +140,7 @@
 		<span id="conversionProgressFill"></span>
 	</div>
 
-	<div class="panel section conversion-toolbar pagination-toolbar" th:if="${totalElements > 0}">
+	<div class="panel section conversion-toolbar pagination-toolbar" th:if="${totalElements> 0}">
 		<div class="conversion-select">
 			<label class="conversion-select-all">
 				<input type="checkbox" id="conversionSelectAll" th:disabled="${conversionRunning}">
@@ -157,7 +157,7 @@
 			</button>
 		</div>
 		<div class="conversion-controls">
-			<nav class="pagination" id="conversionPagination" th:if="${totalPages > 1}" th:aria-label="#{pagination.label}"
+			<nav class="pagination" id="conversionPagination" th:if="${totalPages> 1}" th:aria-label="#{pagination.label}"
 					th:title="${conversionRunning} ? #{conversion.pagingBlocked} : null"
 					th:attr="data-blocked-title=#{conversion.pagingBlocked}"
 					th:with="canGoBack=${hasPrevious and !conversionRunning}, canGoForward=${hasNext and !conversionRunning}">

@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{nav.settings}, 'settings')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{nav.settings})}">
-	<section class="stack">
+	<section>
 		<nav class="tab-strip">
 			<a th:if="${isAdmin}" th:href="@{/app/settings}" th:classappend="${activeTab == 'system'} ? 'active'" th:text="#{settings.tab.system}">Sistema</a>
 			<a th:href="@{/app/settings/preferences}" th:classappend="${activeTab == 'preferences'} ? 'active'" th:text="#{settings.tab.preferences}">Preferências</a>
@@ -13,7 +13,7 @@
 		<div th:if="${error}" class="alert error" th:text="${error}"></div>
 		<div th:if="${activeTab == 'system' and inventoryRunning}" class="alert" role="status" th:text="#{settings.systemLocked}">Sistema bloqueado — inventário em andamento. As configurações não podem ser alteradas até o inventário terminar.</div>
 
-	<section class="stack" th:if="${activeTab == 'system'}" th:attr="data-inventory-running=${inventoryRunning}"
+	<section  th:if="${activeTab == 'system'}" th:attr="data-inventory-running=${inventoryRunning}"
 			th:with="INVENTORY='nimbus-file-manager.inventory.', SECURITY='nimbus-file-manager.security.',
 			API='nimbus-file-manager.api.', TOOLS='nimbus-file-manager.tools.',
 			DUPLICATES='nimbus-file-manager.duplicates.', SCAN='nimbus-file-manager.scan.',
@@ -121,14 +121,18 @@
 
 			<div th:if="${backupRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span>
-					<strong th:text="${backupProgress.clearing()} ? #{settings.backup.clearing}
-						: (${backupProgress.importing()} ? #{settings.backup.importing} : #{settings.backup.exporting})"></strong>
+					<strong th:text="${backupProgress.importing()} ? #{settings.backup.importing} : #{settings.backup.exporting}"></strong>
 				</div>
-				<p th:if="${backupProgress.table() != null}"
-					th:text="#{settings.backup.table(${backupProgress.table()}, ${backupProgress.tablesDone()}, ${backupProgress.tablesTotal()})}"></p>
-				<progress th:if="${backupProgress.tablesTotal() > 0}" th:value="${backupProgress.tablesDone()}"
-					th:max="${backupProgress.tablesTotal()}" th:aria-label="#{settings.backup.exporting}"></progress>
-				<progress th:unless="${backupProgress.tablesTotal() > 0}" th:aria-label="#{settings.backup.exporting}"></progress>
+				<p th:if="${backupProgress.bytes()> 0}"
+					th:text="#{settings.backup.written(${backupProgress.megabytes()})}"></p>
+				<progress th:aria-label="#{settings.backup.exporting}"></progress>
+				<div class="panel-actions" th:if="${backupProgress.exporting()}">
+					<form th:action="@{/app/settings/backup/cancel}" method="post">
+						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+						<button type="submit" class="secondary" th:text="#{settings.backup.cancel}">Cancelar</button>
+					</form>
+				</div>
+				<p class="muted" th:unless="${backupProgress.exporting()}" th:text="#{settings.backup.noCancel}"></p>
 			</div>
 			<div th:if="${!backupRunning and backupResult != null}" class="alert ok" role="status"
 				th:text="#{settings.backup.finished(${backupResult})}"></div>
@@ -143,7 +147,7 @@
 
 			<p class="muted" th:if="${backups.isEmpty()}" th:text="#{settings.backup.none}">Nenhum backup ainda.</p>
 
-			<div class="table-scroll" th:unless="${backups.isEmpty()}">
+			<div  th:unless="${backups.isEmpty()}">
 				<table>
 					<thead>
 						<tr>
@@ -158,7 +162,7 @@
 							<td><code th:text="${backup.name()}"></code></td>
 							<td th:text="${#temporals.format(backup.createdAt(), 'dd/MM/yyyy HH:mm')}"></td>
 							<td th:text="${#numbers.formatDecimal(backup.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB'"></td>
-							<td class="backup-row-actions">
+							<td class="panel-actions">
 								<form th:action="@{/app/settings/backup/restore}" method="post"
 										onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.restoreConfirm}">
 									<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -193,10 +197,10 @@
 
 			<div th:if="${toolInstallRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="${toolInstallProgress.extracting()} ? #{settings.tools.extracting} : #{settings.tools.downloading}">Baixando</strong></div>
-				<p th:if="${toolInstallProgress.percent() >= 0}"><span th:text="#{settings.tools.progress(${#numbers.formatDecimal(toolInstallProgress.percent(), 1, 1, 'COMMA')})}"></span><span th:if="${toolInstallProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${toolInstallProgress.etaSeconds() / 60})}"></span><span th:if="${toolInstallProgress.etaSeconds() >= 0 and toolInstallProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${toolInstallProgress.etaSeconds()})}"></span></p>
-				<progress th:if="${toolInstallProgress.bytesTotal() > 0}" th:value="${toolInstallProgress.bytesDone()}" th:max="${toolInstallProgress.bytesTotal()}"
+				<p th:if="${toolInstallProgress.percent()>= 0}"><span th:text="#{settings.tools.progress(${#numbers.formatDecimal(toolInstallProgress.percent(), 1, 1, 'COMMA')})}"></span><span th:if="${toolInstallProgress.etaSeconds()>= 60}" th:text="#{settings.eta.minutes(${toolInstallProgress.etaSeconds() / 60})}"></span><span th:if="${toolInstallProgress.etaSeconds()>= 0 and toolInstallProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${toolInstallProgress.etaSeconds()})}"></span></p>
+				<progress th:if="${toolInstallProgress.bytesTotal()> 0}" th:value="${toolInstallProgress.bytesDone()}" th:max="${toolInstallProgress.bytesTotal()}"
 					th:aria-label="#{settings.tools.installRunning}"></progress>
-				<progress th:unless="${toolInstallProgress.bytesTotal() > 0}" th:aria-label="#{settings.tools.installRunning}"></progress>
+				<progress th:unless="${toolInstallProgress.bytesTotal()> 0}" th:aria-label="#{settings.tools.installRunning}"></progress>
 			</div>
 			<div th:if="${!toolInstallRunning and toolInstallResult != null}" class="alert ok" role="status"
 					th:text="#{settings.tools.installSuccess}">Ferramentas instaladas.</div>
@@ -264,16 +268,16 @@
 							: (${importing} ? #{settings.geo.importing(${step})}
 							: #{settings.geo.downloadingAndImporting})"></strong>
 				</div>
-				<p th:if="${downloading and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.downloadProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${downloading and geoProgress.percent()>= 0}"><span th:text="#{settings.geo.downloadProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')}, ${#numbers.formatDecimal(geoProgress.bytesTotal() / 1048576.0, 1, 1, 'COMMA')})}"></span><span th:if="${geoProgress.etaSeconds()>= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds()>= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${downloading and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.downloadedSoFar(${#numbers.formatDecimal(geoProgress.bytesDone() / 1048576.0, 1, 1, 'COMMA')})}"></p>
-				<p th:if="${importing and geoProgress.percent() >= 0}"><span th:text="#{settings.geo.importProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds() >= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds() >= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
+				<p th:if="${importing and geoProgress.percent()>= 0}"><span th:text="#{settings.geo.importProgress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)}, ${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></span><span th:if="${geoProgress.etaSeconds()>= 60}" th:text="#{settings.eta.minutes(${geoProgress.etaSeconds() / 60})}"></span><span th:if="${geoProgress.etaSeconds()>= 0 and geoProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${geoProgress.etaSeconds()})}"></span></p>
 				<p th:if="${importing and geoProgress.percent() < 0}"
 						th:text="#{settings.geo.importedSoFar(${#numbers.formatInteger(geoProgress.recordsImported(), 1, 'POINT')})}"></p>
 				<p th:unless="${downloading or importing}" th:text="#{settings.geo.autoRefresh}">Esta página será atualizada automaticamente até a operação terminar.</p>
-				<progress th:if="${(downloading or importing) and geoProgress.percent() >= 0}" th:value="${geoProgress.percent()}" max="100"
+				<progress th:if="${(downloading or importing) and geoProgress.percent()>= 0}" th:value="${geoProgress.percent()}" max="100"
 						th:aria-label="#{duplicates.progress(${#numbers.formatPercent(geoProgress.percent() / 100.0, 1, 2)})}"></progress>
-				<progress th:unless="${(downloading or importing) and geoProgress.percent() >= 0}"
+				<progress th:unless="${(downloading or importing) and geoProgress.percent()>= 0}"
 						th:aria-label="#{settings.geo.operationRunning}"></progress>
 			</div>
 			<div th:if="${!geoImportRunning and geoImportResult != null}" class="alert ok" role="status"
@@ -285,8 +289,8 @@
 				<div><dt th:text="#{settings.geo.provider}">Provedor</dt><dd th:text="${geoStatus.provider()} ?: '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.license}">Licença</dt><dd th:text="${geoStatus.license()} ?: '—'"></dd></div>
 				<div><dt th:text="#{statistics.version}">Versão</dt><dd th:text="${geoStatus.version()} ?: '—'"></dd></div>
-				<div><dt th:text="#{settings.geo.polygons}">Polígonos importados</dt><dd th:text="${geoStatus.importedRecords() > 0} ? ${#numbers.formatInteger(geoStatus.importedRecords(), 1, 'POINT')} : '—'"></dd></div>
-				<div><dt th:text="#{settings.geo.diskSize}">Tamanho em disco</dt><dd th:text="${geoStatus.sizeBytes() > 0} ? ${#numbers.formatDecimal(geoStatus.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB' : '—'"></dd></div>
+				<div><dt th:text="#{settings.geo.polygons}">Polígonos importados</dt><dd th:text="${geoStatus.importedRecords()> 0} ? ${#numbers.formatInteger(geoStatus.importedRecords(), 1, 'POINT')} : '—'"></dd></div>
+				<div><dt th:text="#{settings.geo.diskSize}">Tamanho em disco</dt><dd th:text="${geoStatus.sizeBytes()> 0} ? ${#numbers.formatDecimal(geoStatus.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB' : '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.downloadedAt}">Baixada em</dt><dd th:text="${geoStatus.downloadedAt() != null} ? ${#temporals.format(geoStatus.downloadedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.lastUpdate}">Última atualização</dt><dd th:text="${geoStatus.importedAt() != null} ? ${#temporals.format(geoStatus.importedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
 				<div class="status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${geoStatus.directory()}"></dd></div>
@@ -297,12 +301,12 @@
 
 			<div th:if="${geoRebuildRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.geo.rebuildRunning}">Reconstrução de localizações em andamento</strong></div>
-				<p th:if="${geoRebuildPercent >= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:if="${geoRebuildEta >= 60}" th:text="#{settings.eta.minutes(${geoRebuildEta / 60})}"></span><span th:if="${geoRebuildEta >= 0 and geoRebuildEta < 60}" th:text="#{settings.eta.seconds(${geoRebuildEta})}"></span></p>
-				<p th:unless="${geoRebuildPercent >= 0}"
+				<p th:if="${geoRebuildPercent>= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:if="${geoRebuildEta>= 60}" th:text="#{settings.eta.minutes(${geoRebuildEta / 60})}"></span><span th:if="${geoRebuildEta>= 0 and geoRebuildEta < 60}" th:text="#{settings.eta.seconds(${geoRebuildEta})}"></span></p>
+				<p th:unless="${geoRebuildPercent>= 0}"
 						th:text="#{settings.geo.rebuildProcessed(${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')})}"></p>
-				<progress th:if="${geoRebuildTotal > 0}" th:value="${geoRebuildProcessed}" th:max="${geoRebuildTotal}"
+				<progress th:if="${geoRebuildTotal> 0}" th:value="${geoRebuildProcessed}" th:max="${geoRebuildTotal}"
 						th:aria-label="#{settings.geo.rebuildAria(${geoRebuildProcessed}, ${geoRebuildTotal})}"></progress>
-				<progress th:unless="${geoRebuildTotal > 0}" th:aria-label="#{settings.geo.rebuildRunning}"></progress>
+				<progress th:unless="${geoRebuildTotal> 0}" th:aria-label="#{settings.geo.rebuildRunning}"></progress>
 			</div>
 			<div th:if="${!geoRebuildRunning and geoRebuildResult != null}" class="alert ok" role="status"
 					th:text="#{settings.geo.rebuildSuccess(${#numbers.formatInteger(geoRebuildResult.candidates(), 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildResult.resolved(), 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildResult.unresolved(), 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildResult.errors(), 1, 'POINT')})}"></div>
@@ -352,7 +356,7 @@
 							<p th:text="#{settings.geo.disableExplanation}">A resolução de país, estado e cidade deixa de funcionar.</p>
 							<form th:action="@{/app/settings/geodata/disable}" method="post">
 								<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-								<p th:if="${geoStatus.sizeBytes() > 0}"
+								<p th:if="${geoStatus.sizeBytes()> 0}"
 										th:text="#{settings.geo.disableSize(${#numbers.formatDecimal(geoStatus.sizeBytes() / 1073741824.0, 1, 2, 'COMMA')})}">Os dados ocupam 1,90 GB.</p>
 								<label><input type="radio" name="removeData" value="false" checked>
 									<span th:text="#{settings.geo.disableKeep}">Manter os arquivos</span></label>
@@ -387,21 +391,21 @@
 
 			<div th:if="${metadataRebuildRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.metadata.rebuildRunning}">Reconstrução de metadados em andamento</strong></div>
-				<p th:if="${metadataRebuildPercent >= 0}"><span th:text="#{settings.metadata.rebuildProgress(${metadataRebuildPercent}, ${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildTotal, 1, 'POINT')})}"></span><span th:if="${metadataRebuildEta >= 60}" th:text="#{settings.eta.minutes(${metadataRebuildEta / 60})}"></span><span th:if="${metadataRebuildEta >= 0 and metadataRebuildEta < 60}" th:text="#{settings.eta.seconds(${metadataRebuildEta})}"></span></p>
-				<p th:unless="${metadataRebuildPercent >= 0}"
+				<p th:if="${metadataRebuildPercent>= 0}"><span th:text="#{settings.metadata.rebuildProgress(${metadataRebuildPercent}, ${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildTotal, 1, 'POINT')})}"></span><span th:if="${metadataRebuildEta>= 60}" th:text="#{settings.eta.minutes(${metadataRebuildEta / 60})}"></span><span th:if="${metadataRebuildEta>= 0 and metadataRebuildEta < 60}" th:text="#{settings.eta.seconds(${metadataRebuildEta})}"></span></p>
+				<p th:unless="${metadataRebuildPercent>= 0}"
 						th:text="#{settings.metadata.rebuildProcessed(${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')})}"></p>
-				<progress th:if="${metadataRebuildTotal > 0}" th:value="${metadataRebuildProcessed}" th:max="${metadataRebuildTotal}"
+				<progress th:if="${metadataRebuildTotal> 0}" th:value="${metadataRebuildProcessed}" th:max="${metadataRebuildTotal}"
 						th:aria-label="#{settings.metadata.rebuildAria(${metadataRebuildProcessed}, ${metadataRebuildTotal})}"></progress>
-				<progress th:unless="${metadataRebuildTotal > 0}" th:aria-label="#{settings.metadata.rebuildRunning}"></progress>
+				<progress th:unless="${metadataRebuildTotal> 0}" th:aria-label="#{settings.metadata.rebuildRunning}"></progress>
 			</div>
 			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and metadataRebuildResult.dryRun()}" class="alert" role="status"
 					th:text="#{settings.metadata.rebuildSimulated(${#numbers.formatInteger(metadataRebuildResult.candidates(), 1, 'POINT')})}"></div>
 			<div th:if="${!metadataRebuildRunning and metadataRebuildResult != null and metadataRebuildResult.simulation() != null}">
-				<p class="muted" th:if="${metadataRebuildResult.simulation().skippedByCutoff() > 0}"
+				<p class="muted" th:if="${metadataRebuildResult.simulation().skippedByCutoff()> 0}"
 						th:text="#{settings.metadata.simulationSkipped(${#numbers.formatInteger(metadataRebuildResult.simulation().skippedByCutoff(), 1, 'POINT')})}"></p>
 				<p class="muted"
 						th:text="#{settings.metadata.simulationExamined(${metadataRebuildResult.simulation().examined()}, ${metadataRebuildResult.simulation().wouldChange()})}"></p>
-				<div class="table-scroll" th:if="${!metadataRebuildResult.simulation().preview().isEmpty()}">
+				<div  th:if="${!metadataRebuildResult.simulation().preview().isEmpty()}">
 					<table>
 						<thead>
 							<tr>
@@ -550,7 +554,7 @@
 		</form>
 	</section>
 
-	<form th:if="${activeTab == 'preferences'}" class="stack section" th:action="@{/app/settings/preferences}" method="post">
+	<form th:if="${activeTab == 'preferences'}" class="section" th:action="@{/app/settings/preferences}" method="post">
 		<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 		<section class="panel">
 			<h2 th:text="#{settings.appearance.title}">Aparência</h2>

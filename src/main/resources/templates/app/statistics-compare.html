@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{statistics.compareTitle}, 'statistics')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{statistics.compareTitle})}">
-	<section class="stack">
+	<section>
 
 		<div>
 			<a class="button secondary small" th:href="@{/app/statistics}">&larr; <span th:text="#{statistics.back}">Voltar às estatísticas</span></a>
@@ -41,7 +41,7 @@
 							th:with="exec=${comparison.executions().get(iter.index)}">
 						<span class="series" th:text="'#' + ${exec.id()} + ' · ' + ${exec.applicationVersion()}">#1 · 3.4</span>
 						<span class="chart-track"><span class="chart-bar"
-								th:style="'width:' + ${comparison.maxPhaseMillis() > 0 ? (millis * 100.0 / comparison.maxPhaseMillis()) : 0} + '%'"></span></span>
+								th:style="'width:' + ${comparison.maxPhaseMillis()> 0 ? (millis * 100.0 / comparison.maxPhaseMillis()) : 0} + '%'"></span></span>
 						<span class="chart-value" th:text="${#numbers.formatDecimal(millis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</span>
 					</div>
 				</div>

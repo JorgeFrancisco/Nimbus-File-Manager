@@ -3,7 +3,7 @@
 <head th:replace="~{fragments/head :: common(#{nav.accesses}, null)}"></head>
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{nav.accesses})}">
-	<section class="stack">
+	<section>
 		<form class="panel" th:action="@{/app/accesses}" method="get">
 			<label><span th:text="#{common.email}">E-mail</span>
 				<input type="email" name="email" placeholder="admin@nimbus-file-manager.local" th:value="${email}" autofocus>

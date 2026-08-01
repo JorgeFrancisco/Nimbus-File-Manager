@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.boot.autoconfigure.jdbc.JdbcConnectionDetails;
 import org.springframework.stereotype.Component;
@@ -32,9 +34,20 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 	/** Where the packaged server lives, relative to the working directory. */
 	private static final Path BUNDLED = Path.of("tools", "postgresql", "bin");
 
+	/** Ownership and grants belong to the machine restoring, not to the one that
+	 * took the dump: an installation restoring a developer's backup is normal. */
+	private static final List<String> PORTABLE = List.of("--no-owner", "--no-privileges");
+
+	private static final String PG_DUMP = "pg_dump";
+
+	private static final String PG_RESTORE = "pg_restore";
+
 	private static final int TIMEOUT_MINUTES = 120;
 
 	private final DatabaseConnection connection;
+
+	/** The dump in flight, so it can be ended from another request. */
+	private final AtomicReference<Process> dumping = new AtomicReference<>();
 
 	/**
 	 * Takes the connection Spring actually built, not the configured property.
@@ -58,10 +71,8 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 	 */
 	@Override
 	public boolean dump(Path target) {
-		return run("pg_dump", target,
-				List.of(executable("pg_dump"), "--format=custom", "--no-owner", "--no-privileges", "--host",
-						connection.host(), "--port", Integer.toString(connection.port()), "--username",
-						connection.username(), "--file", target.toString(), connection.database()));
+		return runDump(target, command(PG_DUMP, "--format=custom", "--file", target.toString(),
+				connection.database()));
 	}
 
 	/**
@@ -76,15 +87,61 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 	 */
 	@Override
 	public boolean restore(Path source) {
-		return run("pg_restore", source,
-				List.of(executable("pg_restore"), "--clean", "--if-exists", "--no-owner", "--no-privileges", "--host",
-						connection.host(), "--port", Integer.toString(connection.port()), "--username",
-						connection.username(), "--dbname", connection.database(), source.toString()));
+		return run(PG_RESTORE, source, command(PG_RESTORE, "--clean", "--if-exists", "--dbname",
+				connection.database(), source.toString()));
+	}
+
+	/** Keeps the running dump reachable, which a restore never is. */
+	private boolean runDump(Path target, List<String> command) {
+		try {
+			return run(PG_DUMP, target, command);
+		} finally {
+			dumping.set(null);
+		}
+	}
+
+	@Override
+	public boolean readable(Path dump) {
+		// Listing the archive index reads it end to end: the format is compressed,
+		// so a file cut short or damaged fails to inflate rather than listing fewer
+		// entries. It never touches the database.
+		return run(PG_RESTORE, dump, List.of(executable(PG_RESTORE), "--list", dump.toString()));
+	}
+
+	@Override
+	public boolean cancelDump() {
+		Process running = dumping.getAndSet(null);
+
+		if (running == null || !running.isAlive()) {
+			return false;
+		}
+
+		running.destroy();
+
+		log.info("The running backup was cancelled");
+
+		return true;
 	}
 
 	@Override
 	public DatabaseConnection target() {
 		return connection;
+	}
+
+	/**
+	 * The executable, the connection and the options every invocation shares,
+	 * followed by whatever this one adds.
+	 */
+	private List<String> command(String tool, String... rest) {
+		List<String> command = new ArrayList<>();
+
+		command.add(executable(tool));
+		command.addAll(PORTABLE);
+		command.addAll(List.of("--host", connection.host(), "--port", Integer.toString(connection.port()),
+				"--username", connection.username()));
+		command.addAll(List.of(rest));
+
+		return command;
 	}
 
 	/** The packaged binary when it is there, otherwise the bare command. */
@@ -115,6 +172,10 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 			builder.environment().put("PGPASSWORD", connection.password());
 
 			process = builder.start();
+
+			if (PG_DUMP.equals(name)) {
+				dumping.set(process);
+			}
 
 			if (!process.waitFor(TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
 				process.destroyForcibly();

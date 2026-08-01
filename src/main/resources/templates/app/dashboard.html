@@ -30,7 +30,7 @@
 				</tbody>
 			</table>
 		</div>
-		<div class="table-toolbar" th:if="${executionsPage.totalElements > 0}">
+		<div class="table-toolbar" th:if="${executionsPage.totalElements> 0}">
 			<span th:text="#{dashboard.count(${executionsPage.totalElements})}">0 execuções</span>
 			<span class="muted" id="executionsLoadStatus"></span>
 		</div>

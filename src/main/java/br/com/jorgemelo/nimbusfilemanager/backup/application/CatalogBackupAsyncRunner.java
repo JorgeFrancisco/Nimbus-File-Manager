@@ -31,6 +31,7 @@ public class CatalogBackupAsyncRunner {
 	private final CatalogBackupService backupService;
 	private final BackupProgress progress;
 	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final AtomicBoolean restoring = new AtomicBoolean(false);
 	private final AtomicReference<String> lastError = new AtomicReference<>();
 	private final AtomicReference<String> lastResult = new AtomicReference<>();
 
@@ -69,6 +70,8 @@ public class CatalogBackupAsyncRunner {
 
 	@Async(AsyncConfig.TASK_EXECUTOR)
 	public void restore(String name) {
+		restoring.set(true);
+
 		try {
 			backupService.restore(name);
 
@@ -80,8 +83,17 @@ public class CatalogBackupAsyncRunner {
 		} finally {
 			progress.reset();
 
+			restoring.set(false);
 			running.set(false);
 		}
+	}
+
+	/**
+	 * Asks the running backup to stop. A restore is never cancellable, so this
+	 * refuses while one is loading rather than leaving a half-replaced catalog.
+	 */
+	public boolean cancel() {
+		return !restoring.get() && backupService.cancel();
 	}
 
 	public boolean isRunning() {

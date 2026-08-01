@@ -47,4 +47,26 @@ public interface CatalogDump {
 	 * backup that went somewhere unexpected.
 	 */
 	DatabaseConnection target();
+
+	/**
+	 * Ends a dump that is still running.
+	 *
+	 * <p>
+	 * Only a dump. Killing a restore halfway leaves a database that is neither
+	 * what it was nor what it was becoming - the objects have been dropped and
+	 * not yet recreated - so there is nothing safe to offer there.
+	 *
+	 * @return whether a running command was ended
+	 */
+	boolean cancelDump();
+
+	/**
+	 * Whether a dump can be read back in full.
+	 *
+	 * <p>
+	 * Reading the archive index walks the whole file, so a truncated or damaged
+	 * dump fails here instead of on the day it is needed. A backup nobody can
+	 * restore is worse than no backup, because it is trusted.
+	 */
+	boolean readable(Path dump);
 }

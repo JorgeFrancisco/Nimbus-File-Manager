@@ -68,7 +68,7 @@
 			<div>
 				<strong th:text="${inventoryWatch.running()} ? #{watch.active} : #{watch.stopped}">Monitoramento ativo</strong>
 				<span><span th:text="#{watch.folder}">Pasta monitorada:</span> <span class="path" th:text="${inventoryWatch.folder()}">C:\midia</span></span>
-				<small th:if="${inventoryWatch.lastReconciliation() != null}"><span th:text="#{watch.lastReconciliation}">Última reconciliação:</span> <span th:text="${#temporals.format(inventoryWatch.lastReconciliation(), 'dd/MM HH:mm')}">18/07 12:00</span> <span th:if="${inventoryWatch.lastReconciliationRepaired() > 0}" th:text="'(' + ${inventoryWatch.lastReconciliationRepaired()} + ')'">(3)</span></small>
+				<small th:if="${inventoryWatch.lastReconciliation() != null}"><span th:text="#{watch.lastReconciliation}">Última reconciliação:</span> <span th:text="${#temporals.format(inventoryWatch.lastReconciliation(), 'dd/MM HH:mm')}">18/07 12:00</span> <span th:if="${inventoryWatch.lastReconciliationRepaired()> 0}" th:text="'(' + ${inventoryWatch.lastReconciliationRepaired()} + ')'">(3)</span></small>
 				<small th:if="${inventoryWatch.error() != null}" th:text="${inventoryWatch.error()}">Erro</small>
 			</div>
 		</div>

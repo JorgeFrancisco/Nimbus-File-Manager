@@ -2,6 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -84,6 +87,38 @@ class CatalogBackupAsyncRunnerTest {
 
 		Assertions.assertThat(runner.lastError()).isEqualTo("newer than this installation");
 		Assertions.assertThat(runner.isRunning()).isFalse();
+	}
+
+	/**
+	 * Cancelling a dump costs nothing: the database was only read, and the
+	 * half-written file goes with it.
+	 */
+	@Test
+	void cancelsABackupInFlight() {
+		when(backupService.cancel()).thenReturn(true);
+
+		runner.start();
+
+		Assertions.assertThat(runner.cancel()).isTrue();
+	}
+
+	/**
+	 * A restore drops objects to recreate them. Stopping halfway leaves the
+	 * catalog neither as it was nor as it was becoming, so the answer is no -
+	 * and the tool is never even asked.
+	 */
+	@Test
+	void refusesToCancelARestore() {
+		doAnswer(call -> {
+			Assertions.assertThat(runner.cancel()).isFalse();
+
+			return null;
+		}).when(backupService).restore(anyString());
+
+		runner.start();
+		runner.restore(NAME);
+
+		verify(backupService, never()).cancel();
 	}
 
 	/** A new run starts clean, or the last failure would haunt the next screen. */

@@ -88,7 +88,7 @@
 		</div>
 		<div class="table-toolbar section pagination-toolbar">
 			<span th:text="#{org.pageInfo(${page + 1}, ${totalPages}, ${totalItems})}">Página 1</span>
-			<a class="button secondary" th:if="${plan.summary().conflicts() > 0}"
+			<a class="button secondary" th:if="${plan.summary().conflicts()> 0}"
 					th:href="@{/app/organization/preview/{id}(id=${executionId},page=0,size=${size},onlyConflicts=${!onlyConflicts})}"
 					th:text="${onlyConflicts} ? #{org.viewAll} : #{org.viewConflictsOnly}">Ver só conflitos</a>
 			<a class="button secondary"

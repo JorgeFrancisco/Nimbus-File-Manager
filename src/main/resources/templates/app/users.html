@@ -48,7 +48,7 @@
 			</label>
 			<button type="submit" th:text="#{action.search}">Buscar</button>
 		</form>
-		<div class="table-toolbar pagination-toolbar section" th:if="${usersPage.totalPages > 1}">
+		<div class="table-toolbar pagination-toolbar section" th:if="${usersPage.totalPages> 1}">
 			<span class="muted" th:text="#{users.pageInfo(${usersPage.number + 1}, ${usersPage.totalPages}, ${usersPage.totalElements})}">Página</span>
 			<nav class="pagination" th:aria-label="#{pagination.label}">
 				<a class="button secondary small" th:if="${usersPage.hasPrevious()}" th:href="@{/app/users(q=${q},size=${size},page=0)}" th:text="#{pagination.first}">Primeira</a>
