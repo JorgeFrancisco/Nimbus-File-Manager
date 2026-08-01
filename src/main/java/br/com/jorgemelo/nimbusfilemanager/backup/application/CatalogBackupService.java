@@ -1,10 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -16,12 +17,12 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupManifest;
+import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,64 +38,74 @@ import lombok.extern.slf4j.Slf4j;
  * between reinstalling and continuing, and reinstalling and beginning again.
  *
  * <p>
- * A restore replaces everything. It refuses a backup taken from a different
- * schema version, because loading rows into columns that moved is how a rescue
- * becomes the corruption it was meant to prevent.
+ * The file is a logical dump wrapped with a manifest that says which schema it
+ * came from. It carries the tables and their shape, not only the rows: a backup
+ * whose columns were renamed by a later migration still restores, because what
+ * comes back is the database as it was, and the migrations bring it forward
+ * from there. Rows alone could only ever load into tables shaped exactly as
+ * they were on the day.
  */
 @Slf4j
 @Service
 public class CatalogBackupService {
 
 	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
 	private static final String PREFIX = "nimbus-catalog-";
 	private static final String SUFFIX = ".zip";
 	private static final String MANIFEST = "manifest.json";
-	private static final String DATA = "data/";
+	private static final String DUMP = "catalog.dump";
 
 	private final CatalogCopyRepository catalogCopyRepository;
+	private final CatalogDump catalogDump;
 	private final BackupFolderResolver backupFolderResolver;
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
+	private final BackupProgress progress;
 
-	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository, BackupFolderResolver backupFolderResolver,
-			ObjectMapper objectMapper, Clock clock) {
+	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository, CatalogDump catalogDump,
+			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock,
+			BackupProgress progress) {
 		this.catalogCopyRepository = catalogCopyRepository;
+		this.catalogDump = catalogDump;
 		this.backupFolderResolver = backupFolderResolver;
 		this.objectMapper = objectMapper;
 		this.clock = clock;
+		this.progress = progress;
 	}
 
 	/**
-	 * Writes one file with every table as CSV plus the manifest. Read-only against
-	 * the catalog, so it is safe to run while the application is being used - the
-	 * result is a snapshot of the moment each table was read.
+	 * Writes one file holding the dump and the manifest.
+	 *
+	 * <p>
+	 * Not transactional: the dump opens its own connection and takes its own
+	 * consistent snapshot, so a transaction here would be held open for the whole
+	 * run while protecting nothing.
 	 */
-	@Transactional(readOnly = true)
 	public BackupFile create() {
-		List<String> tables = catalogCopyRepository.tables();
+		Path folder = backupFolderResolver.folder();
 
-		Path target = backupFolderResolver.folder()
-				.resolve(PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + SUFFIX);
+		Path target = folder.resolve(PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + SUFFIX);
 
-		try (OutputStream file = Files.newOutputStream(target); ZipOutputStream zip = new ZipOutputStream(file)) {
-			for (String table : tables) {
-				zip.putNextEntry(new ZipEntry(DATA + table + ".csv"));
+		Path dump = folder.resolve(PREFIX + "working.dump");
 
-				catalogCopyRepository.copyOut(table, zip);
+		progress.start(BackupPhase.EXPORTING, 1);
+		progress.startTable(catalogCopyRepository.schemaVersion());
 
-				zip.closeEntry();
+		try {
+			if (!catalogDump.dump(dump)) {
+				throw new IllegalStateException("The database could not be dumped");
 			}
 
-			zip.putNextEntry(new ZipEntry(MANIFEST));
+			pack(dump, target);
 
-			zip.write(objectMapper.writeValueAsBytes(new BackupManifest(catalogCopyRepository.schemaVersion(),
-					applicationVersion(), LocalDateTime.now(clock), tables)));
-
-			zip.closeEntry();
-		} catch (IOException e) {
+			progress.finishTable();
+		} catch (IOException exception) {
 			deleteQuietly(target);
 
-			throw new IllegalStateException("Could not write the backup " + target, e);
+			throw new IllegalStateException("Could not write the backup " + target, exception);
+		} finally {
+			deleteQuietly(dump);
 		}
 
 		log.info("Catalog backup written to {}", target);
@@ -102,52 +113,61 @@ public class CatalogBackupService {
 		return describe(target);
 	}
 
-	/** The backups on disk, newest first. */
-	public List<BackupFile> list() {
-		Path folder = backupFolderResolver.folder();
-
-		try (var files = Files.list(folder)) {
-			return files.filter(this::isBackup).map(this::describe)
-					.sorted(Comparator.comparing(BackupFile::createdAt).reversed()).toList();
-		} catch (IOException e) {
-			log.warn("Could not list the backup folder {}", folder, e);
-
-			return List.of();
-		}
-	}
-
 	/**
-	 * Replaces the whole catalog with the contents of one backup. Everything runs
-	 * in a single transaction: a restore that failed halfway would leave neither
-	 * the old catalog nor the new one.
+	 * Replaces the whole catalog with the contents of one backup.
+	 *
+	 * <p>
+	 * A backup older than the running schema is accepted: it recreates the
+	 * database as it was and Flyway migrates it forward on the next start, which
+	 * is the entire reason the file carries the schema and not only the rows. One
+	 * <em>newer</em> than the running schema is refused - migrations run forwards
+	 * only, so nothing could reconcile columns this build has never seen.
 	 */
-	@Transactional
 	public BackupManifest restore(String name) {
 		Path file = resolve(name);
+
+		Path dump = backupFolderResolver.folder().resolve(PREFIX + "restoring.dump");
 
 		try (ZipFile zip = new ZipFile(file.toFile())) {
 			BackupManifest manifest = manifest(zip, file);
 
-			String current = catalogCopyRepository.schemaVersion();
+			refuseWhenNewerThanThisBuild(manifest);
 
-			if (!current.equals(manifest.schemaVersion())) {
-				throw new IllegalArgumentException("Backup was taken from schema " + manifest.schemaVersion()
-						+ ", this database is on " + current);
+			progress.start(BackupPhase.IMPORTING, 1);
+			progress.startTable(manifest.schemaVersion());
+
+			unpack(zip, dump);
+
+			if (!catalogDump.restore(dump)) {
+				throw new IllegalStateException("The backup " + name + " could not be loaded");
 			}
 
-			catalogCopyRepository.truncateAll();
-
-			for (String table : manifest.tables()) {
-				load(zip, table);
-			}
-
-			catalogCopyRepository.realignSequences();
+			progress.finishTable();
 
 			log.info("Catalog restored from {}", file);
 
 			return manifest;
-		} catch (IOException e) {
-			throw new IllegalStateException("Could not read the backup " + file, e);
+		} catch (IOException exception) {
+			throw new IllegalStateException("Could not read the backup " + file, exception);
+		} finally {
+			deleteQuietly(dump);
+		}
+	}
+
+	public List<BackupFile> list() {
+		Path folder = backupFolderResolver.folder();
+
+		if (!Files.isDirectory(folder)) {
+			return List.of();
+		}
+
+		try (var files = Files.list(folder)) {
+			return files.filter(this::isBackup).map(this::describe)
+					.sorted(Comparator.comparing(BackupFile::createdAt).reversed()).toList();
+		} catch (IOException exception) {
+			log.warn("Could not list the backup folder {}", folder, exception);
+
+			return List.of();
 		}
 	}
 
@@ -155,15 +175,56 @@ public class CatalogBackupService {
 		deleteQuietly(resolve(name));
 	}
 
-	private void load(ZipFile zip, String table) throws IOException {
-		ZipEntry entry = zip.getEntry(DATA + table + ".csv");
+	/**
+	 * Only migrations move a database, and they only move it forwards. Data
+	 * written by a later schema names columns this build has never heard of.
+	 */
+	private void refuseWhenNewerThanThisBuild(BackupManifest manifest) {
+		String current = catalogCopyRepository.schemaVersion();
+
+		if (isNewer(manifest.schemaVersion(), current)) {
+			throw new IllegalArgumentException("Backup was taken from schema " + manifest.schemaVersion()
+					+ ", newer than this installation's " + current);
+		}
+	}
+
+	/** Schema versions are Flyway's, so they compare as numbers when they are. */
+	private boolean isNewer(String candidate, String current) {
+		try {
+			return Integer.parseInt(candidate.trim()) > Integer.parseInt(current.trim());
+		} catch (NumberFormatException exception) {
+			log.debug("Comparing schema versions {} and {} as text", candidate, current, exception);
+
+			return candidate.compareTo(current) > 0;
+		}
+	}
+
+	private void pack(Path dump, Path target) throws IOException {
+		try (OutputStream file = Files.newOutputStream(target); ZipOutputStream zip = new ZipOutputStream(file)) {
+			zip.putNextEntry(new ZipEntry(DUMP));
+
+			Files.copy(dump, zip);
+
+			zip.closeEntry();
+
+			zip.putNextEntry(new ZipEntry(MANIFEST));
+
+			zip.write(objectMapper.writeValueAsBytes(new BackupManifest(catalogCopyRepository.schemaVersion(),
+					applicationVersion(), LocalDateTime.now(clock), catalogCopyRepository.tables())));
+
+			zip.closeEntry();
+		}
+	}
+
+	private void unpack(ZipFile zip, Path dump) throws IOException {
+		ZipEntry entry = zip.getEntry(DUMP);
 
 		if (entry == null) {
-			return;
+			throw new IllegalArgumentException("The backup carries no dump");
 		}
 
-		try (var data = new BufferedInputStream(zip.getInputStream(entry))) {
-			catalogCopyRepository.copyIn(table, data);
+		try (InputStream data = zip.getInputStream(entry)) {
+			Files.copy(data, dump, StandardCopyOption.REPLACE_EXISTING);
 		}
 	}
 
@@ -171,24 +232,25 @@ public class CatalogBackupService {
 		ZipEntry entry = zip.getEntry(MANIFEST);
 
 		if (entry == null) {
-			throw new IllegalArgumentException("Not a catalog backup: " + file.getFileName());
+			throw new IllegalArgumentException("The backup " + file.getFileName() + " carries no manifest");
 		}
 
-		try (var data = zip.getInputStream(entry)) {
+		try (InputStream data = zip.getInputStream(entry)) {
 			return objectMapper.readValue(data, BackupManifest.class);
 		}
 	}
 
 	/**
-	 * Only a file name, never a path: the screen sends what it listed, and a name
-	 * carrying separators would reach outside the backup folder.
+	 * Refuses anything that is not a backup of ours inside the backup folder: the
+	 * name arrives from a form, and a path traversal here reads and deletes files
+	 * the application was never pointed at.
 	 */
 	private Path resolve(String name) {
-		Path folder = backupFolderResolver.folder();
+		Path folder = backupFolderResolver.folder().toAbsolutePath().normalize();
 
-		Path file = folder.resolve(name).normalize();
+		Path file = folder.resolve(name).toAbsolutePath().normalize();
 
-		if (!file.getParent().equals(folder.normalize()) || !isBackup(file)) {
+		if (!file.startsWith(folder) || !isBackup(file)) {
 			throw new IllegalArgumentException("Not a backup of this installation: " + name);
 		}
 
@@ -198,20 +260,16 @@ public class CatalogBackupService {
 	private boolean isBackup(Path file) {
 		String name = file.getFileName().toString();
 
-		return name.startsWith(PREFIX) && name.endsWith(SUFFIX);
+		return Files.isRegularFile(file) && name.startsWith(PREFIX) && name.endsWith(SUFFIX);
 	}
 
 	private BackupFile describe(Path file) {
 		try {
 			return new BackupFile(file.getFileName().toString(), Files.size(file),
-					LocalDateTime.ofInstant(Files.getLastModifiedTime(file).toInstant(), zone()));
-		} catch (IOException e) {
-			throw new IllegalStateException("Could not read the backup " + file, e);
+					LocalDateTime.ofInstant(Files.getLastModifiedTime(file).toInstant(), ZoneId.systemDefault()));
+		} catch (IOException exception) {
+			throw new IllegalStateException("Could not read the backup " + file, exception);
 		}
-	}
-
-	private ZoneId zone() {
-		return clock.getZone();
 	}
 
 	private String applicationVersion() {
@@ -223,8 +281,8 @@ public class CatalogBackupService {
 	private void deleteQuietly(Path file) {
 		try {
 			Files.deleteIfExists(file);
-		} catch (IOException e) {
-			log.warn("Could not delete {}", file, e);
+		} catch (IOException exception) {
+			log.debug("Could not delete {}", file, exception);
 		}
 	}
 }

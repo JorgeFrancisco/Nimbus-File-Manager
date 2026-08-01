@@ -36,7 +36,7 @@ class CatalogFileEntityGraphIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

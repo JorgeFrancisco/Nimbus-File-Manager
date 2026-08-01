@@ -119,10 +119,25 @@
 				<div><dt th:text="#{settings.backup.count}">Backups guardados</dt><dd th:text="${backups.size()}"></dd></div>
 			</dl>
 
+			<div th:if="${backupRunning}" class="operation-status" role="status">
+				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span>
+					<strong th:text="${backupProgress.clearing()} ? #{settings.backup.clearing}
+						: (${backupProgress.importing()} ? #{settings.backup.importing} : #{settings.backup.exporting})"></strong>
+				</div>
+				<p th:if="${backupProgress.table() != null}"
+					th:text="#{settings.backup.table(${backupProgress.table()}, ${backupProgress.tablesDone()}, ${backupProgress.tablesTotal()})}"></p>
+				<progress th:if="${backupProgress.tablesTotal() > 0}" th:value="${backupProgress.tablesDone()}"
+					th:max="${backupProgress.tablesTotal()}" th:aria-label="#{settings.backup.exporting}"></progress>
+				<progress th:unless="${backupProgress.tablesTotal() > 0}" th:aria-label="#{settings.backup.exporting}"></progress>
+			</div>
+			<div th:if="${!backupRunning and backupResult != null}" class="alert ok" role="status"
+				th:text="#{settings.backup.finished(${backupResult})}"></div>
+			<div th:if="${backupError != null}" class="alert error" th:text="#{settings.backup.lastFailure(${backupError})}"></div>
+
 			<div class="panel-actions">
 				<form th:action="@{/app/settings/backup/create}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-					<button type="submit" th:text="#{settings.backup.create}">Fazer backup agora</button>
+					<button type="submit" th:disabled="${backupRunning}" th:text="#{settings.backup.create}">Fazer backup agora</button>
 				</form>
 			</div>
 
@@ -148,14 +163,14 @@
 										onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.restoreConfirm}">
 									<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 									<input type="hidden" name="name" th:value="${backup.name()}">
-									<button type="submit" class="secondary" th:disabled="${inventoryRunning}"
+									<button type="submit" class="secondary" th:disabled="${inventoryRunning or backupRunning}"
 											th:text="#{settings.backup.restore}">Restaurar</button>
 								</form>
 								<form th:action="@{/app/settings/backup/delete}" method="post"
 										onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="#{settings.backup.deleteConfirm}">
 									<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 									<input type="hidden" name="name" th:value="${backup.name()}">
-									<button type="submit" class="secondary" th:text="#{settings.backup.delete}">Excluir</button>
+									<button type="submit" class="secondary" th:disabled="${backupRunning}" th:text="#{settings.backup.delete}">Excluir</button>
 								</form>
 							</td>
 						</tr>

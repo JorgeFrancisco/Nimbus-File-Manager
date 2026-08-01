@@ -45,7 +45,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	private static final Path WORKSPACE = createWorkspace();
 

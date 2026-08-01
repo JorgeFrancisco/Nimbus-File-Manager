@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
-import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -22,26 +22,30 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 public class SettingsBackupWebController extends LocalizedComponent {
 
 	private final CatalogBackupService catalogBackupService;
+	private final CatalogBackupAsyncRunner asyncRunner;
 	private final InventoryRunningState inventoryRunningState;
 
 	@Autowired
-	public SettingsBackupWebController(CatalogBackupService catalogBackupService,
+	public SettingsBackupWebController(CatalogBackupService catalogBackupService, CatalogBackupAsyncRunner asyncRunner,
 			InventoryRunningState inventoryRunningState) {
 		this.catalogBackupService = catalogBackupService;
+		this.asyncRunner = asyncRunner;
 		this.inventoryRunningState = inventoryRunningState;
 	}
 
 	@PostMapping("/app/settings/backup/create")
 	public String createBackup(RedirectAttributes redirectAttributes) {
-		try {
-			BackupFile backup = catalogBackupService.create();
-
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
-					message("backend.settings.backupCreated", backup.name()));
-		} catch (RuntimeException e) {
+		if (!asyncRunner.start()) {
 			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.backupFailed", e.getMessage()));
+					message("backend.settings.backupRunning"));
+
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
+
+		asyncRunner.create();
+
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.backupStarted"));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}
@@ -55,15 +59,17 @@ public class SettingsBackupWebController extends LocalizedComponent {
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		try {
-			catalogBackupService.restore(name);
-
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
-					message("backend.settings.backupRestored", name));
-		} catch (RuntimeException e) {
+		if (!asyncRunner.start()) {
 			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.backupRestoreFailed", e.getMessage()));
+					message("backend.settings.backupRunning"));
+
+			return SharedConstants.REDIRECT_SETTINGS;
 		}
+
+		asyncRunner.restore(name);
+
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
+				message("backend.settings.restoreStarted", name));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}

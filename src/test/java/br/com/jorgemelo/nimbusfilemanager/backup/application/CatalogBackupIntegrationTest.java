@@ -16,6 +16,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.DatabaseConnection;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -40,7 +41,10 @@ class CatalogBackupIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	@Autowired
+	private CatalogDump catalogDump;
 
 	@Autowired
 	private CatalogBackupService catalogBackupService;
@@ -65,6 +69,26 @@ class CatalogBackupIntegrationTest {
 		return catalogFileRepository.save(CatalogFile.builder().fileKey(fileKey).fileName("photo.jpg").extension("jpg")
 				.sizeBytes(1024L).sha256(fileKey).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
 				.modifiedAt(LocalDateTime.now()).importedAt(LocalDateTime.now()).build());
+	}
+
+	/**
+	 * The dump and the restore act on a database chosen at runtime, and the
+	 * restore destroys what it replaces. This pins the target to the one the
+	 * application is actually connected to.
+	 *
+	 * <p>
+	 * It exists because the first version read {@code spring.datasource.url}
+	 * instead. Under {@code @ServiceConnection} that property keeps the packaged
+	 * default, so the suite dumped and restored a developer machine's own
+	 * database while every assertion here went on passing or failing for
+	 * unrelated reasons.
+	 */
+	@Test
+	void actsOnTheDatabaseTheApplicationIsConnectedTo() {
+		DatabaseConnection target = catalogDump.target();
+
+		Assertions.assertThat(target.port()).isEqualTo(postgres.getFirstMappedPort());
+		Assertions.assertThat(target.database()).isEqualTo(postgres.getDatabaseName());
 	}
 
 	@Test

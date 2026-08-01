@@ -22,6 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupSnapshot;
+import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.database.application.dto.EmbeddedDatabaseStatus;
 import br.com.jorgemelo.nimbusfilemanager.database.infrastructure.web.EmbeddedDatabaseSettingsModel;
@@ -154,6 +156,8 @@ class SettingsPageRenderTest {
 
 			model.addAttribute("backups", List.of());
 			model.addAttribute("backupFolder", "C:/app/workspace/backup");
+			model.addAttribute("backupRunning", false);
+			model.addAttribute("backupProgress", new BackupSnapshot(BackupPhase.IDLE, null, 0, 0, -1));
 
 			return null;
 		}).when(backupSettingsModel).addTo(any(), any());

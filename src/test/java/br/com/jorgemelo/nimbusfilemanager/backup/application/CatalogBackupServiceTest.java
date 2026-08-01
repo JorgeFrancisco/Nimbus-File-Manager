@@ -1,8 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,29 +28,38 @@ import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
 
 /**
- * The refusals. Restoring is the one action that destroys what it replaces, so
- * every reason to stop before touching a row is worth pinning: a file that is
- * not a backup, one taken from another schema, one that never had a manifest.
+ * What the backup accepts and what it refuses. Restoring is the one action that
+ * destroys what it replaces, so every reason to stop before touching a row is
+ * worth pinning: a file that is not a backup, one with no manifest, one taken
+ * from a schema this build has never seen.
+ *
+ * <p>
+ * A backup from an <em>older</em> schema is deliberately not among the
+ * refusals. It is the case the whole format exists for - the dump brings the
+ * database back as it was and the migrations carry it forward.
  */
 class CatalogBackupServiceTest {
 
 	private static final Clock CLOCK = Clock.fixed(LocalDateTime.parse("2026-08-01T06:00:00").toInstant(ZoneOffset.UTC),
 			ZoneOffset.UTC);
 
+	private static final String NAME = "nimbus-catalog-20260731-030000.zip";
+
 	private final CatalogCopyRepository catalogCopyRepository = mock(CatalogCopyRepository.class);
 	private final BackupFolderResolver backupFolderResolver = mock(BackupFolderResolver.class);
+	private final CatalogDump catalogDump = mock(CatalogDump.class);
 
 	private CatalogBackupService service(Path folder) {
 		when(backupFolderResolver.folder()).thenReturn(folder);
 
 		// The injected mapper carries the JSR-310 module; a bare one cannot write the
 		// timestamp of the manifest, which is what production actually uses.
-		return new CatalogBackupService(catalogCopyRepository, backupFolderResolver,
-				new ObjectMapper().findAndRegisterModules(), CLOCK);
+		return new CatalogBackupService(catalogCopyRepository, catalogDump, backupFolderResolver,
+				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress());
 	}
 
 	private Path backup(Path folder, String manifest) throws IOException {
-		Path file = folder.resolve("nimbus-catalog-20260731-030000.zip");
+		Path file = folder.resolve(NAME);
 
 		try (OutputStream out = Files.newOutputStream(file); ZipOutputStream zip = new ZipOutputStream(out)) {
 			if (manifest != null) {
@@ -61,8 +68,8 @@ class CatalogBackupServiceTest {
 				zip.closeEntry();
 			}
 
-			zip.putNextEntry(new ZipEntry("data/app_setting.csv"));
-			zip.write("key\n".getBytes(StandardCharsets.UTF_8));
+			zip.putNextEntry(new ZipEntry("catalog.dump"));
+			zip.write("a dump".getBytes(StandardCharsets.UTF_8));
 			zip.closeEntry();
 		}
 
@@ -70,14 +77,32 @@ class CatalogBackupServiceTest {
 	}
 
 	/**
-	 * The guard that matters most: rows written for one schema, loaded into
-	 * another, land in columns that moved - which is how a rescue becomes the
-	 * corruption it was meant to prevent.
+	 * The reason the file carries the schema and not only the rows: yesterday's
+	 * backup has to survive today's migration, or it is not a rescue at all.
 	 */
 	@Test
-	void refusesABackupTakenFromAnotherSchemaWithoutTouchingTheCatalog(@TempDir Path folder) throws IOException {
+	void restoresABackupTakenBeforeTheCurrentSchema(@TempDir Path folder) throws IOException {
 		backup(folder, """
 				{"schemaVersion":"12","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+				 "tables":["app_setting"]}
+				""");
+
+		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.restore(any())).thenReturn(true);
+
+		Assertions.assertThat(service(folder).restore(NAME).schemaVersion()).isEqualTo("12");
+
+		verify(catalogDump).restore(any());
+	}
+
+	/**
+	 * Migrations only run forwards. Data written by a later schema names columns
+	 * this build has never heard of, and nothing could reconcile them.
+	 */
+	@Test
+	void refusesABackupNewerThanTheRunningSchema(@TempDir Path folder) throws IOException {
+		backup(folder, """
+				{"schemaVersion":"14","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
 				 "tables":["app_setting"]}
 				""");
 
@@ -85,12 +110,10 @@ class CatalogBackupServiceTest {
 
 		CatalogBackupService service = service(folder);
 
-		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.restore("nimbus-catalog-20260731-030000.zip"))
-				.withMessageContaining("schema 12").withMessageContaining("13");
+		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.restore(NAME))
+				.withMessageContaining("schema 14").withMessageContaining("13");
 
-		verify(catalogCopyRepository, never()).truncateAll();
-		verify(catalogCopyRepository, never()).copyIn(anyString(), any());
+		verify(catalogDump, never()).restore(any());
 	}
 
 	/** A zip that is not one of ours: no manifest, nothing to trust. */
@@ -100,11 +123,10 @@ class CatalogBackupServiceTest {
 
 		CatalogBackupService service = service(folder);
 
-		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.restore("nimbus-catalog-20260731-030000.zip"))
-				.withMessageContaining("Not a catalog backup");
+		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.restore(NAME))
+				.withMessageContaining("carries no manifest");
 
-		verify(catalogCopyRepository, never()).truncateAll();
+		verify(catalogDump, never()).restore(any());
 	}
 
 	@Test
@@ -123,10 +145,7 @@ class CatalogBackupServiceTest {
 		Files.writeString(folder.resolve("holiday.zip"), "not a backup");
 		Files.writeString(folder.resolve("notes.txt"), "nor this");
 
-		List<BackupFile> backups = service(folder).list();
-
-		Assertions.assertThat(backups).extracting(BackupFile::name)
-				.containsExactly("nimbus-catalog-20260731-030000.zip");
+		Assertions.assertThat(service(folder).list()).extracting(BackupFile::name).containsExactly(NAME);
 	}
 
 	/**
@@ -142,29 +161,93 @@ class CatalogBackupServiceTest {
 	void namesTheBackupAfterTheMomentItWasTaken(@TempDir Path folder) {
 		when(catalogCopyRepository.tables()).thenReturn(List.of());
 		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.dump(any())).thenAnswer(call -> {
+			Files.writeString(call.getArgument(0), "a dump");
+
+			return true;
+		});
 
 		Assertions.assertThat(service(folder).create().name()).isEqualTo("nimbus-catalog-20260801-060000.zip");
 	}
 
 	/**
-	 * A file that is not a zip at all, or a folder that vanished under the write:
-	 * both have to name the file that failed instead of a stack trace, because the
-	 * operator is the one who has to act on it.
+	 * A dump that did not run leaves nothing to wrap, and saying so beats writing
+	 * an archive that looks like a backup and holds nothing.
 	 */
 	@Test
-	void reportsTheFileWhenItIsNotReadableAsABackup(@TempDir Path folder) throws IOException {
-		Files.writeString(folder.resolve("nimbus-catalog-20260731-030000.zip"), "not a zip at all");
+	void reportsADumpThatCouldNotBeTaken(@TempDir Path folder) {
+		when(catalogDump.dump(any())).thenReturn(false);
 
 		CatalogBackupService service = service(folder);
 
-		Assertions.assertThatIllegalStateException()
-				.isThrownBy(() -> service.restore("nimbus-catalog-20260731-030000.zip"))
+		Assertions.assertThatIllegalStateException().isThrownBy(service::create)
+				.withMessageContaining("could not be dumped");
+	}
+
+	/**
+	 * A file that is not a zip at all has to name the file that failed instead of
+	 * a stack trace, because the operator is the one who has to act on it.
+	 */
+	@Test
+	void reportsTheFileWhenItIsNotReadableAsABackup(@TempDir Path folder) throws IOException {
+		Files.writeString(folder.resolve(NAME), "not a zip at all");
+
+		CatalogBackupService service = service(folder);
+
+		Assertions.assertThatIllegalStateException().isThrownBy(() -> service.restore(NAME))
 				.withMessageContaining("Could not read the backup");
 	}
 
+	/**
+	 * A manifest whose versions are not numbers still has to be ordered somehow.
+	 * Falling back to text keeps the guard working instead of letting an
+	 * unparseable version through as if it were older.
+	 */
+	@Test
+	void comparesSchemaVersionsThatAreNotNumbers(@TempDir Path folder) throws IOException {
+		backup(folder, """
+			{"schemaVersion":"2026.08.b","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+			 "tables":["app_setting"]}
+			""");
+
+		when(catalogCopyRepository.schemaVersion()).thenReturn("2026.08.a");
+
+		CatalogBackupService service = service(folder);
+
+		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.restore(NAME))
+				.withMessageContaining("2026.08.b");
+	}
+
+	/** A file that carries a manifest and no dump has nothing to restore from. */
+	@Test
+	void refusesABackupWithoutADump(@TempDir Path folder) throws IOException {
+		Path file = folder.resolve(NAME);
+
+		try (OutputStream out = Files.newOutputStream(file); ZipOutputStream zip = new ZipOutputStream(out)) {
+			zip.putNextEntry(new ZipEntry("manifest.json"));
+			zip.write("""
+				{"schemaVersion":"13","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+				 "tables":[]}
+				""".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+
+		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+
+		CatalogBackupService service = service(folder);
+
+		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.restore(NAME))
+				.withMessageContaining("carries no dump");
+	}
+
+	/**
+	 * A folder that vanished under the write has to name the file that failed:
+	 * the operator is the one who has to act on it.
+	 */
 	@Test
 	void reportsTheFileWhenTheBackupCannotBeWritten(@TempDir Path folder) {
 		when(catalogCopyRepository.tables()).thenReturn(List.of());
+		when(catalogDump.dump(any())).thenReturn(true);
 
 		CatalogBackupService service = service(folder.resolve("folder-that-is-not-there"));
 
@@ -172,23 +255,20 @@ class CatalogBackupServiceTest {
 				.withMessageContaining("Could not write the backup");
 	}
 
-	/**
-	 * A table listed in the manifest whose data is missing is skipped rather than
-	 * failing the restore: the rest of the catalog is worth more than the table
-	 * that did not travel.
-	 */
+	/** A restore that the tool refused must not report success. */
 	@Test
-	void skipsATableTheBackupDoesNotCarry(@TempDir Path folder) throws IOException {
+	void reportsARestoreTheToolRefused(@TempDir Path folder) throws IOException {
 		backup(folder, """
 				{"schemaVersion":"13","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
-				 "tables":["app_setting","table_that_is_not_in_the_file"]}
+				 "tables":["app_setting"]}
 				""");
 
 		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.restore(any())).thenReturn(false);
 
-		service(folder).restore("nimbus-catalog-20260731-030000.zip");
+		CatalogBackupService service = service(folder);
 
-		verify(catalogCopyRepository).copyIn(eq("app_setting"), any());
-		verify(catalogCopyRepository, never()).copyIn(eq("table_that_is_not_in_the_file"), any());
+		Assertions.assertThatIllegalStateException().isThrownBy(() -> service.restore(NAME))
+				.withMessageContaining("could not be loaded");
 	}
 }

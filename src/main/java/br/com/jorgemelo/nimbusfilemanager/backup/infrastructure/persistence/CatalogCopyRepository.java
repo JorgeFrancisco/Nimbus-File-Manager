@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.postgresql.copy.CopyManager;
 import org.postgresql.core.BaseConnection;
@@ -46,6 +47,12 @@ public class CatalogCopyRepository {
 			ORDER BY table_name
 			""";
 
+	private static final String COLUMNS = """
+			SELECT column_name FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = :table
+			ORDER BY ordinal_position
+			""";
+
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 
 	public CatalogCopyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -54,6 +61,11 @@ public class CatalogCopyRepository {
 
 	public List<String> tables() {
 		return jdbcTemplate.queryForList(TABLES, Map.of("excluded", EXCLUDED), String.class);
+	}
+
+	/** The columns a table has right now, in declaration order. */
+	public List<String> columns(String table) {
+		return jdbcTemplate.queryForList(COLUMNS, Map.of("table", table), String.class);
 	}
 
 	/** Current schema version, as Flyway recorded it. */
@@ -71,10 +83,21 @@ public class CatalogCopyRepository {
 				manager -> manager.copyOut("COPY " + quoted(table) + " TO STDOUT WITH (FORMAT csv, HEADER)", output));
 	}
 
-	/** Loads one table from CSV with a header row, into an empty table. */
-	public long copyIn(String table, InputStream input) {
-		return copy(
-				manager -> manager.copyIn("COPY " + quoted(table) + " FROM STDIN WITH (FORMAT csv, HEADER)", input));
+	/**
+	 * Loads one table from CSV into an empty table, naming the columns.
+	 *
+	 * <p>
+	 * Naming them is what makes the load match by name instead of by position.
+	 * The file already carried a header, but {@code HEADER} on the way in only
+	 * discards that line - so a column added, dropped or reordered since the
+	 * backup was taken either failed the load or, worse, filled the wrong columns
+	 * with whatever happened to line up.
+	 */
+	public long copyIn(String table, List<String> columns, InputStream input) {
+		String named = columns.stream().map(this::quoted).collect(Collectors.joining(", "));
+
+		return copy(manager -> manager.copyIn(
+			"COPY " + quoted(table) + " (" + named + ") FROM STDIN WITH (FORMAT csv, HEADER)", input));
 	}
 
 	/**
