@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterLayout;
@@ -42,6 +44,9 @@ public class PostgresProcessRunner implements PostgresCommands {
 	private static final int COMMAND_TIMEOUT_SECONDS = 120;
 
 	private static final String PG_CTL = "pg_ctl";
+
+	/** Written by the server itself; its first line is the process id. */
+	private static final String POSTMASTER_PID = "postmaster.pid";
 
 	private static final String PORT_TAKEN = "could not bind";
 	private static final String ADDRESS_IN_USE = "address already in use";
@@ -110,6 +115,41 @@ public class PostgresProcessRunner implements PostgresCommands {
 				PG_CTL, List.of(layout.executable(PG_CTL).toString(), "-D", layout.cluster().toString(), "-m",
 						mode.argument(), "-w", "-t", Integer.toString(STOP_TIMEOUT_SECONDS), "stop"),
 				STOP_TIMEOUT_SECONDS + 10) == 0;
+	}
+
+	@Override
+	public boolean stopByRecordedProcess() {
+		return recordedProcess().map(ProcessHandle::destroy).orElse(Boolean.FALSE);
+	}
+
+	@Override
+	public boolean running() {
+		return recordedProcess().isPresent();
+	}
+
+	/**
+	 * The live process the cluster recorded, if there is one. The server writes
+	 * its own pid on the first line of {@code postmaster.pid} and never rewrites
+	 * it while running, so this is the cluster saying which process serves it.
+	 * A stale file - the server died without cleaning up - answers empty, because
+	 * the pid it names is either gone or belongs to something else by now.
+	 */
+	private Optional<ProcessHandle> recordedProcess() {
+		Path pidFile = layout.cluster().resolve(POSTMASTER_PID);
+
+		try {
+			if (!Files.isRegularFile(pidFile)) {
+				return Optional.empty();
+			}
+
+			String first = Files.readAllLines(pidFile, StandardCharsets.UTF_8).getFirst().strip();
+
+			return ProcessHandle.of(Long.parseLong(first)).filter(ProcessHandle::isAlive);
+		} catch (IOException | NumberFormatException | NoSuchElementException exception) {
+			log.error("Could not read the server process from {}", pidFile, exception);
+
+			return Optional.empty();
+		}
 	}
 
 	@Override

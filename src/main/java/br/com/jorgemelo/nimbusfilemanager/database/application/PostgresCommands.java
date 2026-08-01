@@ -46,4 +46,31 @@ public interface PostgresCommands {
 	 * @return whether the database exists once this returns
 	 */
 	boolean createDatabase(int port, String password);
+
+	/**
+	 * Ends the server through the process the cluster recorded, without running
+	 * anything.
+	 *
+	 * <p>
+	 * The clean stop spawns {@code pg_ctl}, which lives in the folder holding the
+	 * server - and that folder can be gone while the server it started is still
+	 * running, which is how a shutdown once had no way left to run. The cluster
+	 * always knows its own process, so this is the way out that depends on
+	 * nothing being installed.
+	 *
+	 * @return whether a process was found and ended
+	 */
+	boolean stopByRecordedProcess();
+
+	/**
+	 * Whether the process the cluster recorded is still alive.
+	 *
+	 * <p>
+	 * A server outlives the application whenever the JVM dies without closing its
+	 * context - killed, crashed, stopped from the IDE. Nothing runs on the way out
+	 * then, so the next start finds its own server already up; asking it to start
+	 * a second one on the same data is how a start fails for a reason nobody can
+	 * act on.
+	 */
+	boolean running();
 }

@@ -84,6 +84,17 @@ public class EmbeddedClusterService {
 			return null;
 		}
 
+		// A server outlives the application whenever the JVM dies without closing its
+		// context - killed, crashed, stopped from the IDE - because nothing runs on
+		// the way out. Reusing it beats asking pg_ctl to start a second server on the
+		// same data, which fails with a message about a lock file that says nothing
+		// about what actually happened.
+		if (commands.running()) {
+			BootstrapProgress.say("reusing the database already running on port " + stored.port());
+
+			return stored;
+		}
+
 		return startOnAWorkingPort(stored);
 	}
 
@@ -157,7 +168,17 @@ public class EmbeddedClusterService {
 		log.warn("The embedded database did not stop cleanly in time; stopping it immediately. "
 				+ "The next start will recover from the write-ahead log.");
 
-		commands.stop(ClusterStopMode.IMMEDIATE);
+		if (commands.stop(ClusterStopMode.IMMEDIATE)) {
+			return;
+		}
+
+		// Both stops run pg_ctl, which is a file that can be missing while the server
+		// it started is still up - deleting the server folder to reinstall it is
+		// enough. Ending the recorded process is the last way out, and the only one
+		// that needs nothing on disk.
+		if (!commands.stopByRecordedProcess()) {
+			log.error("Could not stop the embedded database; a server may still be running");
+		}
 	}
 
 	/**

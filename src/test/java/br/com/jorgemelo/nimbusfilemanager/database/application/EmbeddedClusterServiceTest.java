@@ -190,6 +190,53 @@ class EmbeddedClusterServiceTest {
 		verify(commands, times(4)).start(anyInt());
 	}
 
+	/**
+	 * A server outlives the application whenever the JVM dies without closing its
+	 * context. Starting a second one on the same data fails with a message about a
+	 * lock file that says nothing about what happened, so the one already running
+	 * is the one to use.
+	 */
+	@Test
+	void reusesAServerLeftRunningByAPreviousRun() throws IOException {
+		existingCluster("17");
+
+		ClusterConnection stored = new ClusterConnection(6432, "kept-password");
+
+		store().save(stored);
+
+		when(commands.running()).thenReturn(true);
+
+		Assertions.assertThat(service().start()).isEqualTo(stored);
+
+		verify(commands, never()).start(anyInt());
+	}
+
+	/**
+	 * Both stops run pg_ctl, and pg_ctl is a file: deleting the server folder to
+	 * reinstall it leaves a running server with no way to ask it to stop. The
+	 * cluster records its own process, so that is the way out that survives.
+	 */
+	@Test
+	void endsTheRecordedProcessWhenNeitherStopCanRun() {
+		when(commands.stop(ClusterStopMode.FAST)).thenReturn(false);
+		when(commands.stop(ClusterStopMode.IMMEDIATE)).thenReturn(false);
+		when(commands.stopByRecordedProcess()).thenReturn(true);
+
+		service().stop();
+
+		verify(commands).stopByRecordedProcess();
+	}
+
+	/** A clean stop leaves nothing for the last resort to do. */
+	@Test
+	void doesNotReachForTheProcessWhenTheServerStopped() {
+		when(commands.stop(ClusterStopMode.FAST)).thenReturn(true);
+
+		service().stop();
+
+		verify(commands, never()).stopByRecordedProcess();
+	}
+
 	private Path existingCluster(String majorVersion) throws IOException {
 		Path cluster = Files.createDirectories(workspace.resolve("database").resolve("cluster"));
 
