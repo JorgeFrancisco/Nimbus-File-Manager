@@ -72,7 +72,7 @@
 	margin-bottom: 8px;
 }
 
-.quarantine-dialog {
+.action-dialog {
 	background: var(--panel);
 	border: 1px solid var(--line);
 	border-radius: 10px;
@@ -82,16 +82,16 @@
 	width: calc(100% - 32px);
 }
 
-.quarantine-dialog::backdrop {
+.action-dialog::backdrop {
 	background: rgba(0, 0, 0, .58);
 }
 
-.quarantine-dialog-header h2 {
+.action-dialog-header h2 {
 	font-size: 18px;
 	margin: 0 0 10px;
 }
 
-.quarantine-dialog .actions {
+.action-dialog .actions {
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	margin-top: 18px;

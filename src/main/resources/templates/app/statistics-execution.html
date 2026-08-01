@@ -20,7 +20,7 @@
 				<div class="panel"><div class="metric" th:text="#{category.files}">Arquivos</div><div class="value" th:text="${execution.filesFound()}">0</div></div>
 				<div class="panel"><div class="metric" th:text="#{common.errors}">Erros</div><div class="value" th:text="${execution.errors()}">0</div></div>
 			</div>
-			<dl class="geo-status-grid">
+			<dl class="status-grid">
 				<div><dt th:text="#{common.start}">Início</dt><dd th:text="${execution.startedAt() != null ? #temporals.format(execution.startedAt(), 'dd/MM/yyyy HH:mm:ss') : '—'}">—</dd></div>
 				<div><dt th:text="#{common.end}">Fim</dt><dd th:text="${execution.finishedAt() != null ? #temporals.format(execution.finishedAt(), 'dd/MM/yyyy HH:mm:ss') : '—'}">—</dd></div>
 				<div><dt th:text="#{statistics.workers}">Workers</dt><dd th:text="${execution.workers() != null ? execution.workers() : '—'}">—</dd></div>

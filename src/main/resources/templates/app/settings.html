@@ -102,7 +102,7 @@
 
 			<p class="muted" th:text="#{settings.diagnostics.privacy}">Senhas e segredos são mascarados, e o histórico de acessos não entra. Confira o conteúdo antes de enviar a alguém.</p>
 
-			<div class="geo-dataset-actions">
+			<div class="panel-actions">
 				<a class="button secondary" th:href="@{/api/diagnostics/export}" download
 					th:text="#{settings.diagnostics.download}">Exportar diagnóstico</a>
 			</div>
@@ -114,12 +114,12 @@
 
 			<div th:if="${inventoryRunning}" class="alert" role="status" th:text="#{settings.backup.inventoryBlocked}">Inventário em andamento — restaurar fica bloqueado até ele terminar.</div>
 
-			<dl class="geo-status-grid">
-				<div class="geo-status-directory"><dt th:text="#{settings.backup.folder}">Pasta</dt><dd th:text="${backupFolder}"></dd></div>
+			<dl class="status-grid">
+				<div class="status-directory"><dt th:text="#{settings.backup.folder}">Pasta</dt><dd th:text="${backupFolder}"></dd></div>
 				<div><dt th:text="#{settings.backup.count}">Backups guardados</dt><dd th:text="${backups.size()}"></dd></div>
 			</dl>
 
-			<div class="geo-dataset-actions">
+			<div class="panel-actions">
 				<form th:action="@{/app/settings/backup/create}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 					<button type="submit" th:text="#{settings.backup.create}">Fazer backup agora</button>
@@ -187,18 +187,18 @@
 					th:text="#{settings.tools.installSuccess}">Ferramentas instaladas.</div>
 			<div th:if="${toolInstallError != null}" class="alert error" th:text="#{settings.tools.lastFailure(${toolInstallError})}"></div>
 
-			<dl class="geo-status-grid">
+			<dl class="status-grid">
 				<div><dt>FFmpeg</dt><dd th:text="${toolStatus.ffmpegAvailable()} ? #{settings.tools.found} : #{settings.tools.missing}"></dd></div>
 				<div><dt>FFprobe</dt><dd th:text="${toolStatus.ffprobeAvailable()} ? #{settings.tools.found} : #{settings.tools.missing}"></dd></div>
 				<div><dt th:text="#{statistics.version}">Versão</dt><dd th:text="${toolStatus.version()} ?: '—'"></dd></div>
 				<div><dt th:text="#{settings.tools.origin}">Origem</dt><dd th:text="${toolStatus.bundled()} ? #{settings.tools.originBundled} : #{settings.tools.originSystem}"></dd></div>
-				<div class="geo-status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${toolStatus.directory()}"></dd></div>
+				<div class="status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${toolStatus.directory()}"></dd></div>
 			</dl>
 
 			<p class="muted" th:unless="${toolStatus.installable()}" th:text="#{settings.tools.packageManagerHint}">Neste sistema, instale pelo gerenciador de pacotes.</p>
 			<p class="muted" th:if="${toolStatus.installable()}" th:text="#{settings.tools.licenseNote}">O pacote é baixado do build oficial do FFmpeg (GPL); a licença fica junto dos executáveis.</p>
 
-			<div class="geo-dataset-actions" th:if="${toolStatus.installable()}">
+			<div class="panel-actions" th:if="${toolStatus.installable()}">
 				<form th:action="@{/app/settings/tools/install}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 					<button type="submit" th:disabled="${toolInstallRunning or inventoryRunning}"
@@ -215,17 +215,17 @@
 			<h2 th:text="#{settings.database.title}">Banco de dados embarcado</h2>
 			<p class="muted" th:text="#{settings.database.intro}">O Nimbus pode gerenciar o proprio PostgreSQL, sem instalacao separada.</p>
 
-			<dl class="geo-status-grid">
+			<dl class="status-grid">
 			<div><dt th:text="#{settings.database.server}">Servidor</dt><dd th:text="${embeddedDatabaseStatus.installed()} ? #{settings.tools.found} : #{settings.tools.missing}"></dd></div>
 			<div><dt th:text="#{statistics.version}">Versao</dt><dd th:text="${embeddedDatabaseStatus.version()} ?: '—'"></dd></div>
 			<div><dt th:text="#{settings.database.inUse}">Em uso</dt><dd th:text="${embeddedDatabaseStatus.serving()} ? #{settings.database.inUseEmbedded} : #{settings.database.inUseExternal}"></dd></div>
-			<div class="geo-status-directory"><dt th:text="#{settings.geo.directory}">Diretorio</dt><dd th:text="${embeddedDatabaseStatus.directory()}"></dd></div>
+			<div class="status-directory"><dt th:text="#{settings.geo.directory}">Diretorio</dt><dd th:text="${embeddedDatabaseStatus.directory()}"></dd></div>
 			</dl>
 
 			<div th:if="${embeddedDatabaseStatus.restartRequired()}" class="alert" role="status"
 				th:text="#{settings.database.restartRequired}">Uma atualizacao baixada agora so sera aplicada na proxima inicializacao.</div>
 
-			<div class="geo-dataset-actions">
+			<div class="panel-actions">
 				<form th:action="@{/app/settings/database/install}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 					<button type="submit"
@@ -265,7 +265,7 @@
 					th:text="#{settings.geo.importSuccess(${#numbers.formatInteger(geoImportResult.importedRecords(), 1, 'POINT')})}"></div>
 			<div th:if="${geoImportError != null}" class="alert error" th:text="#{settings.geo.lastFailure(${geoImportError})}"></div>
 
-			<dl class="geo-status-grid">
+			<dl class="status-grid">
 				<div><dt th:text="#{common.status}">Status</dt><dd th:text="${geoStatus.available()} ? #{settings.geo.available} : #{settings.geo.notInstalled}"></dd></div>
 				<div><dt th:text="#{settings.geo.provider}">Provedor</dt><dd th:text="${geoStatus.provider()} ?: '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.license}">Licença</dt><dd th:text="${geoStatus.license()} ?: '—'"></dd></div>
@@ -274,7 +274,7 @@
 				<div><dt th:text="#{settings.geo.diskSize}">Tamanho em disco</dt><dd th:text="${geoStatus.sizeBytes() > 0} ? ${#numbers.formatDecimal(geoStatus.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB' : '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.downloadedAt}">Baixada em</dt><dd th:text="${geoStatus.downloadedAt() != null} ? ${#temporals.format(geoStatus.downloadedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.lastUpdate}">Última atualização</dt><dd th:text="${geoStatus.importedAt() != null} ? ${#temporals.format(geoStatus.importedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
-				<div class="geo-status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${geoStatus.directory()}"></dd></div>
+				<div class="status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${geoStatus.directory()}"></dd></div>
 				<div><dt th:text="#{settings.geo.cache}">Cache de resoluções</dt><dd th:text="#{settings.geo.cacheEntries(${#numbers.formatInteger(geoCacheSize, 1, 'POINT')})}"></dd></div>
 				<div><dt th:text="#{settings.geo.resolved}">Localizações resolvidas</dt><dd th:text="${#numbers.formatInteger(geoResolvedCount, 1, 'POINT')}"></dd></div>
 				<div><dt th:text="#{settings.geo.pending}">Pendentes (GPS sem localização)</dt><dd th:text="${#numbers.formatInteger(geoPendingCount, 1, 'POINT')}"></dd></div>
@@ -306,7 +306,7 @@
 						<button type="submit" th:disabled="${geoRebuildRunning or geoImportRunning or inventoryRunning or !geoStatus.available()}" th:text="#{settings.geo.rebuild}">Reconstruir</button>
 					</div>
 				</form>
-				<div class="geo-dataset-actions">
+				<div class="panel-actions">
 					<form th:unless="${geoEnabled}" th:action="@{/app/settings/geodata/enable}" method="post">
 						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 						<button type="submit" th:disabled="${geoImportRunning or geoRebuildRunning or inventoryRunning}"

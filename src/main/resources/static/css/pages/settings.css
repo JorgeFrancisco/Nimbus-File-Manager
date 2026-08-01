@@ -88,11 +88,14 @@
 	grid-column: 1;
 }
 
-.geo-status-grid {
+/* Symmetric margin: whatever follows the grid needs the same breathing room the
+   grid gets above it. With a top-only margin the panels that put an action right
+   after the grid - the catalog backup - had the button touching the last row. */
+.status-grid {
 	display: grid;
 	gap: 10px;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
-	margin: 18px 0 0;
+	margin: 18px 0;
 }
 
 /* Divider under the panel intro, matching the line the setting-row panels get from
@@ -143,7 +146,7 @@
 	to { transform: rotate(360deg); }
 }
 
-.geo-status-grid > div {
+.status-grid > div {
 	background: var(--bg-subtle);
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -151,13 +154,13 @@
 	padding: 12px 14px;
 }
 
-.geo-status-grid dt {
+.status-grid dt {
 	color: var(--muted);
 	font-size: 11px;
 	margin-bottom: 5px;
 }
 
-.geo-status-grid dd {
+.status-grid dd {
 	color: var(--text);
 	font-size: 13px;
 	font-weight: 700;
@@ -165,7 +168,7 @@
 	overflow-wrap: anywhere;
 }
 
-.geo-status-grid .geo-status-directory {
+.status-grid .status-directory {
 	grid-column: span 2;
 }
 
@@ -186,7 +189,7 @@
 }
 
 .geo-rebuild-controls,
-.geo-dataset-actions {
+.panel-actions {
 	align-items: center;
 	display: flex;
 	flex-wrap: wrap;
@@ -203,7 +206,7 @@
 	min-width: 180px;
 }
 
-.geo-dataset-actions form {
+.panel-actions form {
 	margin: 0;
 }
 
@@ -212,7 +215,7 @@
    edge of the buttons, reading as an underline of them rather than as the start of the
    list. Two selectors because the geo panel wraps its buttons in one more container. */
 .geo-actions + .setting-row,
-.geo-dataset-actions + .setting-row {
+.panel-actions + .setting-row {
 	margin-top: 14px;
 }
 
@@ -226,7 +229,7 @@
 		width: 100%;
 	}
 
-	.geo-status-grid {
+	.status-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -237,11 +240,11 @@
 }
 
 @media (max-width: 560px) {
-	.geo-status-grid {
+	.status-grid {
 		grid-template-columns: 1fr;
 	}
 
-	.geo-status-grid .geo-status-directory {
+	.status-grid .status-directory {
 		grid-column: auto;
 	}
 
@@ -255,12 +258,12 @@
 		width: 100%;
 	}
 
-	.geo-dataset-actions {
+	.panel-actions {
 		display: grid;
 		grid-template-columns: 1fr;
 	}
 
-	.geo-dataset-actions button {
+	.panel-actions button {
 		width: 100%;
 	}
 }

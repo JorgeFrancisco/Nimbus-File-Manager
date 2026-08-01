@@ -151,8 +151,8 @@
 		</div>
 	</div>
 
-	<dialog id="quarantineConflictDialog" class="quarantine-dialog" aria-labelledby="quarantineConflictTitle">
-		<header class="quarantine-dialog-header">
+	<dialog id="quarantineConflictDialog" class="action-dialog" aria-labelledby="quarantineConflictTitle">
+		<header class="action-dialog-header">
 			<h2 id="quarantineConflictTitle" th:text="#{quarantine.conflict.title}">Conflito no destino</h2>
 		</header>
 		<p><span th:text="#{quarantine.conflict.body.before}">Já existe um arquivo chamado</span> <strong id="quarantineConflictName">arquivo</strong> <span th:text="#{quarantine.conflict.body.after}">na pasta de destino. O que deseja fazer? Nada é sobrescrito.</span></p>
@@ -163,8 +163,8 @@
 		</div>
 	</dialog>
 
-	<dialog id="quarantineOriginDialog" class="quarantine-dialog" aria-labelledby="quarantineOriginTitle">
-		<header class="quarantine-dialog-header">
+	<dialog id="quarantineOriginDialog" class="action-dialog" aria-labelledby="quarantineOriginTitle">
+		<header class="action-dialog-header">
 			<h2 id="quarantineOriginTitle" th:text="#{quarantine.origin.title}">Pasta de origem não existe mais</h2>
 		</header>
 		<p><span th:text="#{quarantine.origin.body.before}">A pasta original de</span> <strong id="quarantineOriginName">arquivo</strong> <span th:text="#{quarantine.origin.body.after}">não existe mais. Escolha outra pasta para restaurar este arquivo.</span></p>
@@ -179,8 +179,8 @@
 		</div>
 	</dialog>
 
-	<dialog id="quarantineDeleteDialog" class="quarantine-dialog" aria-labelledby="quarantineDeleteTitle">
-		<header class="quarantine-dialog-header">
+	<dialog id="quarantineDeleteDialog" class="action-dialog" aria-labelledby="quarantineDeleteTitle">
+		<header class="action-dialog-header">
 			<h2 id="quarantineDeleteTitle" th:text="#{quarantine.delete.title}">Apagar definitivamente</h2>
 		</header>
 		<p><span th:text="#{quarantine.delete.body.before}">Apagar de vez</span> <strong id="quarantineDeleteCountDialog">0</strong> <span th:text="#{quarantine.delete.body.after}">arquivo(s) da quarentena? O arquivo é removido do disco e do banco.</span> <strong th:text="#{quarantine.delete.irreversible}">Esta ação não pode ser desfeita.</strong></p>
@@ -190,8 +190,8 @@
 		</div>
 	</dialog>
 
-	<dialog id="quarantineOutcomeDialog" class="quarantine-dialog" aria-labelledby="quarantineOutcomeTitle">
-		<header class="quarantine-dialog-header">
+	<dialog id="quarantineOutcomeDialog" class="action-dialog" aria-labelledby="quarantineOutcomeTitle">
+		<header class="action-dialog-header">
 			<h2 id="quarantineOutcomeTitle" th:text="#{quarantine.outcome.title}">Nada foi apagado</h2>
 		</header>
 		<p id="quarantineOutcomeMessage"></p>
