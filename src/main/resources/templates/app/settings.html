@@ -211,6 +211,28 @@
 				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
 			</th:block>
 		</section>
+		<section id="database-admin" class="panel section" th:if="${embeddedDatabaseStatus.installable()}">
+			<h2 th:text="#{settings.database.title}">Banco de dados embarcado</h2>
+			<p class="muted" th:text="#{settings.database.intro}">O Nimbus pode gerenciar o proprio PostgreSQL, sem instalacao separada.</p>
+
+			<dl class="geo-status-grid">
+			<div><dt th:text="#{settings.database.server}">Servidor</dt><dd th:text="${embeddedDatabaseStatus.installed()} ? #{settings.tools.found} : #{settings.tools.missing}"></dd></div>
+			<div><dt th:text="#{statistics.version}">Versao</dt><dd th:text="${embeddedDatabaseStatus.version()} ?: '—'"></dd></div>
+			<div><dt th:text="#{settings.database.inUse}">Em uso</dt><dd th:text="${embeddedDatabaseStatus.serving()} ? #{settings.database.inUseEmbedded} : #{settings.database.inUseExternal}"></dd></div>
+			<div class="geo-status-directory"><dt th:text="#{settings.geo.directory}">Diretorio</dt><dd th:text="${embeddedDatabaseStatus.directory()}"></dd></div>
+			</dl>
+
+			<div th:if="${embeddedDatabaseStatus.restartRequired()}" class="alert" role="status"
+				th:text="#{settings.database.restartRequired}">Uma atualizacao baixada agora so sera aplicada na proxima inicializacao.</div>
+
+			<div class="geo-dataset-actions">
+				<form th:action="@{/app/settings/database/install}" method="post">
+					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+					<button type="submit"
+						th:text="${embeddedDatabaseStatus.installed()} ? #{settings.database.update} : #{settings.database.install}">Instalar</button>
+				</form>
+			</div>
+		</section>
 		<section id="geo-admin" class="panel section geo-admin-panel" data-operation-panel="geo"
 				th:attr="data-operation-running=${geoImportRunning or geoRebuildRunning}">
 			<h2 th:text="#{settings.sys.location}">Localização offline</h2>

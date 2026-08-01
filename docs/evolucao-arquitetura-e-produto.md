@@ -65,14 +65,14 @@ menu do explorer (dizer "132 arquivos, 4,2 GB" antes do botão vermelho) deveria
 
 ### Complexidade média — semanas
 
-**P4. Instalar ainda exige um PostgreSQL de pé.** O empacotamento por `jpackage` já existe
-(perfil `installer`, com JRE embutido e workspace na pasta do usuário), então Java e
-Maven saíram do caminho. Falta o banco: o README continua pedindo role e permissões criadas à mão,
-razoável para quem desenvolve e proibitivo para quem só quer organizar fotos.
-*Entrega:* o passo que separa "projeto no GitHub" de "produto". Embarcar os binários oficiais do
-PostgreSQL, com a versão maior fixada e ciclo de vida gerenciado pela aplicação. A troca de versão
-maior é assunto separado, decidido quando chegar: dump lógico (`pg_dump`/`pg_restore`), o backup do
-catálogo, ou os dois — preservando o cluster antigo até confirmar que o novo subiu íntegro.
+**P4. Falta empacotar os binários do PostgreSQL.** O empacotamento por `jpackage` e o ciclo
+de vida do banco embarcado já existem: a aplicação cria o cluster em `<workspace>/database/cluster`,
+gera a senha, escolhe a porta (com retentativa), recusa cluster de outra versão maior sem tocar nele e
+para o servidor no fechamento do contexto. O que falta é o download dos binários oficiais para
+`tools/postgresql` — hoje um passo manual — e validar a imagem empacotada de ponta a ponta numa
+máquina limpa.
+*Entrega:* o passo que separa "projeto no GitHub" de "produto". Sem os binários a aplicação sobe
+e cai para a conexão configurada, então o que falta é distribuição, não comportamento.
 
 **P5. Não há atualização.** Subir de versão é trocar o jar e torcer para as migrations rodarem. Não
 há verificação de versão nova, nem aviso, nem rollback.

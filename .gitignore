@@ -1,6 +1,6 @@
 HELP.md
 
-# Projeto
+# Project
 /target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -45,13 +45,14 @@ HELP.md
 ### VS Code ###
 .vscode/
 
-# Ferramentas de IA (configuração local)
+# AI tooling (local configuration)
 .codex/
 .agents/
 
-# Ferramentas externas (ffmpeg/ffprobe) - a pasta inteira e artefato baixado, recriado pela
-# aplicacao; grande demais pra git, e a licenca GPL que vem junto dos binarios nao entra aqui
-# porque este repositorio nao distribui o ffmpeg. Ver "External Tools" no README.
+# Third-party binaries the application fetches for itself. The whole folder is downloaded and
+# recreatable: too large for git, and the licences that come with the binaries are not kept here
+# because this repository distributes none of them. This covers every subfolder, deliberately
+# without naming them - a list here would become a lie with the first tool added. See the README.
 /tools/
-# Artefatos do mount FUSE (arquivos apagados ainda abertos)
+# FUSE mount artefacts (deleted files still held open)
 .fuse_hidden*

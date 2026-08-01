@@ -8,6 +8,7 @@ import java.util.Comparator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterProtection;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -49,6 +50,17 @@ public class LibraryCatalogCleanupService {
 		Path target = cache.toAbsolutePath().normalize();
 
 		if (!target.startsWith(workspace) || target.equals(workspace) || !Files.exists(target)) {
+			return;
+		}
+
+		// The path above is built from constants, so today it cannot be the cluster.
+		// It is checked anyway because this is the only routine in the application
+		// that empties a workspace subtree: whatever moves the cache, renames a
+		// folder or reuses this method later inherits the guard instead of having to
+		// remember it.
+		if (ClusterProtection.holdsCluster(target)) {
+			log.warn("Refusing to clear {}: it holds the embedded database cluster", target);
+
 			return;
 		}
 

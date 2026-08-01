@@ -1,11 +1,13 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.BackupFolderResolver;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -15,7 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * {@link SettingsBackupWebController}.
  */
 @Component
-public class BackupSettingsModel {
+public class BackupSettingsModel implements SettingsSectionModel {
 
 	private final CatalogBackupService catalogBackupService;
 	private final BackupFolderResolver backupFolderResolver;
@@ -27,7 +29,8 @@ public class BackupSettingsModel {
 		this.backupFolderResolver = backupFolderResolver;
 	}
 
-	public void addTo(Model model) {
+	@Override
+	public void addTo(Model model, Authentication authentication) {
 		model.addAttribute("backups", catalogBackupService.list());
 		model.addAttribute("backupFolder", PathUtils.normalize(backupFolderResolver.folder()));
 	}

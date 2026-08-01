@@ -170,7 +170,7 @@ class ExplorerRenameServiceTest {
 
 		verify(catalogFileRepository, never()).save(any());
 	}
-
+
 	/**
 	 * A folder carries no bytes of its own to verify, so it is moved plainly; the
 	 * catalog rows under it are left to the reconciliation rather than rewritten one

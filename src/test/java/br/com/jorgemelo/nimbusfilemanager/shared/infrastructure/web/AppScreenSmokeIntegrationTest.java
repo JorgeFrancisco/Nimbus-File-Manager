@@ -111,7 +111,8 @@ class AppScreenSmokeIntegrationTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "/app", "/app/timeline", "/app/map", "/app/files", "/app/organization",
-			"/app/duplicates", "/app/quarantine", "/app/conversion", "/app/statistics", "/app/settings", "/app/settings/preferences", "/app/users", "/app/accesses", "/app/account" })
+			"/app/duplicates", "/app/quarantine", "/app/conversion", "/app/statistics", "/app/settings",
+			"/app/settings/preferences", "/app/users", "/app/accesses", "/app/account" })
 	@WithMockUser(username = ADMIN, roles = { "ADMIN", "USER" })
 	void everyScreenRendersForAnAdministrator(String url) throws Exception {
 		renders(url);
@@ -151,9 +152,10 @@ class AppScreenSmokeIntegrationTest {
 	}
 
 	/**
-	 * The comparison screen needs two executions to compare; with fewer it returns to
-	 * the list. Both halves are here because only the second renders that template,
-	 * and only the first documents why the screen is not in the list above.
+	 * The comparison screen needs two executions to compare; with fewer it returns
+	 * to the list. Both halves are here because only the second renders that
+	 * template, and only the first documents why the screen is not in the list
+	 * above.
 	 */
 	@Test
 	@WithMockUser(username = ADMIN, roles = { "ADMIN", "USER" })

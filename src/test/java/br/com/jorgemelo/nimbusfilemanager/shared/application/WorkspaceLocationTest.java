@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.DEVELOPMENT_WORKSPACE;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
+
 import java.nio.file.Path;
 
 import org.assertj.core.api.Assertions;
@@ -20,14 +23,13 @@ class WorkspaceLocationTest {
 
 	@Test
 	void keepsTheWorkspaceBesideTheProjectWhenStartedFromABuild() {
-		Assertions.assertThat(WorkspaceLocation.resolve(null, null, HOME))
-				.isEqualTo(WorkspaceLocation.DEVELOPMENT_WORKSPACE);
+		Assertions.assertThat(WorkspaceLocation.resolve(null, null, HOME)).isEqualTo(DEVELOPMENT_WORKSPACE);
 	}
 
 	@Test
 	void movesTheWorkspaceUnderTheUserHomeWhenInstalled() {
 		Assertions.assertThat(WorkspaceLocation.resolve(null, LAUNCHER, HOME))
-				.isEqualTo(Path.of(HOME, WorkspaceLocation.INSTALLED_FOLDER, "workspace").toString());
+				.isEqualTo(Path.of(HOME, INSTALLED_FOLDER, "workspace").toString());
 	}
 
 	/**
@@ -45,7 +47,6 @@ class WorkspaceLocationTest {
 	/** An empty variable is an unset one, not a request to write at the root. */
 	@Test
 	void treatsABlankConfiguredPathAsUnset() {
-		Assertions.assertThat(WorkspaceLocation.resolve("   ", null, HOME))
-				.isEqualTo(WorkspaceLocation.DEVELOPMENT_WORKSPACE);
+		Assertions.assertThat(WorkspaceLocation.resolve("   ", null, HOME)).isEqualTo(DEVELOPMENT_WORKSPACE);
 	}
 }

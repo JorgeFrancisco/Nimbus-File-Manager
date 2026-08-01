@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
+
 import java.util.Map;
 
 import org.springframework.boot.SpringApplication;
@@ -30,12 +32,12 @@ public class WorkspaceEnvironmentPostProcessor implements EnvironmentPostProcess
 
 	@Override
 	public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-		if (environment.containsProperty(WorkspaceLocation.PROPERTY)) {
+		if (environment.containsProperty(WORKSPACE_PROPERTY)) {
 			return;
 		}
 
 		environment.getPropertySources()
 				.addLast(new MapPropertySource(SOURCE_NAME,
-						Map.of(WorkspaceLocation.PROPERTY, WorkspaceLocation.resolve())));
+						Map.of(WORKSPACE_PROPERTY, WorkspaceLocation.resolve())));
 	}
 }

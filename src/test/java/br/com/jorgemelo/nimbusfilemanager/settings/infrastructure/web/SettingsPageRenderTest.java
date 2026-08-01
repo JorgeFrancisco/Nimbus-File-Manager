@@ -23,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
+import br.com.jorgemelo.nimbusfilemanager.database.application.dto.EmbeddedDatabaseStatus;
+import br.com.jorgemelo.nimbusfilemanager.database.infrastructure.web.EmbeddedDatabaseSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
@@ -81,6 +83,9 @@ class SettingsPageRenderTest {
 
 	@MockitoBean
 	private BackupSettingsModel backupSettingsModel;
+
+	@MockitoBean
+	private EmbeddedDatabaseSettingsModel embeddedDatabaseSettingsModel;
 
 	// Dependencies of the MVC interceptors and of the settings advices the slice
 	// always loads, not of the controller under test. The metadata advice is kept
@@ -143,7 +148,7 @@ class SettingsPageRenderTest {
 					new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, -1));
 
 			return null;
-		}).when(externalToolSettingsModel).addTo(any());
+		}).when(externalToolSettingsModel).addTo(any(), any());
 
 		doAnswer(invocation -> {
 			Model model = invocation.getArgument(0);
@@ -152,7 +157,16 @@ class SettingsPageRenderTest {
 			model.addAttribute("backupFolder", "C:/app/workspace/backup");
 
 			return null;
-		}).when(backupSettingsModel).addTo(any());
+		}).when(backupSettingsModel).addTo(any(), any());
+
+		doAnswer(invocation -> {
+			Model model = invocation.getArgument(0);
+
+			model.addAttribute("embeddedDatabaseStatus",
+				new EmbeddedDatabaseStatus(false, false, null, "C:/app/tools/postgresql", true, false));
+
+			return null;
+		}).when(embeddedDatabaseSettingsModel).addTo(any(), any());
 	}
 
 	private AppSetting setting(String key, String value, String valueType) {
@@ -171,11 +185,11 @@ class SettingsPageRenderTest {
 	}
 
 	/**
-	 * The time zone and the map settings belong to no key-prefix group until a panel
-	 * claims them, and an unclaimed setting is stored, read by the application and
-	 * never rendered. This keeps both panels on screen - and with them the only
-	 * render of the time-zone dropdown, whose matching expression had the same latent
-	 * defect that broke the provider row.
+	 * The time zone and the map settings belong to no key-prefix group until a
+	 * panel claims them, and an unclaimed setting is stored, read by the
+	 * application and never rendered. This keeps both panels on screen - and with
+	 * them the only render of the time-zone dropdown, whose matching expression had
+	 * the same latent defect that broke the provider row.
 	 */
 	@Test
 	void rendersTheSettingsThatBelongToNoOtherGroup() throws Exception {

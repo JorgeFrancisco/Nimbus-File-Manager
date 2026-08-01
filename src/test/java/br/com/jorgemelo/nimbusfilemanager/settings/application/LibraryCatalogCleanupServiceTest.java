@@ -62,6 +62,28 @@ class LibraryCatalogCleanupServiceTest {
 		Assertions.assertThat(service().clear("D:/library")).isZero();
 	}
 
+	/**
+	 * The only routine in the application that empties a workspace subtree. What
+	 * it is pointed at today is built from constants, but a cluster inside the
+	 * tree has to stop it regardless - the catalog is the one thing under the
+	 * workspace that no rebuild brings back.
+	 */
+	@Test
+	void clearShouldRefuseToWipeATreeHoldingTheDatabaseCluster() throws Exception {
+		Path workspace = Files.createDirectories(tempDir.resolve("workspace"));
+		Path cache = Files.createDirectories(workspace.resolve("cache").resolve("thumbnails"));
+		Path cluster = Files.createDirectories(cache.resolve("cluster"));
+		Path data = Files.writeString(cluster.resolve("PG_VERSION"), "17");
+
+		when(catalogFileRepository.deleteWithinLibrary(anyString(), anyString())).thenReturn(7);
+		when(workspaceManager.getWorkspacePath()).thenReturn(workspace);
+		when(workspaceManager.resolve("cache", "thumbnails")).thenReturn(cache);
+
+		Assertions.assertThat(service().clear("D:/library")).isEqualTo(7);
+
+		Assertions.assertThat(Files.exists(data)).isTrue();
+	}
+
 	private LibraryCatalogCleanupService service() {
 		return new LibraryCatalogCleanupService(catalogFileRepository, workspaceManager);
 	}

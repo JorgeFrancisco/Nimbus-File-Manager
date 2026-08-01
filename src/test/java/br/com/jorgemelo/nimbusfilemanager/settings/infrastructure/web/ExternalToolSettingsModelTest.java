@@ -39,7 +39,7 @@ class ExternalToolSettingsModelTest {
 
 		Model attributes = new ExtendedModelMap();
 
-		model.addTo(attributes);
+		model.addTo(attributes, null);
 
 		Assertions.assertThat(attributes.asMap()).containsEntry("toolStatus", STATUS)
 				.containsEntry("toolInstallRunning", true).containsEntry("toolInstallProgress", snapshot);
@@ -57,7 +57,7 @@ class ExternalToolSettingsModelTest {
 
 		Model attributes = new ExtendedModelMap();
 
-		model.addTo(attributes);
+		model.addTo(attributes, null);
 
 		Assertions.assertThat(attributes.asMap()).containsEntry("toolInstallError", "Download failed with HTTP 404")
 				.containsEntry("toolInstallResult", STATUS);

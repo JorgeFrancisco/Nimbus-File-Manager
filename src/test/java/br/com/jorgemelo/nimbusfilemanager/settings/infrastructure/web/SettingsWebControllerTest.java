@@ -45,8 +45,8 @@ class SettingsWebControllerTest {
 	private final QuarantineFolderPolicy quarantineFolderPolicy = new QuarantineFolderPolicy(settings);
 	private final ExternalToolSettingsModel externalToolSettingsModel = mock(ExternalToolSettingsModel.class);
 	private final SettingsWebController controller = new SettingsWebController(settings, quarantineFolderPolicy,
-			duplicateExclusions, preferences, geoDatasetSettingsModel, externalToolSettingsModel,
-			mock(BackupSettingsModel.class));
+			duplicateExclusions, preferences,
+			List.of(geoDatasetSettingsModel, externalToolSettingsModel, mock(BackupSettingsModel.class)));
 
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
 

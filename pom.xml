@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.31.0.106</version>
+	<version>5.32.0.107</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -404,6 +404,9 @@
 					     otherwise fetch a ~70 MB archive once per context on a Windows developer
 					     machine. Its own test drives the component directly. -->
 					<nimbus-file-manager.tools.auto-install>false</nimbus-file-manager.tools.auto-install>
+					<!-- Same reason, and a stronger one: the PostgreSQL archive is several hundred MB,
+					     and a test context that fetched it would do so before it could report why. -->
+					<nimbus-file-manager.database.auto-install>false</nimbus-file-manager.database.auto-install>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>
@@ -549,7 +552,7 @@
 		     Native installer, built by the JDK's own jpackage - no extra tooling to install
 		     and nothing to keep in step with the Java version. Off by default because it
 		     only runs on the platform it targets: mvn -Pinstaller package
-		
+
 		     The default type is app-image, a self-contained folder that needs nothing else.
 		     Setting installer.type to msi produces a real installer, which on Windows also
 		     requires WiX on the PATH.
@@ -616,6 +619,16 @@
 										<mkdir dir="${project.build.directory}/installer/input"/>
 										<copy file="${project.build.directory}/${project.build.finalName}.jar"
 												todir="${project.build.directory}/installer/input"/>
+										<!-- The embedded PostgreSQL, when it has been staged into tools/postgresql. A few
+										     hundred MB of third-party binaries do not belong in the repository, so the copy
+										     is conditional: without them the packaged application still runs and falls back
+										     to a configured database, which is what the BINARIES_MISSING outcome reports.
+										     jpackage puts everything from input under the image app folder, which is where
+										     ClusterLayout looks once the launcher marker is set. -->
+										<copy todir="${project.build.directory}/installer/input/tools/postgresql"
+												failonerror="false" quiet="true">
+											<fileset dir="${project.basedir}/tools/postgresql" erroronmissingdir="false"/>
+										</copy>
 									</target>
 								</configuration>
 							</execution>

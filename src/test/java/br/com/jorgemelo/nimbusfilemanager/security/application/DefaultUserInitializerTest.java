@@ -48,7 +48,8 @@ class DefaultUserInitializerTest {
 
 		when(encoder.encode("strongSecret")).thenReturn("hash");
 
-		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "strongSecret")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "strongSecret"))
+				.run(null);
 
 		var captor = ArgumentCaptor.forClass(AppUser.class);
 
@@ -72,7 +73,8 @@ class DefaultUserInitializerTest {
 		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
 		when(encoder.matches("configured-value", "legacy-hash")).thenReturn(true);
 
-		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value")).run(null);
+		new DefaultUserInitializer(repository, encoder, credential, props("admin@example.com", "configured-value"))
+				.run(null);
 
 		Assertions.assertThat(admin.getPasswordChangeRequired()).isTrue();
 

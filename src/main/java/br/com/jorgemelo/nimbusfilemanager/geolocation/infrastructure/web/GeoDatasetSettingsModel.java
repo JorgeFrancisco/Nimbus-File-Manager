@@ -16,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.ReverseGeocodi
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
@@ -27,7 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
  * matching write actions live in {@link SettingsGeodataWebController}.
  */
 @Component
-public class GeoDatasetSettingsModel {
+public class GeoDatasetSettingsModel implements SettingsSectionModel {
 
 	private final OfflineGeoDataset offlineGeoDataset;
 	private final MediaLocationService mediaLocationService;

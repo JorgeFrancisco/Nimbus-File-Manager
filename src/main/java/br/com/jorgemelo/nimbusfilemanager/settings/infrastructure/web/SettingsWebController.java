@@ -13,9 +13,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoDatasetSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.FileExplorerService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationConstants;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
@@ -25,6 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.AppTimeZones;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.UpdatePreferencesForm;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
@@ -56,36 +55,30 @@ public class SettingsWebController extends LocalizedComponent {
 	private final QuarantineFolderPolicy quarantineFolderPolicy;
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final UserPagePreferenceService userPagePreferenceService;
-	private final GeoDatasetSettingsModel geoDatasetSettingsModel;
-	private final ExternalToolSettingsModel externalToolSettingsModel;
-	private final BackupSettingsModel backupSettingsModel;
+	private final List<SettingsSectionModel> sectionModels;
 
 	@Autowired
 	public SettingsWebController(AppSettingService appSettingService, QuarantineFolderPolicy quarantineFolderPolicy,
 			DuplicateExclusionService duplicateExclusionService, UserPagePreferenceService userPagePreferenceService,
-			GeoDatasetSettingsModel geoDatasetSettingsModel, ExternalToolSettingsModel externalToolSettingsModel,
-			BackupSettingsModel backupSettingsModel) {
+			List<SettingsSectionModel> sectionModels) {
 		this.appSettingService = appSettingService;
 		this.quarantineFolderPolicy = quarantineFolderPolicy;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.userPagePreferenceService = userPagePreferenceService;
-		this.geoDatasetSettingsModel = geoDatasetSettingsModel;
-		this.externalToolSettingsModel = externalToolSettingsModel;
-		this.backupSettingsModel = backupSettingsModel;
+		this.sectionModels = sectionModels;
 	}
 
 	@GetMapping("/app/settings")
 	public String settings(Authentication authentication, Model model) {
 		model.addAttribute("settings", appSettingService.list());
+
+		sectionModels.forEach(section -> section.addTo(model, authentication));
 		model.addAttribute("timezones", AppTimeZones.OPTIONS);
 		model.addAttribute("activeTab", "system");
 		model.addAttribute("duplicateFileExclusions", duplicateExclusionService.fileExclusions());
 		model.addAttribute("duplicateFolderExclusions", duplicateExclusionService.folderExclusions());
 		model.addAttribute("quarantineWarning", quarantineFolderPolicy.warning().orElse(null));
 
-		geoDatasetSettingsModel.addTo(model, authentication);
-		externalToolSettingsModel.addTo(model);
-		backupSettingsModel.addTo(model);
 		addPreferencesModel(model, authentication);
 
 		return "app/settings";

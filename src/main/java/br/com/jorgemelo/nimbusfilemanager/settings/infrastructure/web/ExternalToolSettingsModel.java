@@ -1,11 +1,13 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.web;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 
 /**
  * Read-side assembler for the external-tools section of the settings page: what
@@ -14,7 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInsta
  * constructor; the matching action lives in {@link SettingsToolsWebController}.
  */
 @Component
-public class ExternalToolSettingsModel {
+public class ExternalToolSettingsModel implements SettingsSectionModel {
 
 	private final ExternalToolInstaller externalToolInstaller;
 	private final ExternalToolInstallAsyncRunner installAsyncRunner;
@@ -26,7 +28,8 @@ public class ExternalToolSettingsModel {
 		this.installAsyncRunner = installAsyncRunner;
 	}
 
-	public void addTo(Model model) {
+	@Override
+	public void addTo(Model model, Authentication authentication) {
 		model.addAttribute("toolStatus", externalToolInstaller.status());
 		model.addAttribute("toolInstallRunning", installAsyncRunner.isRunning());
 		model.addAttribute("toolInstallError", installAsyncRunner.lastError());

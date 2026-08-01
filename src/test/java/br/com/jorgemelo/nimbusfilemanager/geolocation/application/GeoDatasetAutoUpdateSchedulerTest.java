@@ -61,7 +61,8 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 	private void installed(boolean available) {
 		lenient().when(offlineGeoDataset.status()).thenReturn(available
-				? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, null, "C:/geo", null, "geoBoundaries", "CC BY")
+				? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, null, "C:/geo", null, "geoBoundaries",
+						"CC BY")
 				: OfflineGeoDatasetStatus.unavailable("C:/geo", null));
 	}
 

@@ -1160,9 +1160,34 @@ A real installer instead of a folder:
 `jpackage` fails with a message naming the missing tool. The default stays `app-image` so the
 profile works on a plain machine.
 
-What is packaged still expects **PostgreSQL to exist** — see [Requirements](#running). Embedding
-the database is a separate step; moving between major versions of the server, when it comes, is its
-own decision.
+### The embedded database
+
+A packaged copy manages its own PostgreSQL: the cluster lives in
+`<workspace>/database/cluster`, is created on first start with a generated password, and
+listens on 127.0.0.1 only. The port it bound and that password are kept in
+`<workspace>/database/cluster.properties`, so a restart reuses what worked.
+
+Whether a run manages its own server is decided in one place —
+`EmbeddedDatabaseActivation` — from four signals, in this order:
+
+| Order | Signal | Effect |
+| --- | --- | --- |
+| 1 | `nimbus-file-manager.database.embedded` | wins in both directions; anything that is not `true` counts as off |
+| 2 | `NIMBUS_FILE_MANAGER_DB_HOST` or `SPRING_DATASOURCE_URL` | a database configured by hand keeps its data; the cluster stays down |
+| 3 | `jpackage.app-path` | an installed copy manages its own |
+| 4 | — | off: a build is a developer machine, which already has a server |
+
+The resolved `spring.datasource.url` deliberately decides nothing — the packaged properties
+always define one, so its presence distinguishes nothing. Only a value somebody set counts.
+
+The major version is pinned. A cluster written by another one is refused and left exactly as
+it is, rather than opened, migrated or replaced: moving between major versions of the server
+is its own decision, to be taken when it comes.
+
+The server binaries are **not** in the repository. Stage them in `tools/postgresql` (the
+`bin` folder holding `initdb`, `pg_ctl`, `postgres` and `createdb`) before building the
+installer and they are packaged with it. Without them the application starts anyway and
+falls back to the configured connection.
 
 ### Where an installed copy keeps its data
 
@@ -1193,8 +1218,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2359 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.02% branch, 98.07% line, 98.75% method, 100.00% class
+Tests:       2415 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.40% instruction, 92.05% branch, 97.98% line, 98.78% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1209,6 +1234,13 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 Floor:  98.47% instruction, 92.01% branch, 98.08% line, 98.74% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
+
+Branch and method currently sit above the floor, instruction and line 0.07 and 0.10 below it.
+The gap is 16 lines in the embedded-database domain that no honest test reaches: the I/O
+`catch` blocks of the installer, the cluster service and the download, plus the containment
+check that decides whether an archive entry may be written — which the folder filter ahead of
+it already rejects every escaping name for, and which stays because that is a property of the
+filter rather than a guarantee. The floor was left where it is rather than lowered to match.
 
 **All five metrics reached their goal**, line last — it was the one still short. The
 goals above are the next step the ratchet asks for, set from the numbers actually

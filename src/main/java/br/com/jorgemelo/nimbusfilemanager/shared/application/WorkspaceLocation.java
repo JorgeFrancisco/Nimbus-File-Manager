@@ -1,5 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.DEVELOPMENT_WORKSPACE;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_MARKER;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_ENVIRONMENT_VARIABLE;
+
 import java.nio.file.Path;
 
 /**
@@ -23,25 +28,11 @@ import java.nio.file.Path;
  */
 public final class WorkspaceLocation {
 
-	public static final String PROPERTY = "nimbus-file-manager.workspace";
-
-	/** Read by the container, the compose file and anyone scripting a run. */
-	static final String ENVIRONMENT_VARIABLE = "NIMBUS_FILE_MANAGER_WORKSPACE";
-
-	/**
-	 * Set by the launcher of a jpackage image and by nothing else, which is how
-	 * the application tells an installation from a build.
-	 */
-	static final String INSTALLED_MARKER = "jpackage.app-path";
-
-	static final String INSTALLED_FOLDER = "Nimbus File Manager";
-	static final String DEVELOPMENT_WORKSPACE = "./workspace";
-
 	private WorkspaceLocation() {
 	}
 
 	public static String resolve() {
-		return resolve(System.getenv(ENVIRONMENT_VARIABLE), System.getProperty(INSTALLED_MARKER),
+		return resolve(System.getenv(WORKSPACE_ENVIRONMENT_VARIABLE), System.getProperty(INSTALLED_MARKER),
 				System.getProperty("user.home"));
 	}
 

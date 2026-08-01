@@ -224,8 +224,8 @@
 }
 
 /*
- * Cada item do menu tem sua propria cor, ecoando a paleta de tipos de arquivo usada em
- * pages/files.css (.file-symbol), so que ajustada para contraste sobre o fundo navy do sidebar.
+ * Each menu item carries its own colour, echoing the file-type palette used in
+ * pages/files.css (.file-symbol), adjusted for contrast against the navy sidebar.
  */
 .sidebar .nav a .bi-speedometer2 { color: #38bdf8; }
 .sidebar .nav a .bi-calendar3 { color: #c084fc; }
