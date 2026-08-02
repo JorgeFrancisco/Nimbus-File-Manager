@@ -3,12 +3,13 @@ package br.com.jorgemelo.nimbusfilemanager.database.application;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.CLUSTER_FOLDER;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.CLUSTER_PROPERTIES;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.VERSION_FILE;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_MARKER;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ToolFolders.POSTGRESQL;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceFolders;
 
 /**
@@ -28,18 +29,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.Workspace
  */
 public final class ClusterLayout {
 
-	private static final String BUNDLED_FOLDER = "tools";
-	private static final String SERVER_FOLDER = "postgresql";
-	private static final String BINARY_FOLDER = "bin";
-
-	/** Where jpackage puts everything it was given as input. */
-	private static final String APPLICATION_FOLDER = "app";
-
 	private final Path workspace;
 	private final Path binaries;
 
 	public ClusterLayout(Path workspace) {
-		this(workspace, bundledBinaries(System.getProperty(INSTALLED_MARKER)));
+		this(workspace, ToolsLocation.of(workspace, POSTGRESQL));
 	}
 
 	/** Takes the binary folder so a test can point at one it controls. */
@@ -60,29 +54,6 @@ public final class ClusterLayout {
 	 */
 	public Path clusterProperties() {
 		return workspace.resolve(WorkspaceFolders.DATABASE).resolve(CLUSTER_PROPERTIES).normalize();
-	}
-
-	/**
-	 * Where the packaged server is, which is not the same place in a build and in
-	 * an installation.
-	 *
-	 * <p>
-	 * A relative path is resolved against the working directory, and an installed
-	 * copy is started from wherever its shortcut happens to point - the Desktop,
-	 * {@code C:\Windows\System32}, anywhere. The launcher's own path is the one
-	 * thing that always says where the installation is, so when the marker is there
-	 * the binaries are found beside it rather than beside whoever started it.
-	 */
-	static Path bundledBinaries(String installedMarker) {
-		Path relative = Path.of(BUNDLED_FOLDER, SERVER_FOLDER, BINARY_FOLDER);
-
-		if (installedMarker == null || installedMarker.isBlank()) {
-			return relative;
-		}
-
-		Path launcher = Path.of(installedMarker).toAbsolutePath().getParent();
-
-		return launcher == null ? relative : launcher.resolve(APPLICATION_FOLDER).resolve(relative);
 	}
 
 	/** Where the server is unpacked: the folder holding {@code bin}. */

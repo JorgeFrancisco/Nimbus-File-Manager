@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.infrastructure;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ToolFolders.POSTGRESQL;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,24 +17,22 @@ import org.springframework.stereotype.Component;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogDump;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.JdbcUrls;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.DatabaseConnection;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Runs {@code pg_dump} and {@code pg_restore}.
  *
  * <p>
- * The binaries are looked up beside the packaged server first and fall back to
- * the bare command name, which the operating system resolves through PATH -
- * the same two-step the external media tools use. A developer running against
- * their own PostgreSQL gets the one on their PATH; a packaged installation gets
- * the one it shipped, which is guaranteed to match the server's major version.
+ * The tools are looked for in the workspace first - the same folder the
+ * embedded cluster was installed into, so they match the server's major version
+ * by construction - and fall back to the bare command name, which the operating
+ * system resolves through PATH. A developer running against their own
+ * PostgreSQL gets the one on their PATH.
  */
 @Slf4j
 @Component
 public class PostgresDumpProcessRunner implements CatalogDump {
-
-	/** Where the packaged server lives, relative to the working directory. */
-	private static final Path BUNDLED = Path.of("tools", "postgresql", "bin");
 
 	/** Ownership and grants belong to the machine restoring, not to the one that
 	 * took the dump: an installation restoring a developer's backup is normal. */
@@ -45,6 +45,9 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 	private static final int TIMEOUT_MINUTES = 120;
 
 	private final DatabaseConnection connection;
+
+	/** The same folder the embedded cluster runs from, when there is one. */
+	private final Path binaries = ToolsLocation.of(POSTGRESQL);
 
 	/** What the last failing command printed, for the caller to report. */
 	private final AtomicReference<String> lastOutput = new AtomicReference<>("");
@@ -155,10 +158,10 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 	/** The packaged binary when it is there, otherwise the bare command. */
 	private String executable(String name) {
 		for (String candidate : List.of(name, name + ".exe")) {
-			Path bundled = BUNDLED.resolve(candidate);
+			Path executable = binaries.resolve(candidate);
 
-			if (Files.isRegularFile(bundled)) {
-				return bundled.toAbsolutePath().toString();
+			if (Files.isRegularFile(executable)) {
+				return executable.toAbsolutePath().toString();
 			}
 		}
 

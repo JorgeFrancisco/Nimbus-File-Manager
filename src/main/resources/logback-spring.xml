@@ -13,7 +13,11 @@
 	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-	<springProperty name="WORKSPACE" source="nimbus-file-manager.workspace" defaultValue="./workspace"/>
+	<!-- The property is published before Logback reads it, by the same class the rest of
+	     the application asks. The default only covers a run that somehow bypassed that,
+	     and it names the same place rather than a second opinion beside the project. -->
+	<springProperty name="WORKSPACE" source="nimbus-file-manager.workspace"
+			defaultValue="${user.home}/Nimbus File Manager/workspace"/>
 
 	<property name="LOG_DIR" value="${WORKSPACE}/logs"/>
 

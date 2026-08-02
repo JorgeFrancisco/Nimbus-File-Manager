@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.34.7.119</version>
+	<version>5.35.0.121</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -407,6 +407,16 @@
 					<!-- Same reason, and a stronger one: the PostgreSQL archive is several hundred MB,
 					     and a test context that fetched it would do so before it could report why. -->
 					<nimbus-file-manager.database.auto-install>false</nimbus-file-manager.database.auto-install>
+					<!-- The real workspace lives under the user's home, and the suite must never
+					     write into it: a test that creates folders, logs or a cluster would be
+					     doing it inside the installation people actually use. This keeps the run
+					     inside target/, which `mvn clean` owns. -->
+					<nimbus-file-manager.workspace>${project.build.directory}/test-workspace</nimbus-file-manager.workspace>
+					<!-- Read from the real workspace, written to never: the backup tests need an
+					     actual pg_dump and the media tests an actual ffmpeg. A machine without
+					     them - the CI runner - simply finds nothing here and falls back to PATH,
+					     which is where the workflow installs the PostgreSQL client. -->
+					<nimbus-file-manager.tools>${user.home}/Nimbus File Manager/workspace/tools</nimbus-file-manager.tools>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>
@@ -619,16 +629,11 @@
 										<mkdir dir="${project.build.directory}/installer/input"/>
 										<copy file="${project.build.directory}/${project.build.finalName}.jar"
 												todir="${project.build.directory}/installer/input"/>
-										<!-- The embedded PostgreSQL, when it has been staged into tools/postgresql. A few
-										     hundred MB of third-party binaries do not belong in the repository, so the copy
-										     is conditional: without them the packaged application still runs and falls back
-										     to a configured database, which is what the BINARIES_MISSING outcome reports.
-										     jpackage puts everything from input under the image app folder, which is where
-										     ClusterLayout looks once the launcher marker is set. -->
-										<copy todir="${project.build.directory}/installer/input/tools/postgresql"
-												failonerror="false" quiet="true">
-											<fileset dir="${project.basedir}/tools/postgresql" erroronmissingdir="false"/>
-										</copy>
+										<!-- Nothing else goes in. PostgreSQL and ffmpeg used to be staged into the image,
+										     which meant the machine building the installer had to have downloaded them
+										     first - a pipeline never has - and put hundreds of MB of third-party binaries
+										     inside a folder an installation may not be able to write to. Every tool is
+										     downloaded on first start into the workspace instead. -->
 									</target>
 								</configuration>
 							</execution>

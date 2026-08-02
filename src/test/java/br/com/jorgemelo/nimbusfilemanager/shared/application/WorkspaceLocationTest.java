@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.DEVELOPMENT_WORKSPACE;
 import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_FOLDER;
 
 import java.nio.file.Path;
 
@@ -10,43 +10,44 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Where the workspace lands, which is the one decision three different readers
- * depend on. An installed copy sits in a folder the user cannot write to, so
- * the relative default that serves development would make the application fail
- * on its first log line - and that failure looks like anything but a permission
- * problem.
+ * depend on. It is the same place in every mode on purpose: while a build wrote
+ * beside the project instead, the installed layout was exercised only by the
+ * packaged copy, and its bugs were found by running that copy rather than by
+ * any test.
  */
 class WorkspaceLocationTest {
 
 	private static final String HOME = "C:/Users/someone";
 
-	private static final String LAUNCHER = "C:/Program Files/Nimbus File Manager/Nimbus File Manager.exe";
+	private static final String EXPECTED = Path.of(HOME, INSTALLED_FOLDER, WORKSPACE_FOLDER).toString();
 
 	@Test
-	void keepsTheWorkspaceBesideTheProjectWhenStartedFromABuild() {
-		Assertions.assertThat(WorkspaceLocation.resolve(null, null, HOME)).isEqualTo(DEVELOPMENT_WORKSPACE);
-	}
-
-	@Test
-	void movesTheWorkspaceUnderTheUserHomeWhenInstalled() {
-		Assertions.assertThat(WorkspaceLocation.resolve(null, LAUNCHER, HOME))
-				.isEqualTo(Path.of(HOME, INSTALLED_FOLDER, "workspace").toString());
+	void putsTheWorkspaceUnderTheUserHomeWhenNothingIsConfigured() {
+		Assertions.assertThat(WorkspaceLocation.resolve(null, null, HOME)).isEqualTo(EXPECTED);
 	}
 
 	/**
-	 * A configured path is a decision already taken - a second disk, a shared
-	 * folder, the container's volume - and being installed does not override it.
+	 * The environment variable is how a container and the compose file point at a
+	 * mounted volume, so it has to be read when no property was set.
 	 */
 	@Test
-	void respectsAConfiguredPathInEitherLayout() {
-		Assertions.assertThat(WorkspaceLocation.resolve("D:/nimbus/workspace", LAUNCHER, HOME))
-				.isEqualTo("D:/nimbus/workspace");
-		Assertions.assertThat(WorkspaceLocation.resolve("D:/nimbus/workspace", null, HOME))
+	void takesTheEnvironmentVariableWhenNoPropertyWasSet() {
+		Assertions.assertThat(WorkspaceLocation.resolve(null, "/data/workspace", HOME)).isEqualTo("/data/workspace");
+	}
+
+	/**
+	 * The property wins, and that is what keeps a test run - which sets it - from
+	 * ever being pointed at the workspace someone is actually using.
+	 */
+	@Test
+	void letsThePropertyOverrideTheEnvironmentVariable() {
+		Assertions.assertThat(WorkspaceLocation.resolve("D:/nimbus/workspace", "/data/workspace", HOME))
 				.isEqualTo("D:/nimbus/workspace");
 	}
 
-	/** An empty variable is an unset one, not a request to write at the root. */
+	/** An empty value is an unset one, not a request to write at the root. */
 	@Test
-	void treatsABlankConfiguredPathAsUnset() {
-		Assertions.assertThat(WorkspaceLocation.resolve("   ", null, HOME)).isEqualTo(DEVELOPMENT_WORKSPACE);
+	void treatsBlankValuesAsUnset() {
+		Assertions.assertThat(WorkspaceLocation.resolve("   ", "  ", HOME)).isEqualTo(EXPECTED);
 	}
 }

@@ -1,9 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.DEVELOPMENT_WORKSPACE;
 import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_MARKER;
 import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_ENVIRONMENT_VARIABLE;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_FOLDER;
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 
 import java.nio.file.Path;
 
@@ -20,11 +20,13 @@ import java.nio.file.Path;
  * database in another.
  *
  * <p>
- * An installed copy writes under the user's home instead of next to the
- * executable: an installation lives in a folder the user cannot write to, and a
- * workspace that cannot be created takes the application with it. Started from
- * a build, the relative default keeps everything beside the project, which is
- * what development expects.
+ * It is always under the user's home, whether the copy was installed or started
+ * from a build. An installation lives in a folder the user cannot write to, and
+ * a workspace that cannot be created takes the application with it - but the
+ * stronger reason is that one location means development exercises the very
+ * layout that ships. While a build wrote beside the project instead, the
+ * packaged copy was the only one that ever ran the installed layout, and it
+ * took running it to find that it could not locate its own {@code pg_dump}.
  */
 public final class WorkspaceLocation {
 
@@ -32,25 +34,32 @@ public final class WorkspaceLocation {
 	}
 
 	public static String resolve() {
-		return resolve(System.getenv(WORKSPACE_ENVIRONMENT_VARIABLE), System.getProperty(INSTALLED_MARKER),
+		return resolve(System.getProperty(WORKSPACE_PROPERTY), System.getenv(WORKSPACE_ENVIRONMENT_VARIABLE),
 				System.getProperty("user.home"));
 	}
 
 	/**
 	 * Takes what it depends on so every layout can be exercised; production reads
-	 * the environment and the launcher. The marker arrives as the raw property
-	 * rather than a boolean so that deciding what counts as installed stays here,
-	 * where a test reaches it, instead of on the untestable side of the call.
+	 * the property, the environment and the user's home.
+	 *
+	 * <p>
+	 * The property wins over the variable so that a test run, which sets the
+	 * property, can never be pointed at the workspace someone is actually using.
 	 */
-	static String resolve(String configured, String installedMarker, String userHome) {
-		if (configured != null && !configured.isBlank()) {
-			return configured;
+	static String resolve(String property, String environment, String userHome) {
+		if (isSet(property)) {
+			return property;
 		}
 
-		if (installedMarker != null) {
-			return Path.of(userHome, INSTALLED_FOLDER, "workspace").toString();
+		if (isSet(environment)) {
+			return environment;
 		}
 
-		return DEVELOPMENT_WORKSPACE;
+		return Path.of(userHome, INSTALLED_FOLDER, WORKSPACE_FOLDER).toString();
+	}
+
+	/** An empty value is an unset one, not a request to write at the root. */
+	private static boolean isSet(String value) {
+		return value != null && !value.isBlank();
 	}
 }

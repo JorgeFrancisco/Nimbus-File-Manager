@@ -242,6 +242,22 @@ Cada classe deve ter uma responsabilidade predominante. Quando responsabilidades
 
 ---
 
+# Clone limpo executa
+
+Todo o projeto pressupõe que quem chegou **acabou de clonar**, numa máquina onde nada foi preparado à mão: sem ffmpeg, sem PostgreSQL, sem pasta de ferramentas, sem workspace, sem variável de ambiente. Nesse estado, **a suíte roda e a aplicação sobe** — baixando na própria execução o que faltar. É a mesma promessa do instalador: copiar e abrir.
+
+O que isso obriga:
+
+- **Nada de pré-requisito manual.** Se um recurso precisa de um binário externo, quem o busca é a aplicação (como já fazem o ffmpeg e o PostgreSQL embarcado), não um passo de README que alguém tem que lembrar de executar.
+- **Toda pasta é criada sob demanda**, no primeiro uso. Nenhum caminho de execução pressupõe diretório preexistente.
+- **Teste que depende de binário externo se auto-pula** (`@EnabledIf`) em vez de falhar. Falhar por ausência de dependência externa transforma "clonei agora" em build vermelho, e ensina a ignorar vermelho. O CI instala o que precisa e, lá, esses testes rodam de verdade.
+- **Nenhum caminho depende de artefato que só existe na máquina de quem desenvolveu.** Se um teste passa localmente porque havia uma pasta baixada meses atrás, ele não está testando o que parece — foi assim que a busca de binários ficou quebrada no empacotado sem ninguém notar.
+- **Escrita vai para o workspace**, nunca para dentro da instalação: um programa instalado pode estar numa pasta somente-leitura, e artefato baixado é dado do usuário, não parte do programa.
+
+*Motivo:* o produto está sendo distribuído. "Funciona aqui" é uma afirmação sobre a máquina de uma pessoa; "funciona num clone limpo" é uma afirmação sobre o produto — e é a única que vale para quem instala.
+
+---
+
 # Manipulação de arquivos
 
 - **Somente arquivos físicos:** nunca seguir symlink, junction ou atalho `.lnk`. Usar `PhysicalFilePolicy.isProcessable`; nunca `FileVisitOption.FOLLOW_LINKS`.

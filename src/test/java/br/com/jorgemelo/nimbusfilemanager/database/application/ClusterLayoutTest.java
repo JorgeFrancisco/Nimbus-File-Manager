@@ -8,6 +8,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
+
 /**
  * Where the cluster and its server live. Getting a path wrong here does not
  * fail loudly - it creates a second, empty cluster beside the real one and
@@ -56,31 +58,14 @@ class ClusterLayoutTest {
 	}
 
 	/**
-	 * A build resolves the server against the working directory; an installation
-	 * cannot, because it is started from wherever its shortcut points. The launcher
-	 * path is the only thing that always says where the files are.
+	 * Where a tool lives is {@link ToolsLocation}'s answer, tested there; this
+	 * pins that the cluster asks for the PostgreSQL folder and appends the
+	 * executable it wants, rather than building a path of its own.
 	 */
 	@Test
-	void findsThePackagedServerBesideTheLauncherWhenInstalled() {
-		Assertions.assertThat(ClusterLayout.bundledBinaries(null)).isEqualTo(Path.of("tools", "postgresql", "bin"));
-
-		Path installed = ClusterLayout.bundledBinaries("C:/Program Files/Nimbus/Nimbus.exe");
-
-		Assertions.assertThat(installed).isAbsolute().endsWithRaw(Path.of("app", "tools", "postgresql", "bin"));
-	}
-
-	/**
-	 * A marker that is blank, or that names something with no folder above it, says
-	 * nothing about where the installation is - and a path built from it would
-	 * point at the filesystem root. Both fall back to the build layout.
-	 */
-	@Test
-	void fallsBackToTheBuildLayoutWhenTheMarkerSaysNothingUsable() {
-		Path relative = Path.of("tools", "postgresql", "bin");
-
-		Assertions.assertThat(ClusterLayout.bundledBinaries("   ")).isEqualTo(relative);
-		Assertions.assertThat(ClusterLayout.bundledBinaries(Path.of("/").toAbsolutePath().toString()))
-				.isEqualTo(relative);
+	void asksTheSharedToolsLocationForItsServer(@TempDir Path workspace) {
+		Assertions.assertThat(new ClusterLayout(workspace).executable("pg_ctl"))
+				.isEqualTo(ToolsLocation.of(workspace, "postgresql").resolve("pg_ctl.exe"));
 	}
 
 	@Test

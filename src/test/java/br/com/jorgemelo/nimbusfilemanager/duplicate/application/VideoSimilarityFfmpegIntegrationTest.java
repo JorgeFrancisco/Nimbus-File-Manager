@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ToolFolders.FFMPEG;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,6 +30,8 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFra
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
@@ -37,7 +41,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
  * generates synthetic clips, runs the actual frame extraction + pHash pipeline
  * and asserts the robustness targets. Runs only where the bundled Windows
  * ffmpeg is present (like every other external-process glue, it is skipped on
- * the Linux CI, which has no {@code tools/ffmpeg/bin/ffmpeg.exe}); this is the
+ * the Linux CI, which has no ffmpeg in its workspace); this is the
  * manual/local verification the {@code *ProcessRunner} coverage exclusion
  * refers to.
  *
@@ -48,20 +52,21 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 @EnabledIf("ffmpegAvailable")
 class VideoSimilarityFfmpegIntegrationTest {
 
-	private static final Path FFMPEG = Path.of("tools", "ffmpeg", "bin", "ffmpeg.exe");
+	private static final Path FFMPEG_EXECUTABLE = ToolsLocation.of(Path.of(WorkspaceLocation.resolve()), FFMPEG)
+			.resolve("ffmpeg.exe");
 	private static final int THRESHOLD = 70;
 
 	@TempDir
 	Path tempDir;
 
 	static boolean ffmpegAvailable() {
-		return Files.exists(FFMPEG);
+		return Files.exists(FFMPEG_EXECUTABLE);
 	}
 
 	private VideoPerceptualHashService hashService() {
 		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
-		when(externalToolPaths.ffmpeg()).thenReturn(FFMPEG.toString());
+		when(externalToolPaths.ffmpeg()).thenReturn(FFMPEG_EXECUTABLE.toString());
 
 		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1),
 				new ProcessingMetrics());
@@ -196,7 +201,7 @@ class VideoSimilarityFfmpegIntegrationTest {
 	private Path run(String name, String... args) throws Exception {
 		Path out = tempDir.resolve(name);
 
-		List<String> command = new ArrayList<>(List.of(FFMPEG.toString(), "-v", "error", "-y"));
+		List<String> command = new ArrayList<>(List.of(FFMPEG_EXECUTABLE.toString(), "-v", "error", "-y"));
 
 		command.addAll(Arrays.asList(args));
 		command.add(out.toString());

@@ -58,7 +58,7 @@ public class ExternalToolInstaller {
 
 	/** Downloads and unpacks the tools. Blocking; run it off the request thread. */
 	public ExternalToolStatus install() {
-		Path directory = externalToolPaths.bundledDirectory();
+		Path directory = externalToolPaths.toolsDirectory();
 
 		Path archive = null;
 
@@ -85,7 +85,7 @@ public class ExternalToolInstaller {
 
 		Optional<String> version = probe.version(ffmpeg);
 
-		Path directory = externalToolPaths.bundledDirectory();
+		Path directory = externalToolPaths.toolsDirectory();
 
 		return new ExternalToolStatus(version.isPresent(), ffmpeg, probe.version(ffprobe).isPresent(), ffprobe,
 				version.orElse(null), isInside(ffmpeg, directory), isWindows(), directory.toAbsolutePath().toString());

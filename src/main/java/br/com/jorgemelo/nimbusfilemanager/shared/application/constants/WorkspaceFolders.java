@@ -8,6 +8,7 @@ public final class WorkspaceFolders {
 	public static final String TEMP = "temp";
 	public static final String BACKUP = "backup";
 	public static final String GEODATA = "geodata";
+	public static final String TOOLS = "tools";
 
 	private WorkspaceFolders() {
 	}

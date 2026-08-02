@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ToolFolders.FFMPEG;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -9,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
@@ -34,33 +37,30 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 @Component
 public class ExternalToolPaths {
 
-	/** Where the packaged binaries live, relative to the working directory. */
-	private static final Path BUNDLED_DIRECTORY = Path.of("tools", "ffmpeg", "bin");
-
 	private final AppSettingService appSettingService;
 	private final NimbusFileManagerProperties properties;
-	private final Path bundledDirectory;
+	private final Path toolsDirectory;
 
 	@Autowired
 	@CoverageGenerated("Spring wiring: forwards to the constructor every test builds directly")
 	public ExternalToolPaths(AppSettingService appSettingService, NimbusFileManagerProperties properties) {
-		this(appSettingService, properties, BUNDLED_DIRECTORY);
+		this(appSettingService, properties, ToolsLocation.of(FFMPEG));
 	}
 
 	/**
 	 * Takes the binary directory so a test can point discovery at a folder it
-	 * controls; production always uses the packaged one.
+	 * controls; production always uses the one under the workspace.
 	 */
 	ExternalToolPaths(AppSettingService appSettingService, NimbusFileManagerProperties properties,
-			Path bundledDirectory) {
+			Path toolsDirectory) {
 		this.appSettingService = appSettingService;
 		this.properties = properties;
-		this.bundledDirectory = bundledDirectory;
+		this.toolsDirectory = toolsDirectory;
 	}
 
-	/** Where a bundled binary is looked up - and where the installer writes. */
-	Path bundledDirectory() {
-		return bundledDirectory;
+	/** Where an installed binary is looked up - and where the installer writes. */
+	Path toolsDirectory() {
+		return toolsDirectory;
 	}
 
 	public String ffmpeg() {
@@ -89,10 +89,10 @@ public class ExternalToolPaths {
 	 */
 	private String discover(String executable) {
 		for (String candidate : List.of(executable, executable + ".exe")) {
-			Path bundled = bundledDirectory.resolve(candidate);
+			Path installed = toolsDirectory.resolve(candidate);
 
-			if (Files.isRegularFile(bundled)) {
-				return bundled.toString();
+			if (Files.isRegularFile(installed)) {
+				return installed.toString();
 			}
 		}
 
