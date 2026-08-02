@@ -27,17 +27,14 @@ jobs:
 
       # The catalog backup shells out to pg_dump/pg_restore, and a client refuses to
       # dump a server newer than itself. The tests run PostgreSQL 17 - the major the
-      # product ships - while the runner comes with a 16 client, which failed every
-      # backup test with "aborting because of server version mismatch".
+      # product ships - while the runner comes with a 16 client.
       #
-      # The PGDG repository has to be added: the preinstalled client carries a pgdg
-      # version string, but that only says where the package was built, and apt on
-      # the image has no such source.
-      #
-      # The 16 client is removed rather than left alongside: on Debian these tools
-      # are wrappers that pick a binary version, and one that connects to a server
-      # can infer it while "pg_restore --list" cannot - it reads a file. With both
-      # installed the dump was written by 17 and read back by 16, which cannot.
+      # The versioned binaries go on the PATH rather than the ones in /usr/bin: those
+      # are wrappers that choose a version, and the choice differs per command. One
+      # that connects to a server can infer 17 from it; "pg_restore --list" only reads
+      # a file, so it fell back to the default of 16 and could not read what 17 had
+      # written. Removing the 16 packages instead left the wrapper pointing at a
+      # version that no longer existed, and even "pg_dump --version" failed.
       - name: Install the PostgreSQL 17 client
         run: |
           KEY=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
@@ -47,7 +44,11 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          sudo apt-get remove -y postgresql-client-16
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Show which client the tests will use
+        run: |
+          which pg_dump pg_restore
           pg_dump --version
           pg_restore --version
 
