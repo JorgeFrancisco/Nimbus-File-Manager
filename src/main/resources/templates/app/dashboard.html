@@ -5,6 +5,8 @@
 <div th:replace="~{fragments/layout :: app(~{::section}, #{nav.dashboard})}">
 <section id="autoRefreshRoot" th:attr="data-refresh-ms=${hasRunningExecutions} ? 15000">
 	<img class="app-banner" th:src="@{/img/nimbus-file-manager-banner-fixed.png}" alt="">
+	<div th:if="${catalogRestored != null}" class="alert" role="status"
+			th:text="#{backup.restored.notice(${catalogRestored})}"></div>
 	<div th:replace="~{fragments/library :: summary(${summary})}"></div>
 	<div class="panel section" id="executionsRoot"
 			th:attr="data-page=${executionsPage.number},data-has-next=${executionsPage.hasNext()}">

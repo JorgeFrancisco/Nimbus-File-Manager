@@ -7,6 +7,7 @@ import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.BackupFolderResolver;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.RestoreNotice;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -23,13 +24,15 @@ public class BackupSettingsModel implements SettingsSectionModel {
 	private final CatalogBackupService catalogBackupService;
 	private final BackupFolderResolver backupFolderResolver;
 	private final CatalogBackupAsyncRunner asyncRunner;
+	private final RestoreNotice restoreNotice;
 
 	@Autowired
 	public BackupSettingsModel(CatalogBackupService catalogBackupService, BackupFolderResolver backupFolderResolver,
-			CatalogBackupAsyncRunner asyncRunner) {
+			CatalogBackupAsyncRunner asyncRunner, RestoreNotice restoreNotice) {
 		this.catalogBackupService = catalogBackupService;
 		this.backupFolderResolver = backupFolderResolver;
 		this.asyncRunner = asyncRunner;
+		this.restoreNotice = restoreNotice;
 	}
 
 	@Override
@@ -40,5 +43,6 @@ public class BackupSettingsModel implements SettingsSectionModel {
 		model.addAttribute("backupProgress", asyncRunner.progress());
 		model.addAttribute("backupError", asyncRunner.lastError());
 		model.addAttribute("backupResult", asyncRunner.lastResult());
+		model.addAttribute("catalogRestored", restoreNotice.consume().orElse(null));
 	}
 }

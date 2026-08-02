@@ -6,6 +6,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.RestoreNotice;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -27,12 +28,14 @@ public class DashboardWebController {
 	private final ExecutionQueryService executionQueryService;
 	private final StatisticsService statisticsService;
 	private final AppSettingService appSettingService;
+	private final RestoreNotice restoreNotice;
 
 	public DashboardWebController(ExecutionQueryService executionQueryService, StatisticsService statisticsService,
-			AppSettingService appSettingService) {
+			AppSettingService appSettingService, RestoreNotice restoreNotice) {
 		this.executionQueryService = executionQueryService;
 		this.statisticsService = statisticsService;
 		this.appSettingService = appSettingService;
+		this.restoreNotice = restoreNotice;
 	}
 
 	@GetMapping("/app")
@@ -46,6 +49,9 @@ public class DashboardWebController {
 		model.addAttribute("summary", statisticsService.summary());
 		model.addAttribute("executionsPage", executionsPage);
 		model.addAttribute("hasRunningExecutions", hasRunningExecutions(executionsPage));
+		// Read once and gone: this is the first screen a restore started from the
+		// welcome wizard lands on, and the notice has nothing to say on the second.
+		model.addAttribute("catalogRestored", restoreNotice.consume().orElse(null));
 
 		return "app/dashboard";
 	}

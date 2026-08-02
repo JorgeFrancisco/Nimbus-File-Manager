@@ -137,6 +137,8 @@
 			</div>
 			<div th:if="${!backupRunning and backupResult != null}" class="alert ok" role="status"
 				th:text="#{settings.backup.finished(${backupResult})}"></div>
+			<div th:if="${catalogRestored != null}" class="alert" role="status"
+				th:text="#{backup.restored.notice(${catalogRestored})}"></div>
 			<div th:if="${backupError != null}" class="alert error" th:text="#{settings.backup.lastFailure(${backupError})}"></div>
 
 			<div class="panel-actions">

@@ -13,6 +13,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.ui.ExtendedModelMap;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.RestoreNotice;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -39,7 +41,8 @@ class DashboardWebControllerTest {
 		when(statisticsService.summary()).thenReturn(summary);
 		when(executionQueryService.page(0, 20)).thenReturn(executionsPage);
 
-		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService)
+		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService,
+				new RestoreNotice())
 				.dashboard(model);
 
 		Assertions.assertThat(view).isEqualTo("app/dashboard");
@@ -59,7 +62,8 @@ class DashboardWebControllerTest {
 
 		when(executionQueryService.page(1, 20)).thenReturn(executionsPage);
 
-		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService)
+		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService,
+				new RestoreNotice())
 				.executionItems(1, response, model);
 
 		Assertions.assertThat(view).isEqualTo("app/dashboard :: rows");
@@ -76,7 +80,8 @@ class DashboardWebControllerTest {
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("");
 
-		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService)
+		String view = new DashboardWebController(executionQueryService, statisticsService, appSettingService,
+				new RestoreNotice())
 				.dashboard(model);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/app/onboarding");
@@ -92,4 +97,38 @@ class DashboardWebControllerTest {
 		return new ExecutionResponse(1L, "INVENTORY", "FINISHED", NOW, NOW, "C:/media/input", null, 1, 1, 0, 0, 0, 0,
 				null, null, "ok", false);
 	}
+	/**
+	 * Where a restore lands: the welcome wizard sends the user to the dashboard the
+	 * moment the restored settings name a library, so this is the first screen
+	 * drawn afterwards - and the only one guaranteed to be drawn at all.
+	 */
+	@Test
+	void tellsTheUserOnceThatTheCatalogCameFromABackup() {
+		ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
+		StatisticsService statisticsService = mock(StatisticsService.class);
+		AppSettingService appSettingService = mock(AppSettingService.class);
+
+		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("C:/media");
+		when(statisticsService.summary()).thenReturn(summary());
+		when(executionQueryService.page(0, 20)).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+		RestoreNotice notice = new RestoreNotice();
+
+		notice.onCatalogRestored(new CatalogRestored("nimbus-catalog-20260801-060000.zip"));
+
+		DashboardWebController controller = new DashboardWebController(executionQueryService, statisticsService,
+				appSettingService, notice);
+
+		ExtendedModelMap first = new ExtendedModelMap();
+
+		controller.dashboard(first);
+
+		ExtendedModelMap second = new ExtendedModelMap();
+
+		controller.dashboard(second);
+
+		Assertions.assertThat(first).containsEntry("catalogRestored", "nimbus-catalog-20260801-060000.zip");
+		Assertions.assertThat(second).containsEntry("catalogRestored", null);
+	}
+
 }
