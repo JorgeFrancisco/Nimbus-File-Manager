@@ -18,6 +18,8 @@ Em caso de conflito, prevalece nesta ordem:
 
 Uma **regra nova que conflite com o código atual** deve ser decidida explicitamente antes de entrar — ou o código se ajusta à regra, ou a regra registra a exceção.
 
+`AGENTS.en.md` é **tradução deste documento**, não um documento à parte: não entra na hierarquia acima, e onde os dois divergirem prevalece este. Ela existe para quem não lê português e por isso **não** é incluída pelo `CLAUDE.md` — o agente lê o original, e o contexto de instrução nunca carrega a mesma regra duas vezes. As duas mudam no mesmo commit; quem cobra isso é o `AgentsTranslationTest`, que quebra o build quando este arquivo muda sem a tradução acompanhar.
+
 ---
 
 # Princípios
@@ -135,7 +137,7 @@ Não é expressável no `editor/.editorconfig` nem imposto de forma confiável p
 
 ## Convenções
 
-- Identificadores e comentários técnicos em **inglês**; documentação do projeto em **pt-BR**.
+- Identificadores, comentários e Javadoc em **inglês**. Em documentação, o idioma segue o leitor a quem o documento se dirige: **pt-BR** nos ADRs e nos documentos de `docs/`, que registram decisão e discussão internas; **inglês** no README, que é a porta de entrada de um produto distribuído. Este documento é pt-BR e normativo, com tradução em `AGENTS.en.md` (ver *Hierarquia dos documentos*). Um documento novo escolhe um idioma e não mistura.
 - **Injeção de dependência por construtor** (`@Autowired` no construtor), campos `private final`.
 - **No máximo 7 parâmetros por método ou construtor** (regra Sonar S107). Ao ultrapassar esse limite, agrupar parâmetros de dados coesos em um *Parameter Object* (`record`/DTO) ou reavaliar a responsabilidade da classe/método. Para construtores de injeção de dependências, priorizar a divisão de responsabilidades da classe em vez de encapsular dependências em um objeto.
 - **Sem tipos aninhados.** `class`, `record`, `enum` e `interface` (funcionais ou não) são declarados em **arquivo próprio (top-level)**, nunca aninhados dentro de outra classe. Um *Parameter Object* extraído para resolver o item acima também nasce em arquivo próprio.
