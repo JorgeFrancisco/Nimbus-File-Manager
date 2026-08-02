@@ -5,7 +5,3 @@
 org.springframework.boot.env.EnvironmentPostProcessor=\
   br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceEnvironmentPostProcessor,\
   br.com.jorgemelo.nimbusfilemanager.database.infrastructure.config.EmbeddedDatabaseBootstrap
-
-# Stops the cluster once the context - and with it the connection pool - is closed.
-org.springframework.context.ApplicationListener=\
-  br.com.jorgemelo.nimbusfilemanager.database.infrastructure.config.EmbeddedDatabaseShutdown

@@ -88,8 +88,25 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 
 		remember(service);
 
+		// After the context, not with it. Spring Boot runs these handlers once every
+		// context has been closed, so by the time the server is asked to stop, Tomcat
+		// has drained and the connection pool is shut. Stopping it from a
+		// ContextClosedEvent looked equivalent and was not: that event fires at the
+		// start of the close, and the first Ctrl+C proved it - PostgreSQL terminated
+		// live connections, and a normal shutdown printed a wall of stack traces from
+		// work that was still running.
+		SpringApplication.getShutdownHandlers().add(EmbeddedDatabaseBootstrap::stopRunning);
+
 		environment.getPropertySources()
 				.addFirst(new MapPropertySource(SOURCE_NAME, EmbeddedDatasourceProperties.from(connection)));
+	}
+
+	private static void stopRunning() {
+		EmbeddedClusterService service = running;
+
+		if (service != null) {
+			service.stop();
+		}
 	}
 
 	private static void remember(EmbeddedClusterService service) {
@@ -99,11 +116,6 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	/** Whether the embedded cluster is the one serving this run. */
 	public static boolean serving() {
 		return running != null;
-	}
-
-	/** The cluster this run started, or {@code null} when it started none. */
-	static EmbeddedClusterService running() {
-		return running;
 	}
 
 	private EmbeddedDatabaseDecision decide(ConfigurableEnvironment environment, ClusterLayout layout) {

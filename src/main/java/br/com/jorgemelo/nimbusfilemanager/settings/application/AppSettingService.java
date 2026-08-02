@@ -94,6 +94,14 @@ public class AppSettingService implements ApplicationRunner {
 		return saved;
 	}
 
+	/**
+	 * Forgets every cached value, for when the table changed without going through
+	 * {@link #update} - which a restore does, by replacing it wholesale.
+	 */
+	public void evictAll() {
+		valueCache.clear();
+	}
+
 	public String stringValue(String key, String fallback) {
 		return cachedValue(key).filter(value -> !value.isBlank()).orElse(fallback);
 	}

@@ -193,7 +193,7 @@ class OnboardingWebControllerTest {
 				mock(InventoryWatchService.class)).chooseBackupFolder("   ", null, redirectAttributes);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/app/onboarding");
-		Assertions.assertThat(redirectAttributes.getFlashAttributes().get("error"))
+		Assertions.assertThat(redirectAttributes.getFlashAttributes()).extractingByKey("error")
 				.isEqualTo("Informe a pasta onde estão os backups.");
 
 		verify(appSettingService, never()).update(any(), any(), any());

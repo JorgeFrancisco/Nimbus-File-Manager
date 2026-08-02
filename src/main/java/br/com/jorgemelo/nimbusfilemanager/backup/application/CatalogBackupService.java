@@ -16,12 +16,14 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupManifest;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
@@ -64,10 +66,11 @@ public class CatalogBackupService {
 	private final Clock clock;
 	private final BackupProgress progress;
 	private final SecureFileMove secureFileMove;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public CatalogBackupService(CatalogSchemaRepository catalogSchemaRepository, CatalogDump catalogDump,
 			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock, BackupProgress progress,
-			SecureFileMove secureFileMove) {
+			SecureFileMove secureFileMove, ApplicationEventPublisher eventPublisher) {
 		this.catalogSchemaRepository = catalogSchemaRepository;
 		this.catalogDump = catalogDump;
 		this.backupFolderResolver = backupFolderResolver;
@@ -75,6 +78,7 @@ public class CatalogBackupService {
 		this.clock = clock;
 		this.progress = progress;
 		this.secureFileMove = secureFileMove;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/**
@@ -169,8 +173,12 @@ public class CatalogBackupService {
 					"The backup " + name + " could not be loaded: " + catalogDump.lastOutput());
 			}
 
-
 			log.info("Catalog restored from {}", file);
+
+			// Everything this run had read from the database describes an installation
+			// that no longer exists. Announced rather than fixed here: who keeps state
+			// derived from the catalog is not this domain's business.
+			eventPublisher.publishEvent(new CatalogRestored(name));
 
 			return manifest;
 		} catch (IOException exception) {

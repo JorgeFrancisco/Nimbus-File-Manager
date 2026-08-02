@@ -22,6 +22,7 @@ import java.util.zip.ZipOutputStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -53,6 +54,7 @@ class CatalogBackupServiceTest {
 	private final CatalogSchemaRepository catalogSchemaRepository = mock(CatalogSchemaRepository.class);
 	private final BackupFolderResolver backupFolderResolver = mock(BackupFolderResolver.class);
 	private final CatalogDump catalogDump = mock(CatalogDump.class);
+	private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
 	// The real move: it is what puts the file where the assertions look for it.
 	private final SecureFileMove secureFileMove = new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
@@ -65,7 +67,8 @@ class CatalogBackupServiceTest {
 		// The injected mapper carries the JSR-310 module; a bare one cannot write the
 		// timestamp of the manifest, which is what production actually uses.
 		return new CatalogBackupService(catalogSchemaRepository, catalogDump, backupFolderResolver,
-				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove);
+				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove,
+				eventPublisher);
 	}
 
 	private Path backup(Path folder, String manifest) throws IOException {
