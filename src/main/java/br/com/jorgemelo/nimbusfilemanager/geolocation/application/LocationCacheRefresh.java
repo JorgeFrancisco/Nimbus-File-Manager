@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.application;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
-@Order(100)
 public class LocationCacheRefresh {
 
 	private final MediaLocationService mediaLocationService;
@@ -27,6 +27,8 @@ public class LocationCacheRefresh {
 		this.mediaLocationService = mediaLocationService;
 	}
 
+	/** Nothing here reads a setting, but the order is pinned all the same. */
+	@Order(Ordered.LOWEST_PRECEDENCE)
 	@EventListener
 	public void onCatalogRestored(CatalogRestored event) {
 		long removed = mediaLocationService.clearCache();

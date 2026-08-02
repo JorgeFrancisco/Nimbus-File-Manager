@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,13 @@ public class SettingsCacheRefresh {
 		this.appSettingService = appSettingService;
 	}
 
+	/**
+	 * First of the listeners, and the annotation sits on the method because that
+	 * is where Spring reads it for an {@code @EventListener} - on the class it is
+	 * ignored. That is how the watcher came to reconfigure itself from the very
+	 * values this eviction was about to replace, and it did so silently.
+	 */
+	@Order(Ordered.HIGHEST_PRECEDENCE)
 	@EventListener
 	public void onCatalogRestored(CatalogRestored event) {
 		appSettingService.evictAll();

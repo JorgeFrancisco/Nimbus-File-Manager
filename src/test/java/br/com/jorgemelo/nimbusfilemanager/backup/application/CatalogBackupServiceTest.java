@@ -129,6 +129,20 @@ class CatalogBackupServiceTest {
 		verify(catalogDump, never()).restore(any());
 	}
 
+	/**
+	 * Cancelling only ever reaches the tool that owns the running dump: the
+	 * service keeps no state of its own about it, and a second answer to the same
+	 * question is how the two come to disagree.
+	 */
+	@Test
+	void cancellingAsksTheDumpToolToEndTheRunningBackup(@TempDir Path folder) {
+		when(catalogDump.cancelDump()).thenReturn(true);
+
+		Assertions.assertThat(service(folder).cancel()).isTrue();
+
+		verify(catalogDump).cancelDump();
+	}
+
 	/** A zip that is not one of ours: no manifest, nothing to trust. */
 	@Test
 	void refusesAFileWithoutAManifest(@TempDir Path folder) throws IOException {

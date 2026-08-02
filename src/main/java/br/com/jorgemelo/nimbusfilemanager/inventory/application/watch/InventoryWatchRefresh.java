@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
-@Order(100)
 public class InventoryWatchRefresh {
 
 	private final InventoryWatchService inventoryWatchService;
@@ -28,6 +28,13 @@ public class InventoryWatchRefresh {
 		this.inventoryWatchService = inventoryWatchService;
 	}
 
+	/**
+	 * Last, so the folder read here is the restored one. On the method rather than
+	 * the class: Spring ignores a class-level order for an {@code @EventListener},
+	 * and the first real restore proved it - the watcher reconfigured from the
+	 * empty folder of the installation being replaced.
+	 */
+	@Order(Ordered.LOWEST_PRECEDENCE)
 	@EventListener
 	public void onCatalogRestored(CatalogRestored event) {
 		inventoryWatchService.reconfigure();
