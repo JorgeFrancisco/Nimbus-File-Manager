@@ -1238,7 +1238,10 @@ as one that failed to open. The tooltip carries every bootstrap step; a notifica
 twice only, at the first step and when the application is ready, the second one carrying the
 address that opens it.
 
-Its menu opens the application, the log folder and the workspace, and ends the run. Ending from
+Its menu names the running build — the version is read from the jar manifest, so it answers "which
+one is installed?" without opening anything — and opens the application, the log folder and the
+workspace, and ends the run. A double click on the icon opens the application too, which is the
+gesture Windows treats as an icon's default action. Ending from
 the menu matters more than it looks: the embedded PostgreSQL is stopped by the application's own
 shutdown, so leaving through the task manager left a server behind, and until now the only way to
 close properly was Ctrl+C in a console somebody had to keep open. Everything the menu opens is
@@ -1318,7 +1321,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       2529 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.47% instruction, 92.28% branch, 98.06% line, 98.81% method, 100.00% class
+JaCoCo:      98.47% instruction, 92.28% branch, 98.08% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1348,9 +1351,10 @@ had the two branches worth asserting — a file whose name carries no extension 
 rather than a lightbox with nothing in it, and a recorded original path with no folder above it is
 refused with a reason instead of restoring into nowhere.
 
-Branch keeps the floor a few hundredths under the reading, as it has since the goal was last reset:
-it is the metric that moves most between two runs of the same code — see *A medição varia entre
-execuções* below for where that spread comes from.
+Branch and line keep the floor a few hundredths under the reading, set from the lower of two
+consecutive runs of the same code (98.06 and 98.08 for line): branch is the metric that moves most
+between runs, and pinning either floor to the higher reading would fail the next task for no reason
+— see *A medição varia entre execuções* below for where that spread comes from.
 
 Branch, method and class rose; instruction and line were recalculated downward, by 0.03 and 0.05,
 after the embedded-database and backup domains landed. The rule that allows this is *Recalcular o

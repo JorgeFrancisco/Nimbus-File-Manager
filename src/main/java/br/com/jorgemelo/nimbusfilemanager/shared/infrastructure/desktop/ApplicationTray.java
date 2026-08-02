@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -82,6 +83,11 @@ public final class ApplicationTray {
 			TrayIcon trayIcon = new TrayIcon(image(), text.get("tray.tooltip.starting"), menu(text, logs, workspace));
 
 			trayIcon.setImageAutoSize(true);
+
+			// The double click is what Windows treats as the icon's default action, and
+			// it is the gesture people try first. It reaches the same guard as the menu
+			// item: before there is a port, there is nothing to open.
+			trayIcon.addActionListener(_ -> open());
 
 			SystemTray.getSystemTray().add(trayIcon);
 
@@ -163,7 +169,7 @@ public final class ApplicationTray {
 		// nothing is worse than one that says it is not ready.
 		open.setEnabled(false);
 
-		open.addActionListener(_ -> shell(TrayText.url(port.get())));
+		open.addActionListener(_ -> open());
 
 		openItem.set(open);
 
@@ -179,6 +185,11 @@ public final class ApplicationTray {
 
 		exit.addActionListener(_ -> exit());
 
+		version(text).ifPresent(item -> {
+			menu.add(item);
+			menu.addSeparator();
+		});
+
 		menu.add(open);
 		menu.add(logsItem);
 		menu.add(workspaceItem);
@@ -186,6 +197,41 @@ public final class ApplicationTray {
 		menu.add(exit);
 
 		return menu;
+	}
+
+	/**
+	 * Which build is running, for the question that gets asked whenever something
+	 * looks wrong - and it has to be answerable without opening the application,
+	 * since "it will not open" is when it is asked. Absent outside a packaged
+	 * build: the manifest that carries it is written by the jar, so an IDE run has
+	 * no version to show and shows no item rather than the word "unknown".
+	 */
+	private static Optional<MenuItem> version(TrayText text) {
+		String version = ApplicationTray.class.getPackage().getImplementationVersion();
+
+		if (version == null || version.isBlank()) {
+			return Optional.empty();
+		}
+
+		MenuItem item = new MenuItem(MessageFormat.format(text.get("tray.version"), version));
+
+		// It states, it does not act.
+		item.setEnabled(false);
+
+		return Optional.of(item);
+	}
+
+	/**
+	 * Silent before the port is known. The menu item is disabled until then, but
+	 * the double click cannot be, and opening the address of port 0 would answer a
+	 * gesture with a browser error.
+	 */
+	private static void open() {
+		int servedPort = port.get();
+
+		if (servedPort > 0) {
+			shell(TrayText.url(servedPort));
+		}
 	}
 
 	/**

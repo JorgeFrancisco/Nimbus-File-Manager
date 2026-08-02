@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class TrayTextTest {
 
 	private static final List<String> KEYS = List.of("tray.open", "tray.logs", "tray.workspace", "tray.exit",
-			"tray.ready", "tray.tooltip.starting", "tray.tooltip.running");
+			"tray.ready", "tray.version", "tray.tooltip.starting", "tray.tooltip.running");
 
 	@Test
 	void everyLabelTheMenuAsksForExistsInBothLanguages() {
