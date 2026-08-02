@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -283,6 +284,28 @@ class PhotoPerceptualHashServiceTest {
 		service(runner).compute(sticker);
 
 		Assertions.assertThat(Files.exists(decoded.getValue())).isFalse();
+	}
+
+	/**
+	 * An ffmpeg that never started leaves this method whole, instead of being
+	 * folded into the generic "could not run ffmpeg" that every decoding error also
+	 * produces. Downstream it is the only thing that keeps a healthy photo from
+	 * being written off permanently for a path that pointed at the wrong folder.
+	 */
+	@Test
+	void letsAToolThatNeverStartedThroughUnwrapped() throws Exception {
+		Path photo = Files.write(tempDir.resolve("holiday.jpg"), new byte[] { (byte) 0xFF, (byte) 0xD8, 0, 0 });
+
+		FfmpegRunner runner = mock(FfmpegRunner.class);
+
+		when(runner.run(any(), any()))
+				.thenThrow(new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
+
+		PhotoPerceptualHashService service = service(runner);
+
+		Assertions.assertThatThrownBy(() -> service.compute(photo))
+				.isInstanceOf(ExternalToolNotRunnableException.class)
+				.hasMessageContaining("./tools/bin/ffmpeg.exe");
 	}
 
 	private PhotoPerceptualHashService service(FfmpegRunner runner) {

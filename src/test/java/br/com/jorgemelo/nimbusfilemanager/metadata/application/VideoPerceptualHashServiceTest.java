@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -40,6 +41,24 @@ class VideoPerceptualHashServiceTest {
 			assertThat(frame.positionMs()).isZero();
 			assertThat(frame.hash()).hasSize(32);
 		});
+	}
+
+	/**
+	 * An ffmpeg that never started leaves this method whole, instead of being
+	 * folded into the generic sampling failure that a broken stream also produces.
+	 * Downstream it is the only thing that keeps a healthy video from being written
+	 * off permanently for a path that pointed at the wrong folder.
+	 */
+	@Test
+	void letsAToolThatNeverStartedThroughUnwrapped() throws Exception {
+		Path file = videoFile();
+
+		VideoPerceptualHashService service = service((_, _, _) -> {
+			throw new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2"));
+		}, photoService(gradient()));
+
+		assertThatThrownBy(() -> service.compute(file, 0.04, 5))
+				.isInstanceOf(ExternalToolNotRunnableException.class).hasMessageContaining("./tools/bin/ffmpeg.exe");
 	}
 
 	/** With no frame anywhere, the file is refused, not half-hashed. */

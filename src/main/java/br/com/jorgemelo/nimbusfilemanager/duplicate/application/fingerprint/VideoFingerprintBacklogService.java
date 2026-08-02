@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFinge
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
@@ -158,6 +159,12 @@ public class VideoFingerprintBacklogService
 
 	@Override
 	public FingerprintFailureReason reason(PendingVideo pending, Throwable error) {
+		// Asked before the bytes are read at all: the classifier answers what is wrong
+		// with the file, and a decoder that never started has not looked at one.
+		if (error instanceof ExternalToolNotRunnableException) {
+			return FingerprintFailureReason.TOOL_UNAVAILABLE;
+		}
+
 		if (error instanceof UnsupportedVideoFingerprintException) {
 			return FingerprintFailureReason.UNSUPPORTED_FORMAT;
 		}

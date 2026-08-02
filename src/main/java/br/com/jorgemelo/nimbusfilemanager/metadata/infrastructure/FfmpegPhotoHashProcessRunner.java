@@ -27,14 +27,14 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.Metadat
 @Component
 public class FfmpegPhotoHashProcessRunner {
 
-	public byte[] run(String ffmpegPath, Path file) throws IOException, InterruptedException {
+	public byte[] run(String ffmpegPath, Path file) throws InterruptedException {
 		ProcessBuilder builder = new ProcessBuilder(ffmpegPath, "-v", "error", "-y", "-i",
 				file.toAbsolutePath().normalize().toString(), "-vframes", "1", "-vf",
 				"scale=" + MetadataConstants.SAMPLE_SIDE + ":" + MetadataConstants.SAMPLE_SIDE
 						+ ":flags=lanczos,format=gray",
 				"-f", "rawvideo", "-pix_fmt", "gray", "pipe:1");
 
-		Process process = builder.start();
+		Process process = ExternalToolProcess.start(builder, ffmpegPath);
 
 		ByteArrayOutputStream output = new ByteArrayOutputStream(MetadataConstants.SAMPLE_BYTES);
 

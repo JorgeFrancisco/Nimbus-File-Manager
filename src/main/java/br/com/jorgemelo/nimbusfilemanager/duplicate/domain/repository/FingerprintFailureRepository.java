@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -94,13 +95,19 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 	 * Manual retry clears only what a retry can change. A terminal reason - blank
 	 * bytes, a format the decoder never read - stays, so the button never promises
 	 * to fix a file nothing can fix.
+	 *
+	 * <p>
+	 * Takes every non-terminal reason rather than one, because the set grew: a
+	 * failure recorded while ffmpeg could not be launched is not about the file
+	 * either, and matching a single reason left those rows behind no matter which
+	 * button was pressed.
 	 */
 	@Transactional
 	@Modifying
 	@Query("""
 			DELETE FROM FingerprintFailure fe
-			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.reason = :reason
+			WHERE fe.kind = :kind AND fe.algorithm = :algorithm AND fe.reason IN :reasons
 			""")
 	long deleteRetryableByKindAndAlgorithm(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm,
-			@Param("reason") FingerprintFailureReason reason);
+			@Param("reasons") Collection<FingerprintFailureReason> reasons);
 }

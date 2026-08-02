@@ -47,7 +47,7 @@ public class FfmpegVideoFrameProcessRunner {
 				"-vf", filter, "-fps_mode", "passthrough", "-frames:v", String.valueOf(plan.frameCount()), "-f",
 				"rawvideo", "-pix_fmt", "gray", "pipe:1");
 
-		Process process = new ProcessBuilder(command).start();
+		Process process = ExternalToolProcess.start(new ProcessBuilder(command), ffmpeg);
 
 		Thread stderrDrain = drainAsync(process.getErrorStream());
 

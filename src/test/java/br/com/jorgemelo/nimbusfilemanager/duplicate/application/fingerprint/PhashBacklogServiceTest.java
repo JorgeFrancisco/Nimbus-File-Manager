@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -36,6 +37,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
@@ -229,12 +231,33 @@ class PhashBacklogServiceTest {
 		Assertions.assertThat(status.blocking()).isTrue();
 	}
 
+	/**
+	 * Every non-terminal reason goes, not one named by hand. The button used to
+	 * clear {@code UNKNOWN} alone, which left a run whose ffmpeg never started with
+	 * files no button could return to the queue.
+	 */
 	@Test
-	void resetFailuresClearsTheFailureRows() {
+	void resetFailuresClearsEveryReasonARetryCanChange() {
 		when(fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM, FingerprintFailureReason.UNKNOWN)).thenReturn(4L);
+				DuplicateConstants.ALGORITHM, FingerprintFailureReason.retryable())).thenReturn(4L);
 
 		Assertions.assertThat(service().resetFailures()).isEqualTo(4L);
+	}
+
+	/**
+	 * The decoder never opened the file, so nothing about the file explains this.
+	 * Answering before the classifier is what keeps a healthy photo from being
+	 * written off for a tool that was not where the settings said.
+	 */
+	@Test
+	void blamesTheToolAndNotTheFileWhenFfmpegCouldNotStart() {
+		PendingPhoto photo = new PendingPhoto(9L, "/tmp/holiday.jpg");
+
+		FingerprintFailureReason reason = service().reason(photo,
+				new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
+
+		Assertions.assertThat(reason).isEqualTo(FingerprintFailureReason.TOOL_UNAVAILABLE);
+		Assertions.assertThat(reason.terminal()).isFalse();
 	}
 
 	@SuppressWarnings("unchecked")

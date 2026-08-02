@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFinge
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
@@ -171,6 +172,12 @@ public class PhashBacklogService
 
 	@Override
 	public FingerprintFailureReason reason(PendingPhoto pending, Throwable error) {
+		// Asked before the bytes are read at all: the classifier answers what is wrong
+		// with the file, and a decoder that never started has not looked at one.
+		if (error instanceof ExternalToolNotRunnableException) {
+			return FingerprintFailureReason.TOOL_UNAVAILABLE;
+		}
+
 		if (error instanceof UnsupportedPhotoFingerprintException) {
 			return FingerprintFailureReason.UNSUPPORTED_FORMAT;
 		}

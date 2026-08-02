@@ -1,0 +1,25 @@
+-- Some of these files were never opened. ffmpeg could not be started at all - the path
+-- saved in Settings pointed at a tools folder from an older layout, which is what a
+-- restored backup carries in from the installation it was taken on - and the code that
+-- explains a failure fell back to reading the file's bytes. Faced with whole, healthy
+-- photos it answered DECODER_REFUSED, UNSUPPORTED_FORMAT, NOT_AN_IMAGE and
+-- CORRUPTED_FILE: four verdicts about files, for one broken installation. All four are
+-- terminal, so those rows spend their attempts at once and the backlog never fetches
+-- the files again.
+--
+-- Every row goes, not a filtered subset, because nothing recorded distinguishes them.
+-- The reasons are the same ones a genuine decoding failure produces, and so is the
+-- message: until now a single catch wrapped every cause in "Could not run ffmpeg", so
+-- a decoder refusal and a decoder that never started read identically. A verdict that
+-- cannot be told apart from a wrong one is not evidence.
+--
+-- Nothing is lost by being generous here. The files return to the pending queue, the
+-- run that picks them up has a working ffmpeg, and each one is classified again on that
+-- pass - by the decoder this time, which is the only thing entitled to an opinion about
+-- the bytes. What genuinely cannot be read goes straight back to terminal, and the cost
+-- of finding that out is one attempt per file that had already failed.
+--
+-- Failures recorded from here on say TOOL_UNAVAILABLE when the tool never ran. That
+-- reason is not terminal and is cleared by the Try again button, so no future migration
+-- has to do this.
+DELETE FROM fingerprint_failure;

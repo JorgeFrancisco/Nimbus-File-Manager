@@ -395,9 +395,10 @@ The first administrator is created only when the `app_user` table is empty. Chan
 
 ### Locked out
 
-A restored backup brings the users of the installation it was taken on, so restoring a catalog
-onto a new machine leaves an account whose password nobody on that machine ever knew. The way
-back in is a property of its own:
+For an administrator account whose password is gone — forgotten, saved wrong by a browser, or
+never known on this machine in the first place, which is what a restored backup leaves behind
+when it brings the users of the installation it was taken on. The way back in is a property of
+its own:
 
 ```text
 NIMBUS_FILE_MANAGER_ADMIN_PASSWORD_RESET=temporary-value
@@ -1263,8 +1264,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2494 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.45% instruction, 92.17% branch, 98.06% line, 98.80% method, 100.00% class
+Tests:       2501 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.45% instruction, 92.18% branch, 98.06% line, 98.77% method, 100.00% class
 ```
 
 ### Coverage ratchet

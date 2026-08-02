@@ -33,13 +33,13 @@ public class FingerprintFailureLabels extends LocalizedComponent {
 	/**
 	 * One colour per reason, so a long list separates by eye before it is read. The
 	 * scale is the one the rest of the application already uses: red for the file
-	 * that was lost, amber for a real image refused, blue for a known limitation,
-	 * grey for what was never a photo.
+	 * that was lost, amber for a real image refused or for an installation to fix,
+	 * blue for a known limitation, grey for what was never a photo.
 	 */
 	private String tone(FingerprintFailureReason reason) {
 		return switch (reason) {
 		case CORRUPTED_FILE -> "error";
-		case DECODER_REFUSED -> "warn";
+		case DECODER_REFUSED, TOOL_UNAVAILABLE -> "warn";
 		case UNSUPPORTED_FORMAT -> "info";
 		case NOT_AN_IMAGE -> "muted";
 		case UNKNOWN -> "ok";
@@ -55,6 +55,7 @@ public class FingerprintFailureLabels extends LocalizedComponent {
 		case NOT_AN_IMAGE -> "backend.fingerprint.reason.notAnImage.hint";
 		case UNSUPPORTED_FORMAT -> "backend.fingerprint.reason.unsupportedFormat.hint";
 		case DECODER_REFUSED -> "backend.fingerprint.reason.decoderRefused.hint";
+		case TOOL_UNAVAILABLE -> "backend.fingerprint.reason.toolUnavailable.hint";
 		case UNKNOWN -> "backend.fingerprint.reason.unknown.hint";
 		});
 	}
@@ -65,6 +66,7 @@ public class FingerprintFailureLabels extends LocalizedComponent {
 		case NOT_AN_IMAGE -> message("backend.fingerprint.reason.notAnImage");
 		case UNSUPPORTED_FORMAT -> message("backend.fingerprint.reason.unsupportedFormat");
 		case DECODER_REFUSED -> message("backend.fingerprint.reason.decoderRefused");
+		case TOOL_UNAVAILABLE -> message("backend.fingerprint.reason.toolUnavailable");
 		case UNKNOWN -> message("backend.fingerprint.reason.unknown");
 		};
 	}

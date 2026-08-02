@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
@@ -34,6 +35,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFinge
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
@@ -65,9 +67,19 @@ class VideoFingerprintBacklogServiceTest {
 	@Test
 	void resetFailuresClearsTheRetryableFailureRows() {
 		when(fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM,
-				FingerprintFailureReason.UNKNOWN)).thenReturn(4L);
+				FingerprintFailureReason.retryable())).thenReturn(4L);
 
 		assertThat(service().resetFailures()).isEqualTo(4L);
+	}
+
+	/** A video is written off for its own content, never for a missing ffmpeg. */
+	@Test
+	void blamesTheToolAndNotTheFileWhenFfmpegCouldNotStart() {
+		FingerprintFailureReason reason = build().reason(new PendingVideo(9L, "/tmp/trip.mp4", 12_000D),
+				new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
+
+		assertThat(reason).isEqualTo(FingerprintFailureReason.TOOL_UNAVAILABLE);
+		assertThat(reason.terminal()).isFalse();
 	}
 
 	@Test
@@ -96,6 +108,14 @@ class VideoFingerprintBacklogServiceTest {
 		when(algorithm.kind()).thenReturn(FingerprintKind.VIDEO_PHASH);
 		when(algorithm.algorithm()).thenReturn(ALGORITHM);
 
+		return build();
+	}
+
+	/**
+	 * Without the identity stubs, for the tests that never ask the service which
+	 * kind or algorithm it speaks for.
+	 */
+	private VideoFingerprintBacklogService build() {
 		return new VideoFingerprintBacklogService(mediaFingerprintRepository, fingerprintFailureRepository, algorithm,
 				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
 				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());

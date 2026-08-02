@@ -109,6 +109,11 @@ public class VideoPerceptualHashService {
 	private byte[] sample(Path file, VideoFrameSamplingPlan plan) {
 		try {
 			return ffmpegRunner.run(ffmpegPath(), file, plan);
+		} catch (ExternalToolNotRunnableException exception) {
+			// Rethrown whole: wrapping it below would bury the one distinction that
+			// matters, and the caller would go on to blame the file for a tool that
+			// never ran.
+			throw exception;
 		} catch (Exception exception) {
 			throw new IllegalStateException(
 					"Could not run ffmpeg to sample video frames for file: " + file + ". " + exception.getMessage(),

@@ -127,7 +127,7 @@ class FingerprintBacklogEngine {
 	/** Manual retry: exhausted (retryable) failures return to the pending queue. */
 	public long resetFailures(FingerprintProducer<?, ?> producer) {
 		return fingerprintFailureRepository.deleteRetryableByKindAndAlgorithm(producer.kind(), producer.algorithm(),
-				FingerprintFailureReason.UNKNOWN);
+				FingerprintFailureReason.retryable());
 	}
 
 	/** Clears only this kind/algorithm's derived fingerprints and failures. */
