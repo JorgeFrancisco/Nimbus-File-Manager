@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -118,5 +119,26 @@ class AccountLockServiceTest {
 		service.registerSuccess("admin@example.com");
 
 		verify(appUserRepository).clearFailuresOnSuccess(eq(1L), any(LocalDateTime.class));
+	}
+
+	/**
+	 * A submitted form with the user field left empty must not reach the database
+	 * at all. It would find nobody, but the lookup is a cost an unauthenticated
+	 * caller can repeat as fast as it likes.
+	 */
+	@Test
+	void ignoresAFailureWithNoUsernameToAttributeItTo() {
+		service.registerFailure(null, "127.0.0.1", "JUnit");
+		service.registerFailure("   ", "127.0.0.1", "JUnit");
+
+		verifyNoInteractions(appUserRepository);
+	}
+
+	@Test
+	void ignoresASuccessWithNoUsernameToAttributeItTo() {
+		service.registerSuccess(null);
+		service.registerSuccess("   ");
+
+		verifyNoInteractions(appUserRepository);
 	}
 }

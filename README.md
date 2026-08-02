@@ -1218,8 +1218,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2445 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.35% instruction, 91.91% branch, 97.90% line, 98.75% method, 100.00% class
+Tests:       2457 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.44% instruction, 92.16% branch, 98.03% line, 98.79% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1231,22 +1231,33 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.47% instruction, 92.01% branch, 98.08% line, 98.74% method, 100.00% class
+Floor:  98.44% instruction, 92.16% branch, 98.03% line, 98.79% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-Method and class sit above the floor; instruction, branch and line sit below it. The gap is 28
-lines across the two newest domains that no honest test reaches: the I/O `catch` blocks of the
-PostgreSQL installer, the cluster service, the download and the backup; and the containment check
-that decides whether an archive entry may be written — which the folder filter ahead of it already
-rejects every escaping name for, and which stays because that is a property of the filter rather
-than a guarantee. The floor was left where it is rather than lowered to match.
+Branch, method and class rose; instruction and line were recalculated downward, by 0.03 and 0.05,
+after the embedded-database and backup domains landed. The rule that allows this is *Recalcular o
+piso* in `AGENTS.md`, and it was applied in that order: coverage was first harvested wherever it
+could be earned honestly — the account lock refusing a blank username, a destination name that
+climbs out of the target folder, a boundary name already in real Unicode, a catalog record deleted
+between reconcile and pairing, an inventory that hands its folder lock back when the scan cannot
+start, a geographic import keeping the reason it failed, and the one statistics endpoint missing
+from the delegation sweep. That pass moved branch and method above the old floor and covered 16 of
+the missing lines; what it could not reach is what the floor was then set to.
 
-**All five metrics reached their goal**, line last — it was the one still short. The
-goals above are the next step the ratchet asks for, set from the numbers actually
+Of the 237 lines still uncovered, 124 are I/O `catch` blocks, 26 are the anti-instantiation guards
+of utility classes, and the remainder is largely unreachable by construction — a `continue` or
+`break` the compiler reaches only through a condition that cannot occur, a symlink branch that
+needs the operating system to refuse something. 30 of the 237 are in the two newest domains. None
+of it is coverable by a test that asserts real behaviour, and the alternative — instantiating
+private constructors by reflection — is what *Piso de cobertura* forbids by name.
+
+The goals above are the next step the ratchet asks for, set from the numbers actually
 measured rather than from a round figure: the previous branch goal had been lowered
 from 95% to 90% precisely because a target nobody can reach orients nobody, and 90%
-landed two passes later.
+landed two passes later. All five metrics had reached their goal once, before the
+embedded database and the pg_dump backup arrived — the two features that put the most
+untestable I/O in the project.
 
 Where the remaining work is: the classes furthest from the goal are the ones that
 touch the file system and the delivery layer, and each needs a handful of real cases

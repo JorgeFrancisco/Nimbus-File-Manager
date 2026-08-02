@@ -1,24 +1,30 @@
 (function () {
 	var t = window.NimbusFileManagerI18n.t;
 
+	/**
+	 * Delegated from the document instead of bound element by element: a panel
+	 * that refreshes itself replaces its own markup, and listeners attached at
+	 * load go away with the nodes they were attached to. That is how deleting a
+	 * backup stopped asking for confirmation - the form on screen was not the
+	 * form that had been bound.
+	 */
 	function bindConfirmations() {
-		document.querySelectorAll("[data-confirm]").forEach(function (element) {
-			element.addEventListener("click", function (event) {
-				if (!window.confirm(element.getAttribute("data-confirm"))) {
-					event.preventDefault();
-				}
-			});
+		document.addEventListener("click", function (event) {
+			var element = event.target.closest ? event.target.closest("[data-confirm]") : null;
+
+			if (element && !window.confirm(element.getAttribute("data-confirm"))) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
 		});
 	}
 
 	function bindLoadingState() {
-		document.querySelectorAll("form").forEach(function (form) {
-			form.addEventListener("submit", function () {
-				form.querySelectorAll("button[type='submit']").forEach(function (button) {
-					button.dataset.originalText = button.textContent;
-					button.textContent = t("js.processing");
-					button.disabled = true;
-				});
+		document.addEventListener("submit", function (event) {
+			event.target.querySelectorAll("button[type='submit']").forEach(function (button) {
+				button.dataset.originalText = button.textContent;
+				button.textContent = t("js.processing");
+				button.disabled = true;
 			});
 		});
 	}

@@ -178,6 +178,39 @@ class InventoryFileItemReaderTest {
 		Assertions.assertThat(acquired.get()).isTrue();
 	}
 
+	/**
+	 * A scan that cannot even start must hand the lock back. Keeping it would
+	 * refuse every later inventory - and any organization on the same tree - for
+	 * as long as the process lives, over a failure that already ended.
+	 */
+	@Test
+	void openShouldReleaseTheLockWhenTheScanCannotStart() throws Exception {
+		when(scanExclusionService.excludedExtensions()).thenReturn(List.of());
+		when(scanExclusionService.excludedFolders()).thenReturn(List.of());
+		when(fileScanner.stream(any(), any())).thenThrow(new IllegalStateException("Could not scan path"));
+
+		InventoryFileItemReader reader = reader();
+
+		ExecutionContext context = new ExecutionContext();
+
+		Assertions.assertThatThrownBy(() -> reader.open(context)).isInstanceOf(IllegalStateException.class);
+
+		AtomicBoolean acquired = new AtomicBoolean(false);
+
+		Thread other = new Thread(() -> {
+			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, Path.of("C:/media"))) {
+				acquired.set(true);
+			} catch (OperationLockException _) {
+				acquired.set(false);
+			}
+		});
+
+		other.start();
+		other.join(2000);
+
+		Assertions.assertThat(acquired.get()).isTrue();
+	}
+
 	private InventoryFileItemReader reader() {
 		return new InventoryFileItemReader(fileScanner, scanExclusionService, operationLockService, "C:/media", "true",
 				"false");

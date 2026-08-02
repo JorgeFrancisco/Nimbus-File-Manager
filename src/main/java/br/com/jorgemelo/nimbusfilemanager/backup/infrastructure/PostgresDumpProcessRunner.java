@@ -171,8 +171,11 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 		try {
 			// Beside the file being written or read, never in the system temp folder:
 			// what these tools print names the database, its host and its tables, and a
-			// world-writable directory is readable by everything on the machine.
-			Path output = beside.resolveSibling("nimbus-" + name + ".log");
+			// world-writable directory is readable by everything on the machine. The
+			// name is unique per invocation because a fixed one is a shared handle:
+			// two commands working in the same folder fight over it, and on Windows
+			// the one that finishes first cannot delete what the other still holds.
+			Path output = Files.createTempFile(beside.getParent(), "nimbus-" + name + "-", ".log");
 
 			ProcessBuilder builder = new ProcessBuilder(command).redirectErrorStream(true)
 					.redirectOutput(output.toFile());
@@ -187,6 +190,8 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 
 			if (!process.waitFor(TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
 				process.destroyForcibly();
+
+				Files.deleteIfExists(output);
 
 				log.error("{} did not finish within {} minutes", name, TIMEOUT_MINUTES);
 

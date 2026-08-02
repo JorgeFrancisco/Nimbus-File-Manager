@@ -154,6 +154,34 @@ class OrganizationDestinationResolverTest {
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("é obrigatório");
 	}
 
+	/**
+	 * A name made only of a path segment passes the segment check - {@code ..} is
+	 * its own file name - and still walks out of the folder once resolved. The
+	 * check against the resolved path is what catches it, and it is the last one
+	 * standing between a catalogued name and a write outside the library.
+	 */
+	@Test
+	void resolveShouldRejectAFileNameThatClimbsOutOfTheDestinationFolder() {
+		OrganizationCandidate candidate = candidate("..");
+
+		OrganizationDate date = new OrganizationDate("202405", "09", false);
+
+		OrganizationRuleResult rule = new OrganizationRuleResult(OrganizationRuleType.CAMERA,
+				OrganizationRuleReason.FILE_NAME, FileCategory.MEDIA, MediaSubcategory.CAMERA, FileType.PHOTO);
+
+		when(dateResolver.resolve(candidate)).thenReturn(date);
+		when(ruleEngine.classify(candidate)).thenReturn(rule);
+		when(layoutResolver.resolveFolder(Path.of("C:/target"), "DEFAULT", "202405", "09", "CAMERA", "IMAGENS"))
+				.thenReturn(Path.of("C:/target/202405/09/CAMERA/IMAGENS"));
+
+		var resolver = service();
+
+		Path target = Path.of("C:/target");
+
+		Assertions.assertThatThrownBy(() -> resolver.resolve(target, "DEFAULT", candidate))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("saiu da pasta de destino");
+	}
+
 	private OrganizationDestinationResolver service() {
 		return new OrganizationDestinationResolver(dateResolver, ruleEngine, layoutResolver);
 	}

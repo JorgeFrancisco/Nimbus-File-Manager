@@ -163,6 +163,7 @@ class ControllersTest {
 
 		statisticsController.summary();
 		statisticsController.codecs();
+		statisticsController.extensions(50);
 		statisticsController.folders(20, FileType.VIDEO, "h265", "size");
 		statisticsController.errors();
 		statisticsController.errorFiles();
@@ -174,6 +175,7 @@ class ControllersTest {
 		verify(phashBacklogService).failures();
 		verify(executionQueryService).errorSummary(executionId);
 		verify(executionQueryService).movements(executionId);
+		verify(statisticsService).extensions(50);
 		verify(statisticsService).errorFileDetails(ExecutionErrorType.UNKNOWN, "path", pageable);
 	}
 

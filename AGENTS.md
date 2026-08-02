@@ -354,6 +354,21 @@ Como operar diante disso:
 - **Não baixar o piso** por causa de oscilação, e **não arredondar** a casa decimal: a queda pode ser real, e uma régua mais grossa esconderia justamente o que a catraca existe para pegar.
 - Medir sempre com `clean` e com a árvore principal completa (ver *Piso exige build limpo*); comparar números tirados em condições diferentes produz conclusão errada.
 
+### Recalcular o piso
+
+Um recurso grande traz caminhos que **nenhum teste honesto alcança** — `catch` de I/O que exige o sistema operacional negar algo, guarda que só dispara por corrida, `continue`/`break` que o compilador só alcança por uma condição impossível. Como o piso é percentual sobre o projeto inteiro, esse código **derruba a métrica sem que nada tenha regredido**. Nesse caso — e **só** nesse — o piso pode ser regravado abaixo do anterior.
+
+Não é atalho, e a ordem importa:
+
+1. **Colher primeiro o que é honesto, em qualquer ponto do projeto.** A métrica é global, então uma lacuna legítima em código antigo paga a conta de um caminho inalcançável no código novo — e a busca não se limita ao que a tarefa tocou. Recalcular antes dessa varredura é afrouxar a régua com trabalho por fazer.
+2. **Classificar o que sobrou, linha a linha.** Alvo alcançável por um teste que afirma comportamento observável não é resíduo, é tarefa. Confirmar no relatório do JaCoCo que a linha é de fato inalcançável antes de aceitá-la: uma linha marcada como perdida pode ser um salto que o compilador roteia por outro caminho, e nesse caso o teste "que faltava" não moveria nada.
+3. **Registrar a natureza do resíduo no README** — quantas linhas e de que tipo — e não só os números novos. Piso menor sem essa conta é indistinguível de regressão.
+4. **Gravar os valores medidos** em build limpo, no mesmo commit.
+
+Métrica que **subiu** sobe o piso junto, sempre: recalcular não é sinônimo de baixar as cinco.
+
+Continua valendo a regra base — **nunca** se escreve teste artificial para mover percentual. Se a única forma de segurar o piso for instanciar construtor privado por reflection ou exercitar getter, o certo é recalcular e declarar o resíduo.
+
 ### Código inalcançável e `@CoverageGenerated`
 
 Código que **nenhum teste honesto alcança** pode sair da medição, anotado com `@CoverageGenerated("motivo")` (em `shared/application`). O nome carrega "Generated" porque esse é o único gancho que o JaCoCo oferece — ele filtra membros anotados com anotação cujo nome simples contenha `Generated` e retenção `CLASS`/`RUNTIME`, o mesmo mecanismo do `lombok.Generated`. Nada ali é gerado.

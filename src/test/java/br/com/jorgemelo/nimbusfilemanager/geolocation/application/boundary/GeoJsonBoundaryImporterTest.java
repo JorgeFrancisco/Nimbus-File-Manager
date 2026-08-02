@@ -101,6 +101,37 @@ class GeoJsonBoundaryImporterTest {
 		Assertions.assertThat(insertedRows.get(0).getValue("name")).isEqualTo("Región");
 	}
 
+	/**
+	 * The repair only makes sense for text that arrived as Latin-1 bytes. A name
+	 * already carrying characters outside that range is real UTF-8, and putting it
+	 * through the repair would corrupt what is correct.
+	 */
+	@Test
+	void importDatasetLeavesNamesThatAreAlreadyRealUnicodeAlone() throws IOException {
+		Path file = write(collection(feature("Hà Nội", "VNM", POLYGON)));
+
+		importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST", "v1");
+
+		Assertions.assertThat(insertedRows.get(0).getValue("name")).isEqualTo("Hà Nội");
+	}
+
+	/**
+	 * A nameless feature is skipped instead of stored unnamed, and one named
+	 * beyond what the column takes is cut to fit - a whole country file is not
+	 * worth failing over one long label.
+	 */
+	@Test
+	void importDatasetSkipsNamelessFeaturesAndTrimsOverlongNames() throws IOException {
+		Path file = write(collection(namelessFeature("BRA", POLYGON), feature("A".repeat(250), "BRA", POLYGON)));
+
+		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST",
+				"v1");
+
+		Assertions.assertThat(total).isEqualTo(1);
+		Assertions.assertThat(insertedRows).hasSize(1);
+		Assertions.assertThat((String) insertedRows.get(0).getValue("name")).hasSize(200);
+	}
+
 	@Test
 	void importExtraDoesNotClearTableAndToleratesEmptyInput() throws IOException {
 		Assertions.assertThat(importer.importExtra(List.of(), "TEST", "v1")).isZero();
@@ -151,5 +182,9 @@ class GeoJsonBoundaryImporterTest {
 	private static String feature(String name, String group, String geometry) {
 		return "{\"type\":\"Feature\",\"properties\":{\"shapeName\":\"" + name + "\",\"shapeGroup\":\"" + group
 				+ "\"},\"geometry\":" + geometry + "}";
+	}
+
+	private static String namelessFeature(String group, String geometry) {
+		return "{\"type\":\"Feature\",\"properties\":{\"shapeGroup\":\"" + group + "\"},\"geometry\":" + geometry + "}";
 	}
 }

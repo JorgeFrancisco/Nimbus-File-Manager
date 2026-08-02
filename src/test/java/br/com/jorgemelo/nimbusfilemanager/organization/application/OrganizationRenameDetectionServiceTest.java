@@ -257,6 +257,56 @@ class OrganizationRenameDetectionServiceTest {
 		verify(catalogFileRepository, never()).save(any());
 	}
 
+	/**
+	 * The reconcile that listed the issues and this pass are two reads of a moving
+	 * catalog. A record deleted in between is dropped from the pairing instead of
+	 * leaving an entry that points at no record at all.
+	 */
+	@Test
+	void shouldIgnoreAMissingIssueWhoseRecordIsNoLongerInTheCatalog() throws IOException {
+		Path renamed = write("renamed.jpg", "photo-bytes");
+
+		CatalogFile present = catalogFile(1L, "C:/media/original.jpg", Files.size(renamed), "sha-a");
+
+		// Only the first record comes back: the second was deleted between the
+		// reconcile that reported it and this pass.
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L))).thenReturn(List.of(present));
+		when(fileHashService.hashes(renamed)).thenReturn(new FileHashes("sha-a", "md5-a"));
+		when(dateSourceService.resolveFileSystemDates(renamed)).thenReturn(new FileSystemDates(CREATED, CREATED));
+
+		OrganizationReconcileResponse response = response(
+				List.of(issue(1L, PathUtils.normalize("C:/media/original.jpg")),
+						issue(2L, PathUtils.normalize("C:/media/deleted.jpg"))),
+				List.of(issue(null, renamed.toString())));
+
+		Assertions.assertThat(service.detectAndApplyRenames(response)).containsExactly(1L);
+	}
+
+	/**
+	 * Same size, different content: the record stays missing. Pairing by size
+	 * alone would repoint it at a file it has nothing to do with.
+	 */
+	@Test
+	void shouldLeaveAMissingRecordWhoseContentAppearedNowhereOnDisk() throws IOException {
+		Path renamed = write("renamed.jpg", "photo-bytes");
+
+		CatalogFile matched = catalogFile(1L, "C:/media/original.jpg", Files.size(renamed), "sha-a");
+		CatalogFile unmatched = catalogFile(2L, "C:/media/other.jpg", Files.size(renamed), "sha-b");
+
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L))).thenReturn(List.of(matched, unmatched));
+		when(fileHashService.hashes(renamed)).thenReturn(new FileHashes("sha-a", "md5-a"));
+		when(dateSourceService.resolveFileSystemDates(renamed)).thenReturn(new FileSystemDates(CREATED, CREATED));
+
+		OrganizationReconcileResponse response = response(
+				List.of(issue(1L, PathUtils.normalize("C:/media/original.jpg")),
+						issue(2L, PathUtils.normalize("C:/media/other.jpg"))),
+				List.of(issue(null, renamed.toString())));
+
+		Assertions.assertThat(service.detectAndApplyRenames(response)).containsExactly(1L);
+
+		Assertions.assertThat(unmatched.getFileKey()).isEqualTo("C:/media/other.jpg");
+	}
+
 	private Path write(String name, String content) throws IOException {
 		return Files.writeString(dir.resolve(name), content);
 	}
