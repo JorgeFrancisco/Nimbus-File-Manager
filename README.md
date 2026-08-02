@@ -1264,8 +1264,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2512 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.19% branch, 98.06% line, 98.81% method, 100.00% class
+Tests:       2514 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.46% instruction, 92.20% branch, 98.06% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet
