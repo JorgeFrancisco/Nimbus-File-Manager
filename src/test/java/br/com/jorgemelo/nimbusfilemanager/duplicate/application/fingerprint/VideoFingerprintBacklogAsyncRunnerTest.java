@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintJobRun;
@@ -20,7 +21,7 @@ class VideoFingerprintBacklogAsyncRunnerTest {
 	private final VideoFingerprintBacklogService backlogService = mock(VideoFingerprintBacklogService.class);
 	private final FingerprintJobRunRepository jobRunRepository = mock(FingerprintJobRunRepository.class);
 	private final VideoFingerprintBacklogAsyncRunner runner = new VideoFingerprintBacklogAsyncRunner(backlogService,
-			jobRunRepository, Clock.systemDefaultZone());
+			jobRunRepository, Clock.systemDefaultZone(), new BackgroundWorkGate());
 
 	@Test
 	void startRefusesWhenNothingIsPending() {

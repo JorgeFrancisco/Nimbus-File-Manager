@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,11 +23,13 @@ import java.util.zip.ZipOutputStream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
@@ -349,5 +352,28 @@ class CatalogBackupServiceTest {
 
 		Assertions.assertThatIllegalStateException().isThrownBy(() -> service.restore(NAME))
 				.withMessageContaining("could not be loaded");
+	}
+	/**
+	 * pg_restore brings rows and indexes, never statistics. The first restore of a
+	 * real backup left the perceptual hash backlog on a plan chosen for a table
+	 * the planner believed was empty; it ran for seven minutes and finished
+	 * nothing. Asking for statistics costs seconds and closes that window.
+	 */
+	@Test
+	void givesThePlannerStatisticsBeforeAnnouncingTheRestoredCatalog(@TempDir Path folder) throws IOException {
+		backup(folder, """
+				{"schemaVersion":"13","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+				 "tables":["app_setting"]}
+				""");
+
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.restore(any())).thenReturn(true);
+
+		service(folder).restore(NAME);
+
+		InOrder order = inOrder(catalogSchemaRepository, eventPublisher);
+
+		order.verify(catalogSchemaRepository).analyze();
+		order.verify(eventPublisher).publishEvent(any(CatalogRestored.class));
 	}
 }

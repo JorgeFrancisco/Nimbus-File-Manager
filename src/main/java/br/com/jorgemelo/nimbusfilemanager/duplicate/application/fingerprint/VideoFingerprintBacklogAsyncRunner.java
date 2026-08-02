@@ -5,6 +5,7 @@ import java.time.Clock;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintJobRunRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
@@ -22,8 +23,8 @@ public class VideoFingerprintBacklogAsyncRunner {
 	private final FingerprintJobRunner runner;
 
 	public VideoFingerprintBacklogAsyncRunner(VideoFingerprintBacklogService backlogService,
-			FingerprintJobRunRepository jobRunRepository, Clock clock) {
-		this.runner = new FingerprintJobRunner(backlogService, jobRunRepository, clock);
+			FingerprintJobRunRepository jobRunRepository, Clock clock, BackgroundWorkGate backgroundWorkGate) {
+		this.runner = new FingerprintJobRunner(backlogService, jobRunRepository, clock, backgroundWorkGate);
 	}
 
 	public synchronized boolean start() {

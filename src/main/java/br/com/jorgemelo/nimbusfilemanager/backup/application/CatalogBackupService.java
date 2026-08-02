@@ -182,6 +182,11 @@ public class CatalogBackupService {
 					"The backup " + name + " could not be loaded: " + catalogDump.lastOutput());
 			}
 
+			// Before anything is told the catalog is back, and while the gate still
+			// holds the screens off: whoever reacts to the event queries these tables
+			// immediately, and a plan chosen without statistics does not finish.
+			catalogSchemaRepository.analyze();
+
 			log.info("Catalog restored from {}", file);
 
 			// Everything this run had read from the database describes an installation

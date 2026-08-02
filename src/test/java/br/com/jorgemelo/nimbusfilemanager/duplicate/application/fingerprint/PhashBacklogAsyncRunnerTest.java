@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintJobStatus;
@@ -49,7 +50,7 @@ class PhashBacklogAsyncRunnerTest {
 	}
 
 	private PhashBacklogAsyncRunner runner() {
-		return new PhashBacklogAsyncRunner(backlogService, jobRunRepository, Clock.systemDefaultZone());
+		return new PhashBacklogAsyncRunner(backlogService, jobRunRepository, Clock.systemDefaultZone(), new BackgroundWorkGate());
 	}
 
 	@Test

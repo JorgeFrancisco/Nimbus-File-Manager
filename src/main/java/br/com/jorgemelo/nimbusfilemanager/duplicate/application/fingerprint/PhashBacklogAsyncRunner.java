@@ -5,6 +5,7 @@ import java.time.Clock;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintJobRunRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
@@ -28,8 +29,8 @@ public class PhashBacklogAsyncRunner {
 	private final FingerprintJobRunner runner;
 
 	public PhashBacklogAsyncRunner(PhashBacklogService backlogService, FingerprintJobRunRepository jobRunRepository,
-			Clock clock) {
-		this.runner = new FingerprintJobRunner(backlogService, jobRunRepository, clock);
+			Clock clock, BackgroundWorkGate backgroundWorkGate) {
+		this.runner = new FingerprintJobRunner(backlogService, jobRunRepository, clock, backgroundWorkGate);
 	}
 
 	/**

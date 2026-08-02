@@ -46,6 +46,26 @@ public class CatalogSchemaRepository {
 		return jdbcTemplate.queryForList(TABLES, Map.of("excluded", EXCLUDED), String.class);
 	}
 
+	/**
+	 * Gives the planner statistics for the rows a restore just loaded.
+	 *
+	 * <p>
+	 * {@code pg_restore} brings data and indexes, never statistics: until
+	 * autovacuum gets round to each table, the planner sizes them at a default and
+	 * plans blind. On an empty installation nobody notices; on a restored catalog
+	 * of a hundred thousand files, a query planned in that window picks a shape
+	 * that never finishes - the first restore on a real backup left the perceptual
+	 * hash backlog running one for seven minutes, on a plan that takes
+	 * milliseconds once the statistics exist.
+	 *
+	 * <p>
+	 * Cheap by comparison: seconds, on a sample. It is what the PostgreSQL
+	 * documentation asks of anyone who restores.
+	 */
+	public void analyze() {
+		jdbcTemplate.getJdbcTemplate().execute("ANALYZE");
+	}
+
 	/** Current schema version, as Flyway recorded it. */
 	public String schemaVersion() {
 		List<String> versions = jdbcTemplate.queryForList(

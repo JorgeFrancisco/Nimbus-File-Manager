@@ -14,6 +14,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintB
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintJobStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintJobRun;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintJobRunRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 
 /**
@@ -45,8 +46,11 @@ class FingerprintJobRunner {
 	private final AtomicReference<Long> currentRunId = new AtomicReference<>();
 	private final AtomicReference<String> lastError = new AtomicReference<>();
 	private final Clock clock;
+	private final BackgroundWorkGate backgroundWorkGate;
 
-	public FingerprintJobRunner(FingerprintBacklog backlog, FingerprintJobRunRepository jobRunRepository, Clock clock) {
+	public FingerprintJobRunner(FingerprintBacklog backlog, FingerprintJobRunRepository jobRunRepository, Clock clock,
+			BackgroundWorkGate backgroundWorkGate) {
+		this.backgroundWorkGate = backgroundWorkGate;
 		this.backlog = backlog;
 		this.jobRunRepository = jobRunRepository;
 		this.clock = clock;
@@ -121,7 +125,13 @@ class FingerprintJobRunner {
 
 			message = e.getMessage();
 
-			log.error("Fingerprint backlog failed for {}/{}", backlog.kind(), backlog.algorithm(), e);
+			// A query cancelled because the application is closing, or because a restore
+			// pulled the tables out from under it, describes the moment - not the job.
+			if (backgroundWorkGate.standDown()) {
+				log.debug("Fingerprint backlog stopped for {}/{}", backlog.kind(), backlog.algorithm(), e);
+			} else {
+				log.error("Fingerprint backlog failed for {}/{}", backlog.kind(), backlog.algorithm(), e);
+			}
 		} finally {
 			finalizeRun(finalStatus, message);
 
