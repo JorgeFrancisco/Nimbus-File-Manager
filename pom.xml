@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.37.0.123</version>
+	<version>5.37.1.124</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -671,6 +671,14 @@
 										     Windows change source warns on every start. -->
 										<argument>--java-options</argument>
 										<argument>--enable-native-access=ALL-UNNAMED</argument>
+										<!-- A console launcher for an application that has no window of its own.
+										     Without it Windows attaches none at all, so the first start - which
+										     downloads a few hundred MB before the log file even exists - shows
+										     nothing anywhere and reads as a program that failed to open. It is also
+										     the only way to stop the application properly: Ctrl+C runs the shutdown
+										     hook, which stops the embedded PostgreSQL. Killing the launcher from the
+										     task manager, the only alternative today, leaves the server running. -->
+										<argument>--win-console</argument>
 									</arguments>
 								</configuration>
 							</execution>

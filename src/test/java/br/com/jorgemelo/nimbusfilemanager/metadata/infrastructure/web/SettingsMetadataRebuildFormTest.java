@@ -23,6 +23,7 @@ import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
@@ -51,6 +52,11 @@ class SettingsMetadataRebuildFormTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	// Wired into every web slice by WebMvcConfig: the interceptor that holds the
+	// screens off while a restore is replacing the catalog.
+	@MockitoBean
+	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
 
 	@MockitoBean
 	private MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;

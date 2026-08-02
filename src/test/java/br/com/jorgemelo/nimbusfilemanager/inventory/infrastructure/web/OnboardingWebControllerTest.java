@@ -183,6 +183,22 @@ class OnboardingWebControllerTest {
 		verify(appSettingService, never()).update(any(), any(), any());
 	}
 
+	/** An empty field says what is missing instead of saving a blank folder. */
+	@Test
+	void choosingABlankBackupFolderShouldSaySoAndSaveNothing() {
+		AppSettingService appSettingService = mock(AppSettingService.class);
+		RedirectAttributesModelMap redirectAttributes = new RedirectAttributesModelMap();
+
+		String view = controller(appSettingService, mock(InventoryBatchLauncherService.class),
+				mock(InventoryWatchService.class)).chooseBackupFolder("   ", null, redirectAttributes);
+
+		Assertions.assertThat(view).isEqualTo("redirect:/app/onboarding");
+		Assertions.assertThat(redirectAttributes.getFlashAttributes().get("error"))
+				.isEqualTo("Informe a pasta onde estão os backups.");
+
+		verify(appSettingService, never()).update(any(), any(), any());
+	}
+
 	/**
 	 * The restore panel needs the backup collaborators; every case here is about
 	 * the wizard, so they answer nothing by default.

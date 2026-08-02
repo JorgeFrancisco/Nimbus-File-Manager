@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web.MetadataRebuildSettingsAdvice;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationPreviewExportService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
@@ -45,6 +46,11 @@ class SecurityConfigTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	// Wired into every web slice by WebMvcConfig: the interceptor that holds the
+	// screens off while a restore is replacing the catalog.
+	@MockitoBean
+	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
 
 	@MockitoBean
 	private OrganizationService organizationService;

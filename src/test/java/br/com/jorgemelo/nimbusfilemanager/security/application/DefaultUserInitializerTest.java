@@ -272,6 +272,26 @@ class DefaultUserInitializerTest {
 		verify(repository, never()).save(any());
 	}
 
+	/**
+	 * The reset names an account. A restored catalog whose administrator is called
+	 * something else leaves nothing to reset, and inventing the user would hand out
+	 * an account the backup never had.
+	 */
+	@Test
+	void resetsNothingWhenTheConfiguredUsernameIsNotInTheRestoredCatalog() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		when(repository.count()).thenReturn(1L);
+		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.empty());
+
+		new DefaultUserInitializer(repository, encoder, credential,
+				props("admin@example.com", "", "back-in")).run(null);
+
+		verify(repository, never()).save(any());
+		verify(encoder, never()).encode(any());
+	}
+
 	private NimbusFileManagerProperties props(String username, String password) {
 		return props(username, password, null);
 	}

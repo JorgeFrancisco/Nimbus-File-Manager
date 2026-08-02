@@ -13,6 +13,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.handler.MappedInterceptor;
 import org.springframework.web.util.ServletRequestPathUtils;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.RestoreInProgressInterceptor;
 import br.com.jorgemelo.nimbusfilemanager.security.application.PasswordChangeRequiredInterceptor;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.LibraryConfigurationInterceptor;
 
@@ -32,6 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.LibraryConfi
  */
 class WebMvcConfigTest {
 
+	private final RestoreInProgressInterceptor restoreInterceptor = mock(RestoreInProgressInterceptor.class);
 	private final LibraryConfigurationInterceptor libraryInterceptor = mock(LibraryConfigurationInterceptor.class);
 	private final PasswordChangeRequiredInterceptor passwordInterceptor = mock(PasswordChangeRequiredInterceptor.class);
 
@@ -40,7 +42,7 @@ class WebMvcConfigTest {
 
 	@BeforeEach
 	void registerInterceptors() {
-		WebMvcConfig config = new WebMvcConfig(libraryInterceptor, passwordInterceptor);
+		WebMvcConfig config = new WebMvcConfig(restoreInterceptor, libraryInterceptor, passwordInterceptor);
 
 		InterceptorRegistry registry = new InterceptorRegistry();
 
