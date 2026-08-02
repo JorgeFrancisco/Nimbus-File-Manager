@@ -28,6 +28,29 @@ public class BackupFolderResolver {
 		this.workspaceManager = workspaceManager;
 	}
 
+	/**
+	 * Where a backup is built before it is kept.
+	 *
+	 * <p>
+	 * Always inside the workspace, even when the backup itself goes elsewhere. A
+	 * file written straight into its final folder grows there for minutes, and
+	 * everything watching that folder reacts to every batch of bytes: the
+	 * inventory watcher, a cloud client synchronising the drive, an antivirus
+	 * scanning as it goes. Building it here and moving the finished file means
+	 * they all see one complete file appear instead.
+	 */
+	public Path staging() {
+		Path folder = workspaceManager.resolve(WorkspaceFolders.TEMP);
+
+		try {
+			Files.createDirectories(folder);
+		} catch (IOException e) {
+			throw new IllegalStateException("Could not create the staging folder " + folder, e);
+		}
+
+		return folder;
+	}
+
 	/** The configured folder, created if needed, or the workspace default. */
 	public Path folder() {
 		String configured = appSettingService.stringValue(SettingsConstants.BACKUP_FOLDER, "");

@@ -4,6 +4,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
@@ -36,6 +38,7 @@ class SelfWriteAwareFileChangeSourceTest {
 
 		pathRegistry.announce(ours);
 
+		when(delegate.root()).thenReturn(folder);
 		when(delegate.pollChangedFiles()).thenReturn(List.of(ours, theirs));
 
 		Assertions.assertThat(source.pollChangedFiles()).containsExactly(theirs);
@@ -53,7 +56,29 @@ class SelfWriteAwareFileChangeSourceTest {
 		Path photo = folder.resolve("holiday.jpg");
 
 		when(scanExclusionService.isApplicationOwned(backup)).thenReturn(true);
+		when(delegate.root()).thenReturn(folder);
 		when(delegate.pollChangedFiles()).thenReturn(List.of(backup, photo));
+
+		Assertions.assertThat(source.pollChangedFiles()).containsExactly(photo);
+	}
+
+	/**
+	 * A cloud client synchronising the catalog backup stages the upload in hidden
+	 * folders at the root of the same drive. The automatic inventory excludes
+	 * hidden paths, so every byte moved there was starting a walk of 146k files to
+	 * catalogue nothing.
+	 */
+	@Test
+	void dropsChangesUnderHiddenFolders(@TempDir Path drive) throws IOException {
+		Path staging = Files.createDirectory(drive.resolve(".tmp.driveupload"));
+
+		Files.setAttribute(staging, "dos:hidden", Boolean.TRUE);
+
+		Path staged = Files.writeString(staging.resolve("nimbus-catalog.zip.part"), "bytes");
+		Path photo = Files.writeString(drive.resolve("holiday.jpg"), "bytes");
+
+		when(delegate.root()).thenReturn(drive);
+		when(delegate.pollChangedFiles()).thenReturn(List.of(staged, photo));
 
 		Assertions.assertThat(source.pollChangedFiles()).containsExactly(photo);
 	}

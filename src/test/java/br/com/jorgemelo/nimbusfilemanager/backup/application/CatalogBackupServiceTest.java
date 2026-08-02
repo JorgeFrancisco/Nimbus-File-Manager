@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
  * What the backup accepts and what it refuses. Restoring is the one action that
@@ -49,13 +54,18 @@ class CatalogBackupServiceTest {
 	private final BackupFolderResolver backupFolderResolver = mock(BackupFolderResolver.class);
 	private final CatalogDump catalogDump = mock(CatalogDump.class);
 
+	// The real move: it is what puts the file where the assertions look for it.
+	private final SecureFileMove secureFileMove = new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+			new SelfWrittenPathRegistry(Clock.systemDefaultZone()));
+
 	private CatalogBackupService service(Path folder) {
 		when(backupFolderResolver.folder()).thenReturn(folder);
+		lenient().when(backupFolderResolver.staging()).thenReturn(folder);
 
 		// The injected mapper carries the JSR-310 module; a bare one cannot write the
 		// timestamp of the manifest, which is what production actually uses.
 		return new CatalogBackupService(catalogCopyRepository, catalogDump, backupFolderResolver,
-				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress());
+				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove);
 	}
 
 	private Path backup(Path folder, String manifest) throws IOException {
@@ -169,6 +179,37 @@ class CatalogBackupServiceTest {
 		when(catalogDump.readable(any())).thenReturn(true);
 
 		Assertions.assertThat(service(folder).create().name()).isEqualTo("nimbus-catalog-20260801-060000.zip");
+	}
+
+	/**
+	 * The file is built in the workspace and only then moved into place, so
+	 * whatever watches the backup folder - the inventory, a cloud client, an
+	 * antivirus - sees one finished file appear instead of one growing for
+	 * minutes.
+	 */
+	@Test
+	void buildsTheBackupOutsideItsFolderAndMovesItWhenFinished(@TempDir Path workspace, @TempDir Path folder)
+			throws IOException {
+		CatalogBackupService service = service(folder);
+
+		when(backupFolderResolver.staging()).thenReturn(workspace);
+		when(catalogCopyRepository.tables()).thenReturn(List.of());
+		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.readable(any())).thenReturn(true);
+		when(catalogDump.dump(any())).thenAnswer(call -> {
+			Path written = call.getArgument(0);
+
+			Assertions.assertThat(written.getParent()).isEqualTo(workspace);
+
+			Files.writeString(written, "a dump");
+
+			return true;
+		});
+
+		BackupFile backup = service.create();
+
+		Assertions.assertThat(folder.resolve(backup.name())).exists();
+		Assertions.assertThat(workspace.resolve(backup.name())).doesNotExist();
 	}
 
 	/**

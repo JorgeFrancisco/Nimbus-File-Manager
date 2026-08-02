@@ -1,10 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.domain.enums;
 
 /**
- * What a running backup operation is doing. The restore phases are told apart
- * because they carry very different weight on screen: emptying the catalog is
- * the point of no return, and a screen that goes quiet there is the one a user
- * is most likely to close.
+ * What a running backup operation is doing. Emptying the catalog is not among
+ * them: the restore hands that to the dump tool, which drops and recreates each
+ * object as it goes, so there is no separate step to report.
  */
 public enum BackupPhase {
 
@@ -13,8 +12,6 @@ public enum BackupPhase {
 	/** Reading the tables out into the archive. */
 	EXPORTING,
 
-	/** Emptying the catalog before loading the archive back. */
-	CLEARING,
 
 	/** Loading the archive back into the tables. */
 	IMPORTING

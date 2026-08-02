@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -49,11 +50,47 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	 * while the file is still being written.
 	 */
 	private boolean worthAnInventory(Path changed) {
-		if (scanExclusionService.isApplicationOwned(changed)) {
+		if (scanExclusionService.isApplicationOwned(changed) || isHidden(changed)) {
 			return false;
 		}
 
 		return !selfWrittenPathRegistry.consume(changed);
+	}
+
+	/**
+	 * Whether the path, or any folder above it, is hidden.
+	 *
+	 * <p>
+	 * The automatic inventory always runs with hidden files excluded, so waking it
+	 * for one is asking it to walk the whole library to catalogue nothing. The
+	 * case that forced this: a cloud client synchronising the catalog backup
+	 * staged the upload in hidden folders at the root of the same drive, and
+	 * every batch of bytes it moved there started an inventory of 146k files.
+	 *
+	 * <p>
+	 * The parents are checked too because the change is usually a file inside such
+	 * a folder, and the file itself carries no hidden attribute. A path that can no
+	 * longer be read - the usual case for a delete - counts as not hidden, so real
+	 * deletions keep reaching the watcher.
+	 */
+	private boolean isHidden(Path changed) {
+		Path root = delegate.root();
+
+		// Only below the watched root, never the root itself or anything above it -
+		// the same rule the scanner walks by. Judging absolute ancestors would hide
+		// whole libraries: a folder under AppData, which Windows marks hidden, would
+		// have every file in it ignored.
+		for (Path current = changed; current != null && !current.equals(root); current = current.getParent()) {
+			try {
+				if (Files.exists(current) && Files.isHidden(current)) {
+					return true;
+				}
+			} catch (IOException _) {
+				// Unreadable attributes say nothing; let the change through.
+			}
+		}
+
+		return false;
 	}
 
 	@Override

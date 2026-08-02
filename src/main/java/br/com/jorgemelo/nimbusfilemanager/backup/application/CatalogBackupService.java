@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupManifest;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -62,16 +63,18 @@ public class CatalogBackupService {
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 	private final BackupProgress progress;
+	private final SecureFileMove secureFileMove;
 
 	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository, CatalogDump catalogDump,
 			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock,
-			BackupProgress progress) {
+			BackupProgress progress, SecureFileMove secureFileMove) {
 		this.catalogCopyRepository = catalogCopyRepository;
 		this.catalogDump = catalogDump;
 		this.backupFolderResolver = backupFolderResolver;
 		this.objectMapper = objectMapper;
 		this.clock = clock;
 		this.progress = progress;
+		this.secureFileMove = secureFileMove;
 	}
 
 	/**
@@ -83,11 +86,17 @@ public class CatalogBackupService {
 	 * run while protecting nothing.
 	 */
 	public BackupFile create() {
-		Path folder = backupFolderResolver.folder();
+		String name = PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + SUFFIX;
 
-		Path target = folder.resolve(PREFIX + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + SUFFIX);
+		Path staging = backupFolderResolver.staging();
 
-		Path dump = folder.resolve(PREFIX + "working.dump");
+		Path dump = staging.resolve(PREFIX + "working.dump");
+		// A name of its own, so staging and destination can never be the same file
+		// when both resolve to the same folder - the cleanup would delete the backup
+		// it had just moved into place.
+		Path built = staging.resolve(PREFIX + "building" + SUFFIX);
+
+		Path target = backupFolderResolver.folder().resolve(name);
 
 		progress.start(BackupPhase.EXPORTING, dump);
 
@@ -103,14 +112,26 @@ public class CatalogBackupService {
 				throw new IllegalStateException("The dump could not be read back and was discarded");
 			}
 
-			pack(dump, target);
+			pack(dump, built);
 
+			// The finished file appears in its folder in one step. Built there instead,
+			// it would grow for minutes while the inventory watcher, a cloud client and
+			// an antivirus each reacted to every batch of bytes.
+			//
+			// The secure move rather than a plain one: this is the file a rescue reads,
+			// and when the destination is another disk the move is a copy that nothing
+			// else would verify. It also announces both paths to the watcher, which is
+			// what keeps the arrival from waking an inventory.
+			progress.start(BackupPhase.EXPORTING, target);
+
+			secureFileMove.move(built, target, true);
 		} catch (IOException exception) {
 			deleteQuietly(target);
 
 			throw new IllegalStateException("Could not write the backup " + target, exception);
 		} finally {
 			deleteQuietly(dump);
+			deleteQuietly(built);
 		}
 
 		log.info("Catalog backup written to {}", target);
