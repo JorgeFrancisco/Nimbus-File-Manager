@@ -345,6 +345,7 @@ Classes fora da medição (configuradas no `pom.xml` e espelhadas nas exclusões
 - `**/repository/**` e `**/*Repository` (contratos de acesso a dados).
 - `**/*ProcessRunner` (glue de processo externo: ffmpeg/exiftool/mediainfo).
 - `**/GeoBoundariesSource` (adaptador HTTP de download da base geográfica) e `**/windows/**` (glue nativo FFM/kernel32, só-Windows).
+- `**/infrastructure/desktop/**` (glue AWT de bandeja: `SystemTray`/`TrayIcon`/`PopupMenu` e o repasse ao `explorer.exe` — não há bandeja no CI headless, onde toda chamada é no-op, e o que ele faz num desktop só se vê num desktop).
 
 Lógica de verdade **nunca** mora nessas classes excluídas — fica no serviço que as usa, que é testado. As metas numéricas de cobertura e o estado atual vivem no README.
 

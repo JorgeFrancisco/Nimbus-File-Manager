@@ -1,10 +1,13 @@
 package br.com.jorgemelo.nimbusfilemanager;
 
+import java.nio.file.Path;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.windows.WindowsUsnElevation;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceBootstrapListener;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
@@ -13,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.desktop.ApplicationTray;
 
 @SpringBootApplication
 @EnableConfigurationProperties({ NimbusFileManagerProperties.class, BoundaryDatasetProperties.class,
@@ -32,7 +36,15 @@ public class NimbusFileManagerApplication {
 			System.exit(0);
 		}
 
+		Path workspace = Path.of(WorkspaceLocation.resolve());
+
+		ApplicationTray.install(workspace.resolve("logs"), workspace);
+
 		SpringApplication application = new SpringApplication(NimbusFileManagerApplication.class);
+
+		// Spring Boot assumes headless, which is right for a server and wrong here:
+		// the tray icon is the only thing this application shows.
+		application.setHeadless(false);
 
 		application.addListeners(new WorkspaceBootstrapListener());
 

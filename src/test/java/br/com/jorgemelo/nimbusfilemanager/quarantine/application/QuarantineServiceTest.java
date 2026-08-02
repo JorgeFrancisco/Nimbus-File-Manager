@@ -84,6 +84,36 @@ class QuarantineServiceTest {
 		Assertions.assertThat(item.conflict()).isFalse();
 	}
 
+	/**
+	 * The lightbox is offered from the extension, so a name without one has to fall
+	 * through to "nothing to open" - the id that would serve the content exists
+	 * either way, and an offer that opens an empty viewer is worse than no offer.
+	 */
+	@Test
+	void offersNoPreviewForAFileWhoseNameCarriesNoExtension(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path photoQuarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+		Path plainQuarantine = writeQuarantineCopy(tmp, "11__README", "content");
+
+		Movement photo = quarantineMovement(origin.resolve("a.jpg"), photoQuarantine);
+		Movement plain = quarantineMovement(origin.resolve("README"), plainQuarantine);
+
+		when(photo.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
+		when(plain.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
+		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
+				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
+				.thenReturn(new PageImpl<>(List.of(photo, plain)));
+
+		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
+
+		Assertions.assertThat(items.get(0).image()).isTrue();
+		Assertions.assertThat(items.get(0).previewUrl()).isNotNull();
+
+		Assertions.assertThat(items.get(1).image()).isFalse();
+		Assertions.assertThat(items.get(1).video()).isFalse();
+		Assertions.assertThat(items.get(1).previewUrl()).isNull();
+	}
+
 	@Test
 	void restoresFileBackToOriginalPath(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
@@ -154,6 +184,28 @@ class QuarantineServiceTest {
 		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ORIGIN_MISSING.name());
+		Assertions.assertThat(Files.exists(quarantine)).isTrue();
+
+		verify(persistence, never()).applyRestore(any(), any(), any());
+	}
+
+	/**
+	 * A recorded original path with no folder above it - a row that lost its
+	 * directory somewhere between two versions - would restore into nowhere. The
+	 * screen gets a reason instead of a crash, which is what it shows in the dialog.
+	 */
+	@Test
+	void refusesToRestoreWhenTheRecordedOriginalPathHasNoFolder(@TempDir Path tmp) throws Exception {
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(tmp.getRoot(), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+
+		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+		Assertions.assertThat(result.message()).isNotBlank();
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
 		verify(persistence, never()).applyRestore(any(), any(), any());

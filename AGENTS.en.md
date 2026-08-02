@@ -9,7 +9,7 @@
 > and this file has not been retranslated. Update both in the same commit, and refresh the
 > marker below with the hash the test reports.
 
-<!-- agents-sha256: baeb0bc37ac23136a5a5a738db7b91badc7356d357e54a98751f4f23bad80db7 -->
+<!-- agents-sha256: 27309c185ff5f67db45e8897f03a4618e47c360d1be5a1ba4b0794fee79088ce -->
 
 > **Permanent reference document of the project.**
 
@@ -352,6 +352,7 @@ Classes outside the measurement (configured in `pom.xml` and mirrored in the Son
 - `**/repository/**` and `**/*Repository` (data-access contracts).
 - `**/*ProcessRunner` (external process glue: ffmpeg/exiftool/mediainfo).
 - `**/GeoBoundariesSource` (the HTTP adapter that downloads the geographic dataset) and `**/windows/**` (native FFM/kernel32 glue, Windows only).
+- `**/infrastructure/desktop/**` (AWT tray glue: `SystemTray`/`TrayIcon`/`PopupMenu` and the hand-off to `explorer.exe` — there is no tray on the headless CI, where every call is a no-op, and what it does on a desktop is only visible on one).
 
 Real logic **never** lives in those excluded classes — it lives in the service that uses them, which is tested. The numeric coverage targets and the current state live in the README.
 

@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.39.0.139</version>
+	<version>5.40.0.140</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -49,7 +49,7 @@
 		     layer, external-process glue and the HTTP download adapter are covered by
 		     integration/manual checks, not units. Issues are still analysed on them;
 		     only coverage is excluded. -->
-		<sonar.coverage.exclusions>**/NimbusFileManagerApplication.java,**/infrastructure/config/**,**/domain/model/**,**/dto/**,**/application/constants/**,**/*Constants.java,**/repository/**,**/*Repository.java,**/*ProcessRunner.java,**/GeoBoundariesSource.java,**/windows/**</sonar.coverage.exclusions>
+		<sonar.coverage.exclusions>**/NimbusFileManagerApplication.java,**/infrastructure/config/**,**/domain/model/**,**/dto/**,**/application/constants/**,**/*Constants.java,**/repository/**,**/*Repository.java,**/*ProcessRunner.java,**/GeoBoundariesSource.java,**/windows/**,**/infrastructure/desktop/**</sonar.coverage.exclusions>
 		<!-- The Windows-only FFM glue (USN journal + ReadDirectoryChangesW) in the
 		     ".../source/**/windows" subpackages is native interop: the java.lang.foreign
 		     downcalls mirror the Win32 ABI (DeviceIoControl's 8 params, PascalCase kernel32
@@ -462,6 +462,11 @@
 						     integration tests and manual runs; all the logic above it
 						     (parsers/interpreters/sources/cursor/selection) is unit-tested. -->
 						<exclude>**/windows/**</exclude>
+						<!-- AWT tray glue (SystemTray\TrayIcon\PopupMenu + explorer.exe hand-off).
+						     There is no tray on the headless CI, so every call is a no-op there and
+						     what it does on a desktop is only visible on one. The words and the
+						     address it opens live in TrayText, which is unit-tested. -->
+						<exclude>**/infrastructure/desktop/**</exclude>
 					</excludes>
 				</configuration>
 				<executions>
@@ -546,6 +551,7 @@
 								<param>*ProcessRunner</param>
 								<param>*GeoBoundariesSource</param>
 								<param>*.windows.*</param>
+								<param>*.infrastructure.desktop.*</param>
 							</excludedClasses>
 							<!-- Testcontainers / @SpringBootTest classes cannot drive mutation testing:
 							     booting a Spring context (and a Postgres container) once per mutation is
@@ -678,14 +684,6 @@
 										     Windows change source warns on every start. -->
 										<argument>--java-options</argument>
 										<argument>--enable-native-access=ALL-UNNAMED</argument>
-										<!-- A console launcher for an application that has no window of its own.
-										     Without it Windows attaches none at all, so the first start - which
-										     downloads a few hundred MB before the log file even exists - shows
-										     nothing anywhere and reads as a program that failed to open. It is also
-										     the only way to stop the application properly: Ctrl+C runs the shutdown
-										     hook, which stops the embedded PostgreSQL. Killing the launcher from the
-										     task manager, the only alternative today, leaves the server running. -->
-										<argument>--win-console</argument>
 										<!-- The launcher, the taskbar and the installer all show this. Without it they
 										     show the generic Java cup, which reads as "some Java thing" rather than as a
 										     product. The same file the browser tab already uses. -->

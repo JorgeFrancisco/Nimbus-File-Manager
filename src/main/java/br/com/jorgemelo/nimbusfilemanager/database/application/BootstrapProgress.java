@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.database.application;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.desktop.ApplicationTray;
+
 /**
  * Says what is happening while the database is being fetched and started.
  *
@@ -19,5 +21,10 @@ public final class BootstrapProgress {
 
 	public static void say(String message) {
 		System.out.println(PREFIX + message);
+
+		// The same message on the tray icon. Standard output needs a console window
+		// to be seen, and the first start - minutes of downloading before anything
+		// listens - is exactly when nobody has one open.
+		ApplicationTray.status(message);
 	}
 }

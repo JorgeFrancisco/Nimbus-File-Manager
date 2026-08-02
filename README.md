@@ -1229,6 +1229,25 @@ the `pom.xml` and must stay that way: Windows decides "upgrade this installation
 "install a second one" by that code alone, and `jpackage` invents a fresh one per build when it
 is absent.
 
+### No console, an icon by the clock
+
+The packaged application opens no window of its own. What it opens is a tray icon, installed from
+`main` before Spring exists — which is the point of it, because a first start spends minutes
+fetching a database server before anything is listening, and a program with no sign of life reads
+as one that failed to open. The tooltip carries every bootstrap step; a notification is raised
+twice only, at the first step and when the application is ready, the second one carrying the
+address that opens it.
+
+Its menu opens the application, the log folder and the workspace, and ends the run. Ending from
+the menu matters more than it looks: the embedded PostgreSQL is stopped by the application's own
+shutdown, so leaving through the task manager left a server behind, and until now the only way to
+close properly was Ctrl+C in a console somebody had to keep open. Everything the menu opens is
+handed to `explorer.exe` rather than to `java.awt.Desktop` — this process may be running elevated
+to read the USN journal, and a browser started from it would inherit that.
+
+Where there is no tray — a container, a Linux server, a session without one — every call is a
+no-op and the application runs exactly as it did before.
+
 ### The embedded database
 
 Every run manages its own PostgreSQL: the cluster lives in
@@ -1298,8 +1317,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2522 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.23% branch, 98.06% line, 98.81% method, 100.00% class
+Tests:       2529 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.47% instruction, 92.28% branch, 98.06% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1311,23 +1330,27 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.46% instruction, 92.19% branch, 98.06% line, 98.81% method, 100.00% class
+Floor:  98.47% instruction, 92.24% branch, 98.06% line, 98.81% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-All five rose, and the whole difference is one class that had never had a test of its own:
-the neutral driver behind both fingerprint backlogs. It had been exercised only through the two
-async runners that wrap it, which reach the happy path and nothing else — so what went uncovered
-was every way a run can end badly: an inventory taking the files back mid-drain, a run record that
-cannot be written back, a drain that never went through `start()`. The restore work added one
-more, and it is the one worth naming: a backlog querying while `pg_restore` drops its tables fails
-in a way that is indistinguishable from a defect, and the only thing that tells them apart is
-`BackgroundWorkGate`. That decision shows up nowhere but the log level, so the test asserts the
-level — the same shape `InventoryWatchServiceTest` already uses for the same rule.
+Instruction and branch rose; line and method held. The tray arrived as 272 uncovered instructions
+of AWT glue — there is no `SystemTray` on the headless CI, so every call there is a no-op — and
+that glue is now excluded by package, the same treatment the process runners and the native FFM
+code already get. What is not excluded is the part that decides anything: the menu's words and the
+address it opens live in `TrayText`, which is unit-tested, including the two ways it refuses to
+guess — a key that is not in the bundle, and a bundle that is not on the classpath.
 
-Line and method are set from the lower of two consecutive readings of the same code (98.04 and
-98.06, 98.76 and 98.80). Pinning a floor to the higher one would fail the next run for no reason —
-see *A medição varia entre execuções* below for where that spread comes from.
+That still left instruction a hundredth short, and the missing hundredth was real: seven
+instructions of a `catch` that only a broken classpath stream reaches. *Recalcular o piso* asks for
+the honest harvest first, so it was taken before touching the floor, in the quarantine listing that
+had the two branches worth asserting — a file whose name carries no extension is offered no preview
+rather than a lightbox with nothing in it, and a recorded original path with no folder above it is
+refused with a reason instead of restoring into nowhere.
+
+Branch keeps the floor a few hundredths under the reading, as it has since the goal was last reset:
+it is the metric that moves most between two runs of the same code — see *A medição varia entre
+execuções* below for where that spread comes from.
 
 Branch, method and class rose; instruction and line were recalculated downward, by 0.03 and 0.05,
 after the embedded-database and backup domains landed. The rule that allows this is *Recalcular o
@@ -1339,7 +1362,7 @@ start, a geographic import keeping the reason it failed, and the one statistics 
 from the delegation sweep. That pass moved branch and method above the old floor and covered 16 of
 the missing lines; what it could not reach is what the floor was then set to.
 
-Of the 238 lines still uncovered, 141 are I/O `catch` blocks, 28 are the anti-instantiation guards
+Of the 237 lines still uncovered, 141 are I/O `catch` blocks, 28 are the anti-instantiation guards
 of utility classes, and the remainder is largely unreachable by construction — a `continue` or
 `break` the compiler reaches only through a condition that cannot occur, a symlink branch that
 needs the operating system to refuse something. 29 of the 238 are in the two newest domains. None
