@@ -25,6 +25,18 @@ jobs:
           java-version: '25'
           cache: maven
 
+      # The catalog backup shells out to pg_dump/pg_restore, and a client refuses to
+      # dump a server newer than itself. The tests run PostgreSQL 17 - the major the
+      # product ships - while the runner comes with a 16 client, which failed every
+      # backup test with "aborting because of server version mismatch". The PGDG
+      # repository is already configured on the image (its own client comes from
+      # there), so only the package is missing.
+      - name: Install the PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
       - name: ./mvnw clean test
         run: |
           chmod +x mvnw

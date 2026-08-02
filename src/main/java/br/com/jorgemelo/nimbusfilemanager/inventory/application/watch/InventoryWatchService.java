@@ -73,7 +73,7 @@ public class InventoryWatchService extends LocalizedComponent {
 	 * changes are logged at debug, the launch at info, and diagnosing a watcher
 	 * that fires too often meant guessing at which of the two paths woke it.
 	 */
-	private volatile String pendingReason;
+	private volatile String pendingReason = "a reconfiguration of the watched folder";
 	private volatile boolean shuttingDown;
 	private volatile LocalDateTime lastReconciliation;
 	private volatile long lastReconciliationRepaired;
