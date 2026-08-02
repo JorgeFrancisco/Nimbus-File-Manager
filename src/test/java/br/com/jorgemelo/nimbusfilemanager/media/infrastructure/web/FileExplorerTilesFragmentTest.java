@@ -21,6 +21,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerEntry;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerView;
@@ -54,6 +55,9 @@ class FileExplorerTilesFragmentTest {
 	// screens off while a restore is replacing the catalog.
 	@MockitoBean
 	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
+
+	@MockitoBean
+	private BackgroundWorkGate backgroundWorkGate;
 
 	@MockitoBean
 	private FileExplorerService fileExplorerService;

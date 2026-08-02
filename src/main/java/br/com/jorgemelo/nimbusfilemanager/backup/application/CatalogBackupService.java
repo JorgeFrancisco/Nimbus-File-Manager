@@ -27,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -67,10 +68,12 @@ public class CatalogBackupService {
 	private final BackupProgress progress;
 	private final SecureFileMove secureFileMove;
 	private final ApplicationEventPublisher eventPublisher;
+	private final BackgroundWorkGate backgroundWorkGate;
 
 	public CatalogBackupService(CatalogSchemaRepository catalogSchemaRepository, CatalogDump catalogDump,
 			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock, BackupProgress progress,
-			SecureFileMove secureFileMove, ApplicationEventPublisher eventPublisher) {
+			SecureFileMove secureFileMove, ApplicationEventPublisher eventPublisher,
+			BackgroundWorkGate backgroundWorkGate) {
 		this.catalogSchemaRepository = catalogSchemaRepository;
 		this.catalogDump = catalogDump;
 		this.backupFolderResolver = backupFolderResolver;
@@ -79,6 +82,7 @@ public class CatalogBackupService {
 		this.progress = progress;
 		this.secureFileMove = secureFileMove;
 		this.eventPublisher = eventPublisher;
+		this.backgroundWorkGate = backgroundWorkGate;
 	}
 
 	/**
@@ -159,6 +163,11 @@ public class CatalogBackupService {
 
 		Path dump = backupFolderResolver.folder().resolve(PREFIX + "restoring.dump");
 
+		// Announced before the first table is dropped and cleared only at the end.
+		// Every periodic task in this process queries a database that, for the next
+		// few minutes, is missing whatever pg_restore is recreating at that instant.
+		backgroundWorkGate.restoreStarted();
+
 		try (ZipFile zip = new ZipFile(file.toFile())) {
 			BackupManifest manifest = manifest(zip, file);
 
@@ -184,6 +193,8 @@ public class CatalogBackupService {
 		} catch (IOException exception) {
 			throw new IllegalStateException("Could not read the backup " + file, exception);
 		} finally {
+			backgroundWorkGate.restoreFinished();
+
 			deleteQuietly(dump);
 		}
 	}

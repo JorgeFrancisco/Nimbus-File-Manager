@@ -2,6 +2,8 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+
 /**
  * Restarts the fingerprint backlogs once whatever they stepped aside for is
  * over. Both are resumed: a conversion competes for ffmpeg with photos and
@@ -19,14 +21,25 @@ public class FingerprintBacklogResumer {
 
 	private final PhashBacklogAsyncRunner photoBacklogRunner;
 	private final VideoFingerprintBacklogAsyncRunner videoBacklogRunner;
+	private final BackgroundWorkGate backgroundWorkGate;
 
 	public FingerprintBacklogResumer(PhashBacklogAsyncRunner photoBacklogRunner,
-			VideoFingerprintBacklogAsyncRunner videoBacklogRunner) {
+			VideoFingerprintBacklogAsyncRunner videoBacklogRunner, BackgroundWorkGate backgroundWorkGate) {
 		this.photoBacklogRunner = photoBacklogRunner;
 		this.videoBacklogRunner = videoBacklogRunner;
+		this.backgroundWorkGate = backgroundWorkGate;
 	}
 
 	public void resume() {
+		// Starting a backlog while the application is closing only queues work that
+		// will reach a connection pool already shut - which is how a finished
+		// inventory came to end an otherwise clean shutdown with an I/O error against
+		// the backend. Nothing is lost: the backlog is what is still pending in the
+		// database, and the next start picks it up.
+		if (backgroundWorkGate.standDown()) {
+			return;
+		}
+
 		if (photoBacklogRunner.start()) {
 			photoBacklogRunner.run();
 		}

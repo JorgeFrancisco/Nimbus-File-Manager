@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,16 +36,18 @@ public class RestoreInProgressInterceptor extends LocalizedComponent implements 
 	private static final String TITLE = "backend.backup.restoreInProgress";
 
 	private final CatalogBackupAsyncRunner backupRunner;
+	private final BackgroundWorkGate backgroundWorkGate;
 
-	public RestoreInProgressInterceptor(CatalogBackupAsyncRunner backupRunner) {
+	public RestoreInProgressInterceptor(CatalogBackupAsyncRunner backupRunner, BackgroundWorkGate backgroundWorkGate) {
 		this.backupRunner = backupRunner;
+		this.backgroundWorkGate = backgroundWorkGate;
 	}
 
 	@Override
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
 			throws IOException {
 		// Only a restore: a backup reads the database and leaves it whole.
-		if (!backupRunner.isRunning() || !backupRunner.progress().importing()) {
+		if (!backgroundWorkGate.restoring()) {
 			return true;
 		}
 

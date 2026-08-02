@@ -31,6 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.Cata
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -68,7 +69,7 @@ class CatalogBackupServiceTest {
 		// timestamp of the manifest, which is what production actually uses.
 		return new CatalogBackupService(catalogSchemaRepository, catalogDump, backupFolderResolver,
 				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove,
-				eventPublisher);
+				eventPublisher, new BackgroundWorkGate());
 	}
 
 	private Path backup(Path folder, String manifest) throws IOException {

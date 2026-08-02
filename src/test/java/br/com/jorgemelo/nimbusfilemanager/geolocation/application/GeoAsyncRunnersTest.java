@@ -9,6 +9,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LocationRebuildResult;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
@@ -26,7 +27,8 @@ class GeoAsyncRunnersTest {
 
 		when(dataset.downloadAndImport()).thenReturn(result);
 
-		GeoDatasetAsyncRunner runner = new GeoDatasetAsyncRunner(dataset, locations, new GeoDatasetProgress());
+		GeoDatasetAsyncRunner runner = new GeoDatasetAsyncRunner(dataset, locations, new GeoDatasetProgress(),
+				new BackgroundWorkGate());
 
 		Assertions.assertThat(runner.start()).isTrue();
 

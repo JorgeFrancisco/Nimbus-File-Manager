@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettingsModel;
@@ -73,6 +74,9 @@ class SettingsPageRenderTest {
 	// screens off while a restore is replacing the catalog.
 	@MockitoBean
 	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
+
+	@MockitoBean
+	private BackgroundWorkGate backgroundWorkGate;
 
 	@MockitoBean
 	private AppSettingService appSettingService;

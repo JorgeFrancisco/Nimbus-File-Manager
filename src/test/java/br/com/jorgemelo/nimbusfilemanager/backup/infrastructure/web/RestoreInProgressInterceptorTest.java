@@ -11,6 +11,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 
 /**
  * What the screens get while the catalog is being replaced.
@@ -24,8 +25,9 @@ import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 class RestoreInProgressInterceptorTest {
 
 	private final CatalogBackupAsyncRunner runner = mock(CatalogBackupAsyncRunner.class);
+	private final BackgroundWorkGate gate = new BackgroundWorkGate();
 
-	private final RestoreInProgressInterceptor interceptor = new RestoreInProgressInterceptor(runner);
+	private final RestoreInProgressInterceptor interceptor = new RestoreInProgressInterceptor(runner, gate);
 
 	@Test
 	void holdsAScreenOffWhileTheCatalogIsBeingReplaced() throws Exception {
@@ -56,28 +58,27 @@ class RestoreInProgressInterceptorTest {
 
 	/**
 	 * A backup only reads the database, so nothing is missing while it runs and
-	 * holding the screens off would be a false alarm.
+	 * holding the screens off would be a false alarm. The gate is what tells the
+	 * two apart: only a restore sets it.
 	 */
 	@Test
 	void letsEverythingThroughWhileOnlyABackupIsRunning() throws Exception {
-		when(runner.isRunning()).thenReturn(true);
-		when(runner.progress()).thenReturn(new BackupSnapshot(BackupPhase.EXPORTING, 10));
-
 		Assertions.assertThat(interceptor.preHandle(new MockHttpServletRequest("GET", "/app/timeline"),
 				new MockHttpServletResponse(), null)).isTrue();
 	}
 
 	@Test
-	void letsEverythingThroughWhenNothingIsRunning() throws Exception {
-		when(runner.isRunning()).thenReturn(false);
+	void letsEverythingThroughOnceTheRestoreHasFinished() throws Exception {
+		restoring(10);
+		gate.restoreFinished();
 
 		Assertions.assertThat(interceptor.preHandle(new MockHttpServletRequest("GET", "/app/timeline"),
 				new MockHttpServletResponse(), null)).isTrue();
 	}
 
 	private void restoring(long megabytes) {
-		when(runner.isRunning()).thenReturn(true);
-		when(runner.progress())
-				.thenReturn(new BackupSnapshot(BackupPhase.IMPORTING, megabytes * 1048576));
+		gate.restoreStarted();
+
+		when(runner.progress()).thenReturn(new BackupSnapshot(BackupPhase.IMPORTING, megabytes * 1048576));
 	}
 }

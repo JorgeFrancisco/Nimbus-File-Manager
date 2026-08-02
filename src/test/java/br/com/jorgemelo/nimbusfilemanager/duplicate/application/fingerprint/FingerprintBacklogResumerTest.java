@@ -7,13 +7,17 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+
 class FingerprintBacklogResumerTest {
 
 	private final PhashBacklogAsyncRunner photoBacklogRunner = mock(PhashBacklogAsyncRunner.class);
 	private final VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(
 			VideoFingerprintBacklogAsyncRunner.class);
+	private final BackgroundWorkGate gate = new BackgroundWorkGate();
+
 	private final FingerprintBacklogResumer resumer = new FingerprintBacklogResumer(photoBacklogRunner,
-			videoBacklogRunner);
+			videoBacklogRunner, gate);
 
 	/** A conversion competes with photo and video hashing alike, so both resume. */
 	@Test
@@ -52,5 +56,20 @@ class FingerprintBacklogResumerTest {
 
 		verify(photoBacklogRunner, never()).run();
 		verify(videoBacklogRunner).run();
+	}
+	/**
+	 * An inventory that finishes as the application is closing used to queue a
+	 * backlog against a connection pool about to shut, ending a clean shutdown
+	 * with an I/O error. Nothing is lost by skipping: the backlog is whatever is
+	 * still pending in the database, and the next start picks it up.
+	 */
+	@Test
+	void doesNotStartABacklogWhileTheApplicationIsClosing() {
+		gate.onContextClosed(null);
+
+		resumer.resume();
+
+		verify(photoBacklogRunner, never()).start();
+		verify(videoBacklogRunner, never()).start();
 	}
 }

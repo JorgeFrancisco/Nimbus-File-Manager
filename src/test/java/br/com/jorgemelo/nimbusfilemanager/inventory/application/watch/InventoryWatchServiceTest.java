@@ -33,6 +33,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.LoggerFactory;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
@@ -94,7 +95,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 		service.reconfigure();
 
 		Files.writeString(tempDir.resolve("new-photo.jpg"), "test");
@@ -122,7 +123,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		service.startConfiguredMonitor();
 
@@ -144,7 +145,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 		service.reconfigureAndInventory();
 
 		verify(launcher).launch(any(), any());
@@ -166,7 +167,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		service.startConfiguredMonitor();
 
@@ -194,7 +195,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		when(reconcileService.reconcileAndApply(any())).thenReturn(new OrganizationReconcileResponse(tempDir.toString(),
 				true, false, 0, 1, 1, 0, 0, List.of(), List.of(), List.of(), 0, 0, 0));
@@ -233,7 +234,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		Method pollEvents = InventoryWatchService.class.getDeclaredMethod("pollEvents");
 
@@ -504,7 +505,7 @@ class InventoryWatchServiceTest {
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
 				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		service.stop();
 
@@ -525,7 +526,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(true));
+				recorder(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
 
 		service.stop();
 
@@ -544,7 +545,7 @@ class InventoryWatchServiceTest {
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
 				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(false));
+				watchProps(false), new BackgroundWorkGate());
 
 		service.stop();
 		service.stop();
@@ -560,7 +561,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		service.stop();
 
@@ -581,7 +582,7 @@ class InventoryWatchServiceTest {
 		// cancel(true)'d poll thread carries its interrupt into a shutdown-time query.
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -617,7 +618,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
 				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false));
+				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -669,7 +670,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
 				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
-				mock(OperationLockService.class), failing, recorder(), Clock.systemDefaultZone(), watchProps(true));
+				mock(OperationLockService.class), failing, recorder(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
 
 		service.reconfigure();
 
@@ -705,7 +706,7 @@ class InventoryWatchServiceTest {
 			ExecutionQueryService queries, OrganizationReconcileService reconcileService) throws Exception {
 		InventoryWatchService built = new InventoryWatchService(settings, launcher, queries, reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		Field executorField = InventoryWatchService.class.getDeclaredField("executor");
 
@@ -721,7 +722,7 @@ class InventoryWatchServiceTest {
 		InventoryWatchService built = new InventoryWatchService(configuredSettings(),
 				mock(InventoryBatchLauncherService.class), mock(ExecutionQueryService.class), reconcileService,
 				mock(OperationLockService.class), watchOnlyFactory(), recorder, Clock.systemDefaultZone(),
-				watchProps(true));
+				watchProps(true), new BackgroundWorkGate());
 
 		Field executorField = InventoryWatchService.class.getDeclaredField("executor");
 

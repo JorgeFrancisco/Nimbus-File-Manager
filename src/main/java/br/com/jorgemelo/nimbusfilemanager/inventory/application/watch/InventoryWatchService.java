@@ -31,6 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
@@ -52,6 +53,7 @@ public class InventoryWatchService extends LocalizedComponent {
 	private final OperationLockService operationLockService;
 	private final FileChangeSourceFactory fileChangeSourceFactory;
 	private final ReconcileExecutionRecorder reconcileExecutionRecorder;
+	private final BackgroundWorkGate backgroundWorkGate;
 	private final Clock clock;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "nimbus-file-manager-folder-watch");
@@ -74,6 +76,7 @@ public class InventoryWatchService extends LocalizedComponent {
 	 * that fires too often meant guessing at which of the two paths woke it.
 	 */
 	private volatile String pendingReason = "a reconfiguration of the watched folder";
+
 	private volatile boolean shuttingDown;
 	private volatile LocalDateTime lastReconciliation;
 	private volatile long lastReconciliationRepaired;
@@ -85,7 +88,7 @@ public class InventoryWatchService extends LocalizedComponent {
 			InventoryBatchLauncherService inventoryBatchLauncherService, ExecutionQueryService executionQueryService,
 			OrganizationReconcileService organizationReconcileService, OperationLockService operationLockService,
 			FileChangeSourceFactory fileChangeSourceFactory, ReconcileExecutionRecorder reconcileExecutionRecorder,
-			Clock clock, InventoryWatchProperties watchProperties) {
+			Clock clock, InventoryWatchProperties watchProperties, BackgroundWorkGate backgroundWorkGate) {
 		this.appSettingService = appSettingService;
 		this.inventoryBatchLauncherService = inventoryBatchLauncherService;
 		this.executionQueryService = executionQueryService;
@@ -93,6 +96,7 @@ public class InventoryWatchService extends LocalizedComponent {
 		this.operationLockService = operationLockService;
 		this.fileChangeSourceFactory = fileChangeSourceFactory;
 		this.reconcileExecutionRecorder = reconcileExecutionRecorder;
+		this.backgroundWorkGate = backgroundWorkGate;
 		this.clock = clock;
 
 		// Disabled in the test JVM (InventoryWatchProperties.enabled=false via
@@ -199,7 +203,10 @@ public class InventoryWatchService extends LocalizedComponent {
 			// pollEvents() above is DB-free, so letting it run during shutdown is harmless
 			// -
 			// this single guard sits exactly where the risk (the connection pool) begins.
-			if (shuttingDown) {
+			// The gate adds the other transient state this loop cannot see for itself:
+			// while a restore replaces the catalog, the table about to be queried may
+			// not exist for another minute.
+			if (shuttingDown || backgroundWorkGate.standDown()) {
 				return;
 			}
 
@@ -216,8 +223,8 @@ public class InventoryWatchService extends LocalizedComponent {
 		} catch (Exception exception) {
 			// A cycle that was interrupted or that raced the closing connection pool during
 			// shutdown is expected, not a failure - log it quietly so teardown stays clean.
-			if (shuttingDown || Thread.currentThread().isInterrupted()) {
-				log.debug("Inventory watcher poll stopped during shutdown", exception);
+			if (shuttingDown || backgroundWorkGate.standDown() || Thread.currentThread().isInterrupted()) {
+				log.debug("Inventory watcher poll stopped while the application was busy elsewhere", exception);
 			} else {
 				log.error("Inventory watcher polling failed", exception);
 			}

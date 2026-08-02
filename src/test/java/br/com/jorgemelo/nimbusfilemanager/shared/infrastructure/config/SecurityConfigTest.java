@@ -19,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web.MetadataRebuildSettingsAdvice;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationPreviewExportService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
@@ -51,6 +52,9 @@ class SecurityConfigTest {
 	// screens off while a restore is replacing the catalog.
 	@MockitoBean
 	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
+
+	@MockitoBean
+	private BackgroundWorkGate backgroundWorkGate;
 
 	@MockitoBean
 	private OrganizationService organizationService;

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 
 /**
@@ -24,7 +25,7 @@ class GeoDatasetAsyncRunnerTest {
 	private final MediaLocationService mediaLocationService = mock(MediaLocationService.class);
 
 	private final GeoDatasetAsyncRunner runner = new GeoDatasetAsyncRunner(dataset, mediaLocationService,
-			new GeoDatasetProgress());
+			new GeoDatasetProgress(), new BackgroundWorkGate());
 
 	/**
 	 * Two concurrent imports would write the same boundary table, ending with
