@@ -69,6 +69,7 @@ public class OnboardingWebController extends LocalizedComponent {
 		model.addAttribute("backups", catalogBackupService.list());
 		model.addAttribute("backupFolder", backupFolderResolver.folder().toString());
 		model.addAttribute("restoring", backupRunner.isRunning());
+		model.addAttribute("restoreProgress", backupRunner.progress());
 		model.addAttribute("restoreError", backupRunner.lastError());
 
 		return "app/onboarding";

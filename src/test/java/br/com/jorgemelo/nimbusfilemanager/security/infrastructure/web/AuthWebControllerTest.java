@@ -132,6 +132,6 @@ class AuthWebControllerTest {
 
 	private NimbusFileManagerProperties authProps(boolean googleEnabled) {
 		return new NimbusFileManagerProperties(null, null, null, null,
-				new Security(0, 0, 0, googleEnabled, "admin", "admin"), null);
+				new Security(0, 0, 0, googleEnabled, "admin", "admin", null), null);
 	}
 }

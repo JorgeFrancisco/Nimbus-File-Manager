@@ -366,7 +366,7 @@ class AppSettingServiceTest {
 	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
 		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace",
 				new Tools(null, null, true), new Inventory(true, 60_000L), new Api(500, 20, 100),
-				new Security(5, 5, 15, true, "admin", "admin"), null);
+				new Security(5, 5, 15, true, "admin", "admin", null), null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
 
@@ -384,7 +384,7 @@ class AppSettingServiceTest {
 		return new NimbusFileManagerProperties("C:/workspace",
 				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", true),
 				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
-				new Security(5, 5, 15, true, "admin", "admin"), null);
+				new Security(5, 5, 15, true, "admin", "admin", null), null);
 	}
 
 	/**

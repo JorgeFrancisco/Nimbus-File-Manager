@@ -26,7 +26,9 @@
 	</form>
 	<p class="muted" th:text="#{onboarding.savedNote}">Essa escolha fica salva e pode ser revista em Configurações depois.</p>
 
-	<div class="panel">
+	<!-- While a restore runs this region refreshes itself; when it finishes the page
+	     redirects to the dashboard, and the refresh follows it there on its own. -->
+	<div class="panel" id="onboardingRestore" th:attr="data-refresh-ms=${restoring} ? 3000">
 		<h2 th:text="#{onboarding.restore.title}">Já tenho um backup</h2>
 		<p class="muted" th:text="#{onboarding.restore.prompt}">Restaurar traz o catálogo de volta inteiro, inclusive a pasta
 			monitorada — não é preciso inventariar nada.</p>
@@ -45,8 +47,15 @@
 			<div class="actions"><button type="submit" class="secondary" th:text="#{onboarding.restore.useFolder}">Procurar backups aqui</button></div>
 		</form>
 
-		<p class="muted" th:if="${restoring}" th:text="#{onboarding.restore.running}">Restauração em andamento. Atualize a
-			página para acompanhar; ao terminar, a aplicação abre sozinha.</p>
+		<div th:if="${restoring}" class="operation-status" role="status">
+			<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span>
+				<strong th:text="#{onboarding.restore.running}">Restaurando o catálogo</strong>
+			</div>
+			<p th:if="${restoreProgress.bytes()> 0}"
+				th:text="#{settings.backup.written(${restoreProgress.megabytes()})}"></p>
+			<progress th:aria-label="#{onboarding.restore.running}"></progress>
+			<p class="muted" th:text="#{onboarding.restore.willOpen}">Ao terminar, a aplicação abre sozinha.</p>
+		</div>
 
 		<p class="muted" th:if="${backups.isEmpty()}" th:text="#{onboarding.restore.empty(${backupFolder})}">Coloque o
 			arquivo de backup na pasta indicada e atualize esta página.</p>

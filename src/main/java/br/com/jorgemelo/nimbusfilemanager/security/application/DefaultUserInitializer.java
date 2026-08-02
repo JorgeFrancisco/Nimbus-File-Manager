@@ -30,6 +30,7 @@ public class DefaultUserInitializer implements ApplicationRunner {
 	private final FirstAccessCredential firstAccessCredential;
 	private final String username;
 	private final String configuredPassword;
+	private final String resetPassword;
 
 	public DefaultUserInitializer(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
 			FirstAccessCredential firstAccessCredential, NimbusFileManagerProperties properties) {
@@ -38,11 +39,13 @@ public class DefaultUserInitializer implements ApplicationRunner {
 		this.firstAccessCredential = firstAccessCredential;
 		this.username = properties.security().defaultUsername();
 		this.configuredPassword = properties.security().defaultPassword();
+		this.resetPassword = properties.security().resetPassword();
 	}
 
 	@Override
 	public void run(ApplicationArguments args) {
 		if (appUserRepository.count() > 0) {
+			applyPasswordReset();
 			markConfiguredPasswordStillInUse();
 
 			return;
@@ -85,5 +88,46 @@ public class DefaultUserInitializer implements ApplicationRunner {
 					log.warn("Configured default password is still in use. Password change is required for "
 							+ "username={}.", username);
 				});
+	}
+
+	/**
+	 * The way back in when nobody can sign in any more.
+	 *
+	 * <p>
+	 * A restored backup brings the users of the installation it came from, so
+	 * whoever restores their catalog onto a new machine is locked out by
+	 * credentials they may never have known. This resets the administrator once
+	 * and requires a change at the next sign-in.
+	 *
+	 * <p>
+	 * Deliberately a property of its own rather than a new meaning for
+	 * {@code default-password}: that one provisions an empty installation, and a
+	 * container restarting with it set must never undo the password its owner has
+	 * since chosen. It also grants nothing new - whoever can write the
+	 * configuration of an installation can already read the database password
+	 * sitting next to it. What it removes is the state whose only way out was
+	 * editing rows by hand.
+	 *
+	 * <p>
+	 * The lockout goes with the password: an account locked by the very attempts
+	 * that led here would leave the operator waiting on a timer for a decision
+	 * already taken.
+	 */
+	private void applyPasswordReset() {
+		if (resetPassword == null || resetPassword.isBlank()) {
+			return;
+		}
+
+		appUserRepository.findByUsernameIgnoreCase(username).ifPresent(user -> {
+			user.setPasswordHash(passwordEncoder.encode(resetPassword));
+			user.setPasswordChangeRequired(true);
+			user.setFailedLoginAttempts(0);
+			user.setLockedUntil(null);
+
+			appUserRepository.save(user);
+
+			log.warn("Password of username={} was reset from the configuration. Change it at the next sign-in, "
+					+ "and clear nimbus-file-manager.security.reset-password afterwards.", username);
+		});
 	}
 }

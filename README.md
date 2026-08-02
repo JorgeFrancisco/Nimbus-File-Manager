@@ -391,7 +391,22 @@ NIMBUS_FILE_MANAGER_ADMIN_PASSWORD=change-me
 
 A configured password wins over the generated one, and nothing is written to `first-access.txt`.
 
-The first administrator is created only when the `app_user` table is empty. Changing `NIMBUS_FILE_MANAGER_ADMIN_USERNAME` or `NIMBUS_FILE_MANAGER_ADMIN_PASSWORD` after a user already exists does not update or reset that existing account. After the first login, use the Account screen to change the password and the Users screen to create additional users.
+The first administrator is created only when the `app_user` table is empty. Changing `NIMBUS_FILE_MANAGER_ADMIN_USERNAME` or `NIMBUS_FILE_MANAGER_ADMIN_PASSWORD` after a user already exists does not update or reset that existing account — a restart must never undo a password its owner has since chosen. After the first login, use the Account screen to change the password and the Users screen to create additional users.
+
+### Locked out
+
+A restored backup brings the users of the installation it was taken on, so restoring a catalog
+onto a new machine leaves an account whose password nobody on that machine ever knew. The way
+back in is a property of its own:
+
+```text
+NIMBUS_FILE_MANAGER_ADMIN_PASSWORD_RESET=temporary-value
+```
+
+The next start resets the administrator to it, clears any lockout, and requires a change at
+sign-in. Clear the value afterwards — while it is set, every start resets the account again. It
+grants nothing new: whoever can write the configuration of an installation can already read the
+database password sitting next to it.
 
 Google login is enabled by default. The application starts without Google credentials, but the Google button remains unavailable until OAuth2 credentials are configured:
 

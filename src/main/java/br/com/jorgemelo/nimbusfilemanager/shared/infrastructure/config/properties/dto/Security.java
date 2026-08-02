@@ -4,5 +4,5 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 public record Security(int idleTimeoutMinutes, int maxFailedLoginAttempts, int lockoutDurationMinutes,
 		@DefaultValue("true") boolean googleLoginEnabled, @DefaultValue("admin") String defaultUsername,
-		@DefaultValue("admin") String defaultPassword) {
+		@DefaultValue("admin") String defaultPassword, String resetPassword) {
 }

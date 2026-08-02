@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
@@ -196,8 +197,87 @@ class DefaultUserInitializerTest {
 		verify(repository, never()).findByUsernameIgnoreCase(any());
 	}
 
+	/**
+	 * The way back in after a restore. The backup carries the users of the
+	 * installation it came from, so whoever restores their catalog onto a new
+	 * machine is locked out by a password they may never have known - and the only
+	 * way out used to be editing rows by hand.
+	 */
+	@Test
+	void resetsTheAdministratorWhenAResetPasswordIsConfigured() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		AppUser restored = AppUser.builder().username("admin@example.com").passwordHash("hash-from-another-install")
+				.passwordChangeRequired(false).build();
+
+		when(repository.count()).thenReturn(1L);
+		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(restored));
+		when(encoder.encode("back-in")).thenReturn("new-hash");
+
+		new DefaultUserInitializer(repository, encoder, credential,
+				props("admin@example.com", "", "back-in")).run(null);
+
+		Assertions.assertThat(restored.getPasswordHash()).isEqualTo("new-hash");
+		Assertions.assertThat(restored.getPasswordChangeRequired()).isTrue();
+
+		verify(repository).save(restored);
+	}
+
+	/**
+	 * The lockout goes with the password: the attempts that led someone to reset it
+	 * are usually the ones that locked the account, and leaving the timer running
+	 * would refuse the decision just taken.
+	 */
+	@Test
+	void clearsTheLockoutWhenItResetsThePassword() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		AppUser locked = AppUser.builder().username("admin@example.com").passwordHash("old").failedLoginAttempts(5)
+				.lockedUntil(LocalDateTime.now().plusMinutes(30)).build();
+
+		when(repository.count()).thenReturn(1L);
+		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(locked));
+		when(encoder.encode("back-in")).thenReturn("new-hash");
+
+		new DefaultUserInitializer(repository, encoder, credential,
+				props("admin@example.com", "", "back-in")).run(null);
+
+		Assertions.assertThat(locked.getLockedUntil()).isNull();
+		Assertions.assertThat(locked.getFailedLoginAttempts()).isZero();
+	}
+
+	/**
+	 * The reset is a decision taken once, not a consequence of provisioning: a
+	 * container restarting with a default password set must never undo the password
+	 * its owner has since chosen. Only the dedicated property does that.
+	 */
+	@Test
+	void leavesTheAdministratorAloneWhenOnlyADefaultPasswordIsConfigured() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+		PasswordEncoder encoder = mock(PasswordEncoder.class);
+
+		AppUser chosen = AppUser.builder().username("admin@example.com").passwordHash("password-the-owner-chose")
+				.build();
+
+		when(repository.count()).thenReturn(1L);
+		when(repository.findByUsernameIgnoreCase("admin@example.com")).thenReturn(Optional.of(chosen));
+
+		new DefaultUserInitializer(repository, encoder, credential,
+				props("admin@example.com", "provisioned", null)).run(null);
+
+		Assertions.assertThat(chosen.getPasswordHash()).isEqualTo("password-the-owner-chose");
+
+		verify(repository, never()).save(any());
+	}
+
 	private NimbusFileManagerProperties props(String username, String password) {
-		return new NimbusFileManagerProperties(null, null, null, null, new Security(0, 0, 0, true, username, password),
-				null);
+		return props(username, password, null);
+	}
+
+	private NimbusFileManagerProperties props(String username, String password, String resetPassword) {
+		return new NimbusFileManagerProperties(null, null, null, null,
+				new Security(0, 0, 0, true, username, password, resetPassword), null);
 	}
 }
