@@ -20,12 +20,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.application.dto.PhotoThumbnail;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.application.dto.VideoThumbnailSource;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.infrastructure.FfmpegRunner;
@@ -39,7 +35,7 @@ class VideoThumbnailServiceTest {
 	@Mock
 	WorkspaceManager workspaceManager;
 	@Mock
-	AppSettingService appSettingService;
+	ExternalToolPaths externalToolPaths;
 	@TempDir
 	Path temp;
 
@@ -54,7 +50,7 @@ class VideoThumbnailServiceTest {
 
 		when(repository.findSource(id))
 				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), modified, 50D)));
-		when(appSettingService.stringValue(any(), any())).thenReturn("ffmpeg");
+		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
 		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-video-w320";
 
@@ -72,8 +68,8 @@ class VideoThumbnailServiceTest {
 			runs.incrementAndGet();
 		};
 
-		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, appSettingService,
-				properties(), runner);
+		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, externalToolPaths,
+				runner);
 
 		PhotoThumbnail first = service.get(id, 200).orElseThrow();
 		PhotoThumbnail second = service.get(id, 320).orElseThrow();
@@ -88,8 +84,8 @@ class VideoThumbnailServiceTest {
 
 		when(repository.findSource(id)).thenReturn(Optional.empty());
 
-		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, appSettingService,
-				properties(), (_, _, _, _, _) -> {
+		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, externalToolPaths,
+				(_, _, _, _, _) -> {
 				});
 
 		Assertions.assertThat(service.get(id, 320)).isEmpty();
@@ -98,8 +94,8 @@ class VideoThumbnailServiceTest {
 
 	@Test
 	void rejectsWidthOutsideTheAllowedRange() {
-		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, appSettingService,
-				properties(), (_, _, _, _, _) -> {
+		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, externalToolPaths,
+				(_, _, _, _, _) -> {
 				});
 
 		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.get(UUID.randomUUID(), 0));
@@ -121,8 +117,8 @@ class VideoThumbnailServiceTest {
 
 		when(workspaceManager.resolve(any(), any(), any(), any())).thenReturn(temp.resolve(key + ".jpg"));
 
-		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, appSettingService,
-				properties(), (_, _, _, _, _) -> {
+		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, externalToolPaths,
+				(_, _, _, _, _) -> {
 				});
 
 		Assertions.assertThatThrownBy(() -> service.get(id, 320)).isInstanceOf(IOException.class);
@@ -141,22 +137,17 @@ class VideoThumbnailServiceTest {
 		// large-size branch.
 		when(repository.findSource(id))
 				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), modified, null)));
-		when(appSettingService.stringValue(any(), any())).thenReturn("ffmpeg");
+		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
 		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-video-w640";
 
 		when(workspaceManager.resolve(any(), any(), any(), any())).thenReturn(temp.resolve(key + ".jpg"));
 
-		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, appSettingService,
-				properties(), (_, _, _, _, _) -> {
+		VideoThumbnailService service = new VideoThumbnailService(repository, workspaceManager, externalToolPaths,
+				(_, _, _, _, _) -> {
 					// leaves the temp output empty -> "FFmpeg produced no thumbnail"
 				});
 
 		Assertions.assertThatThrownBy(() -> service.get(id, 640)).isInstanceOf(IOException.class);
-	}
-
-	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(temp.toString(), new Tools(null, "ffmpeg", true),
-				new Inventory(true, 60_000L), new Api(100, 2, 50), null, null);
 	}
 }

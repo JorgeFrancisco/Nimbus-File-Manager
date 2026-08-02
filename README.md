@@ -1252,8 +1252,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2472 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.44% instruction, 92.12% branch, 98.02% line, 98.76% method, 100.00% class
+Tests:       2495 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.45% instruction, 92.17% branch, 98.06% line, 98.80% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1265,22 +1265,23 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.43% instruction, 92.16% branch, 98.02% line, 98.75% method, 100.00% class
+Floor:  98.45% instruction, 92.17% branch, 98.04% line, 98.76% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-Instruction, line and method moved down by one hundredth, and the whole difference is two
-lines: the private constructor of the utility class that answers where the external tools live,
-and the exception it throws to say it must not be instantiated. That class exists because the
-packaged application could not find its own `pg_dump` — the lookup was answered in three places
-with two different answers — so the fix was to answer it once. The only way to cover those two
-lines is to instantiate the constructor by reflection, which *Piso de cobertura* forbids by name,
-so the floor moved instead.
+All five rose, and the whole difference is one class that had never had a test of its own:
+the neutral driver behind both fingerprint backlogs. It had been exercised only through the two
+async runners that wrap it, which reach the happy path and nothing else — so what went uncovered
+was every way a run can end badly: an inventory taking the files back mid-drain, a run record that
+cannot be written back, a drain that never went through `start()`. The restore work added one
+more, and it is the one worth naming: a backlog querying while `pg_restore` drops its tables fails
+in a way that is indistinguishable from a defect, and the only thing that tells them apart is
+`BackgroundWorkGate`. That decision shows up nowhere but the log level, so the test asserts the
+level — the same shape `InventoryWatchServiceTest` already uses for the same rule.
 
-The run above came in 0.02 under the floor on branch and 0.005 under on line. That is the
-oscillation documented in *A medição varia entre execuções* — the classes touched have no
-uncovered branch a test could honestly reach — so the floor stays where it is rather than being
-lowered to match a single reading.
+Line and method are set from the lower of two consecutive readings of the same code (98.04 and
+98.06, 98.76 and 98.80). Pinning a floor to the higher one would fail the next run for no reason —
+see *A medição varia entre execuções* below for where that spread comes from.
 
 Branch, method and class rose; instruction and line were recalculated downward, by 0.03 and 0.05,
 after the embedded-database and backup domains landed. The rule that allows this is *Recalcular o
@@ -1292,10 +1293,10 @@ start, a geographic import keeping the reason it failed, and the one statistics 
 from the delegation sweep. That pass moved branch and method above the old floor and covered 16 of
 the missing lines; what it could not reach is what the floor was then set to.
 
-Of the 237 lines still uncovered, 124 are I/O `catch` blocks, 26 are the anti-instantiation guards
+Of the 238 lines still uncovered, 141 are I/O `catch` blocks, 28 are the anti-instantiation guards
 of utility classes, and the remainder is largely unreachable by construction — a `continue` or
 `break` the compiler reaches only through a condition that cannot occur, a symlink branch that
-needs the operating system to refuse something. 30 of the 237 are in the two newest domains. None
+needs the operating system to refuse something. 29 of the 238 are in the two newest domains. None
 of it is coverable by a test that asserts real behaviour, and the alternative — instantiating
 private constructors by reflection — is what *Piso de cobertura* forbids by name.
 

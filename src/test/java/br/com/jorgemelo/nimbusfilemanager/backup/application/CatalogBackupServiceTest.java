@@ -61,7 +61,8 @@ class CatalogBackupServiceTest {
 	private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
 	// The real move: it is what puts the file where the assertions look for it.
-	private final SecureFileMove secureFileMove = new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+	private final SecureFileMove secureFileMove = new SecureFileMove(
+			new OrganizationMoveVerifier(new FileHashService()),
 			new SelfWrittenPathRegistry(Clock.systemDefaultZone()));
 
 	private CatalogBackupService service(Path folder) {
@@ -176,6 +177,10 @@ class CatalogBackupServiceTest {
 		Files.writeString(folder.resolve("holiday.zip"), "not a backup");
 		Files.writeString(folder.resolve("notes.txt"), "nor this");
 
+		// A folder someone unpacked a backup into carries the whole name and is
+		// still not one.
+		Files.createDirectory(folder.resolve("nimbus-catalog-20260101-000000.zip"));
+
 		Assertions.assertThat(service(folder).list()).extracting(BackupFile::name).containsExactly(NAME);
 	}
 
@@ -278,6 +283,26 @@ class CatalogBackupServiceTest {
 
 		Assertions.assertThatIllegalArgumentException().isThrownBy(() -> service.restore(NAME))
 				.withMessageContaining("2026.08.b");
+	}
+
+	/**
+	 * The other side of the text comparison: a version that does not parse and is
+	 * not ahead has to load, or an installation whose Flyway versions are dated
+	 * rather than numbered could never restore anything.
+	 */
+	@Test
+	void restoresATextVersionThatIsNotAheadOfThisBuild(@TempDir Path folder) throws IOException {
+		backup(folder, """
+				{"schemaVersion":"2026.08.a","applicationVersion":"5.0.0.1","createdAt":"2026-07-31T03:00:00",
+				 "tables":["app_setting"]}
+				""");
+
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("2026.08.b");
+		when(catalogDump.restore(any())).thenReturn(true);
+
+		Assertions.assertThat(service(folder).restore(NAME).schemaVersion()).isEqualTo("2026.08.a");
+
+		verify(catalogDump).restore(any());
 	}
 
 	/** A file that carries a manifest and no dump has nothing to restore from. */

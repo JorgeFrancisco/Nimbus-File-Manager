@@ -120,6 +120,18 @@ class CatalogBackupAsyncRunnerTest {
 		verify(backupService, never()).cancel();
 	}
 
+	/**
+	 * The tool answers no when there is nothing to stop - a dump that has already
+	 * finished, or one whose process is gone. The screen has to hear that instead
+	 * of a confirmation it cannot back up.
+	 */
+	@Test
+	void answersNoWhenThereIsNoBackupLeftToCancel() {
+		runner.start();
+
+		Assertions.assertThat(runner.cancel()).isFalse();
+	}
+
 	/** A new run starts clean, or the last failure would haunt the next screen. */
 	@Test
 	void clearsWhatThePreviousRunLeftBehind() {

@@ -12,10 +12,8 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.application.dto.PhotoThumbnail;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.application.dto.VideoThumbnailSource;
 import br.com.jorgemelo.nimbusfilemanager.thumbnail.infrastructure.FfmpegRunner;
@@ -33,23 +31,20 @@ public class VideoThumbnailService {
 
 	private final VideoThumbnailRepository repository;
 	private final WorkspaceManager workspaceManager;
-	private final AppSettingService appSettingService;
-	private final NimbusFileManagerProperties properties;
+	private final ExternalToolPaths externalToolPaths;
 	private final FfmpegRunner ffmpegRunner;
 
 	@Autowired
 	public VideoThumbnailService(VideoThumbnailRepository repository, WorkspaceManager workspaceManager,
-			AppSettingService appSettingService, NimbusFileManagerProperties properties,
-			FfmpegVideoThumbnailProcessRunner processRunner) {
-		this(repository, workspaceManager, appSettingService, properties, processRunner::run);
+			ExternalToolPaths externalToolPaths, FfmpegVideoThumbnailProcessRunner processRunner) {
+		this(repository, workspaceManager, externalToolPaths, processRunner::run);
 	}
 
 	VideoThumbnailService(VideoThumbnailRepository repository, WorkspaceManager workspaceManager,
-			AppSettingService appSettingService, NimbusFileManagerProperties properties, FfmpegRunner ffmpegRunner) {
+			ExternalToolPaths externalToolPaths, FfmpegRunner ffmpegRunner) {
 		this.repository = repository;
 		this.workspaceManager = workspaceManager;
-		this.appSettingService = appSettingService;
-		this.properties = properties;
+		this.externalToolPaths = externalToolPaths;
 		this.ffmpegRunner = ffmpegRunner;
 	}
 
@@ -103,9 +98,7 @@ public class VideoThumbnailService {
 		try {
 			double seek = source.durationSeconds() == null ? 1D : Math.clamp(source.durationSeconds() * 0.1D, 0D, 10D);
 
-			String ffmpeg = appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, properties.tools().ffmpeg());
-
-			ffmpegRunner.run(ffmpeg, original, temporary, width, seek);
+			ffmpegRunner.run(externalToolPaths.ffmpeg(), original, temporary, width, seek);
 
 			if (!Files.isRegularFile(temporary) || Files.size(temporary) == 0) {
 				throw new IOException("FFmpeg produced no thumbnail");

@@ -18,9 +18,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 
 /**
  * Resolution order of the external tools: what the operator saved on the
- * settings screen, then the configured value, then discovery. Discovery is the
- * part worth pinning - it is what lets a clone run on any platform without
- * anyone editing a path, which the hardcoded {@code .exe} default prevented.
+ * settings screen, then the configured value, then discovery. Two parts are
+ * worth pinning - discovery, which lets a clone run on any platform without
+ * anyone editing a path, something the hardcoded {@code .exe} default
+ * prevented; and the saved value losing its precedence once the file it names
+ * is gone, which is what a restored catalog leaves behind.
  */
 class ExternalToolPathsTest {
 
@@ -43,13 +45,57 @@ class ExternalToolPathsTest {
 	}
 
 	@Test
-	void theSavedSettingWinsOverEverythingElse(@TempDir Path bundled) {
-		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, "C:/tools/ffmpeg.exe"))
-				.thenReturn("D:/custom/ffmpeg.exe");
+	void theSavedSettingWinsOverEverythingElse(@TempDir Path bundled, @TempDir Path custom) throws IOException {
+		Path saved = Files.createFile(custom.resolve("ffmpeg.exe"));
+
+		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, null)).thenReturn(saved.toString());
 
 		Tools tools = new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", true);
 
-		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo("D:/custom/ffmpeg.exe");
+		Assertions.assertThat(paths(bundled, tools).ffmpeg()).isEqualTo(saved.toString());
+	}
+
+	/**
+	 * The path a backup carries in from another installation: saved, naming a
+	 * folder that exists only there. Discovery holds the right answer and has to be
+	 * reached - a restore proved it was not, and every ffprobe call failed against
+	 * a folder nobody could see.
+	 */
+	@Test
+	void ignoresASavedPathWhoseFileIsGone(@TempDir Path bundled) throws IOException {
+		Files.createFile(bundled.resolve("ffprobe.exe"));
+
+		when(appSettingService.stringValue(SettingsConstants.TOOL_FFPROBE, null))
+				.thenReturn("./tools/bin/ffprobe.exe");
+
+		Assertions.assertThat(paths(bundled, new Tools("", "", true)).ffprobe())
+				.isEqualTo(bundled.resolve("ffprobe.exe").toString());
+	}
+
+	/**
+	 * A saved value with no separator is a command for PATH to resolve, so there is
+	 * no file to look for and nothing that could invalidate it.
+	 */
+	@Test
+	void keepsASavedCommandNameThatOnlyPathCanResolve(@TempDir Path bundled) throws IOException {
+		Files.createFile(bundled.resolve("ffmpeg.exe"));
+
+		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, null)).thenReturn("ffmpeg");
+
+		Assertions.assertThat(paths(bundled, new Tools("", "", true)).ffmpeg()).isEqualTo("ffmpeg");
+	}
+
+	/**
+	 * The configured value is not checked for existence the way the saved one is:
+	 * it comes from the environment this application was started in, so a container
+	 * pointing at {@code /usr/bin} is taken at its word.
+	 */
+	@Test
+	void fallsBackToTheConfiguredPathWhenTheSavedOneIsGone(@TempDir Path bundled) {
+		when(appSettingService.stringValue(SettingsConstants.TOOL_FFMPEG, null)).thenReturn("D:/gone/ffmpeg.exe");
+
+		Assertions.assertThat(paths(bundled, new Tools("", "/usr/bin/ffmpeg", true)).ffmpeg())
+				.isEqualTo("/usr/bin/ffmpeg");
 	}
 
 	@Test
