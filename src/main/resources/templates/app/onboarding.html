@@ -25,6 +25,51 @@
 		<div class="actions"><button type="submit" th:text="#{onboarding.start}">Começar a monitorar</button></div>
 	</form>
 	<p class="muted" th:text="#{onboarding.savedNote}">Essa escolha fica salva e pode ser revista em Configurações depois.</p>
+
+	<div class="panel">
+		<h2 th:text="#{onboarding.restore.title}">Já tenho um backup</h2>
+		<p class="muted" th:text="#{onboarding.restore.prompt}">Restaurar traz o catálogo de volta inteiro, inclusive a pasta
+			monitorada — não é preciso inventariar nada.</p>
+
+		<div class="alert error" th:if="${restoreError}" th:text="${restoreError}">Erro.</div>
+
+		<form th:action="@{/app/onboarding/backup-folder}" method="post">
+			<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+			<label><span th:text="#{onboarding.restore.folder}">Pasta onde estão os backups</span>
+				<span class="folder-field">
+					<input name="backupPath" id="onboardingBackupPath" th:value="${backupFolder}" required readonly
+							data-recent-values="onboarding-backup">
+					<button type="button" class="secondary folder-picker-open" data-target="#onboardingBackupPath"><i class="bi bi-folder2" aria-hidden="true"></i> <span th:text="#{quarantine.origin.chooseFolder}">Escolher pasta</span></button>
+				</span>
+			</label>
+			<div class="actions"><button type="submit" class="secondary" th:text="#{onboarding.restore.useFolder}">Procurar backups aqui</button></div>
+		</form>
+
+		<p class="muted" th:if="${restoring}" th:text="#{onboarding.restore.running}">Restauração em andamento. Atualize a
+			página para acompanhar; ao terminar, a aplicação abre sozinha.</p>
+
+		<p class="muted" th:if="${backups.isEmpty()}" th:text="#{onboarding.restore.empty(${backupFolder})}">Coloque o
+			arquivo de backup na pasta indicada e atualize esta página.</p>
+
+		<ul class="backup-list" th:unless="${backups.isEmpty()}">
+			<li class="backup-item" th:each="backup : ${backups}">
+				<code class="backup-name" th:text="${backup.name()}"></code>
+				<p class="muted backup-meta"
+					th:text="#{settings.backup.summary(${#temporals.format(backup.createdAt(), 'dd/MM/yyyy HH:mm')},
+						${#numbers.formatDecimal(backup.sizeBytes() / 1048576.0, 1, 1, 'COMMA')})}"></p>
+				<div class="panel-actions">
+					<form th:action="@{/app/settings/backup/restore}" method="post"
+							th:data-confirm="#{settings.backup.restoreConfirm}">
+						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+						<input type="hidden" name="name" th:value="${backup.name()}">
+						<button type="submit" class="secondary" th:disabled="${restoring}"
+								th:text="#{settings.backup.restore}">Restaurar</button>
+					</form>
+				</div>
+			</li>
+		</ul>
+	</div>
+
 	<div th:replace="~{fragments/folder-picker :: folderPicker}"></div>
 </section>
 </div>

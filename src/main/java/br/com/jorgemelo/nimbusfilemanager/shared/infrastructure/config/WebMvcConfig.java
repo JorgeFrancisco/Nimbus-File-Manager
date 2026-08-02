@@ -21,8 +21,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 	@Override
 	public void addInterceptors(InterceptorRegistry registry) {
+		// The restore is reachable before a library exists on purpose: the folder to
+		// watch is inside the backup, so requiring one first would mean scanning a
+		// library to be allowed to replace it.
 		registry.addInterceptor(libraryConfigurationInterceptor).addPathPatterns("/app/**", "/api/**")
-				.excludePathPatterns("/app/onboarding", "/app/account", "/app/account/**", "/app/settings/folders");
+				.excludePathPatterns("/app/onboarding", "/app/onboarding/**", "/app/account", "/app/account/**",
+						"/app/settings/folders", "/app/settings/backup/restore");
 		registry.addInterceptor(passwordChangeRequiredInterceptor).addPathPatterns("/app/**", "/api/**")
 				.excludePathPatterns("/app/account", "/app/account/password");
 	}

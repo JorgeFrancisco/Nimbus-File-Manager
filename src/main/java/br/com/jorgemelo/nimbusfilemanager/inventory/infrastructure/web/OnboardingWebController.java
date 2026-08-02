@@ -10,12 +10,17 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.backup.application.BackupFolderResolver;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
@@ -32,22 +37,65 @@ public class OnboardingWebController extends LocalizedComponent {
 	private final AppSettingService appSettingService;
 	private final InventoryBatchLauncherService inventoryBatchLauncherService;
 	private final InventoryWatchService inventoryWatchService;
+	private final CatalogBackupService catalogBackupService;
+	private final CatalogBackupAsyncRunner backupRunner;
+	private final BackupFolderResolver backupFolderResolver;
 
 	@Autowired
 	public OnboardingWebController(AppSettingService appSettingService,
-			InventoryBatchLauncherService inventoryBatchLauncherService, InventoryWatchService inventoryWatchService) {
+			InventoryBatchLauncherService inventoryBatchLauncherService, InventoryWatchService inventoryWatchService,
+			CatalogBackupService catalogBackupService, CatalogBackupAsyncRunner backupRunner,
+			BackupFolderResolver backupFolderResolver) {
 		this.appSettingService = appSettingService;
 		this.inventoryBatchLauncherService = inventoryBatchLauncherService;
 		this.inventoryWatchService = inventoryWatchService;
+		this.catalogBackupService = catalogBackupService;
+		this.backupRunner = backupRunner;
+		this.backupFolderResolver = backupFolderResolver;
 	}
 
+	/**
+	 * Two ways in, because a fresh installation is not always a fresh library.
+	 * Someone arriving with a backup wants their catalog back, not a first scan of
+	 * a hundred thousand files - and the folder to watch is inside the backup, so
+	 * restoring is what configures the installation.
+	 */
 	@GetMapping("/app/onboarding")
-	public String onboarding() {
-		if (!isConfigured()) {
-			return "app/onboarding";
+	public String onboarding(Model model) {
+		if (isConfigured()) {
+			return "redirect:/app";
 		}
 
-		return "redirect:/app";
+		model.addAttribute("backups", catalogBackupService.list());
+		model.addAttribute("backupFolder", backupFolderResolver.folder().toString());
+		model.addAttribute("restoring", backupRunner.isRunning());
+		model.addAttribute("restoreError", backupRunner.lastError());
+
+		return "app/onboarding";
+	}
+
+	/**
+	 * Points the restore panel at the folder where the backup actually is, and
+	 * keeps the choice - it is the same setting the settings screen edits, so an
+	 * installation restored from an external drive goes on writing its backups
+	 * there instead of forgetting where they live.
+	 */
+	@PostMapping("/app/onboarding/backup-folder")
+	public String chooseBackupFolder(@RequestParam String backupPath, Authentication authentication,
+			RedirectAttributes redirectAttributes) {
+		String validationError = validateFolder(backupPath, "backend.onboarding.backupFolderRequired");
+
+		if (validationError != null) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, validationError);
+
+			return "redirect:/app/onboarding";
+		}
+
+		String username = authentication != null ? authentication.getName() : null;
+
+		appSettingService.update(SettingsConstants.BACKUP_FOLDER, backupPath.trim(), username);
+
+		return "redirect:/app/onboarding";
 	}
 
 	@PostMapping("/app/onboarding")
@@ -95,11 +143,16 @@ public class OnboardingWebController extends LocalizedComponent {
 	}
 
 	private String validateSourcePath(String sourcePath) {
-		if (sourcePath == null || sourcePath.isBlank()) {
-			return message("backend.onboarding.folderRequired");
+		return validateFolder(sourcePath, "backend.onboarding.folderRequired");
+	}
+
+	/** Same check for both folders; only what to say when it is missing differs. */
+	private String validateFolder(String folder, String requiredKey) {
+		if (folder == null || folder.isBlank()) {
+			return message(requiredKey);
 		}
 
-		Path path = Path.of(sourcePath).toAbsolutePath().normalize();
+		Path path = Path.of(folder).toAbsolutePath().normalize();
 
 		if (!Files.isDirectory(path)) {
 			return message("backend.onboarding.folderInvalid", path);
