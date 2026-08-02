@@ -1196,20 +1196,28 @@ profile works on a plain machine.
 
 ### The embedded database
 
-A packaged copy manages its own PostgreSQL: the cluster lives in
+Every run manages its own PostgreSQL: the cluster lives in
 `<workspace>/database/cluster`, is created on first start with a generated password, and
 listens on 127.0.0.1 only. The port it bound and that password are kept in
 `<workspace>/database/cluster.properties`, so a restart reuses what worked.
 
 Whether a run manages its own server is decided in one place —
-`EmbeddedDatabaseActivation` — from four signals, in this order:
+`EmbeddedDatabaseActivation` — from three signals, in this order:
 
 | Order | Signal | Effect |
 | --- | --- | --- |
 | 1 | `nimbus-file-manager.database.embedded` | wins in both directions; anything that is not `true` counts as off |
 | 2 | `NIMBUS_FILE_MANAGER_DB_HOST` or `SPRING_DATASOURCE_URL` | a database configured by hand keeps its data; the cluster stays down |
-| 3 | `jpackage.app-path` | an installed copy manages its own |
-| 4 | — | off: a build is a developer machine, which already has a server |
+| 3 | — | on: nobody who runs this application installed a server first |
+
+Running from the IDE takes the same path as the installed copy, and on purpose: it is the
+only way the packaged behaviour gets exercised before it is packaged, and it is what lets a
+fresh clone start without anyone installing PostgreSQL. Both open the **same** cluster under
+the user's home, so the IDE and the installed application cannot run at the same time — the
+second one to start finds the port taken. The suite is the exception and says so explicitly
+(`nimbus-file-manager.database.embedded=false`, set by Surefire): every `@SpringBootTest`
+brings its own throwaway container, and a cluster beside it would be a second server for
+nothing.
 
 The resolved `spring.datasource.url` deliberately decides nothing — the packaged properties
 always define one, so its presence distinguishes nothing. Only a value somebody set counts.
@@ -1218,19 +1226,22 @@ The major version is pinned. A cluster written by another one is refused and lef
 it is, rather than opened, migrated or replaced: moving between major versions of the server
 is its own decision, to be taken when it comes.
 
-The server binaries are **not** in the repository. Stage them in `tools/postgresql` (the
-`bin` folder holding `initdb`, `pg_ctl`, `postgres` and `createdb`) before building the
-installer and they are packaged with it. Without them the application starts anyway and
-falls back to the configured connection.
+The server binaries are neither in the repository nor in the installer. They live in
+`<workspace>/tools/postgresql/bin` (`initdb`, `pg_ctl`, `postgres`, `createdb`, and the client
+programs the backup uses), and the first start that finds them missing downloads them —
+before the context opens, because there is no application without a database. Shipping them
+would put the installer's size and its licensing on this project; fetching them at first start
+leaves both where they belong.
 
-### Where an installed copy keeps its data
+### Where the workspace lives
 
-An installation lives in a folder its user cannot write to, so a packaged run puts the workspace
-under `~/Nimbus File Manager/workspace` instead of beside the executable — decided once at
-startup by `WorkspaceLocation`, published as `nimbus-file-manager.workspace` before Logback opens
-its file, and read from there by everything else. Started from a build, the workspace stays next
-to the project as before. Setting `NIMBUS_FILE_MANAGER_WORKSPACE` (or the property) wins over
-both.
+Everything a run writes goes to `~/Nimbus File Manager/workspace`, in every mode: from the IDE,
+from `mvn spring-boot:run`, and from the installed executable. An installation cannot write
+beside its own executable, and having a build write somewhere else would mean the layout people
+actually use is never the one being developed against. It is decided once at startup by
+`WorkspaceLocation` and published as `nimbus-file-manager.workspace` before Logback opens its
+file, so everything downstream reads one answer. `NIMBUS_FILE_MANAGER_WORKSPACE` (or the
+property) wins over it — which is what the suite uses to keep its writes inside `target/`.
 
 ## Organization Safety Notes
 
@@ -1252,7 +1263,7 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2495 run, 0 failures, 0 errors, 9 skipped
+Tests:       2494 run, 0 failures, 0 errors, 9 skipped
 JaCoCo:      98.45% instruction, 92.17% branch, 98.06% line, 98.80% method, 100.00% class
 ```
 

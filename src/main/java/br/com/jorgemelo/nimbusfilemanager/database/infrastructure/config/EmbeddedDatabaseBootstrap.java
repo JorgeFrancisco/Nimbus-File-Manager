@@ -6,7 +6,6 @@ import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.EXTERNAL_HOST_VARIABLE;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.EXTERNAL_URL_VARIABLE;
 import static br.com.jorgemelo.nimbusfilemanager.database.domain.enums.EmbeddedDatabaseDecision.BINARIES_MISSING;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_MARKER;
 import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 
 import java.nio.file.Path;
@@ -120,8 +119,7 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 
 	private EmbeddedDatabaseDecision decide(ConfigurableEnvironment environment, ClusterLayout layout) {
 		return EmbeddedDatabaseActivation.decide(environment.getProperty(EMBEDDED_PROPERTY),
-				externalDatabase(environment), System.getProperty(INSTALLED_MARKER), System.getProperty("os.name"),
-				layout.binariesPresent());
+				externalDatabase(environment), System.getProperty("os.name"), layout.binariesPresent());
 	}
 
 	/**

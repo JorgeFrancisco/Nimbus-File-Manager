@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.37.6.129</version>
+	<version>5.37.7.130</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -407,6 +407,11 @@
 					<!-- Same reason, and a stronger one: the PostgreSQL archive is several hundred MB,
 					     and a test context that fetched it would do so before it could report why. -->
 					<nimbus-file-manager.database.auto-install>false</nimbus-file-manager.database.auto-install>
+					<!-- The suite brings its own database: every @SpringBootTest starts a throwaway
+					     container. Running a cluster is the default everywhere else, so the one
+					     place that already has a server has to say so - otherwise each context
+					     would boot a second PostgreSQL beside the container it is already using. -->
+					<nimbus-file-manager.database.embedded>false</nimbus-file-manager.database.embedded>
 					<!-- The real workspace lives under the user's home, and the suite must never
 					     write into it: a test that creates folders, logs or a cluster would be
 					     doing it inside the installation people actually use. This keeps the run
