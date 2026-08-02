@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.34.7.117</version>
+	<version>5.34.7.118</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -107,14 +107,14 @@
 			<artifactId>leaflet</artifactId>
 			<version>${leaflet.version}</version>
 		</dependency>
-		<!-- Compile scope, not runtime: the catalog backup calls the driver's COPY API
-		     directly (CatalogCopyRepository), which is what lets a full backup work
-		     without installing pg_dump next to the application. The application was
-		     already PostgreSQL-only - Flyway migrations, native queries, pg_catalog -
-		     so this makes an existing coupling visible rather than adding one. -->
+		<!-- Runtime only: no production class imports org.postgresql. It was compile
+		     scope while the backup copied tables through the driver's COPY API; the
+		     backup now runs pg_dump, and the driver went back to being what it always
+		     was here - the JDBC implementation Spring loads by name. -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springdoc</groupId>

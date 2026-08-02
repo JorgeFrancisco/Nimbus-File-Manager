@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupManifest;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
-import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import lombok.extern.slf4j.Slf4j;
 
@@ -57,7 +57,7 @@ public class CatalogBackupService {
 	private static final String MANIFEST = "manifest.json";
 	private static final String DUMP = "catalog.dump";
 
-	private final CatalogCopyRepository catalogCopyRepository;
+	private final CatalogSchemaRepository catalogSchemaRepository;
 	private final CatalogDump catalogDump;
 	private final BackupFolderResolver backupFolderResolver;
 	private final ObjectMapper objectMapper;
@@ -65,10 +65,10 @@ public class CatalogBackupService {
 	private final BackupProgress progress;
 	private final SecureFileMove secureFileMove;
 
-	public CatalogBackupService(CatalogCopyRepository catalogCopyRepository, CatalogDump catalogDump,
-			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock,
-			BackupProgress progress, SecureFileMove secureFileMove) {
-		this.catalogCopyRepository = catalogCopyRepository;
+	public CatalogBackupService(CatalogSchemaRepository catalogSchemaRepository, CatalogDump catalogDump,
+			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock, BackupProgress progress,
+			SecureFileMove secureFileMove) {
+		this.catalogSchemaRepository = catalogSchemaRepository;
 		this.catalogDump = catalogDump;
 		this.backupFolderResolver = backupFolderResolver;
 		this.objectMapper = objectMapper;
@@ -215,7 +215,7 @@ public class CatalogBackupService {
 	 * written by a later schema names columns this build has never heard of.
 	 */
 	private void refuseWhenNewerThanThisBuild(BackupManifest manifest) {
-		String current = catalogCopyRepository.schemaVersion();
+		String current = catalogSchemaRepository.schemaVersion();
 
 		if (isNewer(manifest.schemaVersion(), current)) {
 			throw new IllegalArgumentException("Backup was taken from schema " + manifest.schemaVersion()
@@ -244,8 +244,8 @@ public class CatalogBackupService {
 
 			zip.putNextEntry(new ZipEntry(MANIFEST));
 
-			zip.write(objectMapper.writeValueAsBytes(new BackupManifest(catalogCopyRepository.schemaVersion(),
-					applicationVersion(), LocalDateTime.now(clock), catalogCopyRepository.tables())));
+			zip.write(objectMapper.writeValueAsBytes(new BackupManifest(catalogSchemaRepository.schemaVersion(),
+					applicationVersion(), LocalDateTime.now(clock), catalogSchemaRepository.tables())));
 
 			zip.closeEntry();
 		}

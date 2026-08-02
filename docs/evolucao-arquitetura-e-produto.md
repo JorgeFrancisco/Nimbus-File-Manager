@@ -4,7 +4,7 @@ Documento **vivo** de sugestões, não de decisões. O que virar decisão desce 
 `docs/adr/`; o que virar estado atual pertence ao README.
 
 **Item concluído é removido daqui**, e não marcado como feito: a lista existe para dizer o que falta,
-e histórico é assunto do git. Os identificadores (`A1`, `P2`, …) **não são renumerados** quando algo
+e histórico é assunto do git. Os identificadores (`A4`, `P2`, …) **não são renumerados** quando algo
 sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item.
 
 Escrito a partir de uma varredura do código em 2026-07-31, com o produto na versão 5.26. O critério
@@ -18,17 +18,19 @@ distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambien
 
 ### Complexidade média — semanas
 
-**A4. Punhado de testes de integração para um produto que move arquivos.** A lógica está bem coberta
-por unidade, mas o que quebra na vida real é o encontro com o sistema de arquivos: atributo
-somente-leitura (visto ontem), caminho longo, arquivo bloqueado, unidade removida no meio da
-operação, acentuação, links. Hoje isso só aparece em produção — na sua máquina.
+**A4. Poucos testes de integração para um produto que move arquivos.** A lógica está bem coberta por
+unidade, e há 18 testes de integração — mas só 4 encostam num sistema de arquivos real, e nenhum
+cobre o que de fato quebra na vida real: atributo somente-leitura, caminho longo, arquivo bloqueado
+por outro processo, unidade removida no meio da operação, acentuação, links. Hoje isso só aparece em
+produção — na máquina de quem instalou.
 *Entrega:* confiança para distribuir. Um distribuidor não pode descobrir com o usuário final que
 pasta de celular vem com `ReadOnly`.
 
-**A5. `shared` é o maior domínio do projeto.** Cem classes, incluindo `CatalogFile`, `Execution`,
-`Movement`, `Photo`, `Video` — as entidades centrais. Isso é o esperado num kernel compartilhado, mas
-é também o lugar onde tudo que não tem dono acaba caindo. Vale uma revisão periódica com uma pergunta
-simples: *este tipo é usado por três ou mais domínios?* Se não, ele tem dono e deveria morar lá.
+**A5. `shared` nunca passou por revisão de dono.** São 100 classes, incluindo `CatalogFile`,
+`Execution`, `Movement`, `Photo`, `Video` — as entidades centrais. Não é mais um outlier em tamanho
+(`duplicate` tem 99 e `metadata` 92), mas continua sendo o lugar onde tudo que não tem dono acaba
+caindo, e a revisão sugerida aqui nunca aconteceu. A pergunta é simples: *este tipo é usado por três
+ou mais domínios?* Se não, ele tem dono e deveria morar lá.
 *Entrega:* evita o destino comum de projetos assim, em que `shared` vira um segundo `util` e a
 modularidade some por dentro.
 
@@ -39,10 +41,11 @@ navegador — inclusive um app de celular, se o produto for por aí.
 
 ### Complexidade alta — meses
 
-**A7. Uma instalação, uma biblioteca.** `WATCH_FOLDER` é um `AppSetting` global único. Usuários
-existem e têm papéis, mas todos veem a mesma coleção; trocar de biblioteca significa reconfigurar a
-instalação. Para uso pessoal isso é suficiente. Para distribuição, é a primeira pergunta de quem tem
-fotos em dois HDs — ou de uma família com duas pessoas.
+**A7. Uma instalação, uma biblioteca.** `WATCH_FOLDER` é um `AppSetting` global único. Trocar de
+biblioteca já é uma operação suportada e segura (`LibrarySwitchService` cancela o que está rodando,
+valida a pasta nova e limpa o catálogo), mas continua sendo *troca*: as duas coleções nunca coexistem,
+e todos os usuários veem a mesma. Para uso pessoal isso é suficiente. Para distribuição, é a primeira
+pergunta de quem tem fotos em dois HDs — ou de uma família com duas pessoas.
 *Entrega:* multi-biblioteca destrava tanto o caso "meus discos" quanto o caso "minha família", e é
 uma decisão estrutural: mexe em catálogo, inventário, quarentena e telas.
 
@@ -58,21 +61,42 @@ segundo plano" — e essa percepção define review de produto.
 
 ### Complexidade baixa — dias
 
-**P2. Nenhuma ação destrutiva pede confirmação com contagem, exceto a que fizemos ontem.** Excluir
-duplicados, purgar quarentena e desfazer organização são irreversíveis ou custosos, e a experiência do
-menu do explorer (dizer "132 arquivos, 4,2 GB" antes do botão vermelho) deveria ser o padrão.
+**P2. Duas ações destrutivas ainda confirmam sem dizer o tamanho do estrago.** Excluir duplicados e
+apagar da quarentena já abrem diálogo com contagem. Faltam as duas de organização: *Executar* e
+*Desfazer* pedem confirmação com uma frase fixa (`org.executeConfirm`, `execution.undoConfirm`), sem
+dizer quantos arquivos serão movidos nem quanto isso pesa.
 *Entrega:* consistência e menos arrependimento — barato de fazer, alto valor percebido.
 
 ### Complexidade média — semanas
 
-**P4. Falta empacotar os binários do PostgreSQL.** O empacotamento por `jpackage` e o ciclo
-de vida do banco embarcado já existem: a aplicação cria o cluster em `<workspace>/database/cluster`,
-gera a senha, escolhe a porta (com retentativa), recusa cluster de outra versão maior sem tocar nele e
-para o servidor no fechamento do contexto. O que falta é o download dos binários oficiais para
-`tools/postgresql` — hoje um passo manual — e validar a imagem empacotada de ponta a ponta numa
-máquina limpa.
-*Entrega:* o passo que separa "projeto no GitHub" de "produto". Sem os binários a aplicação sobe
-e cai para a conexão configurada, então o que falta é distribuição, não comportamento.
+**P4. O instalador nunca foi executado de verdade.** Todo o código existe: o perfil `installer`
+monta a imagem por `jpackage` e já copia `tools/postgresql` para dentro dela quando os binários estão
+presentes; a aplicação baixa esses binários sozinha (seção em Config, automático no Windows, botão
+manual), cria o cluster em `<workspace>/database/cluster`, gera a senha, escolhe a porta com
+retentativa, recusa cluster de versão maior sem tocar nele e para o servidor no fechamento. O que
+falta é **rodar isso**: até hoje toda execução foi pela IDE ou pelo Maven, onde a decisão é
+`DEVELOPMENT_BUILD` e o caminho empacotado nunca é exercitado.
+*Entrega:* o passo que separa "projeto no GitHub" de "produto".
+
+As fases abaixo são independentes e valem uma de cada vez; cada uma só faz sentido depois da anterior:
+
+- **P4.1. Gerar a imagem e conferir o layout.** `mvn -Pinstaller package` com `tools/postgresql`
+  presente, e verificar na imagem produzida que existe `app/tools/postgresql/bin` e que
+  `ClusterLayout.bundledBinaries` resolve para `<launcher>/app/tools/postgresql/bin`. Hoje essa
+  resolução só é afirmada por teste unitário — nenhuma imagem real foi inspecionada.
+- **P4.2. Primeira execução na própria máquina de build.** Subir pelo launcher e acompanhar o
+  caminho inteiro: marcador de instalação reconhecido, cluster criado, senha gerada, porta escolhida,
+  migrations aplicadas, tela abrindo. É onde aparecem os erros que a IDE esconde.
+- **P4.3. Máquina limpa.** Sem JDK, sem PostgreSQL e sem ffmpeg no PATH. Além de funcionar, importa
+  *o que a pessoa vê* enquanto centenas de MB de binários são baixados — e o que acontece quando não
+  há internet nenhuma.
+- **P4.4. Atualizar e desinstalar sem perder o cluster.** Instalar por cima de uma instalação
+  existente e depois desinstalar. `PGDATA` é dado crítico: guarda o catálogo inteiro, com anos de
+  hashes perceptuais e localizações resolvidas. Um desinstalador que leve o workspace junto apaga
+  tudo em silêncio, e esse caminho nunca foi exercitado.
+- **P4.5. Instalador de verdade (MSI).** O tipo padrão é `app-image` — uma pasta que o usuário
+  precisa colocar em algum lugar por conta própria. `installer.type=msi` já está previsto no perfil,
+  mas exige WiX no PATH e nunca foi rodado. Sem esta fase o produto se distribui como zip.
 
 **P5. Não há atualização.** Subir de versão é trocar o jar e torcer para as migrations rodarem. Não
 há verificação de versão nova, nem aviso, nem rollback.
@@ -113,7 +137,7 @@ O produto está bom o suficiente para escolher uma direção; tentar as três ao
 real desta fase.
 
 **Caminho 1 — Ferramenta de curadoria séria.** Público: quem tem 100 mil fotos e um problema de
-organização. Prioriza A4, P4, P6, P7. O diferencial é a integridade: mover arquivo com verificação
+organização. Prioriza A4, P4, P7. O diferencial é a integridade: mover arquivo com verificação
 byte a byte, undo, trilha de auditoria. Ninguém no mercado de consumo faz isso.
 
 **Caminho 2 — Substituto do Google Fotos local.** Público: família que quer sair da nuvem. Prioriza
@@ -133,10 +157,13 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **P4** (instalador) — o portão. Sem ele, o resto fica em uso pessoal.
-2. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-3. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-4. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **P4.1 e P4.2** (gerar a imagem e subir por ela) — o portão, e as duas fases mais baratas: o
+   código já existe, falta descobrir se funciona.
+2. **P4.3 e P4.4** (máquina limpa, atualizar/desinstalar) — o que separa "funciona aqui" de
+   "funciona na casa dos outros", com P4.4 sendo o de maior risco: erra e apaga o catálogo alheio.
+3. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
+4. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+5. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 

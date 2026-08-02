@@ -26,7 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
-import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogCopyRepository;
+import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
@@ -50,7 +50,7 @@ class CatalogBackupServiceTest {
 
 	private static final String NAME = "nimbus-catalog-20260731-030000.zip";
 
-	private final CatalogCopyRepository catalogCopyRepository = mock(CatalogCopyRepository.class);
+	private final CatalogSchemaRepository catalogSchemaRepository = mock(CatalogSchemaRepository.class);
 	private final BackupFolderResolver backupFolderResolver = mock(BackupFolderResolver.class);
 	private final CatalogDump catalogDump = mock(CatalogDump.class);
 
@@ -64,7 +64,7 @@ class CatalogBackupServiceTest {
 
 		// The injected mapper carries the JSR-310 module; a bare one cannot write the
 		// timestamp of the manifest, which is what production actually uses.
-		return new CatalogBackupService(catalogCopyRepository, catalogDump, backupFolderResolver,
+		return new CatalogBackupService(catalogSchemaRepository, catalogDump, backupFolderResolver,
 				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove);
 	}
 
@@ -97,7 +97,7 @@ class CatalogBackupServiceTest {
 				 "tables":["app_setting"]}
 				""");
 
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 		when(catalogDump.restore(any())).thenReturn(true);
 
 		Assertions.assertThat(service(folder).restore(NAME).schemaVersion()).isEqualTo("12");
@@ -116,7 +116,7 @@ class CatalogBackupServiceTest {
 				 "tables":["app_setting"]}
 				""");
 
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 
 		CatalogBackupService service = service(folder);
 
@@ -169,8 +169,8 @@ class CatalogBackupServiceTest {
 
 	@Test
 	void namesTheBackupAfterTheMomentItWasTaken(@TempDir Path folder) {
-		when(catalogCopyRepository.tables()).thenReturn(List.of());
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 		when(catalogDump.dump(any())).thenAnswer(call -> {
 			Files.writeString(call.getArgument(0), "a dump");
 
@@ -192,8 +192,8 @@ class CatalogBackupServiceTest {
 		CatalogBackupService service = service(folder);
 
 		when(backupFolderResolver.staging()).thenReturn(workspace);
-		when(catalogCopyRepository.tables()).thenReturn(List.of());
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 		when(catalogDump.readable(any())).thenReturn(true);
 		when(catalogDump.dump(any())).thenAnswer(call -> {
 			Path written = call.getArgument(0);
@@ -251,7 +251,7 @@ class CatalogBackupServiceTest {
 			 "tables":["app_setting"]}
 			""");
 
-		when(catalogCopyRepository.schemaVersion()).thenReturn("2026.08.a");
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("2026.08.a");
 
 		CatalogBackupService service = service(folder);
 
@@ -273,7 +273,7 @@ class CatalogBackupServiceTest {
 			zip.closeEntry();
 		}
 
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 
 		CatalogBackupService service = service(folder);
 
@@ -288,7 +288,7 @@ class CatalogBackupServiceTest {
 	 */
 	@Test
 	void discardsADumpThatCannotBeReadBack(@TempDir Path folder) {
-		when(catalogCopyRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
 		when(catalogDump.dump(any())).thenReturn(true);
 		when(catalogDump.readable(any())).thenReturn(false);
 
@@ -306,7 +306,7 @@ class CatalogBackupServiceTest {
 	 */
 	@Test
 	void reportsTheFileWhenTheBackupCannotBeWritten(@TempDir Path folder) {
-		when(catalogCopyRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
 		when(catalogDump.dump(any())).thenReturn(true);
 		when(catalogDump.readable(any())).thenReturn(true);
 
@@ -324,7 +324,7 @@ class CatalogBackupServiceTest {
 				 "tables":["app_setting"]}
 				""");
 
-		when(catalogCopyRepository.schemaVersion()).thenReturn("13");
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
 		when(catalogDump.restore(any())).thenReturn(false);
 
 		CatalogBackupService service = service(folder);
