@@ -518,6 +518,21 @@ Inventory runs continuously in the background once a folder is set up through On
 
 The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
 
+The journal is the preferred source and the application asks for what it needs to read it: on
+Windows, a start that cannot open a volume handle restarts itself elevated, raising one UAC
+prompt. The reason is what the journal keeps rather than how fast it is - it is a durable record
+on the volume, so changes made while the application was closed can still be read afterwards,
+while real-time events live only in the memory of a process that was not running and a later
+reconcile can only compare two snapshots.
+
+Declining the prompt is a supported answer: the application then starts unelevated, without the
+journal, and finds those changes on the next scan. The restart never happens outside an installed
+copy (it needs `jpackage.app-path`, which the IDE and the build do not have), never happens twice
+in a chain (the restart carries a marker argument), and never happens when the volume already
+opens. Set `nimbus-file-manager.inventory.usn.elevate-on-start=false` to stop asking at all - it
+is read before Spring starts, so it is a system property or environment variable, not a setting
+on a screen.
+
 The settings screen has two tabs. The system tab (admin-only) persists runtime parameters in PostgreSQL; the preferences tab (any authenticated user) stores personal defaults - the file-explorer view and page size, and the organization layout, checkboxes and page size - reusing the same `UserPagePreferenceService` the file explorer already relies on to remember your last-used folder, view and sort.
 
 Each system parameter stores:
@@ -1283,8 +1298,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2514 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.20% branch, 98.08% line, 98.81% method, 100.00% class
+Tests:       2522 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.46% instruction, 92.23% branch, 98.06% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet
