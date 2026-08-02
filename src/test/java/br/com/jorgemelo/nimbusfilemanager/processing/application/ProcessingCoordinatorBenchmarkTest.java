@@ -41,8 +41,6 @@ class ProcessingCoordinatorBenchmarkTest {
 		System.out.printf("[processing-benchmark] sequential            wall=%5dms  accumulated=%5dms%n",
 				ms(sequentialWall), (long) ITEMS * PER_ITEM_MILLIS);
 
-		long fourWorkerWall = Long.MAX_VALUE;
-
 		for (int workers = 1; workers <= 4; workers++) {
 			Result result = timeParallel(items, workers);
 
@@ -57,15 +55,19 @@ class ProcessingCoordinatorBenchmarkTest {
 				assertThat(result.outcomes().get(i).item()).isEqualTo(i);
 			}
 
-			if (workers == 4) {
-				fourWorkerWall = result.wallNanos();
+			// What the coordinator actually promises, and what a bug would break: it
+			// runs items at the same time, and never more of them than its pool allows.
+			// The numbers printed above are the benchmark; asserting on them would be a
+			// bet on how busy the machine is, which is what this used to do - the whole
+			// suite runs in parallel, and a 4-worker run starved by the other classes
+			// once took longer than the sequential baseline and failed a green build.
+			// Concurrency survives that, because the items sleep rather than compute.
+			assertThat(result.maxConcurrency()).isBetween(1, workers);
+
+			if (workers > 1) {
+				assertThat(result.maxConcurrency()).isGreaterThan(1);
 			}
 		}
-
-		// Robust, non-flaky invariant: with 4 workers the wall-clock is clearly below
-		// the
-		// sequential baseline (parallelism actually helps).
-		assertThat(fourWorkerWall).isLessThan(sequentialWall);
 	}
 
 	private long timeSequential(List<Integer> items) {
