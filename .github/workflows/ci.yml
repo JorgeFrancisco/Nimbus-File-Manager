@@ -33,6 +33,11 @@ jobs:
       # The PGDG repository has to be added: the preinstalled client carries a pgdg
       # version string, but that only says where the package was built, and apt on
       # the image has no such source.
+      #
+      # The 16 client is removed rather than left alongside: on Debian these tools
+      # are wrappers that pick a binary version, and one that connects to a server
+      # can infer it while "pg_restore --list" cannot - it reads a file. With both
+      # installed the dump was written by 17 and read back by 16, which cannot.
       - name: Install the PostgreSQL 17 client
         run: |
           KEY=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
@@ -42,7 +47,9 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
+          sudo apt-get remove -y postgresql-client-16
           pg_dump --version
+          pg_restore --version
 
       - name: ./mvnw clean test
         run: |

@@ -46,6 +46,9 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 
 	private final DatabaseConnection connection;
 
+	/** What the last failing command printed, for the caller to report. */
+	private final AtomicReference<String> lastOutput = new AtomicReference<>("");
+
 	/** The dump in flight, so it can be ended from another request. */
 	private final AtomicReference<Process> dumping = new AtomicReference<>();
 
@@ -121,6 +124,11 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 		log.info("The running backup was cancelled");
 
 		return true;
+	}
+
+	@Override
+	public String lastOutput() {
+		return lastOutput.get();
 	}
 
 	@Override
@@ -218,6 +226,8 @@ public class PostgresDumpProcessRunner implements CatalogDump {
 
 			return true;
 		}
+
+		lastOutput.set(text);
 
 		log.error("{} failed with exit code {}: {}", name, exit, text);
 

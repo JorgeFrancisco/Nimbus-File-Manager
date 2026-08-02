@@ -102,14 +102,15 @@ public class CatalogBackupService {
 
 		try {
 			if (!catalogDump.dump(dump)) {
-				throw new IllegalStateException("The database could not be dumped");
+				throw new IllegalStateException("The database could not be dumped: " + catalogDump.lastOutput());
 			}
 
 			// Read back before it is kept. A backup is trusted precisely when nobody is
 			// in a position to check it, so the check happens now, while the alternative
 			// is simply taking it again.
 			if (!catalogDump.readable(dump)) {
-				throw new IllegalStateException("The dump could not be read back and was discarded");
+				throw new IllegalStateException(
+					"The dump could not be read back and was discarded: " + catalogDump.lastOutput());
 			}
 
 			pack(dump, built);
@@ -164,7 +165,8 @@ public class CatalogBackupService {
 			unpack(zip, dump);
 
 			if (!catalogDump.restore(dump)) {
-				throw new IllegalStateException("The backup " + name + " could not be loaded");
+				throw new IllegalStateException(
+					"The backup " + name + " could not be loaded: " + catalogDump.lastOutput());
 			}
 
 

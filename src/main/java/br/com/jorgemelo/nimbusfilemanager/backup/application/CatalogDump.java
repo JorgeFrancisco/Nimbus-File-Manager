@@ -49,6 +49,17 @@ public interface CatalogDump {
 	DatabaseConnection target();
 
 	/**
+	 * What the last failing command printed, or an empty string.
+	 *
+	 * <p>
+	 * Part of the contract because these tools explain themselves and nothing
+	 * else can: "the dump could not be read back" says what happened and never
+	 * why, and the tool's own line - a version mismatch, a missing file, a
+	 * refused connection - was landing in a log far above the failure.
+	 */
+	String lastOutput();
+
+	/**
 	 * Ends a dump that is still running.
 	 *
 	 * <p>
