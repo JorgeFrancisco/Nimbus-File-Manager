@@ -9,6 +9,7 @@ import java.nio.file.Path;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 
@@ -114,6 +115,26 @@ class ScanExclusionServiceTest {
 
 		Assertions.assertThat(service.quarantineRoot()).isNull();
 		Assertions.assertThat(service.isWithinQuarantine(Path.of("anywhere", "file.jpg"))).isFalse();
+	}
+
+	/**
+	 * The backup folder is deliberately put where a cloud client will pick it up,
+	 * which is often inside the watched library. A 600 MB dump written there
+	 * looked like a flood of new files: the watcher answered with an inventory
+	 * while the file was still being written, over and over until it finished.
+	 */
+	@Test
+	void treatsTheBackupFolderAsTheApplicationsOwn(@TempDir Path drive) {
+		Path backups = drive.resolve("Nimbus File Manager Database Backups");
+
+		AppSettingService settings = mock(AppSettingService.class);
+
+		when(settings.stringValue(eq(SettingsConstants.BACKUP_FOLDER), anyString())).thenReturn(backups.toString());
+
+		ScanExclusionService service = new ScanExclusionService(settings);
+
+		Assertions.assertThat(service.isApplicationOwned(backups.resolve("nimbus-catalog-20260801.zip"))).isTrue();
+		Assertions.assertThat(service.isApplicationOwned(drive.resolve("holiday.jpg"))).isFalse();
 	}
 
 	@Test

@@ -37,6 +37,7 @@ public class ScanExclusionService {
 	private final AtomicReference<FolderRules> folderRules = new AtomicReference<>(FolderRules.EMPTY);
 	private final AtomicReference<ExtensionRules> extensionRules = new AtomicReference<>(ExtensionRules.EMPTY);
 	private final AtomicReference<QuarantineRule> quarantineRule = new AtomicReference<>(QuarantineRule.EMPTY);
+	private final AtomicReference<QuarantineRule> backupRule = new AtomicReference<>(QuarantineRule.EMPTY);
 
 	public ScanExclusionService(AppSettingService appSettingService) {
 		this.appSettingService = appSettingService;
@@ -59,7 +60,57 @@ public class ScanExclusionService {
 			return false;
 		}
 
-		return isExcludedExtension(path) || isExcludedFolder(root, path) || isWithinQuarantine(path);
+		return isExcludedExtension(path) || isExcludedFolder(root, path) || isApplicationOwned(path);
+	}
+
+	/**
+	 * Whether the path belongs to a folder the application writes for itself.
+	 *
+	 * <p>
+	 * Quarantine and the catalog backups are both the application's own output,
+	 * and both are commonly configured inside the watched library - the backup
+	 * folder deliberately so, on a drive a cloud client synchronises. Writing a
+	 * backup there otherwise looks like a library full of new files: the watcher
+	 * fires an inventory while the file is still being written, again for every
+	 * batch of bytes, and the screen flickers between blocked and free for as long
+	 * as the dump takes.
+	 */
+	public boolean isApplicationOwned(Path path) {
+		return isWithinQuarantine(path) || isWithinBackups(path);
+	}
+
+	/** Whether {@code path} lives inside (or is) the configured backup folder. */
+	public boolean isWithinBackups(Path path) {
+		return isWithin(path, backupRoot());
+	}
+
+	/**
+	 * Absolute, normalized path of the configured backup folder, or {@code null}
+	 * when the default (inside the workspace) is in use - which the library never
+	 * contains, so there is nothing to exclude.
+	 */
+	public Path backupRoot() {
+		String raw = setting(SettingsConstants.BACKUP_FOLDER, "");
+
+		QuarantineRule current = backupRule.get();
+
+		if (!Objects.equals(raw, current.raw())) {
+			Path root = raw == null || raw.isBlank() ? null : Path.of(raw).toAbsolutePath().normalize();
+
+			current = new QuarantineRule(raw, root);
+
+			backupRule.set(current);
+		}
+
+		return current.root();
+	}
+
+	private boolean isWithin(Path path, Path root) {
+		if (path == null || root == null) {
+			return false;
+		}
+
+		return path.toAbsolutePath().normalize().startsWith(root);
 	}
 
 	/**

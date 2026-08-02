@@ -12,6 +12,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -23,7 +24,10 @@ class SelfWriteAwareFileChangeSourceTest {
 
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
 	private final FileChangeSource delegate = mock(FileChangeSource.class);
-	private final FileChangeSource source = new SelfWriteAwareFileChangeSource(delegate, pathRegistry);
+	private final ScanExclusionService scanExclusionService = mock(ScanExclusionService.class);
+
+	private final FileChangeSource source = new SelfWriteAwareFileChangeSource(delegate, pathRegistry,
+			scanExclusionService);
 
 	@Test
 	void dropsWhatTheApplicationWroteAndReportsEverythingElse(@TempDir Path folder) {
@@ -35,6 +39,23 @@ class SelfWriteAwareFileChangeSourceTest {
 		when(delegate.pollChangedFiles()).thenReturn(List.of(ours, theirs));
 
 		Assertions.assertThat(source.pollChangedFiles()).containsExactly(theirs);
+	}
+
+	/**
+	 * The backup folder is deliberately put on a synchronised drive, which is
+	 * often inside the watched library. Writing 600 MB there looked like a flood
+	 * of new files, and the watcher answered by inventorying while the file was
+	 * still being written - repeatedly, for as long as the dump took.
+	 */
+	@Test
+	void dropsChangesInsideTheFoldersTheApplicationOwns(@TempDir Path folder) {
+		Path backup = folder.resolve("nimbus-catalog-20260801-193133.zip");
+		Path photo = folder.resolve("holiday.jpg");
+
+		when(scanExclusionService.isApplicationOwned(backup)).thenReturn(true);
+		when(delegate.pollChangedFiles()).thenReturn(List.of(backup, photo));
+
+		Assertions.assertThat(source.pollChangedFiles()).containsExactly(photo);
 	}
 
 	/**

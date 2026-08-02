@@ -138,12 +138,14 @@
 	padding-bottom: 16px;
 }
 
+/* Symmetric margin: the action that starts the next run sits right under this
+   panel, and a top-only margin left the two touching. */
 .operation-status {
 	background: var(--accent-soft);
 	border: 1px solid var(--accent-soft-line);
 	border-radius: 8px;
 	color: var(--text);
-	margin-top: 16px;
+	margin: 16px 0;
 	padding: 14px;
 }
 

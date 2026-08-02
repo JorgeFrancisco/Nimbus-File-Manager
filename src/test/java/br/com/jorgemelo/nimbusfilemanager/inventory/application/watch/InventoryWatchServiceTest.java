@@ -40,6 +40,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionRes
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSourceFactory;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -59,6 +60,7 @@ import ch.qos.logback.core.read.ListAppender;
 class InventoryWatchServiceTest {
 
 	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final ScanExclusionService exclusions = mock(ScanExclusionService.class);
 
 	@TempDir
 	Path tempDir;
@@ -663,7 +665,7 @@ class InventoryWatchServiceTest {
 	void aFailureToOpenTheWatcherShouldSurfaceOnTheStatusInsteadOfPropagating() {
 		FileChangeSourceFactory failing = new FileChangeSourceFactory(_ -> {
 			throw new IllegalStateException("no watcher available on this volume");
-		}, pathRegistry);
+		}, pathRegistry, exclusions);
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
 				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
@@ -679,7 +681,7 @@ class InventoryWatchServiceTest {
 	}
 
 	private FileChangeSourceFactory watchOnlyFactory() {
-		return new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry);
+		return new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry, exclusions);
 	}
 
 	private AppSettingService configuredSettings() {

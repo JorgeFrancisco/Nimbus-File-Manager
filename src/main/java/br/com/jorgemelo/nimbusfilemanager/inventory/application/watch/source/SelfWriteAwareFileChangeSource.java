@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -22,16 +23,37 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 
 	private final FileChangeSource delegate;
 	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
+	private final ScanExclusionService scanExclusionService;
 
-	SelfWriteAwareFileChangeSource(FileChangeSource delegate, SelfWrittenPathRegistry selfWrittenPathRegistry) {
+	SelfWriteAwareFileChangeSource(FileChangeSource delegate, SelfWrittenPathRegistry selfWrittenPathRegistry,
+			ScanExclusionService scanExclusionService) {
 		this.delegate = delegate;
 		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
+		this.scanExclusionService = scanExclusionService;
 	}
 
 	@Override
 	public List<Path> pollChangedFiles() {
-		return delegate.pollChangedFiles().stream().filter(changed -> !selfWrittenPathRegistry.consume(changed))
-				.toList();
+		return delegate.pollChangedFiles().stream().filter(this::worthAnInventory).toList();
+	}
+
+	/**
+	 * Two kinds of change the application caused itself.
+	 *
+	 * <p>
+	 * A single registered write is consumed once and forgotten. A folder the
+	 * application owns is excluded for as long as it is configured: quarantine,
+	 * and the catalog backups - which are deliberately put on a synchronised
+	 * drive, often inside the watched library. A backup written there looks like
+	 * hundreds of MB of new files arriving, and answering it means inventorying
+	 * while the file is still being written.
+	 */
+	private boolean worthAnInventory(Path changed) {
+		if (scanExclusionService.isApplicationOwned(changed)) {
+			return false;
+		}
+
+		return !selfWrittenPathRegistry.consume(changed);
 	}
 
 	@Override

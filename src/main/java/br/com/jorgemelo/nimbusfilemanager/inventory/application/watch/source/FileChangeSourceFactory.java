@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.PhysicalTreeWatcher;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -21,10 +22,13 @@ public class FileChangeSourceFactory {
 
 	private final FileChangeSourceProvider provider;
 	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
+	private final ScanExclusionService scanExclusionService;
 
-	public FileChangeSourceFactory(FileChangeSourceProvider provider, SelfWrittenPathRegistry selfWrittenPathRegistry) {
+	public FileChangeSourceFactory(FileChangeSourceProvider provider,
+			SelfWrittenPathRegistry selfWrittenPathRegistry, ScanExclusionService scanExclusionService) {
 		this.provider = provider;
 		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
+		this.scanExclusionService = scanExclusionService;
 	}
 
 	/**
@@ -38,9 +42,10 @@ public class FileChangeSourceFactory {
 		// Every source is wrapped, whichever one it is: the application's own writes
 		// are uninteresting to the watcher regardless of how they were detected.
 		if (provided.isPresent()) {
-			return new SelfWriteAwareFileChangeSource(provided.get(), selfWrittenPathRegistry);
+			return new SelfWriteAwareFileChangeSource(provided.get(), selfWrittenPathRegistry, scanExclusionService);
 		}
 
-		return new SelfWriteAwareFileChangeSource(new PhysicalTreeWatcher(root, recursive), selfWrittenPathRegistry);
+		return new SelfWriteAwareFileChangeSource(new PhysicalTreeWatcher(root, recursive), selfWrittenPathRegistry,
+			scanExclusionService);
 	}
 }

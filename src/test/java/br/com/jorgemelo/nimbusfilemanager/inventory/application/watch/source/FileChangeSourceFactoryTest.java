@@ -13,6 +13,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 class FileChangeSourceFactoryTest {
@@ -33,7 +34,7 @@ class FileChangeSourceFactoryTest {
 		when(provided.root()).thenReturn(dir);
 		when(provided.pollChangedFiles()).thenReturn(List.of(changed));
 
-		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry).create(dir,
+		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry, mock(ScanExclusionService.class)).create(dir,
 				true);
 
 		Assertions.assertThat(source.root()).isEqualTo(dir);
@@ -51,7 +52,7 @@ class FileChangeSourceFactoryTest {
 
 		pathRegistry.announce(ours);
 
-		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry).create(dir,
+		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry, mock(ScanExclusionService.class)).create(dir,
 				true);
 
 		Assertions.assertThat(source.pollChangedFiles()).isEmpty();
@@ -59,7 +60,7 @@ class FileChangeSourceFactoryTest {
 
 	@Test
 	void fallsBackToTheWatchServiceSourceWhenTheProviderDeclines(@TempDir Path dir) throws IOException {
-		FileChangeSourceFactory factory = new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry);
+		FileChangeSourceFactory factory = new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry, mock(ScanExclusionService.class));
 
 		FileChangeSource source = factory.create(dir, false);
 
