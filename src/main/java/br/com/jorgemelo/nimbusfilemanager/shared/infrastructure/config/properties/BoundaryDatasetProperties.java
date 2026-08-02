@@ -19,6 +19,22 @@ public class BoundaryDatasetProperties {
 	 */
 	private String localDir = "";
 
+	/**
+	 * Whether this run keeps the dataset current by itself. Off means the timer is
+	 * never scheduled - nothing is acquired, nothing is refreshed, and no thread
+	 * exists to tick.
+	 *
+	 * <p>
+	 * Distinct from the {@code auto-update-enabled} setting on the Settings screen,
+	 * which decides whether a running timer acts on a given day. This one decides
+	 * whether the timer runs at all, and it is the switch a run with no business on
+	 * the network needs: the suite, where every {@code @SpringBootTest} would
+	 * otherwise find the dataset missing and take the "acquire it now, whatever the
+	 * hour" branch - several hundred megabytes, once per context, into a folder
+	 * {@code mvn clean} then deletes.
+	 */
+	private boolean autoUpdate = true;
+
 	/** Provider label shown on the admin screen. */
 	private String providerLabel = "geoBoundaries CGAZ";
 
@@ -34,6 +50,14 @@ public class BoundaryDatasetProperties {
 
 	public void setLocalDir(String localDir) {
 		this.localDir = localDir;
+	}
+
+	public boolean isAutoUpdate() {
+		return autoUpdate;
+	}
+
+	public void setAutoUpdate(boolean autoUpdate) {
+		this.autoUpdate = autoUpdate;
 	}
 
 	public String getProviderLabel() {

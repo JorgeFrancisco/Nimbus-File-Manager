@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -59,14 +61,30 @@ public class GeoDatasetAutoUpdateScheduler {
 	private volatile LocalDate lastCheckedOn;
 
 	public GeoDatasetAutoUpdateScheduler(AppSettingService appSettingService, OfflineGeoDataset offlineGeoDataset,
-			GeoDatasetAsyncRunner geoDatasetAsyncRunner, InventoryRunningState inventoryRunningState, Clock clock) {
+			GeoDatasetAsyncRunner geoDatasetAsyncRunner, InventoryRunningState inventoryRunningState, Clock clock,
+			BoundaryDatasetProperties properties) {
 		this.appSettingService = appSettingService;
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.geoDatasetAsyncRunner = geoDatasetAsyncRunner;
 		this.inventoryRunningState = inventoryRunningState;
 		this.clock = clock;
 
-		executor.scheduleWithFixedDelay(this::runOnce, INITIAL_DELAY_SECONDS, TICK_SECONDS, TimeUnit.SECONDS);
+		if (properties.isAutoUpdate()) {
+			executor.scheduleWithFixedDelay(this::runOnce, INITIAL_DELAY_SECONDS, TICK_SECONDS, TimeUnit.SECONDS);
+		}
+	}
+
+	/**
+	 * Stops the timer with the context that owns it. Without this the thread
+	 * outlives its own beans: a pass firing after the context closed reaches a
+	 * connection pool that is already shut, and reports it as a failed update
+	 * rather than as what it is. A suite that opens dozens of contexts accumulates
+	 * one live scheduler per context, all of them still ticking against pools
+	 * nobody can use.
+	 */
+	@PreDestroy
+	public void stop() {
+		executor.shutdownNow();
 	}
 
 	/**

@@ -10,6 +10,7 @@ import org.springframework.core.annotation.OrderUtils;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationCacheRefresh;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchRefresh;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPathRefresh;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.SettingsCacheRefresh;
 
 /**
@@ -46,5 +47,6 @@ class CatalogRestoredListenerOrderTest {
 	@Test
 	void pinsTheOrderOfEveryListenerThatReactsToARestore() throws Exception {
 		assertThat(order(LocationCacheRefresh.class)).isGreaterThan(order(SettingsCacheRefresh.class));
+		assertThat(order(ExternalToolPathRefresh.class)).isGreaterThan(order(SettingsCacheRefresh.class));
 	}
 }

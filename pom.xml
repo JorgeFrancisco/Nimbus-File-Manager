@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.37.9.133</version>
+	<version>5.37.10.134</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -407,6 +407,11 @@
 					<!-- Same reason, and a stronger one: the PostgreSQL archive is several hundred MB,
 					     and a test context that fetched it would do so before it could report why. -->
 					<nimbus-file-manager.database.auto-install>false</nimbus-file-manager.database.auto-install>
+					<!-- Third of the same family, and the one that was actually happening: every
+					     @SpringBootTest found the boundary dataset missing, took the "acquire it
+					     now, whatever the hour" branch, and pulled ~382 MB into target/, which the
+					     next `mvn clean` deleted so the following build could fetch it again. -->
+					<nimbus-file-manager.location.boundary.auto-update>false</nimbus-file-manager.location.boundary.auto-update>
 					<!-- The suite brings its own database: every @SpringBootTest starts a throwaway
 					     container. Running a cluster is the default everywhere else, so the one
 					     place that already has a server has to say so - otherwise each context

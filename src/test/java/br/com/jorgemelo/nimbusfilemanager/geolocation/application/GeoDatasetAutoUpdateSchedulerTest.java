@@ -15,7 +15,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -24,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunning
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
 
 /**
  * The decision of when to touch the dataset, which is where the promise of not
@@ -31,6 +35,8 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
  * configured time, and never start on top of work already running.
  */
 class GeoDatasetAutoUpdateSchedulerTest {
+
+	private static final String TIMER_THREAD = "nimbus-file-manager-geo-auto-update";
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
@@ -41,9 +47,61 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		return Clock.fixed(LocalDateTime.parse(localDateTime).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 	}
 
+	/**
+	 * Built with the timer off, and every test drives {@code runOnce} directly. A
+	 * scheduler that also ticked on its own would race the assertions and outlive
+	 * the test, which is what the suite spent whole builds doing.
+	 */
 	private GeoDatasetAutoUpdateScheduler scheduler(Clock clock) {
+		return scheduler(clock, false);
+	}
+
+	private GeoDatasetAutoUpdateScheduler scheduler(Clock clock, boolean autoUpdate) {
+		BoundaryDatasetProperties properties = new BoundaryDatasetProperties();
+
+		properties.setAutoUpdate(autoUpdate);
+
 		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, runner, inventoryRunningState,
-				clock);
+				clock, properties);
+	}
+
+	private Set<Thread> timerThreads() {
+		return Thread.getAllStackTraces().keySet().stream().filter(thread -> thread.getName().equals(TIMER_THREAD))
+				.collect(Collectors.toSet());
+	}
+
+	/**
+	 * The timer runs on a thread of its own, and that thread is a daemon: a
+	 * scheduler waiting out its initial delay must never be the reason a JVM
+	 * refuses to exit.
+	 */
+	@Test
+	void schedulesTheTimerOnADaemonThreadOfItsOwn() {
+		Set<Thread> before = timerThreads();
+
+		GeoDatasetAutoUpdateScheduler scheduler = scheduler(at("2026-08-02T10:00:00"), true);
+
+		try {
+			Set<Thread> started = timerThreads();
+
+			Assertions.assertThat(started).hasSizeGreaterThan(before.size()).allMatch(Thread::isDaemon);
+		} finally {
+			scheduler.stop();
+		}
+	}
+
+	/**
+	 * Off means no thread at all, rather than a thread that wakes up to decide it
+	 * has nothing to do. It is what lets the suite - and a container with no
+	 * business on the network - hold this bean without one.
+	 */
+	@Test
+	void schedulesNothingWhenAutoUpdateIsOff() {
+		Set<Thread> before = timerThreads();
+
+		scheduler(at("2026-08-02T10:00:00"));
+
+		Assertions.assertThat(timerThreads()).isEqualTo(before);
 	}
 
 	private void locationEnabled(boolean enabled) {
