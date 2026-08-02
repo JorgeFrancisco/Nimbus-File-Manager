@@ -69,35 +69,6 @@ dizer quantos arquivos serão movidos nem quanto isso pesa.
 
 ### Complexidade média — semanas
 
-**P4. O instalador nunca foi executado de verdade.** Todo o código existe: o perfil `installer`
-monta a imagem por `jpackage` e já copia `tools/postgresql` para dentro dela quando os binários estão
-presentes; a aplicação baixa esses binários sozinha (seção em Config, automático no Windows, botão
-manual), cria o cluster em `<workspace>/database/cluster`, gera a senha, escolhe a porta com
-retentativa, recusa cluster de versão maior sem tocar nele e para o servidor no fechamento. O que
-falta é **rodar isso**: até hoje toda execução foi pela IDE ou pelo Maven, onde a decisão é
-`DEVELOPMENT_BUILD` e o caminho empacotado nunca é exercitado.
-*Entrega:* o passo que separa "projeto no GitHub" de "produto".
-
-As fases abaixo são independentes e valem uma de cada vez; cada uma só faz sentido depois da anterior:
-
-- **P4.1. Gerar a imagem e conferir o layout.** `mvn -Pinstaller package` com `tools/postgresql`
-  presente, e verificar na imagem produzida que existe `app/tools/postgresql/bin` e que
-  `ClusterLayout.bundledBinaries` resolve para `<launcher>/app/tools/postgresql/bin`. Hoje essa
-  resolução só é afirmada por teste unitário — nenhuma imagem real foi inspecionada.
-- **P4.2. Primeira execução na própria máquina de build.** Subir pelo launcher e acompanhar o
-  caminho inteiro: marcador de instalação reconhecido, cluster criado, senha gerada, porta escolhida,
-  migrations aplicadas, tela abrindo. É onde aparecem os erros que a IDE esconde.
-- **P4.3. Máquina limpa.** Sem JDK, sem PostgreSQL e sem ffmpeg no PATH. Além de funcionar, importa
-  *o que a pessoa vê* enquanto centenas de MB de binários são baixados — e o que acontece quando não
-  há internet nenhuma.
-- **P4.4. Atualizar e desinstalar sem perder o cluster.** Instalar por cima de uma instalação
-  existente e depois desinstalar. `PGDATA` é dado crítico: guarda o catálogo inteiro, com anos de
-  hashes perceptuais e localizações resolvidas. Um desinstalador que leve o workspace junto apaga
-  tudo em silêncio, e esse caminho nunca foi exercitado.
-- **P4.5. Instalador de verdade (MSI).** O tipo padrão é `app-image` — uma pasta que o usuário
-  precisa colocar em algum lugar por conta própria. `installer.type=msi` já está previsto no perfil,
-  mas exige WiX no PATH e nunca foi rodado. Sem esta fase o produto se distribui como zip.
-
 **P5. Não há atualização.** Subir de versão é trocar o jar e torcer para as migrations rodarem. Não
 há verificação de versão nova, nem aviso, nem rollback.
 *Entrega:* ciclo de vida. Software distribuído que não sabe se atualizar envelhece na máquina do
@@ -137,19 +108,20 @@ O produto está bom o suficiente para escolher uma direção; tentar as três ao
 real desta fase.
 
 **Caminho 1 — Ferramenta de curadoria séria.** Público: quem tem 100 mil fotos e um problema de
-organização. Prioriza A4, P4, P7. O diferencial é a integridade: mover arquivo com verificação
+organização. Prioriza A4, P7. O diferencial é a integridade: mover arquivo com verificação
 byte a byte, undo, trilha de auditoria. Ninguém no mercado de consumo faz isso.
 
 **Caminho 2 — Substituto do Google Fotos local.** Público: família que quer sair da nuvem. Prioriza
-P4, P8, P9, A7. Exige a camada de encantamento e multiusuário de verdade. Concorrência forte
+P8, P9, A7. Exige a camada de encantamento e multiusuário de verdade. Concorrência forte
 (Immich, PhotoPrism) e barra alta de UX.
 
 **Caminho 3 — Motor de organização para profissionais.** Público: fotógrafo, arquivista, quem recebe
 cartão de memória toda semana. Prioriza A6 (API), P7, regras de ingestão automáticas. Menor público,
 maior disposição a pagar, e é onde a arquitetura atual já está mais pronta.
 
-Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe, e P4 (instalador) é o
-gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, nenhum deles acontece.
+Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe. O gargalo que era comum
+aos três — instalar exigia criar role no PostgreSQL — deixou de existir; o próximo comum é **P5**,
+porque um produto instalável que não sabe se atualizar envelhece na máquina de quem o instalou.
 
 ---
 
@@ -157,13 +129,9 @@ gargalo comum aos três — enquanto instalar exigir criar role no PostgreSQL, n
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **P4.1 e P4.2** (gerar a imagem e subir por ela) — o portão, e as duas fases mais baratas: o
-   código já existe, falta descobrir se funciona.
-2. **P4.3 e P4.4** (máquina limpa, atualizar/desinstalar) — o que separa "funciona aqui" de
-   "funciona na casa dos outros", com P4.4 sendo o de maior risco: erra e apaga o catálogo alheio.
-3. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-4. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-5. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
+2. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+3. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 
@@ -174,7 +142,8 @@ Dizer não também é sugestão:
   quer.
 - **Microsserviços.** O monólito modular está bem separado; o gargalo é processamento, e isso se
   resolve com fila e worker (A8), não com rede entre serviços.
-- **Trocar o PostgreSQL.** Ele sustenta o modelo com folga. O que atrapalha é a *instalação* dele
-  (P4), não o banco.
-- **Reconhecimento facial (P10) antes de existir instalador.** Recurso vistoso num produto que
-  ninguém consegue instalar é esforço mal colocado.
+- **Trocar o PostgreSQL.** Ele sustenta o modelo com folga, e o motivo histórico para cogitar a
+  troca — obrigar quem instala a instalar um servidor antes — deixou de existir: a aplicação
+  baixa o servidor, cria o cluster e o desliga no fechamento, sem ninguém saber que ele está ali.
+- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o produto saber se
+  atualizar (P5) e antes de ter sido exposto a discos de estranhos (A4) é esforço mal colocado.

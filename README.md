@@ -1185,15 +1185,34 @@ workspace, which means the machine building the installer needs neither - a pipe
 - and an installation that lands in a read-only folder still works, because nothing is ever written
 back into it.
 
-A real installer instead of a folder:
+A real installer instead of a folder — an entry in Programs and Features, a Start menu
+shortcut and an uninstaller:
 
 ```bash
-./mvnw -Pinstaller -Dinstaller.type=msi -DskipTests package
+./mvnw -Pinstaller,installer-msi -DskipTests package
 ```
 
-`msi` (and `exe`) additionally require [WiX](https://wixtoolset.org/) on the `PATH`; without it
-`jpackage` fails with a message naming the missing tool. The default stays `app-image` so the
-profile works on a plain machine.
+It is a second profile rather than a switch on the first because it needs tooling the image
+does not. Three prerequisites, on the machine that builds — never on the machine that runs:
+
+| | | |
+| --- | --- | --- |
+| **WiX 5** | `winget install --id WiXToolset.WiXCLI --version 5.0.2.0` | `jpackage` accepts WiX v3 (`light.exe`/`candle.exe`) or v4/v5 (`wix.exe`). v5 is the cheapest of the three: v3 drags in the .NET Framework 3.5 Windows feature, and v6+ asks you to accept the Open Source Maintenance Fee EULA — a licensing decision this project has not taken. |
+| **`WixToolset.Util.wixext`** | bundled with the WiX 5 install | |
+| **`WixToolset.UI.wixext`** | bundled with the WiX 5 install | |
+
+The two extensions are the non-obvious part: `jpackage` invokes `wix build` with `-ext
+WixToolset.Util.wixext -ext WixToolset.UI.wixext` and does not install them, so on a WiX 4+
+toolchain that has only the base tool the build fails inside `wix` with no mention of what is
+missing. The WiX 5 installer ships them, so nothing else is needed — but `wix extension list
+--global` is what confirms it, and their version has to match the toolset: adding them by name
+alone fetches the newest from NuGet, which a v5 `wix.exe` then refuses.
+
+The MSI is packaged from the image the first profile produced (`--app-image`), so what ships is
+what was already built rather than a second pass over the jar. `--win-upgrade-uuid` is fixed in
+the `pom.xml` and must stay that way: Windows decides "upgrade this installation" against
+"install a second one" by that code alone, and `jpackage` invents a fresh one per build when it
+is absent.
 
 ### The embedded database
 
@@ -1265,7 +1284,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       2514 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.20% branch, 98.06% line, 98.81% method, 100.00% class
+JaCoCo:      98.46% instruction, 92.20% branch, 98.08% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet

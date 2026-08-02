@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>5.37.12.136</version>
+	<version>5.38.0.138</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -569,19 +569,16 @@
 			</build>
 		</profile>
 		<!--
-		     Native installer, built by the JDK's own jpackage - no extra tooling to install
-		     and nothing to keep in step with the Java version. Off by default because it
-		     only runs on the platform it targets: mvn -Pinstaller package
+		     The application image, built by the JDK's own jpackage - no extra tooling to
+		     install and nothing to keep in step with the Java version. Off by default
+		     because it only runs on the platform it targets: mvn -Pinstaller package
 
-		     The default type is app-image, a self-contained folder that needs nothing else.
-		     Setting installer.type to msi produces a real installer, which on Windows also
-		     requires WiX on the PATH.
+		     What comes out is a self-contained folder that runs as it is. Turning it into
+		     an installer is the installer-msi profile below, kept apart because that step
+		     needs WiX and this one needs nothing.
 		-->
 		<profile>
 			<id>installer</id>
-			<properties>
-				<installer.type>app-image</installer.type>
-			</properties>
 			<build>
 				<plugins>
 					<plugin>
@@ -663,7 +660,7 @@
 									<executable>${java.home}/bin/jpackage</executable>
 									<arguments>
 										<argument>--type</argument>
-										<argument>${installer.type}</argument>
+										<argument>app-image</argument>
 										<argument>--name</argument>
 										<argument>Nimbus File Manager</argument>
 										<argument>--app-version</argument>
@@ -689,6 +686,72 @@
 										     hook, which stops the embedded PostgreSQL. Killing the launcher from the
 										     task manager, the only alternative today, leaves the server running. -->
 										<argument>--win-console</argument>
+										<!-- The launcher, the taskbar and the installer all show this. Without it they
+										     show the generic Java cup, which reads as "some Java thing" rather than as a
+										     product. The same file the browser tab already uses. -->
+										<argument>--icon</argument>
+										<argument>${project.basedir}/src/main/resources/static/favicon.ico</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<!--
+		     The MSI, from the image the profile above just produced: an entry in Programs
+		     and Features, a Start menu shortcut and an uninstaller, instead of a folder the
+		     user has to file away somewhere. Separate profile because it needs WiX on the
+		     PATH - v3 as light.exe/candle.exe, or v4/v5 as wix.exe - which the image does
+		     not: mvn -Pinstaller,installer-msi package
+		-->
+		<profile>
+			<id>installer-msi</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>jpackage-msi</id>
+								<phase>package</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>${java.home}/bin/jpackage</executable>
+									<arguments>
+										<argument>--type</argument>
+										<argument>msi</argument>
+										<argument>--name</argument>
+										<argument>Nimbus File Manager</argument>
+										<argument>--app-version</argument>
+										<argument>${installer.app.version}</argument>
+										<argument>--vendor</argument>
+										<argument>Jorge Melo</argument>
+										<!-- Packaged from the image rather than from the jar again, so what ships is
+										     exactly what was already produced, and the launcher's own arguments live in
+										     one place instead of two that can drift apart. -->
+										<argument>--app-image</argument>
+										<argument>${project.build.directory}/installer/Nimbus File Manager</argument>
+										<argument>--dest</argument>
+										<argument>${project.build.directory}/installer</argument>
+										<!-- Fixed forever, and the single most consequential line here. Windows decides
+										     "upgrade this installation" against "install a second one" by this code
+										     alone. jpackage invents a fresh one on every build when it is absent, so
+										     each version would land beside the previous - two entries, two folders, two
+										     launchers - and changing it later does the same thing once. -->
+										<argument>--win-upgrade-uuid</argument>
+										<argument>4AB605B6-D275-45FB-84FD-174F69293136</argument>
+										<argument>--win-menu</argument>
+										<argument>--win-menu-group</argument>
+										<argument>Nimbus File Manager</argument>
+										<argument>--win-shortcut</argument>
+										<!-- Lets the person installing choose where it goes. Without it the folder is
+										     fixed, and an installation cannot be put on the drive that has room. -->
+										<argument>--win-dir-chooser</argument>
 									</arguments>
 								</configuration>
 							</execution>
