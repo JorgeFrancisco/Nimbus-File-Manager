@@ -29,7 +29,7 @@
 	</p>
 	<p class="muted" th:if="${activeTab == 'videos'}" th:text="#{duplicates.videos.description}">Vídeos visualmente parecidos.</p>
 	<form th:if="${activeTab == 'similar' or activeTab == 'videos'}" th:action="@{${rebuildAction}}" method="post"
-			onsubmit="return confirm(this.dataset.confirm);" th:data-confirm="${activeTab == 'videos'} ? #{duplicates.rebuild.confirm.videos} : #{duplicates.rebuild.confirm}">
+			th:data-confirm="${activeTab == 'videos'} ? #{duplicates.rebuild.confirm.videos} : #{duplicates.rebuild.confirm}">
 		<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 		<button type="submit" class="secondary small" th:disabled="${!phashRebuildAvailable}" th:text="#{duplicates.rebuild}">Recalcular semelhança</button>
 		<span class="muted" th:text="#{duplicates.rebuild.description}">Recalcula apenas pHash/SSIM; não executa inventário, metadados ou SHA-256.</span>
