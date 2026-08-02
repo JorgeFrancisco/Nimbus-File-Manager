@@ -188,8 +188,7 @@ class CatalogBackupServiceTest {
 	 * minutes.
 	 */
 	@Test
-	void buildsTheBackupOutsideItsFolderAndMovesItWhenFinished(@TempDir Path workspace, @TempDir Path folder)
-			throws IOException {
+	void buildsTheBackupOutsideItsFolderAndMovesItWhenFinished(@TempDir Path workspace, @TempDir Path folder) {
 		CatalogBackupService service = service(folder);
 
 		when(backupFolderResolver.staging()).thenReturn(workspace);
@@ -199,7 +198,7 @@ class CatalogBackupServiceTest {
 		when(catalogDump.dump(any())).thenAnswer(call -> {
 			Path written = call.getArgument(0);
 
-			Assertions.assertThat(written.getParent()).isEqualTo(workspace);
+			Assertions.assertThat(written).hasParentRaw(workspace);
 
 			Files.writeString(written, "a dump");
 

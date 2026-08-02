@@ -1219,7 +1219,7 @@ Most recent clean local build (PostgreSQL):
 
 ```text
 Tests:       2445 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.35% instruction, 91.93% branch, 97.90% line, 98.75% method, 100.00% class
+JaCoCo:      98.35% instruction, 91.91% branch, 97.90% line, 98.75% method, 100.00% class
 ```
 
 ### Coverage ratchet

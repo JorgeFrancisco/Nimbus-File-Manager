@@ -66,6 +66,14 @@ public class InventoryWatchService extends LocalizedComponent {
 			InventoryWatchStatus.unconfigured());
 	private volatile long lastEventMillis;
 	private volatile boolean inventoryPending;
+
+	/**
+	 * What asked for the pending inventory. Reported when it launches, because
+	 * "why did this run again?" is a question the log could not answer: the
+	 * changes are logged at debug, the launch at info, and diagnosing a watcher
+	 * that fires too often meant guessing at which of the two paths woke it.
+	 */
+	private volatile String pendingReason;
 	private volatile boolean shuttingDown;
 	private volatile LocalDateTime lastReconciliation;
 	private volatile long lastReconciliationRepaired;
@@ -251,6 +259,10 @@ public class InventoryWatchService extends LocalizedComponent {
 		for (Path changed : currentWatcher.pollChangedFiles()) {
 			lastEventMillis = System.currentTimeMillis();
 
+			if (!inventoryPending) {
+				pendingReason = changed.toString();
+			}
+
 			inventoryPending = true;
 
 			status.set(new InventoryWatchStatus(status.get().folder(), true, true, LocalDateTime.now(clock), null,
@@ -263,9 +275,11 @@ public class InventoryWatchService extends LocalizedComponent {
 			// The WatchService dropped events under load: force a debounced re-inventory
 			// (which runs its own FILE_EVENT reconcile) so the catalog re-syncs promptly
 			// instead of waiting for the independent reconcile scheduler's next pass.
-			inventoryPending = true;
+			if (!inventoryPending) {
+				pendingReason = "the change source reported an overflow";
+			}
 
-			log.debug("Watch overflow detected; requesting early re-inventory.");
+			inventoryPending = true;
 		}
 	}
 
@@ -275,6 +289,8 @@ public class InventoryWatchService extends LocalizedComponent {
 		}
 
 		inventoryPending = false;
+
+		log.info("Re-inventorying because of: {}", pendingReason);
 
 		automaticReconcile(ExecutionTrigger.FILE_EVENT);
 
