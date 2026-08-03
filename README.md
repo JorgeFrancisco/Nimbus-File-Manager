@@ -101,6 +101,13 @@ bar of every screen, and the tray icon's tooltip and a balloon. Once per version
 check — the same notice four times an hour is not a reminder, it is a reason to turn notifications
 off.
 
+The screen also shows when the endpoint was last asked — including when the answer was that nothing
+could be reached, because otherwise "nothing newer" and "the check stopped running" look identical,
+and only one of them is good news. That distinction is not hypothetical: the check was written as a
+Spring `@Scheduled` method, this application has no `@EnableScheduling`, and it therefore never
+fired on a timer at all. It looked like it worked because the button calls the same code. It now
+runs on its own daemon thread, the way every other periodic task here does.
+
 Fifteen minutes is four requests an hour against an endpoint that allows sixty from an address that
 does not authenticate. A minute would sit exactly on that ceiling, and the first thing to share the
 address would push it over — after which the answer is a refusal and updates silently stop being
@@ -1457,8 +1464,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2617 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.47% instruction, 92.26% branch, 97.99% line, 98.87% method, 100.00% class
+Tests:       2625 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.47% instruction, 92.23% branch, 97.99% line, 98.88% method, 100.00% class
 ```
 
 ### Coverage ratchet

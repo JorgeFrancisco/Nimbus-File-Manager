@@ -197,7 +197,7 @@ class SettingsPageRenderTest {
 		doAnswer(invocation -> {
 			Model model = invocation.getArgument(0);
 
-			model.addAttribute("updateStatus", new UpdateStatus("6.0.0.147", false, null, null, true, false));
+			model.addAttribute("updateStatus", new UpdateStatus("6.0.0.147", false, null, null, true, false, null));
 			model.addAttribute("updateProgress",
 					new UpdateInstallSnapshot(UpdatePhase.IDLE, false, 0, -1, -1, -1, null));
 

@@ -250,6 +250,10 @@
 				<dd th:if="${updateStatus.available()}" th:text="#{settings.update.available(${updateStatus.published()})}">Versao disponivel</dd>
 				<dd th:if="${not updateStatus.available() and updateStatus.canCheck()}" th:text="#{settings.update.upToDate}">Esta e a versao mais recente</dd>
 				<dd th:if="${not updateStatus.available() and not updateStatus.canCheck()}" th:text="#{settings.update.unavailable}">Verificacao indisponivel</dd></div>
+			<div th:if="${updateStatus.canCheck()}"><dt th:text="#{settings.update.lastChecked}">Última verificação</dt>
+				<dd th:text="${updateStatus.lastChecked() != null}
+					? ${#temporals.format(updateStatus.lastChecked(), 'dd/MM HH:mm')}
+					: #{settings.update.neverChecked}">—</dd></div>
 			</dl>
 
 			<div th:if="${updateStatus.canInstall() and not updateProgress.running()}" class="alert" role="status"

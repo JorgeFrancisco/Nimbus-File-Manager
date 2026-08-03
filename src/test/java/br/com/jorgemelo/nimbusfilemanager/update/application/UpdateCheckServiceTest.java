@@ -1,5 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -15,6 +19,8 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.dto.PublishedReleas
  * until it is not.
  */
 class UpdateCheckServiceTest {
+
+	private static final Clock FIXED = Clock.fixed(Instant.parse("2026-08-03T15:30:00Z"), ZoneOffset.UTC);
 
 	@Test
 	void findsNothingWhenTheRunHasNoVersionOfItsOwn() {
@@ -103,9 +109,55 @@ class UpdateCheckServiceTest {
 		Assertions.assertThat(service.available()).isPresent();
 	}
 
+	@Test
+	void hasNoLastCheckedTimeBeforeItEverAsked() {
+		Assertions.assertThat(check(publishing("v6.1.0.160")).lastCheckedAt()).isNull();
+	}
+
+	@Test
+	void recordsWhenItAsked() {
+		UpdateCheckService service = at(FIXED, publishing("v6.1.0.160"));
+
+		service.check("6.0.0.147");
+
+		Assertions.assertThat(service.lastCheckedAt()).isEqualTo(LocalDateTime.now(FIXED));
+	}
+
+	/**
+	 * Being offline is a normal state here, and a timestamp that only moved on
+	 * success would sit frozen without saying why - which is exactly the doubt it
+	 * exists to answer: is the check running, or is there simply nothing newer?
+	 */
+	@Test
+	void recordsTheAttemptEvenWhenNothingCouldBeReached() {
+		UpdateCheckService service = at(FIXED, counting(new AtomicInteger()));
+
+		service.check("6.0.0.147");
+
+		Assertions.assertThat(service.lastCheckedAt()).isEqualTo(LocalDateTime.now(FIXED));
+	}
+
+	/**
+	 * A run with no version of its own never asks anything, so there is no attempt
+	 * to record - stamping one would claim a check that did not happen.
+	 */
+	@Test
+	void recordsNothingWhenItNeverAsked() {
+		UpdateCheckService service = at(FIXED, counting(new AtomicInteger()));
+
+		service.check(null);
+
+		Assertions.assertThat(service.lastCheckedAt()).isNull();
+	}
+
+	private static UpdateCheckService at(Clock clock, ReleaseSource source) {
+		return new UpdateCheckService(source, event -> {
+		}, clock);
+	}
+
 	private static UpdateCheckService check(ReleaseSource source) {
 		return new UpdateCheckService(source, event -> {
-		});
+		}, Clock.systemDefaultZone());
 	}
 
 	private static ReleaseSource counting(AtomicInteger asked) {

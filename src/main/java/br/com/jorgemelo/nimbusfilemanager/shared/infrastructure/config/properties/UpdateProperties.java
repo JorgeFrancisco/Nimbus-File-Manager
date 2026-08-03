@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties;
 
+import java.time.Duration;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -25,9 +27,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param enabled whether the check may run at all (default true)
  * @param releaseUrl the endpoint answering with the most recent release
+ * @param checkInterval how often to ask (default fifteen minutes). Four
+ * requests an hour against an endpoint that allows sixty from an address that
+ * does not authenticate; a minute would sit exactly on that ceiling, and the
+ * first thing to share the address would push it over - after which the answer
+ * is a refusal and updates stop being found without anything saying so.
  */
 @ConfigurationProperties(prefix = "nimbus-file-manager.update")
 public record UpdateProperties(@DefaultValue("true") boolean enabled,
 		@DefaultValue("https://api.github.com/repos/JorgeFrancisco/Nimbus-File-Manager/releases/latest")
-		String releaseUrl) {
+		String releaseUrl, @DefaultValue("PT15M") Duration checkInterval) {
 }

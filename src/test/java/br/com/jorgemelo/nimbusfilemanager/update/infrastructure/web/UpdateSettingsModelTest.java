@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
@@ -38,7 +39,7 @@ class UpdateSettingsModelTest {
 		when(updateCheckService.available()).thenReturn(Optional.empty());
 		when(updateInstallService.canInstall()).thenReturn(false);
 
-		UpdateStatus status = assemble(new UpdateProperties(true, "https://example.invalid"));
+		UpdateStatus status = assemble(properties(true));
 
 		Assertions.assertThat(status.canCheck()).isFalse();
 		Assertions.assertThat(status.installed()).isNull();
@@ -51,7 +52,7 @@ class UpdateSettingsModelTest {
 	void doesNotOfferTheCheckWhenItIsSwitchedOff() {
 		when(updateCheckService.available()).thenReturn(Optional.empty());
 
-		Assertions.assertThat(assemble(new UpdateProperties(false, "https://example.invalid")).canCheck()).isFalse();
+		Assertions.assertThat(assemble(properties(false)).canCheck()).isFalse();
 	}
 
 	@Test
@@ -59,12 +60,16 @@ class UpdateSettingsModelTest {
 		when(updateCheckService.available()).thenReturn(Optional.of(update()));
 		when(updateInstallService.canInstall()).thenReturn(true);
 
-		UpdateStatus status = assemble(new UpdateProperties(true, "https://example.invalid"));
+		UpdateStatus status = assemble(properties(true));
 
 		Assertions.assertThat(status.available()).isTrue();
 		Assertions.assertThat(status.published()).isEqualTo("v6.1.0.160");
 		Assertions.assertThat(status.page()).isEqualTo("https://example.invalid/page");
 		Assertions.assertThat(status.canInstall()).isTrue();
+	}
+
+	private static UpdateProperties properties(boolean enabled) {
+		return new UpdateProperties(enabled, "https://example.invalid", Duration.ofMinutes(15));
 	}
 
 	private UpdateStatus assemble(UpdateProperties properties) {

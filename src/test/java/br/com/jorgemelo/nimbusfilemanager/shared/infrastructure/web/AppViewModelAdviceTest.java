@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -137,6 +138,6 @@ class AppViewModelAdviceTest {
 		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, executionQueryService,
 				inventoryWatchService, appUserRepository, fingerprintActivityService,
 				new UpdateCheckService(Optional::empty, event -> {
-				}));
+				}, Clock.systemDefaultZone()));
 	}
 }

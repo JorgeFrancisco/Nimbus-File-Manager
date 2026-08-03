@@ -1,9 +1,14 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure;
 
+import java.time.Duration;
 import java.io.IOException;
+import java.time.Duration;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.assertj.core.api.Assertions;
@@ -86,7 +91,7 @@ class GitHubReleaseSourceTest {
 	 */
 	@Test
 	void findsNothingWhenNothingAnswers() {
-		Assertions.assertThat(new GitHubReleaseSource(new UpdateProperties(true, "http://127.0.0.1:1/latest"),
+		Assertions.assertThat(new GitHubReleaseSource(properties(true, "http://127.0.0.1:1/latest"),
 				objectMapper).latest()).isEmpty();
 	}
 
@@ -96,24 +101,29 @@ class GitHubReleaseSourceTest {
 	 */
 	@Test
 	void asksNothingWhenTheCheckIsSwitchedOff() {
-		Assertions.assertThat(new GitHubReleaseSource(new UpdateProperties(false, base + "/latest"), objectMapper)
-				.latest()).isEmpty();
+		Assertions.assertThat(new GitHubReleaseSource(
+				properties(false, base + "/latest"), objectMapper).latest())
+				.isEmpty();
 
 		Assertions.assertThat(requests).hasValue(0);
 	}
 
 	@Test
 	void asksNothingWithoutAnAddress() {
-		Assertions.assertThat(new GitHubReleaseSource(new UpdateProperties(true, "  "), objectMapper).latest())
+		Assertions.assertThat(new GitHubReleaseSource(properties(true, "  "), objectMapper).latest())
 				.isEmpty();
-		Assertions.assertThat(new GitHubReleaseSource(new UpdateProperties(true, null), objectMapper).latest())
+		Assertions.assertThat(new GitHubReleaseSource(properties(true, null), objectMapper).latest())
 				.isEmpty();
 
 		Assertions.assertThat(requests).hasValue(0);
 	}
 
+	private static UpdateProperties properties(boolean enabled, String url) {
+		return new UpdateProperties(enabled, url, Duration.ofMinutes(15));
+	}
+
 	private GitHubReleaseSource source(String path) {
-		return new GitHubReleaseSource(new UpdateProperties(true, base + path), objectMapper);
+		return new GitHubReleaseSource(properties(true, base + path), objectMapper);
 	}
 
 	private void answer(HttpExchange exchange, int status, String body) throws IOException {

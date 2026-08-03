@@ -1,10 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
@@ -17,12 +18,13 @@ import lombok.extern.slf4j.Slf4j;
  * Keeps the answer to "is there a newer version than this one?".
  *
  * <p>
- * It runs on a timer rather than only at startup, because the installations
- * this exists for are the ones left open for weeks - a check that only happened
- * at start would never fire on the machine that most needs it. The first run is
- * delayed: a start already spends its first minutes fetching a database server
- * and the external tools, and an update check has no business competing with
- * the things the application cannot work without.
+ * Driven by {@link UpdateCheckScheduler} on a timer rather than only at
+ * startup, because the installations this exists for are the ones left open for
+ * weeks - a check that only happened at start would never fire on the machine
+ * that most needs it. The scheduling lives there and not in an annotation here:
+ * this application has no {@code @EnableScheduling}, so {@code @Scheduled}
+ * never fires, and it silently did nothing until a real installation was left
+ * running and nothing ever happened.
  *
  * <p>
  * A run that does not know its own version never asks anything. That is the IDE
@@ -35,24 +37,31 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class UpdateCheckService {
 
-	// Late enough that the bootstrap downloads are done competing for the network,
-	// and long before anyone would think to look for an update notice.
-	private static final String INITIAL_DELAY = "PT2M";
-	// Fifteen minutes is four requests an hour against an endpoint that allows
-	// sixty from an address that does not authenticate. A minute would sit exactly
-	// on that ceiling, and the first thing to share the address - a browser, a
-	// second installation - would push it over, after which the answer is a
-	// refusal and updates stop being found without anything saying so.
-	private static final String INTERVAL = "${nimbus-file-manager.update.check-interval:PT15M}";
-
 	private final ReleaseSource releaseSource;
 	private final ApplicationEventPublisher eventPublisher;
+	private final Clock clock;
 	private final AtomicReference<AvailableUpdate> available = new AtomicReference<>();
 	private final AtomicReference<String> announced = new AtomicReference<>();
+	private final AtomicReference<LocalDateTime> lastCheckedAt = new AtomicReference<>();
 
-	public UpdateCheckService(ReleaseSource releaseSource, ApplicationEventPublisher eventPublisher) {
+	public UpdateCheckService(ReleaseSource releaseSource, ApplicationEventPublisher eventPublisher, Clock clock) {
 		this.releaseSource = releaseSource;
 		this.eventPublisher = eventPublisher;
+		this.clock = clock;
+	}
+
+	/**
+	 * When the endpoint was last asked, or {@code null} when it never was.
+	 *
+	 * <p>
+	 * On the screen because "no newer version" and "the check is not running" look
+	 * identical otherwise, and only one of them is good news. It marks the moment
+	 * the question was asked, including when the answer was that nothing could be
+	 * reached - being offline is a normal state here, and a timestamp that only
+	 * moved on success would freeze without explaining itself.
+	 */
+	public LocalDateTime lastCheckedAt() {
+		return lastCheckedAt.get();
 	}
 
 	/**
@@ -74,7 +83,6 @@ public class UpdateCheckService {
 		return Optional.ofNullable(available.get());
 	}
 
-	@Scheduled(initialDelayString = INITIAL_DELAY, fixedDelayString = INTERVAL)
 	public Optional<AvailableUpdate> check() {
 		return check(InstalledVersion.current().orElse(null));
 	}
@@ -90,6 +98,8 @@ public class UpdateCheckService {
 		}
 
 		Optional<PublishedRelease> release = releaseSource.latest();
+
+		lastCheckedAt.set(LocalDateTime.now(clock));
 
 		if (release.isEmpty()) {
 			return Optional.empty();

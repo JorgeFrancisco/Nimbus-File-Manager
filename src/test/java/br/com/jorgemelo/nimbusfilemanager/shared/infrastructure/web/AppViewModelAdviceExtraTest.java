@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -42,7 +43,7 @@ class AppViewModelAdviceExtraTest {
 	private final AppViewModelAdvice advice = new AppViewModelAdvice("2.0.0", userPagePreferenceService,
 			appSettingService, executionQueryService, inventoryWatchService, appUserRepository,
 			fingerprintActivityService, new UpdateCheckService(Optional::empty, event -> {
-			}));
+			}, Clock.systemDefaultZone()));
 
 	private final Authentication user = new TestingAuthenticationToken("bob", "x", "ROLE_USER");
 	private final Authentication anonymous = new TestingAuthenticationToken("anonymousUser", "x", "ROLE_ANONYMOUS");

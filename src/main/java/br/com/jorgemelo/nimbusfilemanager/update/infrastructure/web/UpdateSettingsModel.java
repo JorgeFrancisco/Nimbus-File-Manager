@@ -51,7 +51,8 @@ public class UpdateSettingsModel implements SettingsSectionModel {
 				new UpdateStatus(installed.orElse(null), update.isPresent(),
 						update.map(AvailableUpdate::published).orElse(null),
 						update.map(found -> found.release().page()).orElse(null),
-						updateProperties.enabled() && installed.isPresent(), updateInstallService.canInstall()));
+						updateProperties.enabled() && installed.isPresent(), updateInstallService.canInstall(),
+						updateCheckService.lastCheckedAt()));
 
 		// The install outlives the request that started it, so the screen reads its
 		// state here rather than from a flash attribute that only existed once.
