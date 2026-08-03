@@ -69,8 +69,12 @@ jobs:
             throw "Tag $tag does not match the project version $pom"
           }
 
+      # The profile list is quoted because a runner step is PowerShell, where the comma is
+      # the array operator: unquoted, -Pinstaller,installer-msi fails to parse before
+      # mvnw.cmd is ever invoked. The same line is harmless in the shell it was written in,
+      # which is why it took a runner to find it.
       - name: Build the application image and the MSI
-        run: .\mvnw.cmd -B -Pinstaller,installer-msi -DskipTests package
+        run: .\mvnw.cmd -B "-Pinstaller,installer-msi" -DskipTests package
 
       # A checksum beside the file, because a release is a public download over a network
       # nobody here controls, and whatever ends up fetching it automatically has to be
