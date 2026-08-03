@@ -51,7 +51,7 @@ public class UpdateCheckScheduler {
 	 * One check. Package-private so it can be exercised directly in tests without
 	 * the scheduler.
 	 */
-	void runOnce() {
+	final void runOnce() {
 		try {
 			updateCheckService.check();
 		} catch (Exception exception) {

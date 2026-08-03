@@ -2,12 +2,12 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
@@ -18,7 +18,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 @Service
 public class OperationLockService {
 
-	private final Map<String, OperationLock> activeLocks = new ConcurrentHashMap<>();
+	/**
+	 * A plain map, guarded by its own monitor. Every read and every write here
+	 * happens inside {@code synchronized (activeLocks)}, because the critical
+	 * section is composite - look for a conflict, wait for it to clear, then
+	 * insert - and no concurrent collection makes a sequence like that atomic. It
+	 * was a {@link java.util.concurrent.ConcurrentHashMap}, which guaranteed
+	 * nothing extra and suggested a thread-safety that came from the monitor all
+	 * along. The monitor is also what {@code wait}/{@code notifyAll} signal on.
+	 */
+	private final Map<String, OperationLock> activeLocks = new HashMap<>();
 
 	public OperationLock acquire(ExecutionType executionType, Path... paths) {
 		return acquireWithin(Duration.ZERO, executionType, paths);

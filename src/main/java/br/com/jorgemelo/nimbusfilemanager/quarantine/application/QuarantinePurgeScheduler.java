@@ -48,7 +48,7 @@ public class QuarantinePurgeScheduler {
 	 * One purge pass. Package-private so it can be exercised directly in tests
 	 * without the scheduler.
 	 */
-	void runOnce() {
+	final void runOnce() {
 		try {
 			// The window (and its fail-safe for a blank/invalid setting) belongs to the
 			// purge itself; this class only decides when to run.

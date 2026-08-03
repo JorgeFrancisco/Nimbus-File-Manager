@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.statistics.application;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -121,7 +122,7 @@ public class StatisticsService {
 			return "size";
 		}
 
-		return switch (sort.trim().toLowerCase()) {
+		return switch (sort.trim().toLowerCase(Locale.ROOT)) {
 		case SORT_FILES -> SORT_FILES;
 		case "size" -> "size";
 		default -> "size";

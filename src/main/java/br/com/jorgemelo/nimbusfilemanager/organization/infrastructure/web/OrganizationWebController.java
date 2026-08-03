@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -285,7 +286,7 @@ public class OrganizationWebController extends LocalizedComponent {
 		model.addAttribute(TARGET_PATH, form.targetPath());
 		model.addAttribute(OrganizationConstants.RECURSIVE, form.recursive());
 		model.addAttribute("layoutValue", form.layout() == null ? OrganizationLayout.DEFAULT : form.layout());
-		model.addAttribute(LIMIT, form.limit() == null ? 1000 : form.limit());
+		model.addAttribute(LIMIT, Objects.requireNonNullElse(form.limit(), 1000));
 		model.addAttribute(OrganizationConstants.ALLOW_CONFLICTS, form.allowConflicts());
 		model.addAttribute(OrganizationConstants.OVERWRITE_EXISTING, form.overwriteExisting());
 		model.addAttribute("page", safePage(form.page()));
@@ -434,9 +435,9 @@ public class OrganizationWebController extends LocalizedComponent {
 		LocationConfidence minConfidence = parseConfidence(preferences.get(LOCATION_MIN_CONFIDENCE));
 		LocationFallbackMode fallback = parseFallback(preferences.get(LOCATION_FALLBACK));
 
-		return new Defaults(recursive, layout, allowConflicts, overwriteExisting, size == null ? 50 : size,
-				limit == null ? 1000 : limit, preferences.get(SOURCE_PATH), preferences.get(TARGET_PATH), subdivision,
-				minConfidence, fallback);
+		return new Defaults(recursive, layout, allowConflicts, overwriteExisting, Objects.requireNonNullElse(size, 50),
+				Objects.requireNonNullElse(limit, 1000), preferences.get(SOURCE_PATH), preferences.get(TARGET_PATH),
+				subdivision, minConfidence, fallback);
 	}
 
 	private void saveDefaults(Authentication authentication, OrganizationForm form) {

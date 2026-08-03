@@ -7,6 +7,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Locale;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +56,7 @@ public class ExplorerPropertiesService extends LocalizedComponent {
 
 		return new ExplorerItemProperties(fileName(target), PathUtils.normalize(target), parent(target), false,
 				attributes.size(), SizeFormatter.format(attributes.size()), null, null,
-				extension.isBlank() ? message("files.properties.typeUnknown") : extension.toUpperCase(),
+				extension.isBlank() ? message("files.properties.typeUnknown") : extension.toUpperCase(Locale.ROOT),
 				label(attributes.creationTime().toMillis()), label(attributes.lastModifiedTime().toMillis()), cataloged,
 				message(cataloged ? "files.status.cataloged" : "files.status.notCataloged"));
 	}

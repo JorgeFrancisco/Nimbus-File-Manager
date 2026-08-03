@@ -91,7 +91,7 @@ public class GeoDatasetAutoUpdateScheduler {
 	 * One decision pass. Package-private so the decision can be exercised directly,
 	 * without waiting on the timer.
 	 */
-	void runOnce() {
+	final void runOnce() {
 		try {
 			if (!shouldRun()) {
 				return;

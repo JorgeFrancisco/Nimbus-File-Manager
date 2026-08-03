@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+     What SpotBugs and find-sec-bugs are told not to report, and why.
+
+     Every entry is a decision that was checked against the code, not a convenience:
+     a filter file that grows without justification is where a tool goes to be
+     ignored. Two kinds live here, and they are kept apart on purpose:
+
+       - patterns excluded everywhere, because what they report is an architectural
+         rule of this project rather than a defect;
+       - patterns excluded in one class, because that one place was read and found
+         to be safe. Those never become global.
+
+     A finding that is neither is a task, not an entry here.
+-->
+<FindBugsFilter>
+
+	<!--
+	     Constructor injection with final fields is the project's dependency rule
+	     (see AGENTS.md), and it is exactly what this pattern reports: a constructor
+	     that stores a reference it was handed. 272 of the 345 occurrences are in
+	     services and adapters for that reason alone; the rest are the accessors of
+	     entities, DTOs and repository projections, which exist to carry data.
+	-->
+	<Match>
+		<Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+	</Match>
+
+	<!--
+	     Not a defect: find-sec-bugs marks every request handler as "this is an
+	     endpoint", as an aid to a human reviewer. In an application that is a web
+	     application, that is every controller.
+	-->
+	<Match>
+		<Bug pattern="SPRING_ENDPOINT"/>
+	</Match>
+
+	<!--
+	     Log forging assumes a log somebody else reads as records - an aggregator
+	     splitting on newlines, a shared multi-tenant sink. This log is a file in
+	     the workspace of the person running the application, and what it records is
+	     overwhelmingly file paths, which are the subject of the product. Escaping
+	     them would make the log harder to read for the only reader it has.
+	-->
+	<Match>
+		<Bug pattern="CRLF_INJECTION_LOGS"/>
+	</Match>
+
+	<!--
+	     Every occurrence is ProcessBuilder over a List<String>, which does not go
+	     through a shell: each argument is passed as an argument, and there is no
+	     command line for anything to be injected into. The one place that does write
+	     a script for cmd - UpdateInstallProcessRunner - quotes every path it writes,
+	     and a quote is not a legal character in a Windows file name.
+	-->
+	<Match>
+		<Bug pattern="COMMAND_INJECTION"/>
+	</Match>
+
+	<!--
+	     Path.getFileName() and Path.getParent() are null only for a filesystem root.
+	     Every occurrence dereferences one over a path that names a real file - a
+	     backup being listed, a thumbnail being written, an entry being unpacked -
+	     and a guard for "what if this is D:\" would be a branch no test can reach,
+	     which AGENTS.md already refuses. Null dereference itself stays covered: the
+	     Sonar analyser reports it and is not filtered here.
+	-->
+	<Match>
+		<Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+	</Match>
+
+	<!--
+	     Catching Exception is deliberate and documented at each site: a scheduled
+	     pass that lets anything escape kills its own timer forever
+	     (scheduleWithFixedDelay stops on the first escaping exception), and a
+	     background runner that dies leaves the screen showing work that is not
+	     happening. The same reasoning covers the throws clauses: what these methods
+	     hand back is "it failed", and the caller decides.
+	-->
+	<Match>
+		<Bug pattern="REC_CATCH_EXCEPTION,THROWS_METHOD_THROWS_RUNTIMEEXCEPTION,THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION"/>
+	</Match>
+
+	<!--
+	     Reported for case-insensitive comparison, on the grounds that Unicode case
+	     folding is not one-to-one. Every occurrence here already folds through
+	     Locale.ROOT, which is the fix the rule asks for - what is compared is an
+	     extension, a sort key, a folder name or a hexadecimal hash, never a
+	     credential.
+	-->
+	<Match>
+		<Bug pattern="IMPROPER_UNICODE"/>
+	</Match>
+
+	<!--
+	     An empty catch whose reason is written above it is the project's way of
+	     saying "this failure changes nothing" - a notification a desktop refused, a
+	     temporary file that was already gone. The unnamed variable (_) makes that
+	     deliberate in the language itself.
+	-->
+	<Match>
+		<Bug pattern="DE_MIGHT_IGNORE"/>
+	</Match>
+
+	<!--
+	     Reading the request is what a controller does. These report that a
+	     parameter, a header, the User-Agent or the server name was read at all -
+	     each is used to render or to record, never to decide access.
+	-->
+	<Match>
+		<Bug pattern="SERVLET_PARAMETER,SERVLET_HEADER,SERVLET_HEADER_USER_AGENT,SERVLET_SERVER_NAME"/>
+	</Match>
+
+	<!-- =====================================================================
+	     From here down: one class each, because one place was read and found safe.
+	     ===================================================================== -->
+
+	<!--
+	     Unpacking the published tool archive. Reported as traversal, but the entry
+	     name is reduced to its last segment before it is resolved
+	     (name.substring(name.lastIndexOf('/') + 1)), so "../../evil.exe" becomes
+	     "evil.exe" - and only names from a closed list, plus .dll, are unpacked at
+	     all.
+	-->
+	<Match>
+		<Class name="~.*\.ExternalToolInstaller"/>
+		<Bug pattern="PATH_TRAVERSAL_IN"/>
+	</Match>
+
+	<!--
+	     Paths built from the workspace the application owns, for the database dump
+	     and for the boundary dataset download. Neither takes a name from a request.
+	-->
+	<Match>
+		<Class name="~.*\.(PostgresDumpProcessRunner|GeoBoundariesSource)"/>
+		<Bug pattern="PATH_TRAVERSAL_IN"/>
+	</Match>
+
+	<!--
+	     The page shown while a restore is running. What it writes is a message from
+	     the bundle and a page built in this class - nothing from the request reaches
+	     the response.
+	-->
+	<Match>
+		<Class name="~.*\.RestoreInProgressInterceptor"/>
+		<Bug pattern="XSS_SERVLET"/>
+	</Match>
+
+	<!--
+	     Every destination is a constant path of this application - /login,
+	     /app/account, /app/onboarding - prefixed with the context path the container
+	     defines. Nothing from the request chooses where the browser goes.
+	-->
+	<Match>
+		<Class name="~.*\.(LoginFailureHandler|LogoutAwareAccessDeniedHandler|PasswordChangeRequiredInterceptor|LibraryConfigurationInterceptor)"/>
+		<Bug pattern="UNVALIDATED_REDIRECT"/>
+	</Match>
+
+	<!--
+	     The locale cookie. It is persistent on purpose - the point is to remember
+	     the language across visits - it is already httpOnly, and it is secure
+	     whenever the request is, which is the most that can be promised by an
+	     application whose normal address is http://localhost.
+	-->
+	<Match>
+		<Class name="~.*\.UserPreferenceLocaleResolver"/>
+		<Bug pattern="COOKIE_USAGE,COOKIE_PERSISTENT,INSECURE_COOKIE"/>
+	</Match>
+
+	<!--
+	     Reported as catastrophic backtracking on the ISO 6709 coordinate pattern.
+	     The input is refused above MAX_ISO6709_LENGTH characters before the pattern
+	     ever sees it, which bounds the work by construction.
+	-->
+	<Match>
+		<Class name="~.*\.MediaInfoService"/>
+		<Bug pattern="REDOS"/>
+	</Match>
+
+	<!--
+	     A socket opened to find out whether a port is free, on the loopback
+	     interface, closed immediately. There is no traffic to encrypt.
+	-->
+	<Match>
+		<Class name="~.*\.EmbeddedClusterService"/>
+		<Bug pattern="UNENCRYPTED_SERVER_SOCKET"/>
+	</Match>
+
+	<!--
+	     Leaving the application is what the tray's "Exit" item is for; there is no
+	     container to hand the decision to.
+	-->
+	<Match>
+		<Class name="~.*\.TrayLifecycle"/>
+		<Bug pattern="DM_EXIT"/>
+	</Match>
+
+	<!--
+	     The detector reads the record pattern in equals() - instanceof
+	     UsnReadResult(long otherUsn, byte[] otherRecords) - as a store nobody reads.
+	     Both bindings are read on the next line.
+	-->
+	<Match>
+		<Class name="~br\.com\.jorgemelo\.nimbusfilemanager\..*\.UsnReadResult"/>
+		<Bug pattern="DLS_DEAD_LOCAL_STORE"/>
+	</Match>
+
+	<!--
+	     A text block whose line breaks are part of the text: it is written to a file
+	     a person opens, not formatted for a console, so %n would hand the layout to
+	     whatever platform ran it.
+	-->
+	<Match>
+		<Class name="~br\.com\.jorgemelo\.nimbusfilemanager\..*\.FirstAccessCredential"/>
+		<Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+	</Match>
+
+	<!--
+	     A watcher that refuses to be constructed over a path it cannot watch, and
+	     two anonymous classes that close over their instance. Both are the shape the
+	     code is meant to have.
+	-->
+	<Match>
+		<Bug pattern="CT_CONSTRUCTOR_THROW,SIC_INNER_SHOULD_BE_STATIC_ANON"/>
+	</Match>
+
+</FindBugsFilter>

@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application.classifier;
 import java.io.FileNotFoundException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.NoSuchFileException;
+import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 
@@ -14,7 +15,7 @@ public class ExecutionErrorClassifier {
 	public ExecutionErrorType classify(Throwable throwable) {
 		Throwable root = rootCause(throwable);
 
-		String message = root.getMessage() == null ? "" : root.getMessage().toLowerCase();
+		String message = root.getMessage() == null ? "" : root.getMessage().toLowerCase(Locale.ROOT);
 
 		if (message.contains("verificação cíclica de redundância") || message.contains("cyclic redundancy check")
 				|| message.contains("crc")) {

@@ -44,7 +44,7 @@ public final class PathUtils {
 	}
 
 	public static String normalizeLower(String path) {
-		return normalize(path).toLowerCase();
+		return normalize(path).toLowerCase(Locale.ROOT);
 	}
 
 	/**

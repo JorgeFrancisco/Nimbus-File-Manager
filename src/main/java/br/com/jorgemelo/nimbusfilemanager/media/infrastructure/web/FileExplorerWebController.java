@@ -8,6 +8,7 @@ import static br.com.jorgemelo.nimbusfilemanager.media.application.constants.Med
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,7 +121,7 @@ public class FileExplorerWebController {
 	}
 
 	private String normalizeSort(String sort) {
-		return FileSortOption.fromValue(sort == null ? null : sort.toLowerCase()).value();
+		return FileSortOption.fromValue(sort == null ? null : sort.toLowerCase(Locale.ROOT)).value();
 	}
 
 	@PostMapping("/app/preferences/sidebar")

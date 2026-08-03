@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.i18n;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
@@ -99,7 +100,9 @@ public abstract class LocalizedComponent {
 				throw new IllegalStateException("Bundle base ausente no classpath: " + BASE_BUNDLE);
 			}
 
-			properties.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
+			try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+				properties.load(reader);
+			}
 		} catch (IOException exception) {
 			throw new IllegalStateException("Falha ao carregar o bundle base " + BASE_BUNDLE, exception);
 		}

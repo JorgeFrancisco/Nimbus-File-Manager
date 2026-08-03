@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -355,7 +356,7 @@ public class MediaInfoService {
 	}
 
 	private boolean contains(String value, String expected) {
-		return value != null && value.toLowerCase().contains(expected.toLowerCase());
+		return value != null && value.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT));
 	}
 
 	private LocalDateTime captureDate(JsonNode format, JsonNode videoStream) {

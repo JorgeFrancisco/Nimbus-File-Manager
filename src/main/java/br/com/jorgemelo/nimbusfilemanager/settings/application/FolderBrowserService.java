@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.stereotype.Service;
 
@@ -35,8 +36,8 @@ public class FolderBrowserService extends LocalizedComponent {
 
 		try (var paths = Files.list(current)) {
 			List<FolderBrowserEntry> directories = paths.filter(Files::isDirectory).filter(this::isVisibleFolder)
-					.sorted(Comparator.comparing(path -> fileName(path).toLowerCase())).limit(MAX_DIRECTORIES + 1L)
-					.map(this::entry).toList();
+					.sorted(Comparator.comparing(path -> fileName(path).toLowerCase(Locale.ROOT)))
+					.limit(MAX_DIRECTORIES + 1L).map(this::entry).toList();
 
 			boolean truncated = directories.size() > MAX_DIRECTORIES;
 

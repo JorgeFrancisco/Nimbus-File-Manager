@@ -9,7 +9,7 @@
 > and this file has not been retranslated. Update both in the same commit, and refresh the
 > marker below with the hash the test reports.
 
-<!-- agents-sha256: 27309c185ff5f67db45e8897f03a4618e47c360d1be5a1ba4b0794fee79088ce -->
+<!-- agents-sha256: 18fb616793a1d08658fe2f7a87826036275b0425f465785645854f87780fa59c -->
 
 > **Permanent reference document of the project.**
 
@@ -415,6 +415,35 @@ The ratchet **does not** authorise a shortcut: it still holds that a test valida
 - False positives and legitimate cases (an idiomatic pattern, a library/spec requirement, a hotspot safe by design) are **marked as accepted/reviewed in Sonar with a justification**, never "resolved" with artificial code.
 - **Recurring accepted case — `java:S3516` in an MVC handler that returns a redirect.** A screen's `@PostMapping` handler always returns **the same `redirect:`**, because what changes between the paths is the *flash attribute* (`success`/`error`), not the destination — the originating page re-renders with the message. Sonar reads that as "the method always returns the same value" and the issue is **accepted**, never worked around. **Do not refactor to a single `return`** (extracting the guards into a method that returns the message key): that closes the issue, but leaves the handler unlike all its siblings in the project, and consistency is worth more than zeroing a rule whose pattern has already been decided. There are already several accepted this way (`SettingsGeodataWebController`, `OrganizationWebController`, `SettingsWebController`). When creating a new handler of this kind, **accept the issue in Sonar** as the previous ones.
 - **Recurring accepted case — `java:S2479` in `@Query("""…""")`.** The indentation of the JPQL query text block leaves significant whitespace in the string, and Sonar complains about the unescaped character. It is **idiomatic and deliberate** (the query stays readable in the code), so the issue is **accepted in Sonar**, never worked around with concatenation or artificial escapes. There are already dozens accepted this way in the repositories. A **new** S2479 in those files, however, is a sign that someone **reindented a line of the query** — in that case the right answer is to revert the reindentation, not to accept the issue.
+
+---
+
+# Bytecode analysis (SpotBugs + find-sec-bugs)
+
+Sonar reads the source; SpotBugs reads the **bytecode**. On its own it would repeat almost everything Sonar's Java analyser already covers — what justifies the tool here is the **find-sec-bugs** plugin, which brings the security detectors that were missing: taint analysis for path traversal, injection, weak cryptography and XXE, over an application that takes paths from the user, runs external processes, and downloads and verifies files.
+
+It runs in a profile of its own, outside the everyday build — the one run dozens of times a day:
+
+```bash
+./mvnw -Pspotbugs verify
+```
+
+- **Every task ends with `-Pspotbugs verify` green.** The `check` goal fails the build on the first finding, the same way the Sonar rule fails it for a new issue.
+- A finding is settled either by **fixing the code** or by **excluding it with a justification** in `spotbugs-exclude.xml`. There is no third way: `@SuppressFBWarnings` scattered across classes takes the decision out of the one file where they are reviewed together.
+- **A global exclusion only when what the detector reports is a rule of this project**, not a defect. An exclusion for a case that was read and found safe stays **tied to its class**, and is never promoted to global.
+- Every `<Match>` carries **the reason**, checked against the code. An entry without one is debt dressed as configuration — that is how a tool comes to be ignored.
+
+## Recurring accepted cases
+
+The patterns below are already excluded, each with its reason recorded in `spotbugs-exclude.xml` itself. A **new** finding of one of these types, in a situation other than the one described there, means the justification stopped holding: the exclusion is revisited, not widened:
+
+- **`EI_EXPOSE_REP` / `EI_EXPOSE_REP2`** — constructor injection with `final` fields, which this document requires, is exactly what the detector reports.
+- **`SPRING_ENDPOINT`** — an informational marker on handlers, not a defect.
+- **`CRLF_INJECTION_LOGS`** — the log is a file in the workspace of whoever runs the application, and what it records is paths, which are the subject of the product.
+- **`COMMAND_INJECTION`** — every `ProcessBuilder` here takes a `List<String>`, which never goes through a shell; there is no command line to inject into.
+- **`NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`** — `Path.getFileName()`/`getParent()` are null only for a filesystem root; the guard would be an unreachable branch, which this document already refuses. Null dereference itself stays covered by Sonar.
+- **`REC_CATCH_EXCEPTION` and the `THROWS_METHOD_*` patterns** — catching `Exception` is deliberate: a scheduled pass that lets one escape kills its own timer forever.
+- **`IMPROPER_UNICODE`** — comparisons that already fold through `Locale.ROOT`.
 
 ---
 

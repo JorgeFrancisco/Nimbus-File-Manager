@@ -68,7 +68,7 @@ public class ReconcileScheduler {
 	 * One reconcile pass. Package-private so it can be exercised directly in tests
 	 * without the scheduler.
 	 */
-	void runOnce() {
+	final void runOnce() {
 		try {
 			String configuredFolder = appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "");
 

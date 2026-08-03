@@ -72,9 +72,18 @@ public final class Checksums {
 	/**
 	 * Case-insensitive because the two sides are written by different tools, and
 	 * only ever true for two hashes that are both present.
+	 *
+	 * <p>
+	 * Folded through {@link Locale#ROOT} rather than compared with
+	 * {@code equalsIgnoreCase}: this is the check that decides whether an
+	 * installer runs, and case folding under the platform's default locale is not
+	 * the same operation everywhere - in a Turkish locale {@code I} does not fold
+	 * to {@code i}. A hexadecimal hash would survive that today; a check worth
+	 * having should not depend on the machine it runs on.
 	 */
 	public static boolean matches(String actual, String expected) {
-		return actual != null && expected != null && actual.equalsIgnoreCase(expected);
+		return actual != null && expected != null
+				&& actual.toLowerCase(Locale.ROOT).equals(expected.toLowerCase(Locale.ROOT));
 	}
 
 	/**

@@ -165,17 +165,17 @@ public class MetadataRebuildService {
 
 			counters.add(batchHolder[0]);
 
-			progress.accept(counters.processed);
+			progress.accept(counters.processed());
 		}
 
 		log.info(
 				"Metadata rebuild finished. candidates={} rebuilt={} skippedMissing={} skippedWithoutLocation={} skippedUnsupportedType={} errors={}",
-				counters.candidates, counters.rebuilt, counters.skippedMissing, counters.skippedWithoutLocation,
-				counters.skippedUnsupportedType, counters.errors);
+				counters.candidates(), counters.rebuilt(), counters.skippedMissing(), counters.skippedWithoutLocation(),
+				counters.skippedUnsupportedType(), counters.errors());
 
-		return new MetadataRebuildResponse(sourcePathText, false, counters.candidates, counters.rebuilt,
-				counters.skippedMissing, counters.skippedWithoutLocation, counters.skippedUnsupportedType,
-				counters.errors, null);
+		return new MetadataRebuildResponse(sourcePathText, false, counters.candidates(), counters.rebuilt(),
+				counters.skippedMissing(), counters.skippedWithoutLocation(), counters.skippedUnsupportedType(),
+				counters.errors(), null);
 	}
 
 	/**
@@ -270,17 +270,17 @@ public class MetadataRebuildService {
 					ids.getLast());
 
 			for (CatalogFile catalogFile : candidates) {
-				counters.processed++;
-				counters.candidates++;
+				counters.countProcessed();
+				counters.countCandidate();
 
 				Path file = currentPath(catalogFile);
 
 				if (file == null) {
-					counters.skippedWithoutLocation++;
+					counters.countSkippedWithoutLocation();
 
 					logProgress(counters, null);
 				} else if (!Files.exists(file) || !Files.isRegularFile(file)) {
-					counters.skippedMissing++;
+					counters.countSkippedMissing();
 
 					logProgress(counters, file);
 				} else {
@@ -289,9 +289,9 @@ public class MetadataRebuildService {
 
 						applySelectedFields(catalogFile, metadata, request);
 
-						counters.rebuilt++;
+						counters.countRebuilt();
 					} catch (Exception e) {
-						counters.errors++;
+						counters.countError();
 
 						log.warn("Error rebuilding metadata. file={}", file, e);
 					}
@@ -398,11 +398,11 @@ public class MetadataRebuildService {
 	}
 
 	private void logProgress(MetadataRebuildCounters counters, Path file) {
-		if (counters.processed == 1 || counters.processed % 1000 == 0) {
+		if (counters.processed() == 1 || counters.processed() % 1000 == 0) {
 			log.info(
 					"Metadata rebuild progress: processed={} rebuilt={} skippedMissing={} skippedWithoutLocation={} errors={} currentFile={}",
-					counters.processed, counters.rebuilt, counters.skippedMissing, counters.skippedWithoutLocation,
-					counters.errors, file);
+					counters.processed(), counters.rebuilt(), counters.skippedMissing(),
+					counters.skippedWithoutLocation(), counters.errors(), file);
 		}
 	}
 }

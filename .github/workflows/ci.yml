@@ -57,6 +57,14 @@ jobs:
           chmod +x mvnw
           ./mvnw -B clean test
 
+      # Bytecode analysis, for the security detectors find-sec-bugs adds over the
+      # Sonar rules (path traversal, injection, weak crypto). It reads the classes
+      # the step above already compiled, so it costs about a minute and needs no
+      # database. Findings fail the job: the policy is in AGENTS.md, and what is
+      # deliberately not reported is justified in spotbugs-exclude.xml.
+      - name: ./mvnw -Pspotbugs spotbugs:check
+        run: ./mvnw -B -Pspotbugs -DskipTests compile com.github.spotbugs:spotbugs-maven-plugin:check
+
       - name: Upload JaCoCo coverage report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

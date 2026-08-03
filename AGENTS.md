@@ -411,6 +411,35 @@ A catraca **não** autoriza atalho: continua valendo que teste valida comportame
 
 ---
 
+# Análise de bytecode (SpotBugs + find-sec-bugs)
+
+O Sonar lê o código-fonte; o SpotBugs lê o **bytecode**. Sozinho ele repetiria quase tudo o que o analisador Java do Sonar já cobre — quem justifica a ferramenta é o plugin **find-sec-bugs**, que traz os detectores de segurança que faltavam: *taint analysis* para path traversal, injeção, criptografia fraca e XXE, sobre uma aplicação que recebe caminhos do usuário, executa processos externos e baixa e verifica arquivos.
+
+Roda em profile próprio, fora do build do dia a dia — que é o executado dezenas de vezes por dia:
+
+```bash
+./mvnw -Pspotbugs verify
+```
+
+- **Toda tarefa termina com `-Pspotbugs verify` verde.** O goal `check` reprova o build no primeiro achado, como a régua do Sonar reprova por issue nova.
+- Um achado se resolve **corrigindo o código** ou **excluindo com justificativa** em `spotbugs-exclude.xml`. Não há terceira via: `@SuppressFBWarnings` espalhado pelas classes tira a decisão do único arquivo onde ela é revisada em conjunto.
+- **Exclusão global apenas quando o que o detector reporta é regra deste projeto**, não defeito. Exclusão de caso analisado fica **presa à classe** e nunca é promovida a global.
+- Cada `<Match>` carrega **o porquê**, conferido contra o código. Entrada sem justificativa é débito disfarçado de configuração — é assim que uma ferramenta passa a ser ignorada.
+
+## Casos aceitos recorrentes
+
+Os padrões abaixo já estão excluídos, com o motivo registrado no próprio `spotbugs-exclude.xml`. Um achado **novo** de um desses tipos, em situação diferente da descrita lá, é sinal de que a justificativa deixou de valer: revisa-se a exclusão, não se amplia:
+
+- **`EI_EXPOSE_REP` / `EI_EXPOSE_REP2`** — a injeção por construtor com campos `final`, que é regra deste documento, é exatamente o que o detector reporta.
+- **`SPRING_ENDPOINT`** — marcação informativa de handler, não defeito.
+- **`CRLF_INJECTION_LOGS`** — o log é um arquivo no workspace de quem roda a aplicação, e o que ele registra são caminhos, que são o assunto do produto.
+- **`COMMAND_INJECTION`** — todo `ProcessBuilder` daqui recebe `List<String>`, que não passa por shell; não existe linha de comando onde injetar.
+- **`NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`** — `Path.getFileName()`/`getParent()` só são nulos na raiz de unidade; a guarda seria ramo inalcançável, que este documento já recusa. Desreferência nula continua coberta pelo Sonar.
+- **`REC_CATCH_EXCEPTION` e os `THROWS_METHOD_*`** — o `catch (Exception)` é deliberado: uma passagem agendada que deixa exceção escapar mata o próprio timer para sempre.
+- **`IMPROPER_UNICODE`** — comparações que já passam por `Locale.ROOT`.
+
+---
+
 # Warnings de compilação e análise estática
 
 Antes de concluir qualquer tarefa, validar os arquivos criados ou modificados quanto a warnings de compilação e análise estática.

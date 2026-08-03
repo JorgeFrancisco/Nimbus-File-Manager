@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.application;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -75,7 +76,9 @@ public final class TrayText {
 				throw new IllegalStateException("Missing message bundle " + resource);
 			}
 
-			bundle.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
+			try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+				bundle.load(reader);
+			}
 		} catch (IOException e) {
 			throw new UncheckedIOException("Could not read " + resource, e);
 		}

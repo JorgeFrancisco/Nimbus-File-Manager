@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>6.2.9.159</version>
+	<version>6.2.10.160</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -27,6 +27,8 @@
 		<metadata-extractor.version>2.19.0</metadata-extractor.version>
 		<pitest.version>1.25.6</pitest.version>
 		<pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
+		<spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
+		<findsecbugs-plugin.version>1.14.0</findsecbugs-plugin.version>
 		<zxing.version>3.5.3</zxing.version>
 		<bootstrap-icons.version>1.13.1</bootstrap-icons.version>
 		<leaflet.version>1.9.4</leaflet.version>
@@ -570,6 +572,56 @@
 							<timestampedReports>false</timestampedReports>
 							<withHistory>false</withHistory>
 						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<!--
+		     Bytecode analysis, with the security detectors that are the reason it is
+		     here: mvn -Pspotbugs verify
+
+		     SpotBugs overlaps the Sonar Java analyser on the classic bug patterns, so on
+		     its own it would mostly repeat what is already checked. What it adds is
+		     find-sec-bugs - taint analysis for path traversal, injection, weak crypto
+		     and XXE - over an application that takes paths from the user, runs external
+		     processes and downloads and verifies files.
+
+		     A profile rather than the default build for the same reason pitest is one:
+		     the ordinary build is the one run dozens of times a day.
+		-->
+		<profile>
+			<id>spotbugs</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.github.spotbugs</groupId>
+						<artifactId>spotbugs-maven-plugin</artifactId>
+						<version>${spotbugs-maven-plugin.version}</version>
+						<configuration>
+							<!-- Max effort with a Low threshold: the run takes about a minute either
+							     way, and the findings worth having in the security detectors are
+							     frequently reported at low confidence. -->
+							<effort>Max</effort>
+							<threshold>Low</threshold>
+							<includeTests>false</includeTests>
+							<excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+							<plugins>
+								<plugin>
+									<groupId>com.h3xstream.findsecbugs</groupId>
+									<artifactId>findsecbugs-plugin</artifactId>
+									<version>${findsecbugs-plugin.version}</version>
+								</plugin>
+							</plugins>
+						</configuration>
+						<executions>
+							<execution>
+								<id>analyse</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>check</goal>
+								</goals>
+							</execution>
+						</executions>
 					</plugin>
 				</plugins>
 			</build>

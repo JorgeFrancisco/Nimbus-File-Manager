@@ -54,7 +54,7 @@ class CatalogFilePurgeScheduler {
 	 * One purge pass. Package-private so it can be exercised directly in tests
 	 * without the scheduler.
 	 */
-	void runOnce() {
+	final void runOnce() {
 		try {
 			// The fallback is deliberately non-positive (never the product default): a
 			// blank or invalid retention setting resolves to it, so an unreadable window

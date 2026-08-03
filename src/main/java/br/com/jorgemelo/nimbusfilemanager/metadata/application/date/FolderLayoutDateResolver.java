@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -42,8 +43,8 @@ public class FolderLayoutDateResolver {
 			return null;
 		}
 
-		String fileType = fileName(fileTypePath).toUpperCase();
-		String subcategory = fileName(subcategoryPath).toUpperCase();
+		String fileType = fileName(fileTypePath).toUpperCase(Locale.ROOT);
+		String subcategory = fileName(subcategoryPath).toUpperCase(Locale.ROOT);
 		String day = fileName(dayPath);
 		String yearMonth = fileName(yearMonthPath);
 
