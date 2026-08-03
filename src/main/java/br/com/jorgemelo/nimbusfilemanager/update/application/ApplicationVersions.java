@@ -58,6 +58,18 @@ public final class ApplicationVersions {
 	}
 
 	/**
+	 * The version Windows records for the installed product: three fields, because
+	 * that is all Windows Installer keeps and all {@code jpackage} is given. It is
+	 * how a committed installation is recognised - the install script waits for
+	 * this string to appear against the product before it reopens the application.
+	 *
+	 * @return empty for anything this project did not publish
+	 */
+	public static Optional<String> productVersion(String text) {
+		return parse(text).map(version -> version.major() + "." + version.minor() + "." + version.patch());
+	}
+
+	/**
 	 * Whether {@code published} is worth offering to somebody running
 	 * {@code installed}.
 	 */

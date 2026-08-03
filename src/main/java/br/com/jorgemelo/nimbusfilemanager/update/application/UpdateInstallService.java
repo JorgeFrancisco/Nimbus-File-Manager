@@ -40,6 +40,9 @@ public class UpdateInstallService {
 
 	private static final String WINDOWS = "windows";
 
+	/** Beside the application's own logs, which is where anyone would look. */
+	private static final String INSTALL_LOG = "update-install.log";
+
 	private final UpdateCheckService updateCheckService;
 	private final ReleaseDownloader releaseDownloader;
 	private final UpdateInstallProcessRunner processRunner;
@@ -111,8 +114,17 @@ public class UpdateInstallService {
 	private UpdateOutcome start(Path installer, AvailableUpdate update) {
 		progress.starting();
 
+		// The script waits for Windows to record this exact version before it reopens
+		// the application, so what is passed here is what tells a finished
+		// installation from one still copying files. An unparseable tag never gets
+		// this far - it is refused while deciding there was an update at all - and if
+		// one ever did, the wait would run to its deadline rather than reopen early,
+		// which is the safe end of that mistake.
+		String productVersion = ApplicationVersions.productVersion(update.published()).orElse("");
+
 		try {
-			processRunner.start(installer);
+			processRunner.start(installer, workspaceManager.resolve(WorkspaceFolders.LOGS).resolve(INSTALL_LOG),
+					productVersion);
 		} catch (IOException exception) {
 			log.warn("The verified installer could not be started", exception);
 

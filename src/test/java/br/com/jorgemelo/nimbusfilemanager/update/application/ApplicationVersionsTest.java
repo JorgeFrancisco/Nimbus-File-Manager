@@ -108,6 +108,24 @@ class ApplicationVersionsTest {
 		Assertions.assertThat(supersedes("6.0.1.147", "6.1.0.150")).isFalse();
 	}
 
+	/**
+	 * What the install script waits for Windows to record. The build is dropped
+	 * because Windows Installer never stores it, so a wait that included it would
+	 * never be satisfied and every update would sit until its deadline.
+	 */
+	@Test
+	void dropsTheBuildFromTheVersionWindowsRecords() {
+		Assertions.assertThat(ApplicationVersions.productVersion("v6.2.7.157")).contains("6.2.7");
+		Assertions.assertThat(ApplicationVersions.productVersion("6.2.7.157")).contains("6.2.7");
+		Assertions.assertThat(ApplicationVersions.productVersion("6.2.7")).contains("6.2.7");
+	}
+
+	@Test
+	void hasNoProductVersionForWhatThisProjectDidNotPublish() {
+		Assertions.assertThat(ApplicationVersions.productVersion("nightly")).isEmpty();
+		Assertions.assertThat(ApplicationVersions.productVersion(null)).isEmpty();
+	}
+
 	private static boolean supersedes(String published, String installed) {
 		return ApplicationVersions.supersedes(ApplicationVersions.parse(published).orElseThrow(),
 				ApplicationVersions.parse(installed).orElseThrow());

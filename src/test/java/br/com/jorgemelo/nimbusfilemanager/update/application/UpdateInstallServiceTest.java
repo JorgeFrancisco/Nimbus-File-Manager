@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,7 +49,7 @@ class UpdateInstallServiceTest {
 
 		Assertions.assertThat(outcome).isEqualTo(UpdateOutcome.NOTHING_TO_INSTALL);
 
-		verify(processRunner, never()).start(any());
+		verify(processRunner, never()).start(any(), any(), any());
 		verify(applicationShutdown, never()).endRun();
 	}
 
@@ -65,7 +66,7 @@ class UpdateInstallServiceTest {
 
 		Assertions.assertThat(outcome).isEqualTo(UpdateOutcome.UNSUPPORTED_PLATFORM);
 
-		verify(processRunner, never()).start(any());
+		verify(processRunner, never()).start(any(), any(), any());
 	}
 
 	@Test
@@ -77,7 +78,7 @@ class UpdateInstallServiceTest {
 
 		Assertions.assertThat(outcome).isEqualTo(UpdateOutcome.STARTED);
 
-		verify(processRunner).start(folder.resolve("a.msi"));
+		verify(processRunner).start(eq(folder.resolve("a.msi")), any(), eq("6.1.0"));
 		verify(applicationShutdown).endRun();
 	}
 
@@ -95,7 +96,7 @@ class UpdateInstallServiceTest {
 
 		Assertions.assertThat(outcome).isEqualTo(UpdateOutcome.CHECKSUM_MISMATCH);
 
-		verify(processRunner, never()).start(any());
+		verify(processRunner, never()).start(any(), any(), any());
 		verify(applicationShutdown, never()).endRun();
 	}
 
@@ -104,7 +105,7 @@ class UpdateInstallServiceTest {
 		when(updateCheckService.available()).thenReturn(Optional.of(update()));
 		when(workspaceManager.resolve(any())).thenReturn(folder);
 
-		doThrow(new IOException("denied")).when(processRunner).start(any());
+		doThrow(new IOException("denied")).when(processRunner).start(any(), any(), any());
 
 		UpdateOutcome outcome = onWindows(downloader(hashOf(folder) + "  a.msi")).install();
 
