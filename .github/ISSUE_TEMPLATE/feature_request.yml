@@ -1,0 +1,31 @@
+name: Feature request
+description: Something the application should do and does not
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: |
+        The situation, not the solution. What you were doing with your files when the application
+        got in the way is more useful than a described button — it usually leads somewhere better.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: If you already have a shape in mind, describe it here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do today instead
+      description: |
+        How you work around the absence. It says how much the gap costs, and sometimes the
+        workaround is the feature.
+    validations:
+      required: false

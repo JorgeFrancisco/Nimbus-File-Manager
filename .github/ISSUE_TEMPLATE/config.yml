@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/JorgeFrancisco/Nimbus-File-Manager/security/advisories/new
+    about: Report privately instead of opening an issue — an issue is public from the moment it exists.
+  - name: Contributing and licensing
+    url: https://github.com/JorgeFrancisco/Nimbus-File-Manager/blob/main/CONTRIBUTING.md
+    about: Read this before preparing a pull request — contributions need a signed agreement first.

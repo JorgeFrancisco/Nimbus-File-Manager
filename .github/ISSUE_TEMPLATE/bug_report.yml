@@ -1,0 +1,72 @@
+name: Bug report
+description: Something the application does that it should not, or fails to do
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Not a bug report:** if what you found is a security problem, do not open an issue —
+        it is public from the moment you create it. Follow [SECURITY.md](../blob/main/SECURITY.md)
+        instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The tray menu shows the installed version, and so does the Settings screen.
+      placeholder: 6.2.10.160
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it is running
+      options:
+        - Installed from the MSI
+        - Built from source (Maven or the IDE)
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 Pro 24H2
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: |
+        The screen you were on and what you clicked. If it involves files, what kind of files —
+        size, format, where they live — often matters more than the count.
+      placeholder: |
+        1. Open Settings
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: |
+        From `<workspace>/logs/nimbus-file-manager.log` — the tray menu opens that folder. Paste
+        the lines around the failure, and redact any path you would rather not publish.
+      render: text
+    validations:
+      required: false
