@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -12,24 +14,25 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.PublishedRelease;
-import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdateOutcome;
 
 /**
- * Every refusal has to reach the screen with its reason. An update that did not
- * happen looks exactly like one that did when the page comes back silently, and
- * these reasons are ones the person can act on - being offline, being on the
- * wrong platform, or bytes that did not match what was published.
+ * The screen has to answer immediately and let the download run behind it. It
+ * used to wait for the whole installer - about a minute of blank page - and the
+ * answer then arrived seconds before the application closed, which is when it
+ * was least useful.
  */
 class SettingsUpdateWebControllerTest {
 
 	private final UpdateCheckService updateCheckService = Mockito.mock(UpdateCheckService.class);
 	private final UpdateInstallService updateInstallService = Mockito.mock(UpdateInstallService.class);
+	private final UpdateInstallAsyncRunner asyncRunner = Mockito.mock(UpdateInstallAsyncRunner.class);
 
 	private final SettingsUpdateWebController controller = new SettingsUpdateWebController(updateCheckService,
-			updateInstallService);
+			updateInstallService, asyncRunner);
 
 	@Test
 	void saysSoWhenTheCheckFindsNothing() {
@@ -56,42 +59,56 @@ class SettingsUpdateWebControllerTest {
 				.contains("v6.1.0.160");
 	}
 
+	/**
+	 * The request returns while the download is still running, so what comes back
+	 * says the work started - not that it finished.
+	 */
 	@Test
-	void reportsTheInstallerHavingStartedAsSuccess() {
-		when(updateInstallService.install()).thenReturn(UpdateOutcome.STARTED);
+	void startsTheDownloadInTheBackgroundAndAnswersAtOnce() {
+		when(updateInstallService.canInstall()).thenReturn(true);
+		when(asyncRunner.start()).thenReturn(true);
 
 		RedirectAttributes attributes = new RedirectAttributesModelMap();
 
 		String view = controller.installUpdate(attributes);
 
 		Assertions.assertThat(view).isEqualTo(SharedConstants.REDIRECT_SETTINGS);
-		Assertions.assertThat(attributes.getFlashAttributes()).containsKey(SharedConstants.ATTR_SUCCESS)
-				.doesNotContainKey(SharedConstants.ATTR_ERROR);
+		Assertions.assertThat(attributes.getFlashAttributes()).containsKey(SharedConstants.ATTR_SUCCESS);
+
+		verify(asyncRunner).install();
 	}
 
 	/**
-	 * Every outcome other than success has to produce a message, and a distinct
-	 * one: a map missing an entry would throw, and a shared entry would tell the
-	 * person the wrong reason.
+	 * A second click while the first download is running would fetch the same file
+	 * into the same folder, and the loser would verify bytes the winner was still
+	 * writing.
 	 */
 	@Test
-	void answersEveryRefusalWithAReasonOfItsOwn() {
-		for (UpdateOutcome outcome : UpdateOutcome.values()) {
-			if (outcome == UpdateOutcome.STARTED) {
-				continue;
-			}
+	void refusesASecondInstallWhileOneIsRunning() {
+		when(updateInstallService.canInstall()).thenReturn(true);
+		when(asyncRunner.start()).thenReturn(false);
 
-			when(updateInstallService.install()).thenReturn(outcome);
+		RedirectAttributes attributes = new RedirectAttributesModelMap();
 
-			RedirectAttributes attributes = new RedirectAttributesModelMap();
+		controller.installUpdate(attributes);
 
-			controller.installUpdate(attributes);
+		Assertions.assertThat(attributes.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
 
-			Assertions.assertThat(attributes.getFlashAttributes()).as("message for %s", outcome)
-					.containsKey(SharedConstants.ATTR_ERROR);
-			Assertions.assertThat(attributes.getFlashAttributes().get(SharedConstants.ATTR_ERROR).toString())
-					.as("reason for %s", outcome).isNotBlank();
-		}
+		verify(asyncRunner, never()).install();
+	}
+
+	@Test
+	void refusesToInstallWhenThereIsNothingToInstall() {
+		when(updateInstallService.canInstall()).thenReturn(false);
+
+		RedirectAttributes attributes = new RedirectAttributesModelMap();
+
+		controller.installUpdate(attributes);
+
+		Assertions.assertThat(attributes.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
+
+		verify(asyncRunner, never()).start();
+		verify(asyncRunner, never()).install();
 	}
 
 	private static AvailableUpdate update() {

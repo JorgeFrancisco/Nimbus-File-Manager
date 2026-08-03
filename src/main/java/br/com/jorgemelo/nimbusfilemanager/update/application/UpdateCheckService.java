@@ -3,12 +3,14 @@ package br.com.jorgemelo.nimbusfilemanager.update.application;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.PublishedRelease;
+import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateFound;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -36,13 +38,32 @@ public class UpdateCheckService {
 	// Late enough that the bootstrap downloads are done competing for the network,
 	// and long before anyone would think to look for an update notice.
 	private static final String INITIAL_DELAY = "PT2M";
-	private static final String INTERVAL = "PT24H";
+	// Fifteen minutes is four requests an hour against an endpoint that allows
+	// sixty from an address that does not authenticate. A minute would sit exactly
+	// on that ceiling, and the first thing to share the address - a browser, a
+	// second installation - would push it over, after which the answer is a
+	// refusal and updates stop being found without anything saying so.
+	private static final String INTERVAL = "${nimbus-file-manager.update.check-interval:PT15M}";
 
 	private final ReleaseSource releaseSource;
+	private final ApplicationEventPublisher eventPublisher;
 	private final AtomicReference<AvailableUpdate> available = new AtomicReference<>();
+	private final AtomicReference<String> announced = new AtomicReference<>();
 
-	public UpdateCheckService(ReleaseSource releaseSource) {
+	public UpdateCheckService(ReleaseSource releaseSource, ApplicationEventPublisher eventPublisher) {
 		this.releaseSource = releaseSource;
+		this.eventPublisher = eventPublisher;
+	}
+
+	/**
+	 * Once per version rather than once per check. The check runs every fifteen
+	 * minutes, and a notification repeating the same sentence four times an hour
+	 * is not a reminder - it is a reason to disable notifications.
+	 */
+	private void announce(String published) {
+		if (!published.equals(announced.getAndSet(published))) {
+			eventPublisher.publishEvent(new UpdateFound(published));
+		}
 	}
 
 	/**
@@ -80,8 +101,11 @@ public class UpdateCheckService {
 		// that has just been updated must stop being told to update.
 		available.set(update.orElse(null));
 
-		update.ifPresent(found -> log.info("Version {} is available; this installation is {}", found.published(),
-				found.installed()));
+		update.ifPresent(found -> {
+			log.info("Version {} is available; this installation is {}", found.published(), found.installed());
+
+			announce(found.published());
+		});
 
 		return update;
 	}

@@ -23,6 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepo
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 
 /**
  * Shared model attributes for server-rendered pages: authenticated vs
@@ -40,7 +41,8 @@ class AppViewModelAdviceExtraTest {
 	private final FingerprintActivityService fingerprintActivityService = mock(FingerprintActivityService.class);
 	private final AppViewModelAdvice advice = new AppViewModelAdvice("2.0.0", userPagePreferenceService,
 			appSettingService, executionQueryService, inventoryWatchService, appUserRepository,
-			fingerprintActivityService);
+			fingerprintActivityService, new UpdateCheckService(Optional::empty, event -> {
+			}));
 
 	private final Authentication user = new TestingAuthenticationToken("bob", "x", "ROLE_USER");
 	private final Authentication anonymous = new TestingAuthenticationToken("anonymousUser", "x", "ROLE_ANONYMOUS");

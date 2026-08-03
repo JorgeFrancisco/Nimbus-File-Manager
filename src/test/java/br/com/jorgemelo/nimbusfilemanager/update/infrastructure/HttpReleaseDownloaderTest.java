@@ -15,6 +15,8 @@ import org.junit.jupiter.api.io.TempDir;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallProgress;
+
 /**
  * Exercised against a real server on the loopback interface rather than against
  * a mocked client, because what is worth proving is the transfer itself: that a
@@ -25,6 +27,8 @@ import com.sun.net.httpserver.HttpServer;
 class HttpReleaseDownloaderTest {
 
 	private static final byte[] CONTENT = "the installer bytes".getBytes(StandardCharsets.UTF_8);
+
+	private final UpdateInstallProgress progress = new UpdateInstallProgress();
 
 	private HttpServer server;
 	private String base;
@@ -52,7 +56,7 @@ class HttpReleaseDownloaderTest {
 	void downloadsEveryByteToTheNameItWasGiven(@TempDir Path folder) throws IOException {
 		Path target = folder.resolve("a.msi");
 
-		new HttpReleaseDownloader().download(base + "/installer", target);
+		new HttpReleaseDownloader(progress).download(base + "/installer", target);
 
 		Assertions.assertThat(target).exists().hasBinaryContent(CONTENT);
 	}
@@ -64,7 +68,7 @@ class HttpReleaseDownloaderTest {
 	 */
 	@Test
 	void leavesNoPartialFileBehind(@TempDir Path folder) throws IOException {
-		new HttpReleaseDownloader().download(base + "/installer", folder.resolve("a.msi"));
+		new HttpReleaseDownloader(progress).download(base + "/installer", folder.resolve("a.msi"));
 
 		Assertions.assertThat(folder.resolve("a.msi.part")).doesNotExist();
 	}
@@ -77,7 +81,7 @@ class HttpReleaseDownloaderTest {
 	void refusesAStatusThatIsNotSuccess(@TempDir Path folder) {
 		Path target = folder.resolve("a.msi");
 
-		Assertions.assertThatThrownBy(() -> new HttpReleaseDownloader().download(base + "/missing", target))
+		Assertions.assertThatThrownBy(() -> new HttpReleaseDownloader(progress).download(base + "/missing", target))
 				.isInstanceOf(IOException.class).hasMessageContaining("404");
 
 		Assertions.assertThat(target).doesNotExist();
@@ -85,12 +89,12 @@ class HttpReleaseDownloaderTest {
 
 	@Test
 	void readsASmallTextFile() throws IOException {
-		Assertions.assertThat(new HttpReleaseDownloader().readText(base + "/text")).isEqualTo("a checksum");
+		Assertions.assertThat(new HttpReleaseDownloader(progress).readText(base + "/text")).isEqualTo("a checksum");
 	}
 
 	@Test
 	void refusesTextThatAnsweredWithAnError() {
-		Assertions.assertThatThrownBy(() -> new HttpReleaseDownloader().readText(base + "/missing"))
+		Assertions.assertThatThrownBy(() -> new HttpReleaseDownloader(progress).readText(base + "/missing"))
 				.isInstanceOf(IOException.class).hasMessageContaining("404");
 	}
 

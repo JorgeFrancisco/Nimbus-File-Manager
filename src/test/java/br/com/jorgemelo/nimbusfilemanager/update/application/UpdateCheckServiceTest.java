@@ -18,7 +18,7 @@ class UpdateCheckServiceTest {
 
 	@Test
 	void findsNothingWhenTheRunHasNoVersionOfItsOwn() {
-		UpdateCheckService service = new UpdateCheckService(counting(new AtomicInteger()));
+		UpdateCheckService service = check(counting(new AtomicInteger()));
 
 		Assertions.assertThat(service.check()).isEmpty();
 		Assertions.assertThat(service.available()).isEmpty();
@@ -32,20 +32,20 @@ class UpdateCheckServiceTest {
 	void doesNotAskAboutReleasesWithoutAVersionToCompare() {
 		AtomicInteger asked = new AtomicInteger();
 
-		new UpdateCheckService(counting(asked)).check(null);
-		new UpdateCheckService(counting(asked)).check("  ");
+		check(counting(asked)).check(null);
+		check(counting(asked)).check("  ");
 
 		Assertions.assertThat(asked).hasValue(0);
 	}
 
 	@Test
 	void hasNothingToShowBeforeTheFirstCheck() {
-		Assertions.assertThat(new UpdateCheckService(counting(new AtomicInteger())).available()).isEmpty();
+		Assertions.assertThat(check(counting(new AtomicInteger())).available()).isEmpty();
 	}
 
 	@Test
 	void remembersAReleaseThatSupersedesTheInstalledVersion() {
-		UpdateCheckService service = new UpdateCheckService(publishing("v6.1.0.160"));
+		UpdateCheckService service = check(publishing("v6.1.0.160"));
 
 		Assertions.assertThat(service.check("6.0.0.147")).isPresent();
 		Assertions.assertThat(service.available()).isPresent();
@@ -55,7 +55,7 @@ class UpdateCheckServiceTest {
 
 	@Test
 	void remembersNothingWhenTheInstallationIsCurrent() {
-		UpdateCheckService service = new UpdateCheckService(publishing("v6.1.0.160"));
+		UpdateCheckService service = check(publishing("v6.1.0.160"));
 
 		Assertions.assertThat(service.check("6.1.0.160")).isEmpty();
 		Assertions.assertThat(service.available()).isEmpty();
@@ -68,7 +68,7 @@ class UpdateCheckServiceTest {
 	 */
 	@Test
 	void forgetsWhatItFoundOnceTheInstallationCatchesUp() {
-		UpdateCheckService service = new UpdateCheckService(publishing("v6.1.0.160"));
+		UpdateCheckService service = check(publishing("v6.1.0.160"));
 
 		service.check("6.0.0.147");
 
@@ -95,12 +95,17 @@ class UpdateCheckServiceTest {
 			}
 		};
 
-		UpdateCheckService service = new UpdateCheckService(flaky);
+		UpdateCheckService service = check(flaky);
 
 		service.check("6.0.0.147");
 		service.check("6.0.0.147");
 
 		Assertions.assertThat(service.available()).isPresent();
+	}
+
+	private static UpdateCheckService check(ReleaseSource source) {
+		return new UpdateCheckService(source, event -> {
+		});
 	}
 
 	private static ReleaseSource counting(AtomicInteger asked) {

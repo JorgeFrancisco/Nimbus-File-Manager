@@ -153,6 +153,31 @@ public final class ApplicationTray {
 				MessageFormat.format(message.get("tray.ready"), TrayText.url(servedPort)));
 	}
 
+	/**
+	 * Says a newer version was published, without stealing the screen.
+	 *
+	 * <p>
+	 * The tray is where this belongs: the application has no window of its own,
+	 * so an update nobody opens the settings screen to look for would never be
+	 * found. The tooltip keeps saying it after the balloon is gone, which is what
+	 * makes it a state rather than a moment.
+	 */
+	public static void updateAvailable(String version) {
+		TrayIcon trayIcon = icon.get();
+
+		if (trayIcon == null) {
+			return;
+		}
+
+		TrayText message = text();
+
+		String announcement = MessageFormat.format(message.get("tray.updateAvailable"), version);
+
+		trayIcon.setToolTip(announcement);
+
+		notify(trayIcon, message.get("tray.updateAvailableTitle"), announcement);
+	}
+
 	public static void remove() {
 		TrayIcon trayIcon = icon.getAndSet(null);
 

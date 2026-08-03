@@ -19,6 +19,8 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
+import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 
@@ -57,12 +59,14 @@ public class AppViewModelAdvice {
 	private final InventoryWatchService inventoryWatchService;
 	private final AppUserRepository appUserRepository;
 	private final FingerprintActivityService fingerprintActivityService;
+	private final UpdateCheckService updateCheckService;
 
 	@Autowired
 	public AppViewModelAdvice(@Value("${application.version}") String appVersion,
 			UserPagePreferenceService userPagePreferenceService, AppSettingService appSettingService,
 			ExecutionQueryService executionQueryService, InventoryWatchService inventoryWatchService,
-			AppUserRepository appUserRepository, FingerprintActivityService fingerprintActivityService) {
+			AppUserRepository appUserRepository, FingerprintActivityService fingerprintActivityService,
+			UpdateCheckService updateCheckService) {
 		this.appVersion = appVersion;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.appSettingService = appSettingService;
@@ -70,11 +74,23 @@ public class AppViewModelAdvice {
 		this.inventoryWatchService = inventoryWatchService;
 		this.appUserRepository = appUserRepository;
 		this.fingerprintActivityService = fingerprintActivityService;
+		this.updateCheckService = updateCheckService;
 	}
 
 	@ModelAttribute("appVersion")
 	public String appVersion() {
 		return appVersion;
+	}
+
+	/**
+	 * Read by the topbar on every screen, so a published version is visible
+	 * without anyone opening the settings screen to look for it - which nobody
+	 * does, because there is no reason to look for something you do not know
+	 * exists.
+	 */
+	@ModelAttribute("availableUpdate")
+	public String availableUpdate() {
+		return updateCheckService.available().map(AvailableUpdate::published).orElse(null);
 	}
 
 	/**

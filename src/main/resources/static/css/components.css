@@ -532,6 +532,21 @@ a.button.disabled {
 	padding: 5px 10px;
 }
 
+/* The published-version badge, next to the installed one. Uses the theme's own
+   "ok" pair rather than a colour of its own, so it stays readable in both
+   themes - and reads as news rather than as a warning, because an update being
+   available is not a problem. */
+.version-pill.update-available {
+	background: var(--ok-soft);
+	border-color: var(--ok);
+	color: var(--ok);
+	text-decoration: none;
+}
+
+.version-pill.update-available:hover {
+	filter: brightness(1.05);
+}
+
 .alert {
 	background: var(--accent-soft);
 	border: 1px solid var(--accent-soft-line);

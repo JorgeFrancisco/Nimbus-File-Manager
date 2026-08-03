@@ -252,17 +252,33 @@
 				<dd th:if="${not updateStatus.available() and not updateStatus.canCheck()}" th:text="#{settings.update.unavailable}">Verificacao indisponivel</dd></div>
 			</dl>
 
-			<div th:if="${updateStatus.canInstall()}" class="alert" role="status"
+			<div th:if="${updateStatus.canInstall() and not updateProgress.running()}" class="alert" role="status"
 				th:text="#{settings.update.installWarning}">A instalacao encerra o Nimbus.</div>
+
+			<div th:if="${updateProgress.running()}" class="alert" role="status">
+				<span th:if="${updateProgress.phase().name() == 'DOWNLOADING'}"
+					th:text="${updateProgress.percent() >= 0}
+						? #{settings.update.downloading(${#numbers.formatDecimal(updateProgress.percent(), 1, 0)})}
+						: #{settings.update.downloadingUnknown}">Baixando...</span>
+				<span th:if="${updateProgress.phase().name() == 'VERIFYING'}"
+					th:text="#{settings.update.verifying}">Conferindo o arquivo...</span>
+				<span th:if="${updateProgress.phase().name() == 'STARTING'}"
+					th:text="#{settings.update.starting}">Iniciando o instalador...</span>
+			</div>
+
+			<div th:if="${updateProgress.phase().name() == 'FAILED' and updateProgress.message() != null}"
+				class="alert error" role="alert" th:text="${updateProgress.message()}">Falhou.</div>
 
 			<div class="panel-actions">
 				<form th:if="${updateStatus.canCheck()}" th:action="@{/app/settings/update/check}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 					<button type="submit" class="button secondary" th:text="#{settings.update.check}">Verificar agora</button>
 				</form>
-				<form th:if="${updateStatus.canInstall()}" th:action="@{/app/settings/update/install}" method="post">
+				<form th:if="${updateStatus.canInstall() and not updateProgress.running()}"
+					th:action="@{/app/settings/update/install}" method="post">
 					<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-					<button type="submit" th:text="#{settings.update.install}">Baixar e instalar</button>
+					<button type="submit" th:attr="data-confirm=#{settings.update.confirm}"
+						th:text="#{settings.update.install}">Baixar e instalar</button>
 				</form>
 				<a th:if="${updateStatus.available()}" class="button secondary" th:href="${updateStatus.page()}"
 					target="_blank" rel="noopener" th:text="#{settings.update.releasePage}">Ver o que mudou</a>

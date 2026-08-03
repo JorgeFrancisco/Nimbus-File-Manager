@@ -26,7 +26,8 @@ public class OpenApiConfig {
 				- Automatic media organization
 				- Duplicate detection
 				- Media statistics and reports
-				""").license(new License().name("MIT License").url("https://opensource.org/licenses/MIT"))
+				""").license(new License().name("PolyForm Noncommercial License 1.0.0").url(
+						"https://polyformproject.org/licenses/noncommercial/1.0.0"))
 				.contact(new Contact().name("Jorge Melo").url("https://github.com/JorgeFrancisco")
 						.email("jorgefrancisco.melo@gmail.com")));
 	}

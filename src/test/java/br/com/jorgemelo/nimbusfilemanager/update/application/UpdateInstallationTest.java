@@ -26,7 +26,7 @@ class UpdateInstallationTest {
 		String hash = hashOf(folder);
 
 		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder,
-				downloader(CONTENT, hash + "  a.msi"));
+				downloader(CONTENT, hash + "  a.msi"), () -> {});
 
 		Assertions.assertThat(prepared.refusal()).isNull();
 		Assertions.assertThat(prepared.installer()).exists().hasBinaryContent(CONTENT);
@@ -34,7 +34,7 @@ class UpdateInstallationTest {
 
 	@Test
 	void refusesWhenTheDownloadFails(@TempDir Path folder) {
-		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder, failingDownload());
+		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder, failingDownload(), () -> {});
 
 		Assertions.assertThat(prepared.refusal()).isEqualTo(UpdateOutcome.DOWNLOAD_FAILED);
 		Assertions.assertThat(prepared.installer()).isNull();
@@ -47,7 +47,8 @@ class UpdateInstallationTest {
 	 */
 	@Test
 	void refusesAndDeletesWhenNoChecksumWasPublished(@TempDir Path folder) {
-		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder, downloader(CONTENT, "<html>404"));
+		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder,
+				downloader(CONTENT, "<html>404"), () -> {});
 
 		Assertions.assertThat(prepared.refusal()).isEqualTo(UpdateOutcome.CHECKSUM_UNAVAILABLE);
 		Assertions.assertThat(folder.resolve("a.msi")).doesNotExist();
@@ -55,7 +56,7 @@ class UpdateInstallationTest {
 
 	@Test
 	void refusesAndDeletesWhenTheChecksumCannotBeFetched(@TempDir Path folder) {
-		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder, failingChecksum());
+		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder, failingChecksum(), () -> {});
 
 		Assertions.assertThat(prepared.refusal()).isEqualTo(UpdateOutcome.CHECKSUM_UNAVAILABLE);
 		Assertions.assertThat(folder.resolve("a.msi")).doesNotExist();
@@ -68,7 +69,7 @@ class UpdateInstallationTest {
 	@Test
 	void refusesAndDeletesWhatDoesNotMatchThePublishedHash(@TempDir Path folder) {
 		PreparedInstaller prepared = UpdateInstallation.prepare(release(), folder,
-				downloader(CONTENT, "0".repeat(64) + "  a.msi"));
+				downloader(CONTENT, "0".repeat(64) + "  a.msi"), () -> {});
 
 		Assertions.assertThat(prepared.refusal()).isEqualTo(UpdateOutcome.CHECKSUM_MISMATCH);
 		Assertions.assertThat(folder.resolve("a.msi")).doesNotExist();

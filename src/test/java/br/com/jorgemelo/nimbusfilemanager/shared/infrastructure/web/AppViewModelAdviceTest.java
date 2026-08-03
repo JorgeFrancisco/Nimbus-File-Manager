@@ -25,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 
 @ExtendWith(MockitoExtension.class)
 class AppViewModelAdviceTest {
@@ -134,6 +135,8 @@ class AppViewModelAdviceTest {
 
 	private AppViewModelAdvice advice(String version) {
 		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, executionQueryService,
-				inventoryWatchService, appUserRepository, fingerprintActivityService);
+				inventoryWatchService, appUserRepository, fingerprintActivityService,
+				new UpdateCheckService(Optional::empty, event -> {
+				}));
 	}
 }

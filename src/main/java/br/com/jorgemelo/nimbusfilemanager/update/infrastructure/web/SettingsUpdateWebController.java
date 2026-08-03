@@ -1,7 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
-import java.util.Map;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,8 +8,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallService;
-import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdateOutcome;
+import br.com.jorgemelo.nimbusfilemanager.update.application.constants.UpdateMessages;
 
 /**
  * Checking for an update and installing one, from the Sistema tab.
@@ -31,51 +30,56 @@ import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdateOutcome;
 @Controller
 public class SettingsUpdateWebController extends LocalizedComponent {
 
-	private static final Map<UpdateOutcome, String> MESSAGES = Map.of(UpdateOutcome.NOTHING_TO_INSTALL,
-			"backend.settings.updateNothingToInstall", UpdateOutcome.UNSUPPORTED_PLATFORM,
-			"backend.settings.updateUnsupportedPlatform", UpdateOutcome.DOWNLOAD_FAILED,
-			"backend.settings.updateDownloadFailed", UpdateOutcome.CHECKSUM_UNAVAILABLE,
-			"backend.settings.updateChecksumUnavailable", UpdateOutcome.CHECKSUM_MISMATCH,
-			"backend.settings.updateChecksumMismatch", UpdateOutcome.COULD_NOT_START,
-			"backend.settings.updateCouldNotStart");
-
 	private final UpdateCheckService updateCheckService;
 	private final UpdateInstallService updateInstallService;
+	private final UpdateInstallAsyncRunner asyncRunner;
 
 	@Autowired
 	public SettingsUpdateWebController(UpdateCheckService updateCheckService,
-			UpdateInstallService updateInstallService) {
+			UpdateInstallService updateInstallService, UpdateInstallAsyncRunner asyncRunner) {
 		this.updateCheckService = updateCheckService;
 		this.updateInstallService = updateInstallService;
+		this.asyncRunner = asyncRunner;
 	}
 
 	@PostMapping("/app/settings/update/check")
 	public String checkForUpdate(RedirectAttributes redirectAttributes) {
 		if (updateCheckService.check().isEmpty()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
-					message("backend.settings.updateUpToDate"));
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message(UpdateMessages.UP_TO_DATE));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.updateFound",
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message(UpdateMessages.FOUND,
 				updateCheckService.available().map(found -> found.published()).orElse("")));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}
 
+	/**
+	 * Answers immediately and lets the download run behind it. The installer is
+	 * over a hundred megabytes: holding the request until it lands left the
+	 * browser on a blank minute, and the answer arrived seconds before the
+	 * application closed, which is when it was least useful.
+	 */
 	@PostMapping("/app/settings/update/install")
 	public String installUpdate(RedirectAttributes redirectAttributes) {
-		UpdateOutcome outcome = updateInstallService.install();
-
-		if (outcome == UpdateOutcome.STARTED) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
-					message("backend.settings.updateStarted"));
+		if (!updateInstallService.canInstall()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
+					message(UpdateMessages.NOTHING_TO_INSTALL));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGES.get(outcome)));
+		if (!asyncRunner.start()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(UpdateMessages.ALREADY_RUNNING));
+
+			return SharedConstants.REDIRECT_SETTINGS;
+		}
+
+		asyncRunner.install();
+
+		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message(UpdateMessages.INSTALL_STARTED));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}

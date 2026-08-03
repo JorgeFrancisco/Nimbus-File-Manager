@@ -61,6 +61,9 @@
 		<div class="topbar">
 			<h1 class="title" th:text="${pageTitle}">Nimbus File Manager</h1>
 			<span class="version-pill">v<span th:text="${appVersion}">0.0.0</span></span>
+			<a th:if="${availableUpdate != null}" class="version-pill update-available"
+					th:href="@{/app/settings(tab='system')}" th:title="#{topbar.updateAvailableTitle}"
+					th:text="#{topbar.updateAvailable(${availableUpdate})}">Nova versão disponível</a>
 		</div>
 		<div class="watch-status" th:if="${inventoryWatch.configured()}"
 				th:classappend="${inventoryWatch.running()} ? 'running' : 'stopped'">

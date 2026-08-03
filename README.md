@@ -95,15 +95,30 @@ progress") until it is killed.
 ## Updating
 
 An installed copy checks whether a newer version has been published — a couple of minutes after it
-starts, then once a day — and the settings screen has a *Check now* alongside it. When one is
-found, the screen offers to install it: the installer is downloaded into the workspace, its
-SHA-256 is compared against the one published beside it, and only then is it started. A file that
-does not match is deleted rather than kept, because an installer of unknown provenance sitting
-under the name of a real release is worse than no download at all.
+starts, then every fifteen minutes — and the settings screen has a *Check now* alongside it. When
+one is found it is announced where it will actually be seen: a badge next to the version in the top
+bar of every screen, and the tray icon's tooltip and a balloon. Once per version, not once per
+check — the same notice four times an hour is not a reminder, it is a reason to turn notifications
+off.
 
-Installing ends the run, and the screen says so before it happens. The MSI replaces the files the
-application is executing from, so it cannot finish while the application is up; the shutdown is the
-graceful one the tray's *Exit* uses, so the embedded PostgreSQL is stopped rather than left behind.
+Fifteen minutes is four requests an hour against an endpoint that allows sixty from an address that
+does not authenticate. A minute would sit exactly on that ceiling, and the first thing to share the
+address would push it over — after which the answer is a refusal and updates silently stop being
+found. The interval is `nimbus-file-manager.update.check-interval`, so a test can lower it.
+
+Installing asks first, saying the application will close and reopen. The download then runs in the
+background with its progress on the screen: it is over a hundred megabytes, and holding the request
+until it landed left the browser on a blank minute. The SHA-256 is compared against the one
+published beside the installer, and only then is it started. A file that does not match is deleted
+rather than kept, because an installer of unknown provenance sitting under the name of a real
+release is worse than no download at all.
+
+The run then ends, because the MSI replaces the files it is executing from — through the same
+graceful path the tray's *Exit* uses, so the embedded PostgreSQL is stopped rather than left
+behind. What survives the process is a small script: it waits for the installer, deletes it, and
+**opens the application again**. Neither half is a nicety. Without the relaunch an update ends with
+the window gone and nothing back, which reads as a crash; without the delete, every update leaves
+another hundred-megabyte installer in the workspace forever.
 
 **Only releases whose `MAJOR.MINOR.PATCH` moved are offered.** Windows Installer records three
 fields, so two releases differing only in the build are the same version to the machine that would
@@ -1442,8 +1457,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2596 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.46% instruction, 92.25% branch, 97.98% line, 98.87% method, 100.00% class
+Tests:       2617 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.47% instruction, 92.26% branch, 97.99% line, 98.87% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1627,7 +1642,26 @@ target/pit-reports/index.html
 
 ## License
 
-This project is licensed under the MIT License.
+Nimbus File Manager is source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE):
+
+An [unofficial Brazilian Portuguese translation](LICENSE.pt-BR.md) is available
+for convenience. The English license remains the controlling text.
+
+- Personal, noncommercial use is permitted.
+- Use by charitable organizations, educational institutions, public research,
+  public safety or health organizations, environmental protection organizations,
+  government institutions, and autarchies is permitted.
+- Commercial use, including use in a business and commercial competing products
+  or services, requires a separate paid commercial license.
+
+Commercial licensing inquiries may be submitted through the project
+[repository](https://github.com/JorgeFrancisco/Nimbus-File-Manager).
+
+This is a source-available license, not an OSI-approved open-source license.
+Copies and versions released before August 3, 2026 remain under the MIT terms
+that accompanied them. The relicensing does not revoke permissions already
+granted for those earlier versions.
 
 ## Author
 

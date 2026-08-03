@@ -41,6 +41,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoData
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
@@ -50,7 +51,9 @@ import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.LocaleConfig;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcConfig;
+import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateInstallSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateStatus;
+import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdatePhase;
 import br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web.UpdateSettingsModel;
 
 /**
@@ -107,6 +110,9 @@ class SettingsPageRenderTest {
 	// Dependencies of the MVC interceptors and of the settings advices the slice
 	// always loads, not of the controller under test. The metadata advice is kept
 	// (not filtered out) because the page renders its panel too.
+	@MockitoBean
+	private UpdateCheckService updateCheckService;
+
 	@MockitoBean
 	private AppUserRepository appUserRepository;
 
@@ -192,6 +198,8 @@ class SettingsPageRenderTest {
 			Model model = invocation.getArgument(0);
 
 			model.addAttribute("updateStatus", new UpdateStatus("6.0.0.147", false, null, null, true, false));
+			model.addAttribute("updateProgress",
+					new UpdateInstallSnapshot(UpdatePhase.IDLE, false, 0, -1, -1, -1, null));
 
 			return null;
 		}).when(updateSettingsModel).addTo(any(), any());

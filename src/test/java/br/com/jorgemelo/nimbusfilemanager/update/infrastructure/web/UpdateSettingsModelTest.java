@@ -12,6 +12,7 @@ import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UpdateProperties;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallProgress;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.PublishedRelease;
@@ -69,7 +70,8 @@ class UpdateSettingsModelTest {
 	private UpdateStatus assemble(UpdateProperties properties) {
 		Model model = new ConcurrentModel();
 
-		new UpdateSettingsModel(updateCheckService, updateInstallService, properties).addTo(model, null);
+		new UpdateSettingsModel(updateCheckService, updateInstallService, properties, new UpdateInstallProgress())
+				.addTo(model, null);
 
 		return (UpdateStatus) model.getAttribute("updateStatus");
 	}

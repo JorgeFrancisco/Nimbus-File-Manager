@@ -11,6 +11,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UpdateProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallProgress;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateStatus;
@@ -30,13 +31,15 @@ public class UpdateSettingsModel implements SettingsSectionModel {
 	private final UpdateCheckService updateCheckService;
 	private final UpdateInstallService updateInstallService;
 	private final UpdateProperties updateProperties;
+	private final UpdateInstallProgress progress;
 
 	@Autowired
 	public UpdateSettingsModel(UpdateCheckService updateCheckService, UpdateInstallService updateInstallService,
-			UpdateProperties updateProperties) {
+			UpdateProperties updateProperties, UpdateInstallProgress progress) {
 		this.updateCheckService = updateCheckService;
 		this.updateInstallService = updateInstallService;
 		this.updateProperties = updateProperties;
+		this.progress = progress;
 	}
 
 	@Override
@@ -49,5 +52,9 @@ public class UpdateSettingsModel implements SettingsSectionModel {
 						update.map(AvailableUpdate::published).orElse(null),
 						update.map(found -> found.release().page()).orElse(null),
 						updateProperties.enabled() && installed.isPresent(), updateInstallService.canInstall()));
+
+		// The install outlives the request that started it, so the screen reads its
+		// state here rather than from a flash attribute that only existed once.
+		model.addAttribute("updateProgress", progress.snapshot());
 	}
 }

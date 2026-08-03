@@ -34,8 +34,11 @@ public final class UpdateInstallation {
 	 * @param release the release to fetch
 	 * @param folder where the installer is written, created by the caller
 	 * @param downloader how the files are fetched
+	 * @param onVerifying called once the bytes are in and the comparison starts,
+	 * so the screen stops showing a download that already finished
 	 */
-	public static PreparedInstaller prepare(PublishedRelease release, Path folder, ReleaseDownloader downloader) {
+	public static PreparedInstaller prepare(PublishedRelease release, Path folder, ReleaseDownloader downloader,
+			Runnable onVerifying) {
 		Path installer = folder.resolve(release.installerName());
 
 		try {
@@ -43,6 +46,8 @@ public final class UpdateInstallation {
 		} catch (IOException _) {
 			return refused(UpdateOutcome.DOWNLOAD_FAILED);
 		}
+
+		onVerifying.run();
 
 		Optional<String> expected = expected(release, downloader);
 

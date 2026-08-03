@@ -31,6 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.security.application.LogoutAwareAccess
 import br.com.jorgemelo.nimbusfilemanager.security.application.OAuth2LoginSuccessHandler;
 import br.com.jorgemelo.nimbusfilemanager.security.application.TwoFactorAuthenticationSuccessHandler;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.AppViewModelAdvice;
 
@@ -64,6 +65,9 @@ class SecurityConfigTest {
 
 	@MockitoBean
 	private AppSettingService appSettingService;
+
+	@MockitoBean
+	private UpdateCheckService updateCheckService;
 
 	@MockitoBean
 	private AppUserRepository appUserRepository;

@@ -29,7 +29,11 @@ releases do repositório, e a verificação pode ser desligada.
 Consequências dessa escolha, todas deliberadas:
 
 1. **Desligar é resposta de primeira classe.** `nimbus-file-manager.update.enabled=false` impede
-   qualquer conexão — não é um contorno, é um modo de operação suportado.
+   qualquer conexão — não é um contorno, é um modo de operação suportado. O intervalo também é
+   configurável (`nimbus-file-manager.update.check-interval`); o default é quinze minutos, que são
+   quatro requisições por hora contra um limite de sessenta por endereço não autenticado. Um
+   intervalo de um minuto ficaria exatamente no teto, e ao estourá-lo a resposta passa a ser uma
+   recusa — o verificador pararia de achar atualizações sem que nada dissesse isso.
 2. **Nenhum identificador de instalação é enviado.** Sem id, sem contador, sem telemetria. A
    requisição é indistinguível de alguém abrindo a página de releases no navegador.
 3. **A versão instalada não trafega.** O servidor responde qual é a última; quem compara é a

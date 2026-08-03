@@ -45,15 +45,17 @@ public class UpdateInstallService {
 	private final UpdateInstallProcessRunner processRunner;
 	private final WorkspaceManager workspaceManager;
 	private final ApplicationShutdown applicationShutdown;
+	private final UpdateInstallProgress progress;
 
 	public UpdateInstallService(UpdateCheckService updateCheckService, ReleaseDownloader releaseDownloader,
 			UpdateInstallProcessRunner processRunner, WorkspaceManager workspaceManager,
-			ApplicationShutdown applicationShutdown) {
+			ApplicationShutdown applicationShutdown, UpdateInstallProgress progress) {
 		this.updateCheckService = updateCheckService;
 		this.releaseDownloader = releaseDownloader;
 		this.processRunner = processRunner;
 		this.workspaceManager = workspaceManager;
 		this.applicationShutdown = applicationShutdown;
+		this.progress = progress;
 	}
 
 	/**
@@ -94,7 +96,8 @@ public class UpdateInstallService {
 			return UpdateOutcome.DOWNLOAD_FAILED;
 		}
 
-		PreparedInstaller prepared = UpdateInstallation.prepare(update.get().release(), folder, releaseDownloader);
+		PreparedInstaller prepared = UpdateInstallation.prepare(update.get().release(), folder, releaseDownloader,
+				progress::verifying);
 
 		if (prepared.refusal() != null) {
 			log.warn("The update to {} was not installed: {}", update.get().published(), prepared.refusal());
@@ -106,6 +109,8 @@ public class UpdateInstallService {
 	}
 
 	private UpdateOutcome start(Path installer, AvailableUpdate update) {
+		progress.starting();
+
 		try {
 			processRunner.start(installer);
 		} catch (IOException exception) {

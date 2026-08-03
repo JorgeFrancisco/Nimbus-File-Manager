@@ -38,6 +38,7 @@ class UpdateInstallServiceTest {
 	private final UpdateInstallProcessRunner processRunner = Mockito.mock(UpdateInstallProcessRunner.class);
 	private final WorkspaceManager workspaceManager = Mockito.mock(WorkspaceManager.class);
 	private final ApplicationShutdown applicationShutdown = Mockito.mock(ApplicationShutdown.class);
+	private final UpdateInstallProgress progress = new UpdateInstallProgress();
 
 	@Test
 	void refusesWhenNothingWasFound() throws IOException {
@@ -153,13 +154,13 @@ class UpdateInstallServiceTest {
 
 	private UpdateInstallService service(ReleaseDownloader downloader) {
 		return new UpdateInstallService(updateCheckService, downloader, processRunner, workspaceManager,
-				applicationShutdown);
+				applicationShutdown, progress);
 	}
 
 	/** Answers as a Windows run would, whatever this machine is. */
 	private UpdateInstallService onWindows(ReleaseDownloader downloader) {
 		return new UpdateInstallService(updateCheckService, downloader, processRunner, workspaceManager,
-				applicationShutdown) {
+				applicationShutdown, progress) {
 
 			@Override
 			boolean installable() {
@@ -174,7 +175,7 @@ class UpdateInstallServiceTest {
 		}
 
 		return new UpdateInstallService(updateCheckService, downloader, processRunner, workspaceManager,
-				applicationShutdown) {
+				applicationShutdown, progress) {
 
 			@Override
 			boolean installable() {

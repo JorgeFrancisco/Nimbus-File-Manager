@@ -15,6 +15,7 @@ import java.time.Duration;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.update.application.ReleaseDownloader;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallProgress;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -39,9 +40,11 @@ public class HttpReleaseDownloader implements ReleaseDownloader {
 	private static final String PARTIAL_SUFFIX = ".part";
 	private static final int BUFFER = 64 * 1024;
 
+	private final UpdateInstallProgress progress;
 	private final HttpClient httpClient;
 
-	public HttpReleaseDownloader() {
+	public HttpReleaseDownloader(UpdateInstallProgress progress) {
+		this.progress = progress;
 		this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT)
 				.followRedirects(HttpClient.Redirect.NORMAL).build();
 	}
@@ -58,6 +61,8 @@ public class HttpReleaseDownloader implements ReleaseDownloader {
 			throw new IOException("Download answered HTTP " + response.statusCode() + ": " + url);
 		}
 
+		progress.startDownload(response.headers().firstValueAsLong("content-length").orElse(-1));
+
 		try (InputStream source = response.body(); OutputStream sink = Files.newOutputStream(partial)) {
 			byte[] buffer = new byte[BUFFER];
 
@@ -65,6 +70,8 @@ public class HttpReleaseDownloader implements ReleaseDownloader {
 
 			while ((read = source.read(buffer)) > 0) {
 				sink.write(buffer, 0, read);
+
+				progress.addDownloadedBytes(read);
 			}
 		}
 

@@ -32,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebui
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
+import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.LocaleConfig;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcConfig;
@@ -73,6 +74,9 @@ class SettingsMetadataRebuildFormTest {
 
 	// Dependencies of the MVC interceptors the slice always loads, not of the
 	// controller under test.
+	@MockitoBean
+	private UpdateCheckService updateCheckService;
+
 	@MockitoBean
 	private AppUserRepository appUserRepository;
 
