@@ -46,7 +46,7 @@ public class SecureFileMove {
 	 * applies its own rollback/audit policy (mirrors the organization executor).
 	 */
 	public void move(Path source, Path target, boolean overwrite) throws IOException {
-		MoveBaseline baseline = verifier.capture(source);
+		MoveBaseline baseline = capture(source);
 
 		// Announced before the file actually moves, because the folder watcher can
 		// poll the event milliseconds later: every move through here is the
@@ -70,6 +70,32 @@ public class SecureFileMove {
 		verifier.verify(source, target, baseline);
 
 		reportIfTheMoveLeftSomethingBehind(source, target);
+	}
+
+	/**
+	 * The baseline is read from the file itself, so anything holding it open fails
+	 * here - before anything has moved. That is the normal case on a real desktop:
+	 * a photo viewer, an antivirus, a sync client.
+	 *
+	 * <p>
+	 * {@code FileHashService} reports an unreadable file as an
+	 * {@link IllegalStateException}, which this method does not declare and its
+	 * callers do not catch. The rename on the Files screen catches
+	 * {@link IOException} and turned that into an error page instead of "the file
+	 * is in use"; the organization executor survived only because it catches
+	 * everything. Translating it back here keeps the promise the signature makes,
+	 * for every caller at once.
+	 */
+	private MoveBaseline capture(Path source) throws IOException {
+		try {
+			return verifier.capture(source);
+		} catch (IllegalStateException exception) {
+			if (exception.getCause() instanceof IOException cause) {
+				throw new IOException("Could not read " + source + " to capture the move baseline", cause);
+			}
+
+			throw exception;
+		}
 	}
 
 	/**

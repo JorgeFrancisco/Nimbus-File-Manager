@@ -4,7 +4,7 @@ Documento **vivo** de sugestões, não de decisões. O que virar decisão desce 
 `docs/adr/`; o que virar estado atual pertence ao README.
 
 **Item concluído é removido daqui**, e não marcado como feito: a lista existe para dizer o que falta,
-e histórico é assunto do git. Os identificadores (`A4`, `P7`, …) **não são renumerados** quando algo
+e histórico é assunto do git. Os identificadores (`A5`, `P7`, …) **não são renumerados** quando algo
 sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item — e o que ele era
 se acha em `git log -S"P4." -- docs/evolucao-arquitetura-e-produto.md`, que é onde vive o histórico.
 
@@ -18,14 +18,6 @@ distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambien
 ## Arquitetura
 
 ### Complexidade média — semanas
-
-**A4. Poucos testes de integração para um produto que move arquivos.** A lógica está bem coberta por
-unidade, e há 18 testes de integração — mas só 4 encostam num sistema de arquivos real, e nenhum
-cobre o que de fato quebra na vida real: atributo somente-leitura, caminho longo, arquivo bloqueado
-por outro processo, unidade removida no meio da operação, acentuação, links. Hoje isso só aparece em
-produção — na máquina de quem instalou.
-*Entrega:* confiança para distribuir. Um distribuidor não pode descobrir com o usuário final que
-pasta de celular vem com `ReadOnly`.
 
 **A5. `shared` nunca passou por revisão de dono.** São 100 classes, incluindo `CatalogFile`,
 `Execution`, `Movement`, `Photo`, `Video` — as entidades centrais. Não é mais um outlier em tamanho
@@ -96,7 +88,7 @@ O produto está bom o suficiente para escolher uma direção; tentar as três ao
 real desta fase.
 
 **Caminho 1 — Ferramenta de curadoria séria.** Público: quem tem 100 mil fotos e um problema de
-organização. Prioriza A4, P7. O diferencial é a integridade: mover arquivo com verificação
+organização. Prioriza P7. O diferencial é a integridade: mover arquivo com verificação
 byte a byte, undo, trilha de auditoria. Ninguém no mercado de consumo faz isso.
 
 **Caminho 2 — Substituto do Google Fotos local.** Público: família que quer sair da nuvem. Prioriza
@@ -109,9 +101,9 @@ maior disposição a pagar, e é onde a arquitetura atual já está mais pronta.
 
 Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe. Os dois gargalos que eram
 comuns aos três já saíram: instalar exigia criar role no PostgreSQL, e depois a versão instalada era
-a versão eterna. O próximo comum é **A4**, pelo mesmo motivo que valeu para os anteriores — um produto
-que se instala e se atualiza sozinho passa a rodar em discos que ninguém viu, e é neles que ele move
-arquivo insubstituível.
+a versão eterna, e o move sobre disco hostil passou a ser testado onde ele realmente falha. Não sobra
+um gargalo comum aos três: daqui em diante a ordem depende do caminho escolhido, e **P7** é o que
+rende em dois deles.
 
 ---
 
@@ -119,9 +111,8 @@ arquivo insubstituível.
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **A4** (integração com o sistema de arquivos) — antes de expor o produto a discos que você nunca viu.
-2. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-3. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
+2. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
 
 ## O que eu não recomendaria agora
 
@@ -135,5 +126,5 @@ Dizer não também é sugestão:
 - **Trocar o PostgreSQL.** Ele sustenta o modelo com folga, e o motivo histórico para cogitar a
   troca — obrigar quem instala a instalar um servidor antes — deixou de existir: a aplicação
   baixa o servidor, cria o cluster e o desliga no fechamento, sem ninguém saber que ele está ali.
-- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o produto ter sido
-  exposto a discos de estranhos (A4) é esforço mal colocado.
+- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o catálogo ser
+  explorável (P7) é esforço mal colocado: primeiro se acha o que já se tem.

@@ -201,6 +201,45 @@ class SecureFileMoveTest {
 		assertThat(Files.exists(target)).isTrue();
 	}
 
+	/**
+	 * A file held open by another process fails while the baseline is being read,
+	 * and the hash service reports that as an {@code IllegalStateException} - which
+	 * this method does not declare. Callers that catch {@code IOException} (the
+	 * rename on the Files screen) saw it escape as an error page, so it is
+	 * translated back into what the signature promises.
+	 */
+	@Test
+	void reportsAnUnreadableSourceAsAnIoFailureSoCallersCanCatchIt(@TempDir Path dir) throws IOException {
+		Path source = Files.writeString(dir.resolve("in-use.txt"), "payload");
+
+		Path target = dir.resolve("target.txt");
+
+		when(verifier.capture(source)).thenThrow(
+				new IllegalStateException("Could not read file", new IOException("locked by another process")));
+
+		assertThatThrownBy(() -> secureFileMove.move(source, target, false))
+				.isInstanceOf(IOException.class).hasRootCauseMessage("locked by another process");
+
+		assertThat(Files.exists(source)).isTrue();
+	}
+
+	/**
+	 * The translation above is for I/O and nothing else: a state failure with no
+	 * I/O behind it is a defect, and dressing it as an {@code IOException} would
+	 * send it to the branch that reports "the file is in use" to the user.
+	 */
+	@Test
+	void leavesAFailureThatIsNotAboutIoAsItIs(@TempDir Path dir) throws IOException {
+		Path source = Files.writeString(dir.resolve("source.txt"), "payload");
+
+		Path target = dir.resolve("target.txt");
+
+		when(verifier.capture(source)).thenThrow(new IllegalStateException("Hash algorithm not available: SHA-256"));
+
+		assertThatThrownBy(() -> secureFileMove.move(source, target, false))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining("Hash algorithm");
+	}
+
 	@Test
 	void rollbackMovesTheFileBackAndReportsSuccess(@TempDir Path dir) throws IOException {
 		Path moved = Files.writeString(dir.resolve("moved.txt"), "payload");
