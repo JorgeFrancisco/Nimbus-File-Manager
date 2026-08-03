@@ -1227,6 +1227,16 @@ the `pom.xml` and must stay that way: Windows decides "upgrade this installation
 "install a second one" by that code alone, and `jpackage` invents a fresh one per build when it
 is absent.
 
+Installing it is a double click on the `.msi`: Programs and Features lists the application, the
+Start menu entry opens it, and the uninstaller removes it. A machine that answers that with
+**2502 and 2503 followed by 1603** is not describing a broken package — those codes mean "called
+out of sequence", which is the symptom of the `msiexec` server failing to elevate, and the cause
+is local. Any other MSI is the cheapest way to tell the two apart: one that fails the same way
+proves the machine is at fault. The case seen here was the `Users` group having no write
+permission on `C:\Windows\Temp`, where that server creates its own temporary files, fixed with
+`icacls C:\Windows\Temp /grant '*S-1-5-32-545:(CI)(S,WD,AD,X)'`. Every failed attempt also leaves
+an `msiexec` behind, which answers 1500 ("another installation is in progress") until it is killed.
+
 ### No console, an icon by the clock
 
 The packaged application opens no window of its own. What it opens is a tray icon, installed from

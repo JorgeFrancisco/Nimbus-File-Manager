@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  # A tag is the only thing that publishes. Pushing v6.0.0.143 builds the MSI from that
+  # exact commit and hangs it under a release named after the tag, which is what the
+  # /releases/latest endpoint then answers with - the question an installed copy will one
+  # day ask to find out whether anything newer than itself exists.
+  push:
+    tags: ['v*']
+  # Building without publishing, landing the MSI as a workflow artifact instead. The
+  # image, WiX and jpackage had only ever run on one developer's machine; a pipeline
+  # broken on a runner is far cheaper to find here than on a tag, which cannot be pushed
+  # a second time.
+  workflow_dispatch:
+
+permissions:
+  contents: write # creating a release writes to the repository
+
+jobs:
+  msi:
+    # jpackage builds the installer of the platform it runs on and no other, so the MSI
+    # can only come from Windows. The suite is not run here: the integration tests drive
+    # Testcontainers, which needs the Linux Docker the CI job already has - a tag points
+    # at a commit on main, which that job has tested.
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # WiX 4+ is published as a .NET tool as well as the installer the README points at,
+      # and on a runner the tool feed is the dependable one - winget is not reliably
+      # present, and the feed pins an exact version where winget resolves one.
+      #
+      # The two extensions are the part that bites: jpackage invokes "wix build" with
+      # -ext WixToolset.Util.wixext -ext WixToolset.UI.wixext and does not install them,
+      # and the build then fails inside wix without naming what is missing. The installer
+      # bundles them; the .NET tool does not. Their version has to match the toolset, so
+      # they are pinned too - asking by name alone fetches the newest from NuGet, which a
+      # v5 wix.exe refuses.
+      - name: Install WiX 5 and the extensions jpackage needs
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          wix --version
+          wix extension list --global
+
+      # A tag that disagrees with <version> would publish an installer whose name, whose
+      # Programs and Features entry and whose manifest all contradict the release holding
+      # it - and the update check reads the tag, so the disagreement would be exactly the
+      # number it compares. Stopping here costs one job; noticing later costs a published
+      # release that has to be deleted.
+      - name: Check the tag against the project version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $pom = ([xml](Get-Content pom.xml)).project.version
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          Write-Host "pom=$pom tag=$tag"
+          if ($pom -ne $tag) {
+            throw "Tag $tag does not match the project version $pom"
+          }
+
+      - name: Build the application image and the MSI
+        run: .\mvnw.cmd -B -Pinstaller,installer-msi -DskipTests package
+
+      # A checksum beside the file, because a release is a public download over a network
+      # nobody here controls, and whatever ends up fetching it automatically has to be
+      # able to tell that the bytes it got are the bytes that were published.
+      - name: Checksum the MSI
+        run: |
+          $msi = Get-ChildItem "target\installer\*.msi" | Select-Object -First 1
+          if (-not $msi) {
+            throw "The build produced no MSI in target/installer"
+          }
+          $hash = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($msi.Name)" | Out-File "$($msi.FullName).sha256" -Encoding ascii
+          Write-Host "$hash  $($msi.Name)"
+
+      - name: Upload the MSI as a workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nimbus-msi
+          path: |
+            target/installer/*.msi
+            target/installer/*.sha256
+          retention-days: 14
+
+      # Created with its files in the same command rather than created and then filled: a
+      # release that exists without its installer starts answering /releases/latest the
+      # moment it appears, and an update check reading it would point every installation
+      # at a download that is not there.
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $files = Get-ChildItem "target\installer\*.msi", "target\installer\*.sha256"
+          gh release create "${{ github.ref_name }}" $files.FullName `
+            --title "${{ github.ref_name }}" `
+            --generate-notes
