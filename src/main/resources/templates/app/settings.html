@@ -240,7 +240,9 @@
 				</form>
 			</div>
 		</section>
-		<section id="update-admin" class="panel section">
+		<section id="update-admin" class="panel section" data-operation-panel="update"
+				th:attr="data-operation-running=${updateProgress.running()},
+					data-update-phase=${updateProgress.phase().name()}">
 			<h2 th:text="#{settings.update.title}">Atualização</h2>
 			<p class="muted" th:text="#{settings.update.intro}">O Nimbus verifica se existe uma versao mais recente publicada.</p>
 

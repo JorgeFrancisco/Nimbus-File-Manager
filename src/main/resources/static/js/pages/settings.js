@@ -90,12 +90,44 @@
 				var fresh = document_.querySelector('[data-operation-panel="' + current.dataset.operationPanel + '"]');
 				if (fresh) current.replaceWith(fresh);
 			});
+			waitForRestartAfterUpdate(); // the phase only appears in a refreshed panel
 			monitorOperationPanels(); // reschedules itself only while an operation is still running
 		}).catch(function () {
 			// Network error or expired session (redirect to login): fall back to
 			// the old full reload, which lands wherever the server sends us.
 			window.location.reload();
 		});
+	}
+
+	// An update is the one operation that takes the server down with it: the
+	// installer replaces the files this process runs from, so the application
+	// closes, the installer runs, and it opens again by itself. Without this the
+	// browser is left showing the page of a server that died - the update worked
+	// and the screen never said so, which is indistinguishable from a crash.
+	function waitForRestartAfterUpdate() {
+		var panel = document.querySelector('[data-update-phase="STARTING"]');
+		if (!panel || waitForRestartAfterUpdate.watching) return;
+		waitForRestartAfterUpdate.watching = true;
+		var notice = document.createElement("div");
+		notice.className = "alert";
+		notice.setAttribute("role", "status");
+		notice.textContent = t("js.settings.updateRestarting");
+		panel.appendChild(notice);
+		// Health is the one endpoint that answers without a session, which matters
+		// because the restart drops the old one: polling anything else would answer
+		// the login page and read as "back" while the application was still down.
+		var attempt = function () {
+			fetch("/actuator/health", { cache: "no-store" }).then(function (response) {
+				if (!response.ok) throw new Error();
+				window.location.reload();
+			}).catch(function () {
+				window.setTimeout(attempt, 3000);
+			});
+		};
+		// Waits before the first attempt: the server is still up for a few seconds
+		// after the answer, and finding it alive now would reload into the version
+		// being replaced.
+		window.setTimeout(attempt, 8000);
 	}
 
 	// The rebuild choices belong to the user, not to a rebuild, so they are stored
@@ -142,6 +174,7 @@
 
 	document.addEventListener("DOMContentLoaded", function () {
 		restoreScrollPosition();
+		waitForRestartAfterUpdate();
 		monitorOperationPanels();
 		bindMetadataRebuildPreferences();
 		bindGeoDisableDialog();
