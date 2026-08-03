@@ -41,6 +41,13 @@ public final class ExecutionMessages {
 	public static final String RECONCILE_REPAIRED = "backend.execution.reconcileRepaired";
 	public static final String OPERATION_FAILED = "backend.execution.operationFailed";
 
+	/**
+	 * Asked before undoing a run, and the only code here that is not recorded on
+	 * an execution: it is text for a screen, resolved when the page is built, and
+	 * so has no factory pairing it with an {@code ExecutionMessage}.
+	 */
+	public static final String UNDO_CONFIRM = "backend.execution.undoConfirm";
+
 	private ExecutionMessages() {
 	}
 

@@ -4,8 +4,9 @@ Documento **vivo** de sugestões, não de decisões. O que virar decisão desce 
 `docs/adr/`; o que virar estado atual pertence ao README.
 
 **Item concluído é removido daqui**, e não marcado como feito: a lista existe para dizer o que falta,
-e histórico é assunto do git. Os identificadores (`A4`, `P2`, …) **não são renumerados** quando algo
-sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item.
+e histórico é assunto do git. Os identificadores (`A4`, `P7`, …) **não são renumerados** quando algo
+sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item — e o que ele era
+se acha em `git log -S"P4." -- docs/evolucao-arquitetura-e-produto.md`, que é onde vive o histórico.
 
 Escrito a partir de uma varredura do código em 2026-07-31, com o produto na versão 5.26. O critério
 que orienta todas as recomendações é a intenção declarada: **o produto está amadurecendo para ser
@@ -59,20 +60,7 @@ segundo plano" — e essa percepção define review de produto.
 
 ## Produto
 
-### Complexidade baixa — dias
-
-**P2. Duas ações destrutivas ainda confirmam sem dizer o tamanho do estrago.** Excluir duplicados e
-apagar da quarentena já abrem diálogo com contagem. Faltam as duas de organização: *Executar* e
-*Desfazer* pedem confirmação com uma frase fixa (`org.executeConfirm`, `execution.undoConfirm`), sem
-dizer quantos arquivos serão movidos nem quanto isso pesa.
-*Entrega:* consistência e menos arrependimento — barato de fazer, alto valor percebido.
-
 ### Complexidade média — semanas
-
-**P5. Não há atualização.** Subir de versão é trocar o jar e torcer para as migrations rodarem. Não
-há verificação de versão nova, nem aviso, nem rollback.
-*Entrega:* ciclo de vida. Software distribuído que não sabe se atualizar envelhece na máquina do
-usuário — e a versão instalada vira a versão eterna.
 
 **P7. Só duas telas usam o que o catálogo sabe.** Timeline e Mapa exploram metadados; o resto é
 gestão. Há riqueza subaproveitada: câmera, dimensões, duração, subcategoria, data confiável.
@@ -119,9 +107,11 @@ P8, P9, A7. Exige a camada de encantamento e multiusuário de verdade. Concorrê
 cartão de memória toda semana. Prioriza A6 (API), P7, regras de ingestão automáticas. Menor público,
 maior disposição a pagar, e é onde a arquitetura atual já está mais pronta.
 
-Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe. O gargalo que era comum
-aos três — instalar exigia criar role no PostgreSQL — deixou de existir; o próximo comum é **P5**,
-porque um produto instalável que não sabe se atualizar envelhece na máquina de quem o instalou.
+Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe. Os dois gargalos que eram
+comuns aos três já saíram: instalar exigia criar role no PostgreSQL, e depois a versão instalada era
+a versão eterna. O próximo comum é **A4**, pelo mesmo motivo que valeu para os anteriores — um produto
+que se instala e se atualiza sozinho passa a rodar em discos que ninguém viu, e é neles que ele move
+arquivo insubstituível.
 
 ---
 
@@ -145,5 +135,5 @@ Dizer não também é sugestão:
 - **Trocar o PostgreSQL.** Ele sustenta o modelo com folga, e o motivo histórico para cogitar a
   troca — obrigar quem instala a instalar um servidor antes — deixou de existir: a aplicação
   baixa o servidor, cria o cluster e o desliga no fechamento, sem ninguém saber que ele está ali.
-- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o produto saber se
-  atualizar (P5) e antes de ter sido exposto a discos de estranhos (A4) é esforço mal colocado.
+- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o produto ter sido
+  exposto a discos de estranhos (A4) é esforço mal colocado.

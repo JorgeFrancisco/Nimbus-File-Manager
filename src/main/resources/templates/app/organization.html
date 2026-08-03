@@ -74,7 +74,7 @@
 		<div class="actions">
 			<button type="submit" th:formaction="@{/app/organization/preview}" th:text="#{org.preview}">Preview</button>
 			<button class="secondary" type="submit" th:formaction="@{/app/organization/execute}"
-					th:attr="data-confirm=#{org.executeConfirm}" th:text="#{org.execute}">Executar</button>
+					th:attr="data-confirm=${executeConfirmation}" th:text="#{org.execute}">Executar</button>
 		</div>
 	</form>
 	<div th:replace="~{fragments/folder-picker :: folderPicker}"></div>

@@ -1,0 +1,24 @@
+package br.com.jorgemelo.nimbusfilemanager.organization.application.constants;
+
+/**
+ * The organization message codes resolved from the bundles, kept apart from
+ * {@link OrganizationConstants} because these are keys of user-facing text
+ * rather than parameters of the feature.
+ *
+ * <p>
+ * The two confirmations exist as a pair because the answer to "how much is
+ * about to move?" depends on whether a preview has been run, and choosing
+ * between them is a decision - which belongs here and in the controller, never
+ * in the template.
+ */
+public final class OrganizationMessages {
+
+	/** Asked before a preview, when nobody knows yet how much would move. */
+	public static final String EXECUTE_CONFIRM = "backend.organization.executeConfirm";
+
+	/** Asked with a plan in hand: how many files, and how much they weigh. */
+	public static final String EXECUTE_CONFIRM_PLANNED = "backend.organization.executeConfirmPlanned";
+
+	private OrganizationMessages() {
+	}
+}

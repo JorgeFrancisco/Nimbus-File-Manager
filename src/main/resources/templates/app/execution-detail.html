@@ -39,7 +39,7 @@
 				<i class="bi bi-arrow-repeat"></i><span th:text="#{action.reprocess}">Reprocessar</span></a>
 			<form th:if="${canUndo}" th:action="@{/app/executions/{id}/undo(id=${execution.executionId()})}" method="post">
 				<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-				<button type="submit" th:attr="data-confirm=#{execution.undoConfirm}" th:text="#{action.undo}">Undo</button>
+				<button type="submit" th:attr="data-confirm=${undoConfirmation}" th:text="#{action.undo}">Undo</button>
 			</form>
 		</div>
 	</div>

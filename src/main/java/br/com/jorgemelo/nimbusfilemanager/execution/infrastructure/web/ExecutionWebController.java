@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.web;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -11,20 +12,23 @@ import org.springframework.web.bind.annotation.PostMapping;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionDetailLabels;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 @Controller
-public class ExecutionWebController {
+public class ExecutionWebController extends LocalizedComponent {
 
 	private static final String ATTR_EXECUTION = "execution";
 	private static final String ATTR_STEPS = "steps";
 	private static final String ATTR_ERRORS = "errors";
 	private static final String ATTR_MOVEMENTS = "movements";
 	private static final String ATTR_MOVEMENT_SUMMARY = "movementSummary";
+	private static final String ATTR_UNDO_CONFIRMATION = "undoConfirmation";
 	private static final String VIEW_EXECUTION_DETAIL = "app/execution-detail";
 	private static final String ORGANIZATION = ExecutionType.ORGANIZATION.name();
 	private static final Set<String> REPROCESSABLE_STATUSES = Set.of(ExecutionStatus.INTERRUPTED.name(),
@@ -110,5 +114,12 @@ public class ExecutionWebController {
 
 		model.addAttribute("canUndo", organization);
 		model.addAttribute("canReprocess", organization && REPROCESSABLE_STATUSES.contains(execution.status()));
+
+		// How much the undo will move back, resolved here for the same reason as the
+		// flags above: the screen shows a sentence, it does not build one. A run that
+		// recorded no moves still gets the question - undoing it is harmless, and a
+		// confirmation that says zero is more honest than one that says nothing.
+		model.addAttribute(ATTR_UNDO_CONFIRMATION,
+				message(ExecutionMessages.UNDO_CONFIRM, Objects.requireNonNullElse(execution.filesMoved(), 0)));
 	}
 }

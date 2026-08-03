@@ -33,6 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.SizeFormatter;
 
 class OrganizationWebControllerTest {
 
@@ -517,5 +518,47 @@ class OrganizationWebControllerTest {
 
 		Assertions.assertThat(view).isEqualTo("app/organization");
 		Assertions.assertThat(model).containsEntry("error", "Path outside roots.");
+	}
+
+	/**
+	 * Before a preview nothing has been counted, so the question cannot promise a
+	 * number - and inventing one would be worse than admitting it. What it can do
+	 * is point at the preview, which is where the number comes from.
+	 */
+	@Test
+	void theExecuteConfirmationAdmitsItDoesNotKnowTheSizeBeforeAPreview() {
+		OrganizationWebController controller = new OrganizationWebController(mock(OrganizationService.class),
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.organization(model);
+
+		Assertions.assertThat(model.get("executeConfirmation").toString()).contains("preview").doesNotContain("{0}");
+	}
+
+	/**
+	 * The point of the whole change: a destructive action that says how much it is
+	 * about to move. "Move 9600 files, 45.7 GB?" is a different decision from
+	 * "organize now?", and the difference is the reason somebody stops to think.
+	 */
+	@Test
+	void theExecuteConfirmationCountsTheFilesAndTheirWeightOncePlanned() {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		OrganizationWebController controller = new OrganizationWebController(organizationService,
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
+		UUID executionId = UUID.randomUUID();
+
+		OrganizationPlan plan = new OrganizationPlan("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT,
+				false, new OrganizationSummary(9600, 9600, 0, 0, 9600, 49_100_000_000L, 0, 0, 0), List.of());
+
+		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(plan);
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.previewResult(executionId, 0, 50, false, null, model);
+
+		String confirmation = model.get("executeConfirmation").toString();
+
+		Assertions.assertThat(confirmation).contains(SizeFormatter.format(49_100_000_000L)).contains("9")
+				.doesNotContain("{0}").doesNotContain("{1}");
 	}
 }

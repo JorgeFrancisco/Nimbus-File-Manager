@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallb
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationConstants;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationMessages;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Defaults;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationForm;
@@ -38,9 +39,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.NumberUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.SizeFormatter;
 
 @Controller
 public class OrganizationWebController extends LocalizedComponent {
+
+	/** Model attribute holding the sentence the Execute button asks before moving anything. */
+	private static final String EXECUTE_CONFIRMATION = "executeConfirmation";
 
 	private static final String INTERRUPTED = "INTERRUPTED";
 	private static final String CANCELLED = "CANCELLED";
@@ -293,6 +298,12 @@ public class OrganizationWebController extends LocalizedComponent {
 		model.addAttribute("size", safeSize(form.size()));
 		model.addAttribute("sizes", List.of(20, 50, 100));
 
+		// The confirmation before a preview cannot say how much will move, because
+		// nothing has been counted yet. addPlan replaces it with the sentence that
+		// can. Which of the two applies is decided here rather than in the template:
+		// the screen displays a sentence, it does not choose one.
+		model.addAttribute(EXECUTE_CONFIRMATION, message(OrganizationMessages.EXECUTE_CONFIRM));
+
 		prepareLocationModel(model, form.locationSubdivision(), form.locationMinConfidence(), form.locationFallback());
 	}
 
@@ -330,6 +341,12 @@ public class OrganizationWebController extends LocalizedComponent {
 		List<OrganizationItem> pageItems = items.subList(from, to);
 
 		model.addAttribute("plan", plan);
+
+		// Now there is a count and a weight, so the question stops being generic:
+		// "move 9,600 files, 412 GB?" is a different decision from "organize now?".
+		model.addAttribute(EXECUTE_CONFIRMATION, message(OrganizationMessages.EXECUTE_CONFIRM_PLANNED,
+				plan.summary().plannedMoves(), SizeFormatter.format(plan.summary().totalSizeBytes())));
+
 		model.addAttribute("previewItems", pageItems);
 		model.addAttribute("conflictTypeLabels", conflictTypeLabels());
 		model.addAttribute("page", page);

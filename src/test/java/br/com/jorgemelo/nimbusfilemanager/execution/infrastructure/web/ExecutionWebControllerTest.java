@@ -105,6 +105,26 @@ class ExecutionWebControllerTest {
 		Assertions.assertThat(model).containsEntry("canUndo", true).containsEntry("canReprocess", true);
 	}
 
+	/**
+	 * Undo moves files back, so the question has to say how many. The number comes
+	 * from the run itself and is resolved here, because the screen is not allowed
+	 * to build a sentence out of raw fields.
+	 */
+	@Test
+	void theUndoConfirmationSaysHowManyFilesComeBack() {
+		when(executionQueryService.get(ID)).thenReturn(new ExecutionResponse(1L, "ORGANIZATION", "FINISHED", NOW, NOW,
+				"src", null, 4200, 4200, 0, 3814, 0, 0, null, null, "ok", true));
+		when(executionQueryService.steps(ID)).thenReturn(List.of());
+		when(executionQueryService.errors(ID)).thenReturn(List.of());
+		when(executionQueryService.movements(ID)).thenReturn(List.of());
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.execution(ID, model);
+
+		Assertions.assertThat(model.get("undoConfirmation").toString()).contains("814").doesNotContain("{0}");
+	}
+
 	private ExecutionResponse response(String type, String status, Boolean executeFlag) {
 		return new ExecutionResponse(1L, type, status, NOW, NOW, "src", null, 1, 1, 0, 0, 0, 0, null, null, "ok",
 				executeFlag);
