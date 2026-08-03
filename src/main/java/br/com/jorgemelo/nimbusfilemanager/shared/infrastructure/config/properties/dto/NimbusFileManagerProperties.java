@@ -8,5 +8,5 @@ public record NimbusFileManagerProperties(
 
 		String workspace,
 
-		Tools tools, Inventory inventory, Api api, Security security, @DefaultValue Email email) {
+		Inventory inventory, Api api, Security security, @DefaultValue Email email) {
 }

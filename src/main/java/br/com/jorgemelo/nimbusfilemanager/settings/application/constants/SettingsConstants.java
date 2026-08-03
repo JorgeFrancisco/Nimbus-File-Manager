@@ -10,10 +10,6 @@ public final class SettingsConstants {
 
 	public static final String DEFAULT_TIMEZONE = "America/Sao_Paulo";
 	public static final String TIMEZONE = "nimbus-file-manager.timezone";
-	public static final String TOOL_FFPROBE = "nimbus-file-manager.tools.ffprobe";
-	public static final String TOOL_FFMPEG = "nimbus-file-manager.tools.ffmpeg";
-	public static final String TOOL_DOWNLOAD_URL = "nimbus-file-manager.tools.download-url";
-	public static final String TOOL_AUTO_INSTALL = "nimbus-file-manager.tools.auto-install";
 	public static final String API_MAX_PAGE_SIZE = "nimbus-file-manager.api.max-page-size";
 	public static final String API_DEFAULT_FOLDER_LIMIT = "nimbus-file-manager.api.default-folder-limit";
 	public static final String API_MAX_FOLDER_LIMIT = "nimbus-file-manager.api.max-folder-limit";

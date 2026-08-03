@@ -297,7 +297,7 @@ class DefaultUserInitializerTest {
 	}
 
 	private NimbusFileManagerProperties props(String username, String password, String resetPassword) {
-		return new NimbusFileManagerProperties(null, null, null, null,
+		return new NimbusFileManagerProperties(null, null, null,
 				new Security(0, 0, 0, true, username, password, resetPassword), null);
 	}
 }

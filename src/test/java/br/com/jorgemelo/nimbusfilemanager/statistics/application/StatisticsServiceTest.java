@@ -168,7 +168,7 @@ class StatisticsServiceTest {
 	}
 
 	private StatisticsService service() {
-		NimbusFileManagerProperties properties = new NimbusFileManagerProperties("C:/workspace", null,
+		NimbusFileManagerProperties properties = new NimbusFileManagerProperties("C:/workspace",
 				new Inventory(true, 60_000L), new Api(100, 2, 50), null, null);
 
 		// Mimics an unconfigured AppSettingService (no admin override stored), same as

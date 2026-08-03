@@ -127,7 +127,7 @@ class ReconcileSchedulerTest {
 	}
 
 	private NimbusFileManagerProperties properties() {
-		return new NimbusFileManagerProperties(null, null, new Inventory(false, 60_000L), null, null, null);
+		return new NimbusFileManagerProperties(null, new Inventory(false, 60_000L), null, null, null);
 	}
 
 	private OrganizationReconcileResponse response() {

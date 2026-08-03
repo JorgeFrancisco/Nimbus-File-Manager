@@ -11,19 +11,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolArchiveSource;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallProgress;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Downloads the published ffmpeg build over HTTP. The URL lives in
- * {@code AppSetting} rather than in code so a broken or relocated release can
- * be pointed elsewhere - including an internal mirror - without a new version
- * of the application.
+ * Downloads the published ffmpeg build over HTTP. The url arrives as a property
+ * rather than from the settings table, the same way the embedded PostgreSQL
+ * gets its own: a broken or relocated release can be pointed at a mirror
+ * without a new version of the application, and the value never becomes catalog
+ * data that a backup could carry onto a machine it does not describe.
  */
 @Slf4j
 @Component
@@ -34,12 +34,13 @@ public class FfmpegBuildSource implements ExternalToolArchiveSource {
 	private static final String ARCHIVE_FILE = "ffmpeg-build.zip";
 	private static final int BUFFER = 64 * 1024;
 
-	private final AppSettingService appSettingService;
+	private final String url;
 	private final ExternalToolInstallProgress progress;
 	private final HttpClient httpClient;
 
-	public FfmpegBuildSource(AppSettingService appSettingService, ExternalToolInstallProgress progress) {
-		this.appSettingService = appSettingService;
+	public FfmpegBuildSource(@Value("${nimbus-file-manager.tools.download-url:}") String url,
+			ExternalToolInstallProgress progress) {
+		this.url = url;
 		this.progress = progress;
 		this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT)
 				.followRedirects(HttpClient.Redirect.NORMAL).build();
@@ -47,9 +48,7 @@ public class FfmpegBuildSource implements ExternalToolArchiveSource {
 
 	@Override
 	public Path download(Path targetFolder) {
-		String url = appSettingService.stringValue(SettingsConstants.TOOL_DOWNLOAD_URL, "");
-
-		if (url.isBlank()) {
+		if (url == null || url.isBlank()) {
 			throw new IllegalStateException("No download URL configured for the external tools.");
 		}
 

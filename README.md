@@ -1134,28 +1134,33 @@ not used: photo EXIF is read in-process by metadata-extractor.
 
 ### Installing them
 
-On **Windows**, nothing has to be fetched by hand. A start that finds neither tool installs them
-by itself in the background, and the external-tools section of the settings screen has an
-install/update button for forcing it — including over an existing build, which the automatic run
-never touches. Either way the official FFmpeg package is downloaded, the executables and their
-DLLs are kept under `<workspace>/tools/ffmpeg/bin` and the rest is dropped. The package is GPL-licensed and is
-downloaded by the machine that runs the application — it is never shipped inside this project —
-and its `LICENSE.txt` is stored next to the binaries as `FFMPEG-LICENSE.txt`.
-
-The automatic install can be turned off on the same screen
-(`nimbus-file-manager.tools.auto-install`), for an installation that deliberately points at its
-own build or runs offline.
+On **Windows**, nothing has to be fetched by hand. Every start that finds this installation
+without its own copy downloads one in the background, and the external-tools section of the
+settings screen has an install/update button for forcing it — including over an existing build,
+which the automatic run never touches. Either way the official FFmpeg package is downloaded, the
+executables and their DLLs are kept under `<workspace>/tools/ffmpeg/bin` and the rest is dropped.
+The package is GPL-licensed and is downloaded by the machine that runs the application — it is
+never shipped inside this project — and its `LICENSE.txt` is stored next to the binaries as
+`FFMPEG-LICENSE.txt`.
 
 On **Linux and macOS**, install them with the package manager (`apt install ffmpeg`,
-`brew install ffmpeg`) - the commands resolve through `PATH` and nothing else is needed. The
-Docker image installs them and points the environment variables at `/usr/bin` explicitly.
+`brew install ffmpeg`) - the commands resolve through `PATH` and nothing else is needed.
 
 ### How a path is resolved
 
-No path is configured by default. The tools are looked up in this order: the value saved on the
-settings screen, then the configured property/environment variable, then discovery - the binary
-under `<workspace>/tools/ffmpeg/bin` when it is there, and otherwise the bare command, which the
-operating system resolves through `PATH`.
+There is nothing to configure. The tools are looked up in one order, in every mode: the copy this
+application downloaded under `<workspace>/tools/ffmpeg/bin`, and otherwise the bare command, which
+the operating system resolves through `PATH`.
+
+The downloaded copy comes first deliberately. A binary already on `PATH` is of unknown provenance
+and may be old enough to lack the codecs this application asks for, so it is what keeps the
+features working until the download succeeds, never the preferred answer - and a start that found
+only `PATH` tries the download again.
+
+There is no setting naming where the binaries live, and that is the point: the value used to be
+stored in the catalog, so it travelled inside a backup and landed describing another machine. A
+restored installation spent seventeen hours failing every ffprobe call against a folder that
+existed only on the installation the backup came from.
 
 Every external tool lives in `<workspace>/tools/<tool>/bin`, in every mode: a build and an
 installation resolve it identically. A downloaded binary is the user's data rather than part of the
@@ -1163,15 +1168,8 @@ program, and an installation may sit in a folder nobody can write to. `nimbus-fi
 points that folder elsewhere - at tools the machine already has, and at a real `pg_dump` for the
 test run, which writes its own throwaway workspace under `target/`.
 
-Pin an absolute path with an environment variable or on the settings screen:
-
-```text
-NIMBUS_FILE_MANAGER_FFPROBE=C:/nimbus-file-manager/tools/ffmpeg/bin/ffprobe.exe
-NIMBUS_FILE_MANAGER_FFMPEG=C:/nimbus-file-manager/tools/ffmpeg/bin/ffmpeg.exe
-```
-
-The download address itself is a setting (`nimbus-file-manager.tools.download-url`), so it can be
-pointed at a mirror without a new release.
+The download address is a property (`nimbus-file-manager.tools.download-url`), the same way the
+embedded PostgreSQL takes its own, so it can be pointed at a mirror without a new release.
 
 ### The binaries are never in git
 
@@ -1320,8 +1318,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2529 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.47% instruction, 92.28% branch, 98.08% line, 98.81% method, 100.00% class
+Tests:       2518 run, 0 failures, 0 errors, 9 skipped
+JaCoCo:      98.46% instruction, 92.23% branch, 98.05% line, 98.81% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1333,9 +1331,22 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.47% instruction, 92.24% branch, 98.06% line, 98.81% method, 100.00% class
+Floor:  98.46% instruction, 92.22% branch, 98.05% line, 98.81% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
+
+Instruction, branch and line were recalculated downward by a hundredth each, and no code lost
+coverage to earn it: the tool paths leaving the catalog **deleted** a fully covered class
+(`ExternalToolPathRefresh`), a properties record, a seeding helper and the eleven tests that
+exercised them. Removing code that sat above the project average lowers the average, which is the
+denominator moving rather than a regression. It was verified class by class in the JaCoCo report
+before the floor was touched — every class the change touched is at zero missed instructions and
+zero missed branches, except two gaps that predate it: the `catch (InterruptedException)` of
+`FfmpegBuildSource`, which only a thread interrupted mid-download reaches. The one branch the
+change did add uncovered — a download URL that is null rather than blank — was covered instead of
+declared, since an address the configuration never declared has to be refused with a reason, and
+that is worth asserting on its own. Two consecutive clean runs of the same code returned the same
+reading, so this is not the between-run spread described below.
 
 Instruction and branch rose; line and method held. The tray arrived as 272 uncovered instructions
 of AWT glue — there is no `SystemTray` on the headless CI, so every call there is a no-op — and

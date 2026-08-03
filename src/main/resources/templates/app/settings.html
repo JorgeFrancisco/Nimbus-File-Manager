@@ -15,7 +15,7 @@
 
 	<section  th:if="${activeTab == 'system'}" th:attr="data-inventory-running=${inventoryRunning}"
 			th:with="INVENTORY='nimbus-file-manager.inventory.', SECURITY='nimbus-file-manager.security.',
-			API='nimbus-file-manager.api.', TOOLS='nimbus-file-manager.tools.',
+			API='nimbus-file-manager.api.',
 			DUPLICATES='nimbus-file-manager.duplicates.', SCAN='nimbus-file-manager.scan.',
 			LOCATION='nimbus-file-manager.location.', CATALOG='nimbus-file-manager.catalog.',
 			LOCATION_ENABLED='nimbus-file-manager.location.enabled', BACKUP='nimbus-file-manager.backup.',
@@ -217,11 +217,6 @@
 						th:text="${toolStatus.complete()} ? #{settings.tools.update} : #{settings.tools.install}">Instalar</button>
 				</form>
 			</div>
-
-			<th:block th:each="setting : ${settings}"
-					th:if="${#strings.startsWith(setting.settingKey, TOOLS)}">
-				<div th:replace="~{fragments/settings-row :: settingRow(${setting})}"></div>
-			</th:block>
 		</section>
 		<section id="database-admin" class="panel section" th:if="${embeddedDatabaseStatus.installable()}">
 			<h2 th:text="#{settings.database.title}">Banco de dados embarcado</h2>

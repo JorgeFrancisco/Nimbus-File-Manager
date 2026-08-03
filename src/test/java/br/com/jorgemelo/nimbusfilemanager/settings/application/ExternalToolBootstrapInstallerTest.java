@@ -1,38 +1,27 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
 
 /**
- * The first start installs what is missing, and stays out of the way whenever
- * the answer is already settled.
+ * Every start installs what this installation does not have of its own, and
+ * stays out of the way whenever the answer is already settled.
  */
 class ExternalToolBootstrapInstallerTest {
 
 	private final ExternalToolInstaller installer = mock(ExternalToolInstaller.class);
 	private final ExternalToolInstallAsyncRunner runner = mock(ExternalToolInstallAsyncRunner.class);
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
 
-	private final ExternalToolBootstrapInstaller bootstrap = new ExternalToolBootstrapInstaller(installer, runner,
-			appSettingService);
+	private final ExternalToolBootstrapInstaller bootstrap = new ExternalToolBootstrapInstaller(installer, runner);
 
-	@BeforeEach
-	void enableTheSetting() {
-		when(appSettingService.booleanValue(eq(SettingsConstants.TOOL_AUTO_INSTALL), anyBoolean())).thenReturn(true);
-	}
-
-	private ExternalToolStatus status(boolean ffmpeg, boolean ffprobe, boolean installable) {
-		return new ExternalToolStatus(ffmpeg, "ffmpeg", ffprobe, "ffprobe", null, false, installable,
+	private ExternalToolStatus status(boolean available, boolean bundled, boolean installable) {
+		return new ExternalToolStatus(available, "ffmpeg", available, "ffprobe", null, bundled, installable,
 				"C:/app/tools/ffmpeg/bin");
 	}
 
@@ -47,22 +36,28 @@ class ExternalToolBootstrapInstallerTest {
 	}
 
 	/**
-	 * A half-installed folder has a file to overwrite, and the startup inventory
-	 * may be executing it - which Windows refuses. Finishing it is the settings
-	 * button's job, since that one waits for an idle inventory.
+	 * The behaviour this component exists for: a machine that already answers
+	 * {@code ffmpeg} on PATH used to end the story, leaving the installation on a
+	 * build of unknown provenance and age. PATH is what keeps the features working
+	 * until the download lands, not a reason to skip it.
 	 */
 	@Test
-	void staysQuietWhenOneOfTheTwoIsAlreadyInPlace() {
-		when(installer.status()).thenReturn(status(false, true, true));
+	void downloadsEvenWhenSomethingOnThePathAlreadyAnswers() {
+		when(installer.status()).thenReturn(status(true, false, true));
+		when(runner.start()).thenReturn(true);
 
 		bootstrap.installWhenMissing();
 
-		verify(runner, never()).start();
-		verify(runner, never()).install();
+		verify(runner).install();
 	}
 
+	/**
+	 * Our own copy is a file to overwrite, and the startup inventory may be
+	 * executing it - which Windows refuses. Updating it is the settings button's
+	 * job, since that one waits for an idle inventory.
+	 */
 	@Test
-	void staysQuietWhenBothToolsAlreadyRun() {
+	void staysQuietWhenTheDownloadedCopyIsAlreadyHere() {
 		when(installer.status()).thenReturn(status(true, true, true));
 
 		bootstrap.installWhenMissing();
@@ -81,17 +76,6 @@ class ExternalToolBootstrapInstallerTest {
 
 		bootstrap.installWhenMissing();
 
-		verify(runner, never()).install();
-	}
-
-	/** An operator who turned it off is not asked again on every restart. */
-	@Test
-	void staysQuietWhenTheSettingIsOff() {
-		when(appSettingService.booleanValue(eq(SettingsConstants.TOOL_AUTO_INSTALL), anyBoolean())).thenReturn(false);
-
-		bootstrap.installWhenMissing();
-
-		verify(installer, never()).status();
 		verify(runner, never()).install();
 	}
 

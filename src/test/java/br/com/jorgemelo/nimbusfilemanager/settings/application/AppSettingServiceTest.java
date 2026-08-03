@@ -22,7 +22,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Security;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 class AppSettingServiceTest {
 
@@ -42,8 +41,8 @@ class AppSettingServiceTest {
 		verify(repository, Mockito.atLeast(1)).save(captor.capture());
 
 		Assertions.assertThat(captor.getAllValues()).anySatisfy(setting -> {
-			Assertions.assertThat(setting.getSettingKey()).isEqualTo(SettingsConstants.TOOL_FFPROBE);
-			Assertions.assertThat(setting.getSettingValue()).isEqualTo("C:/tools/ffprobe.exe");
+			Assertions.assertThat(setting.getSettingKey()).isEqualTo(SettingsConstants.TIMEZONE);
+			Assertions.assertThat(setting.getSettingValue()).isEqualTo(SettingsConstants.DEFAULT_TIMEZONE);
 			Assertions.assertThat(setting.getCreatedByUsername()).isEqualTo("system");
 		}).anySatisfy(setting -> {
 			Assertions.assertThat(setting.getSettingKey()).isEqualTo(SettingsConstants.API_MAX_FOLDER_LIMIT);
@@ -348,8 +347,7 @@ class AppSettingServiceTest {
 	 */
 	@Test
 	void definitionsSurviveAConfigurationWithoutTheOptionalSections() {
-		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", null, null, null, null,
-				null);
+		NimbusFileManagerProperties bare = new NimbusFileManagerProperties("C:/workspace", null, null, null, null);
 
 		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), bare);
 
@@ -357,34 +355,13 @@ class AppSettingServiceTest {
 				.allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isNotNull());
 	}
 
-	/**
-	 * A section that exists but leaves a path unset is the same case as no section
-	 * at all: the setting is seeded empty for the operator to fill in on screen,
-	 * never as the literal {@code null} a text field cannot render.
-	 */
-	@Test
-	void toolPathsLeftUnsetAreSeededEmptyRatherThanNull() {
-		NimbusFileManagerProperties withoutPaths = new NimbusFileManagerProperties("C:/workspace",
-				new Tools(null, null, true), new Inventory(true, 60_000L), new Api(500, 20, 100),
-				new Security(5, 5, 15, true, "admin", "admin", null), null);
-
-		AppSettingService service = new AppSettingService(mock(AppSettingRepository.class), withoutPaths);
-
-		Assertions.assertThat(service.definitions())
-				.filteredOn(definition -> List.of(SettingsConstants.TOOL_FFPROBE, SettingsConstants.TOOL_FFMPEG)
-						.contains(definition.key()))
-				.hasSize(2).allSatisfy(definition -> Assertions.assertThat(definition.defaultValue()).isEmpty());
-	}
-
 	private NimbusFileManagerProperties properties() {
 		return properties(true);
 	}
 
 	private NimbusFileManagerProperties properties(boolean recursiveWatchDefault) {
-		return new NimbusFileManagerProperties("C:/workspace",
-				new Tools("C:/tools/ffprobe.exe", "C:/tools/ffmpeg.exe", true),
-				new Inventory(recursiveWatchDefault, 60_000L), new Api(500, 20, 100),
-				new Security(5, 5, 15, true, "admin", "admin", null), null);
+		return new NimbusFileManagerProperties("C:/workspace", new Inventory(recursiveWatchDefault, 60_000L),
+				new Api(500, 20, 100), new Security(5, 5, 15, true, "admin", "admin", null), null);
 	}
 
 	/**

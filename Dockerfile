@@ -35,9 +35,9 @@ RUN mkdir -p /workspace /library && chown -R nimbus-file-manager:nimbus-file-man
 
 USER nimbus-file-manager
 
-ENV NIMBUS_FILE_MANAGER_WORKSPACE=/workspace \
-	NIMBUS_FILE_MANAGER_FFPROBE=/usr/bin/ffprobe \
-	NIMBUS_FILE_MANAGER_FFMPEG=/usr/bin/ffmpeg
+# No tool path is set: apt put ffmpeg and ffprobe on PATH above, which is exactly
+# what the application falls back to when it has no downloaded copy of its own.
+ENV NIMBUS_FILE_MANAGER_WORKSPACE=/workspace
 
 EXPOSE 8088
 VOLUME ["/workspace"]

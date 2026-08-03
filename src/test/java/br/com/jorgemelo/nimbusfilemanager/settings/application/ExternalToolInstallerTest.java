@@ -1,9 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,8 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 /**
  * The installer unpacks a published archive shaped like the real one: the
@@ -31,17 +25,12 @@ class ExternalToolInstallerTest {
 
 	private static final String ROOT = "ffmpeg-master-latest-win64-gpl-shared/";
 
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
-
 	private ExternalToolInstaller installer(Path tools, Path archive) {
 		return installer(tools, target -> copyInto(archive, target));
 	}
 
 	private ExternalToolInstaller installer(Path tools, ExternalToolArchiveSource source) {
-		when(appSettingService.stringValue(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-
-		ExternalToolPaths paths = new ExternalToolPaths(appSettingService,
-				new NimbusFileManagerProperties(null, new Tools("", "", true), null, null, null, null), tools);
+		ExternalToolPaths paths = new ExternalToolPaths(tools);
 
 		return new ExternalToolInstaller(paths, source, this::runsWhenOnDisk, new ExternalToolInstallProgress());
 	}

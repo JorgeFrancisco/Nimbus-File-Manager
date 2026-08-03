@@ -1,9 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.tools;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -17,12 +13,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.sun.net.httpserver.HttpServer;
 
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallProgress;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 
 /**
  * Download behaviour of the tools archive against a real HTTP server: the file
@@ -36,7 +33,6 @@ class FfmpegBuildSourceTest {
 
 	private HttpServer server;
 
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress();
 
 	@TempDir
@@ -74,9 +70,7 @@ class FfmpegBuildSourceTest {
 	}
 
 	private FfmpegBuildSource source(String url) {
-		when(appSettingService.stringValue(any(), any())).thenReturn(url);
-
-		return new FfmpegBuildSource(appSettingService, progress);
+		return new FfmpegBuildSource(url, progress);
 	}
 
 	@Test
@@ -118,14 +112,15 @@ class FfmpegBuildSourceTest {
 	}
 
 	/**
-	 * An empty address is the state of an installation whose setting was cleared:
-	 * it must say so, not attempt a request against an empty URI.
+	 * A blank address is the state of a configuration whose property was cleared,
+	 * and a null one of a configuration that never declared it: both have to say
+	 * so, rather than attempt a request against an empty URI or fail on the null.
 	 */
-	@Test
-	void failsWhenNoAddressIsConfigured() {
-		when(appSettingService.stringValue(SettingsConstants.TOOL_DOWNLOAD_URL, "")).thenReturn("  ");
-
-		FfmpegBuildSource source = new FfmpegBuildSource(appSettingService, progress);
+	@ParameterizedTest
+	@NullSource
+	@ValueSource(strings = { "", "  " })
+	void failsWhenNoAddressIsConfigured(String address) {
+		FfmpegBuildSource source = source(address);
 
 		Assertions.assertThatIllegalStateException().isThrownBy(() -> source.download(target))
 				.withMessageContaining("No download URL");

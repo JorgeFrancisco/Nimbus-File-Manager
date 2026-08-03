@@ -26,7 +26,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Security;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Tools;
 
 @Service
 public class AppSettingService implements ApplicationRunner {
@@ -250,17 +249,6 @@ public class AppSettingService implements ApplicationRunner {
 	private List<AppSettingDefinition> definitions(NimbusFileManagerProperties properties) {
 		return List.of(new AppSettingDefinition(SettingsConstants.TIMEZONE, SettingsConstants.DEFAULT_TIMEZONE,
 				VALUE_TYPE_ZONE_ID, "Fuso horário da aplicação, usado para carimbar as datas/horas registradas."),
-				new AppSettingDefinition(SettingsConstants.TOOL_FFPROBE, value(properties.tools(), Tools::ffprobe),
-						VALUE_TYPE_STRING, "Caminho do executável ffprobe."),
-				new AppSettingDefinition(SettingsConstants.TOOL_FFMPEG, value(properties.tools(), Tools::ffmpeg),
-						VALUE_TYPE_STRING, "Caminho do executável ffmpeg."),
-				new AppSettingDefinition(SettingsConstants.TOOL_AUTO_INSTALL,
-						booleanDefault(properties.tools(), Tools::autoInstall), VALUE_TYPE_BOOLEAN,
-						"Baixa ffmpeg/ffprobe automaticamente na inicialização quando não forem encontrados (somente Windows)."),
-				new AppSettingDefinition(SettingsConstants.TOOL_DOWNLOAD_URL,
-						"https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip",
-						VALUE_TYPE_STRING,
-						"Endereço do pacote de ffmpeg/ffprobe baixado pelo botão de instalação. Aponte para um espelho se o oficial estiver indisponível."),
 				new AppSettingDefinition(SettingsConstants.API_MAX_PAGE_SIZE,
 						intDefault(properties.api(), Api::maxPageSize), VALUE_TYPE_INTEGER,
 						"Tamanho máximo de página nas consultas, em registros."),
@@ -338,17 +326,6 @@ public class AppSettingService implements ApplicationRunner {
 						VALUE_TYPE_STRING, "Mapa: texto de atribuição exibido no rodapé do mapa."),
 				new AppSettingDefinition(SettingsConstants.MAP_MAX_ZOOM, "19", VALUE_TYPE_INTEGER,
 						"Mapa: nível máximo de zoom."));
-	}
-
-	/**
-	 * Seed value of a text setting: an absent section and an absent property inside
-	 * it mean the same thing to the settings table - no configured default - so
-	 * both collapse to the empty string a screen can show and an admin can fill in.
-	 */
-	private <T> String value(T object, Function<T, String> getter) {
-		String configured = object == null ? null : getter.apply(object);
-
-		return configured == null ? "" : configured;
 	}
 
 	private <T> String intDefault(T object, ToIntFunction<T> getter) {
