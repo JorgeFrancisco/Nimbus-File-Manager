@@ -1,7 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
+import java.util.stream.Stream;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -43,45 +48,33 @@ class GitHubReleasesTest {
 		Assertions.assertThat(release.checksumUrl()).endsWith(".sha256");
 	}
 
-	@Test
-	void refusesAReleaseWhoseInstallerWasNeverAttached() {
-		String document = """
-				{"tag_name":"v6.1.0.160","assets":[
-				  {"name":"Nimbus.File.Manager-6.1.0.msi.sha256","browser_download_url":"x","size":97}]}""";
-
-		Assertions.assertThat(GitHubReleases.parse(document, objectMapper)).isEmpty();
-	}
-
-	@Test
-	void refusesAReleaseWithNoChecksumBesideTheInstaller() {
-		String document = """
-				{"tag_name":"v6.1.0.160","assets":[
-				  {"name":"Nimbus.File.Manager-6.1.0.msi","browser_download_url":"x","size":1}]}""";
-
-		Assertions.assertThat(GitHubReleases.parse(document, objectMapper)).isEmpty();
-	}
-
 	/**
-	 * A draft is visible to whoever created it and is not published. Offering one
-	 * would send installations to a release that can still be deleted or changed.
+	 * Every shape that must not be offered. Three are incomplete - an installer
+	 * that was never attached, a checksum that was not, no tag at all - and the
+	 * fourth is complete but a draft: visible only to whoever created it, and
+	 * still free to be deleted or changed, so offering it would point
+	 * installations at a release that may not exist tomorrow.
 	 */
-	@Test
-	void refusesADraft() {
-		String document = """
-				{"tag_name":"v6.1.0.160","draft":true,"assets":[
-				  {"name":"a.msi","browser_download_url":"x","size":1},
-				  {"name":"a.msi.sha256","browser_download_url":"y","size":97}]}""";
-
-		Assertions.assertThat(GitHubReleases.parse(document, objectMapper)).isEmpty();
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("releasesNotWorthOffering")
+	void refusesAReleaseThatIsNotWorthOffering(String shape, String document) {
+		Assertions.assertThat(GitHubReleases.parse(document, objectMapper)).as(shape).isEmpty();
 	}
 
-	@Test
-	void refusesADocumentWithNoTag() {
-		String document = """
-				{"assets":[{"name":"a.msi","browser_download_url":"x","size":1},
-				  {"name":"a.msi.sha256","browser_download_url":"y","size":97}]}""";
-
-		Assertions.assertThat(GitHubReleases.parse(document, objectMapper)).isEmpty();
+	private static Stream<Arguments> releasesNotWorthOffering() {
+		return Stream.of(Arguments.of("installer never attached", """
+				{"tag_name":"v6.1.0.160","assets":[
+				  {"name":"Nimbus.File.Manager-6.1.0.msi.sha256","browser_download_url":"x","size":97}]}"""),
+				Arguments.of("no checksum beside the installer", """
+						{"tag_name":"v6.1.0.160","assets":[
+						  {"name":"Nimbus.File.Manager-6.1.0.msi","browser_download_url":"x","size":1}]}"""),
+				Arguments.of("draft", """
+						{"tag_name":"v6.1.0.160","draft":true,"assets":[
+						  {"name":"a.msi","browser_download_url":"x","size":1},
+						  {"name":"a.msi.sha256","browser_download_url":"y","size":97}]}"""),
+				Arguments.of("no tag", """
+						{"assets":[{"name":"a.msi","browser_download_url":"x","size":1},
+						  {"name":"a.msi.sha256","browser_download_url":"y","size":97}]}"""));
 	}
 
 	/**

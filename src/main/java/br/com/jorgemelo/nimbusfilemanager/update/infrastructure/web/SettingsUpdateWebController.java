@@ -11,6 +11,7 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateInstallService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.constants.UpdateMessages;
+import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
 
 /**
  * Checking for an update and installing one, from the Sistema tab.
@@ -51,7 +52,7 @@ public class SettingsUpdateWebController extends LocalizedComponent {
 		}
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message(UpdateMessages.FOUND,
-				updateCheckService.available().map(found -> found.published()).orElse("")));
+				updateCheckService.available().map(AvailableUpdate::published).orElse("")));
 
 		return SharedConstants.REDIRECT_SETTINGS;
 	}

@@ -1,10 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdateOutcome;
 import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdatePhase;
@@ -17,7 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.update.domain.enums.UpdatePhase;
  */
 class UpdateInstallAsyncRunnerTest {
 
-	private final UpdateInstallService installService = Mockito.mock(UpdateInstallService.class);
+	private final UpdateInstallService installService = mock(UpdateInstallService.class);
 	private final UpdateInstallProgress progress = new UpdateInstallProgress();
 
 	private final UpdateInstallAsyncRunner runner = new UpdateInstallAsyncRunner(installService, progress);

@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
@@ -7,7 +8,6 @@ import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
@@ -26,8 +26,8 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateStatus;
  */
 class UpdateSettingsModelTest {
 
-	private final UpdateCheckService updateCheckService = Mockito.mock(UpdateCheckService.class);
-	private final UpdateInstallService updateInstallService = Mockito.mock(UpdateInstallService.class);
+	private final UpdateCheckService updateCheckService = mock(UpdateCheckService.class);
+	private final UpdateInstallService updateInstallService = mock(UpdateInstallService.class);
 
 	/**
 	 * The suite has no manifest, which is the same state as a run from the IDE:

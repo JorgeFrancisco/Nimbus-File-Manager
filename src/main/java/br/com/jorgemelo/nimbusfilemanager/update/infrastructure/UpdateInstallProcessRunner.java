@@ -37,8 +37,18 @@ public class UpdateInstallProcessRunner {
 		Files.writeString(script, UpdateInstallScript.build(installer, System.getProperty("jpackage.app-path")),
 				Charset.forName(System.getProperty("sun.jnu.encoding", "windows-1252")));
 
-		List<String> command = List.of("cmd", "/c", "start", "", "/min", script.toAbsolutePath().toString());
+		List<String> command = List.of(shell(), "/c", "start", "", "/min", script.toAbsolutePath().toString());
 
 		new ProcessBuilder(command).start();
+	}
+
+	/**
+	 * The interpreter by absolute path rather than by name. Looking {@code cmd} up
+	 * through PATH lets whatever the first writable entry there points at run in
+	 * its place - and what runs here installs the application over itself, which
+	 * is the last place to accept a name somebody else can answer for.
+	 */
+	private static String shell() {
+		return Path.of(System.getenv().getOrDefault("SystemRoot", "C:\\Windows"), "System32", "cmd.exe").toString();
 	}
 }

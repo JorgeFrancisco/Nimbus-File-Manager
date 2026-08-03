@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,7 +9,6 @@ import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
@@ -27,9 +27,9 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.dto.PublishedReleas
  */
 class SettingsUpdateWebControllerTest {
 
-	private final UpdateCheckService updateCheckService = Mockito.mock(UpdateCheckService.class);
-	private final UpdateInstallService updateInstallService = Mockito.mock(UpdateInstallService.class);
-	private final UpdateInstallAsyncRunner asyncRunner = Mockito.mock(UpdateInstallAsyncRunner.class);
+	private final UpdateCheckService updateCheckService = mock(UpdateCheckService.class);
+	private final UpdateInstallService updateInstallService = mock(UpdateInstallService.class);
+	private final UpdateInstallAsyncRunner asyncRunner = mock(UpdateInstallAsyncRunner.class);
 
 	private final SettingsUpdateWebController controller = new SettingsUpdateWebController(updateCheckService,
 			updateInstallService, asyncRunner);

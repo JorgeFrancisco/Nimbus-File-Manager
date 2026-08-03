@@ -1,6 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.update.application;
 
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -9,7 +11,6 @@ import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UpdateProperties;
 
@@ -25,7 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
  */
 class UpdateCheckSchedulerTest {
 
-	private final UpdateCheckService updateCheckService = Mockito.mock(UpdateCheckService.class);
+	private final UpdateCheckService updateCheckService = mock(UpdateCheckService.class);
 
 	@Test
 	void asksTheServiceToCheck() {
@@ -50,7 +51,7 @@ class UpdateCheckSchedulerTest {
 		Assertions.assertThatCode(scheduler::runOnce).doesNotThrowAnyException();
 		Assertions.assertThatCode(scheduler::runOnce).doesNotThrowAnyException();
 
-		verify(updateCheckService, Mockito.times(2)).check();
+		verify(updateCheckService, times(2)).check();
 	}
 
 	/**

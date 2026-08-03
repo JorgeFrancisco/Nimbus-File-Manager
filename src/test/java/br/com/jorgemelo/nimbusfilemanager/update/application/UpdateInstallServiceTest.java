@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.update.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mockito;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ApplicationShutdown;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
@@ -34,10 +34,10 @@ class UpdateInstallServiceTest {
 
 	private static final byte[] CONTENT = "an installer".getBytes();
 
-	private final UpdateCheckService updateCheckService = Mockito.mock(UpdateCheckService.class);
-	private final UpdateInstallProcessRunner processRunner = Mockito.mock(UpdateInstallProcessRunner.class);
-	private final WorkspaceManager workspaceManager = Mockito.mock(WorkspaceManager.class);
-	private final ApplicationShutdown applicationShutdown = Mockito.mock(ApplicationShutdown.class);
+	private final UpdateCheckService updateCheckService = mock(UpdateCheckService.class);
+	private final UpdateInstallProcessRunner processRunner = mock(UpdateInstallProcessRunner.class);
+	private final WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
+	private final ApplicationShutdown applicationShutdown = mock(ApplicationShutdown.class);
 	private final UpdateInstallProgress progress = new UpdateInstallProgress();
 
 	@Test

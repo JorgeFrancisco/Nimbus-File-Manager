@@ -175,6 +175,29 @@ class AppScreenSmokeIntegrationTest {
 	}
 
 	/**
+	 * Every script and stylesheet the pages ask for carries a hash of its own
+	 * content in the name. It is what stops a browser from running an installation
+	 * with the JavaScript it cached from the previous one - which happened, and cost
+	 * the update screen its confirmation dialog, its live progress and its automatic
+	 * return after the restart, all three with the markup already on the page.
+	 *
+	 * <p>
+	 * Asserted on the rendered page rather than on the property, because the name is
+	 * only rewritten if the resource chain, the link expressions and the encoding
+	 * filter all agree - and any one of them dropping out brings the plain name back
+	 * without anything failing.
+	 */
+	@Test
+	@WithMockUser(username = ADMIN, roles = { "ADMIN", "USER" })
+	void everyScriptAndStylesheetIsServedUnderAHashOfItsOwnContent() throws Exception {
+		String page = mockMvc.perform(get("/app/settings")).andExpect(status().isOk()).andReturn().getResponse()
+				.getContentAsString();
+
+		Assertions.assertThat(page).contains("/js/pages/settings-").contains("/css/components-")
+				.doesNotContain("\"/js/pages/settings.js\"").doesNotContain("\"/css/components.css\"");
+	}
+
+	/**
 	 * The first run: with no library configured every screen is sent to onboarding,
 	 * and onboarding itself is the one page that renders. This is also what makes
 	 * the assertions above meaningful - it is the redirect they must not accept.

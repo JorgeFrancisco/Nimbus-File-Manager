@@ -6,6 +6,10 @@
 	// library-switch confirmation on the watch-folder form.
 	var scrollKey = "nimbus-file-manager.settings.scroll:" + window.location.pathname;
 	var t = window.NimbusFileManagerI18n.t;
+	// Marks a refresh that the server did answer, just not with the page. It is the one
+	// failure that must still reload, and it has to be told apart from not reaching the
+	// server at all - see the catch in refreshOperationPanels().
+	var ANSWERED = "answered";
 
 	// The app shell scrolls the inner .main element, not the window (layout.css:
 	// .shell is height:100vh and .main is overflow-y:auto). So window.scrollY is
@@ -73,7 +77,7 @@
 		// a full reload every 5s made the whole page flash during long
 		// download/import/rebuild operations.
 		fetch(window.location.href, { headers: { "Accept": "text/html" } }).then(function (response) {
-			if (!response.ok || response.redirected) throw new Error();
+			if (!response.ok || response.redirected) throw new Error(ANSWERED);
 			return response.text();
 		}).then(function (html) {
 			var document_ = new DOMParser().parseFromString(html, "text/html");
@@ -92,11 +96,37 @@
 			});
 			waitForRestartAfterUpdate(); // the phase only appears in a refreshed panel
 			monitorOperationPanels(); // reschedules itself only while an operation is still running
-		}).catch(function () {
-			// Network error or expired session (redirect to login): fall back to
-			// the old full reload, which lands wherever the server sends us.
+		}).catch(function (error) {
+			// Not reaching the server at all, while an update is installing, is the
+			// installer taking it down rather than a broken page. Reloading now lands on
+			// the browser's own connection-error screen, which runs no JavaScript: the
+			// wait below would never start, and the page would only come back if the
+			// browser happened to retry by itself. It is also the case the phase check
+			// cannot catch, because the server can die between two five-second refreshes
+			// without ever having answered STARTING.
+			if (error.message !== ANSWERED && updateInstalling()) {
+				enterRestartWait();
+				return;
+			}
+			// The server answered, just not with the page (an expired session redirecting
+			// to login): fall back to the full reload, which lands wherever it sends us.
 			window.location.reload();
 		});
+	}
+
+	// Downloading, verifying or starting the installer - anything that ends with this
+	// server being replaced.
+	function updateInstalling() {
+		var panel = document.querySelector('[data-operation-panel="update"]');
+		return !!panel && panel.dataset.operationRunning === "true";
+	}
+
+	// The phase the server answers last, right before the installer starts. Read after
+	// every panel swap, because it only ever appears in a refreshed panel - and it is
+	// the orderly way in; the catch above is the one for a server that stopped
+	// answering without having said so.
+	function waitForRestartAfterUpdate() {
+		if (document.querySelector('[data-update-phase="STARTING"]')) enterRestartWait();
 	}
 
 	// An update is the one operation that takes the server down with it: the
@@ -104,15 +134,17 @@
 	// closes, the installer runs, and it opens again by itself. Without this the
 	// browser is left showing the page of a server that died - the update worked
 	// and the screen never said so, which is indistinguishable from a crash.
-	function waitForRestartAfterUpdate() {
-		var panel = document.querySelector('[data-update-phase="STARTING"]');
-		if (!panel || waitForRestartAfterUpdate.watching) return;
-		waitForRestartAfterUpdate.watching = true;
-		var notice = document.createElement("div");
-		notice.className = "alert";
-		notice.setAttribute("role", "status");
-		notice.textContent = t("js.settings.updateRestarting");
-		panel.appendChild(notice);
+	function enterRestartWait() {
+		if (enterRestartWait.watching) return;
+		enterRestartWait.watching = true;
+		var panel = document.querySelector('[data-operation-panel="update"]');
+		if (panel) {
+			var notice = document.createElement("div");
+			notice.className = "alert";
+			notice.setAttribute("role", "status");
+			notice.textContent = t("js.settings.updateRestarting");
+			panel.appendChild(notice);
+		}
 		// Health is the one endpoint that answers without a session, which matters
 		// because the restart drops the old one: polling anything else would answer
 		// the login page and read as "back" while the application was still down.
