@@ -19,9 +19,9 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
+import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**

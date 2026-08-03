@@ -8,6 +8,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
@@ -19,10 +20,9 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 
 /**
  * Populates model attributes shared by every server-rendered page

@@ -16,10 +16,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerEntry;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerView;
+import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FileExplorerLocationProjection;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FileExplorerLocationProjection;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 

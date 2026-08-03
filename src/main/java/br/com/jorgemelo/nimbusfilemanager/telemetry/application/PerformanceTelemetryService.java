@@ -15,13 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionPhaseRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ConfigSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhaseSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhotoHashCounters;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetrics;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 /**
  * Persists the performance telemetry of a finished execution: one

@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.concurrent;
+package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

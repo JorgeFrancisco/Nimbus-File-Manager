@@ -69,8 +69,8 @@ class UpdateCheckServiceTest {
 
 	/**
 	 * The reason the remembered value is cleared rather than only set. An
-	 * installation that took the update and restarted would otherwise keep
-	 * offering the version it is already running.
+	 * installation that took the update and restarted would otherwise keep offering
+	 * the version it is already running.
 	 */
 	@Test
 	void forgetsWhatItFoundOnceTheInstallationCatchesUp() {
@@ -151,12 +151,12 @@ class UpdateCheckServiceTest {
 	}
 
 	private static UpdateCheckService at(Clock clock, ReleaseSource source) {
-		return new UpdateCheckService(source, event -> {
+		return new UpdateCheckService(source, _ -> {
 		}, clock);
 	}
 
 	private static UpdateCheckService check(ReleaseSource source) {
-		return new UpdateCheckService(source, event -> {
+		return new UpdateCheckService(source, _ -> {
 		}, Clock.systemDefaultZone());
 	}
 

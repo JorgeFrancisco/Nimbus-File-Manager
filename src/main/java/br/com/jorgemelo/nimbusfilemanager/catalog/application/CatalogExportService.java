@@ -19,8 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.catalog.application.dto.CatalogExport;
 import br.com.jorgemelo.nimbusfilemanager.catalog.domain.enums.CatalogExportFormat;
+import br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogExportRow;
 
 /**
  * Streams the whole {@code catalog_file} catalog as CSV or JSON.

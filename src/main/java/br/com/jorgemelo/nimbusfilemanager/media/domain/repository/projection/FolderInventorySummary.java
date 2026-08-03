@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection;
+package br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection;
 
 /**
  * What the catalog knows about one folder: how many inventoried files sit under

@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.enums;
+package br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums;
 
 public enum MediaOrientation {
 

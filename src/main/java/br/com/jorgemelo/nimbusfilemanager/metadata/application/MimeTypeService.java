@@ -7,7 +7,6 @@ import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 @Service
 public class MimeTypeService {

@@ -4,7 +4,7 @@ Documento **vivo** de sugestões, não de decisões. O que virar decisão desce 
 `docs/adr/`; o que virar estado atual pertence ao README.
 
 **Item concluído é removido daqui**, e não marcado como feito: a lista existe para dizer o que falta,
-e histórico é assunto do git. Os identificadores (`A5`, `P8`, …) **não são renumerados** quando algo
+e histórico é assunto do git. Os identificadores (`A6`, `P8`, …) **não são renumerados** quando algo
 sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item — e o que ele era
 se acha em `git log -S"P4." -- docs/evolucao-arquitetura-e-produto.md`, que é onde vive o histórico.
 
@@ -18,14 +18,6 @@ distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambien
 ## Arquitetura
 
 ### Complexidade média — semanas
-
-**A5. `shared` nunca passou por revisão de dono.** São 100 classes, incluindo `CatalogFile`,
-`Execution`, `Movement`, `Photo`, `Video` — as entidades centrais. Não é mais um outlier em tamanho
-(`duplicate` tem 99 e `metadata` 92), mas continua sendo o lugar onde tudo que não tem dono acaba
-caindo, e a revisão sugerida aqui nunca aconteceu. A pergunta é simples: *este tipo é usado por três
-ou mais domínios?* Se não, ele tem dono e deveria morar lá.
-*Entrega:* evita o destino comum de projetos assim, em que `shared` vira um segundo `util` e a
-modularidade some por dentro.
 
 **A6. Não há API para automação.** `/api/**` é autenticado por sessão de formulário com CSRF, o que é
 correto para a tela, mas fecha a porta para script, integração ou app móvel: não existe token.

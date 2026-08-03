@@ -4,10 +4,10 @@ import java.nio.file.Path;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileValidationUtils;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 @Service
 public class MetadataFacade {

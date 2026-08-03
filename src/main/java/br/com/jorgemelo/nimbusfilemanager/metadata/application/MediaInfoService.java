@@ -18,11 +18,11 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinate
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FfprobeResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.GeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

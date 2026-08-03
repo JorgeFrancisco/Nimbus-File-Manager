@@ -18,7 +18,6 @@ import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCa
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 /**
  * Computes a 256-bit DCT perceptual hash (pHash) for photos. FFmpeg decodes and

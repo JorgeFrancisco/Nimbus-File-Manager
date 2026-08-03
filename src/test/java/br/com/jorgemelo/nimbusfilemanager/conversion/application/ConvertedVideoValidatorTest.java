@@ -14,7 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 
 class ConvertedVideoValidatorTest {
 

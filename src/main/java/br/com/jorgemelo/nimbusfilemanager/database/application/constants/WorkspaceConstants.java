@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.application.constants;
+package br.com.jorgemelo.nimbusfilemanager.database.application.constants;
 
 /**
  * Where a run keeps what it writes, and where it looks for the tools it spawns.

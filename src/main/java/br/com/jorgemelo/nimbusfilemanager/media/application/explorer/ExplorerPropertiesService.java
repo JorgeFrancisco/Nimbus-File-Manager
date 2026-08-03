@@ -13,8 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
+import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;

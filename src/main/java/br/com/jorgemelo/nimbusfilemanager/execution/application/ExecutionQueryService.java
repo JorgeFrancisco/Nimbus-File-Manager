@@ -9,20 +9,20 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionErrorResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.MovementResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionError;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionErrorRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionStepRepository;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.MovementSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionStepRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.MovementSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 @Service

@@ -8,8 +8,8 @@ import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 
 /**
  * The banner polls this even when nothing is running, because the backlogs

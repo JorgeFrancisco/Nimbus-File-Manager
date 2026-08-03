@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.application.constants;
+package br.com.jorgemelo.nimbusfilemanager.execution.application.constants;
 
 import java.util.Arrays;
 import java.util.Set;

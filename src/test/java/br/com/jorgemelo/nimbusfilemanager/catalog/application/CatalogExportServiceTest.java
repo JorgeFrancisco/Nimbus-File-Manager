@@ -25,8 +25,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import br.com.jorgemelo.nimbusfilemanager.catalog.domain.enums.CatalogExportFormat;
+import br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogExportRow;
 
 @ExtendWith(MockitoExtension.class)
 class CatalogExportServiceTest {

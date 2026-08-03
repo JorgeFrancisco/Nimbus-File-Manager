@@ -3,7 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 
 class MediaOrientationResolverTest {
 

@@ -13,10 +13,10 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow;
+import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogExportRow;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FolderInventorySummary;
 
 public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> {
 
@@ -28,7 +28,7 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 * no lazy association is touched while streaming outside a transaction.
 	 */
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogExportRow(
+			SELECT new br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow(
 				mf.id, mf.publicId, mf.fileKey, mf.fileName, mf.extension, mf.sizeBytes, mf.sha256, mf.md5,
 				mf.mimeType, CAST(mf.fileType AS string), CAST(mf.lifecycleStatus AS string),
 				mf.createdAt, mf.modifiedAt, mf.importedAt, loc.currentPath, loc.originalPath)

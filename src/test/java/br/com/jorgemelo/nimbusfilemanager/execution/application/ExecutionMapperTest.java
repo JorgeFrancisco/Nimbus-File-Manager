@@ -17,13 +17,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionStep;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionStep;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 
 class ExecutionMapperTest {

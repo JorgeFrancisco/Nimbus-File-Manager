@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.application.dto;
+package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
 
 /**
  * A background job worth telling the user about, in the shape the page banner

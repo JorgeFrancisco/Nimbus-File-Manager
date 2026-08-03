@@ -1,10 +1,12 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.model;
+package br.com.jorgemelo.nimbusfilemanager.execution.domain.model;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.ClockHolder;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;

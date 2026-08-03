@@ -12,9 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionPhaseRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 /**
  * The read side of the telemetry screen. Comparison lives in its own test; this

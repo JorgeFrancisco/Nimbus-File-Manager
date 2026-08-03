@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config;
 
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
+import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 
 import java.util.Map;
 

@@ -12,10 +12,10 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.MovementSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.MovementSummaryResponse;
 
 public interface MovementRepository extends JpaRepository<Movement, Long> {
 
@@ -60,7 +60,7 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 	 * to the ~200k-movement runs without materializing every row.
 	 */
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.MovementSummaryResponse(
+			SELECT new br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.MovementSummaryResponse(
 				CAST(m.status AS string),
 				CAST(m.reason AS string),
 				COUNT(m)

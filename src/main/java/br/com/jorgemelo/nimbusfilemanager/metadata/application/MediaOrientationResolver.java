@@ -2,7 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 
 @Component
 public class MediaOrientationResolver {

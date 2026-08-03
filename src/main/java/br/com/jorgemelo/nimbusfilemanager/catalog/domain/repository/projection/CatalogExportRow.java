@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection;
+package br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

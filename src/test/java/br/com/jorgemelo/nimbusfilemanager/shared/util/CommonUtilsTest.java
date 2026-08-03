@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.util;
 
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileValidationUtils;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

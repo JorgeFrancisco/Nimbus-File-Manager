@@ -2,9 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application.model;
 
 import java.time.LocalDateTime;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import lombok.Builder;
 import lombok.Getter;

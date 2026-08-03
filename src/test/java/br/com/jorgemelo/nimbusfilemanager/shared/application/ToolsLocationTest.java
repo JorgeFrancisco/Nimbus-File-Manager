@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.TOOLS_PROPERTY;
 import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ToolFolders.POSTGRESQL;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.TOOLS_PROPERTY;
 
 import java.nio.file.Path;
 

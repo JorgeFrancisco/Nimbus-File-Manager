@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
+package br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository;
 
 import java.util.Collection;
 import java.util.List;

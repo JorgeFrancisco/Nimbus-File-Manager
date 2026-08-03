@@ -8,9 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FileExplorerLocationProjection;
+import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.MediaLocationReconcileProjection;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.FileExplorerLocationProjection;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.MediaLocationReconcileProjection;
 
 public interface CatalogFileLocationRepository extends JpaRepository<CatalogFileLocation, Long> {
 

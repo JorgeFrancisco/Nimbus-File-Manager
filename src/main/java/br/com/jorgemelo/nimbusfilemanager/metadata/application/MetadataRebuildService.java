@@ -27,7 +27,6 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataReb
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
-import br.com.jorgemelo.nimbusfilemanager.shared.concurrent.OptimisticLockRetry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;

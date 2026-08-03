@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
@@ -23,7 +24,6 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 
 /**
@@ -42,7 +42,7 @@ class AppViewModelAdviceExtraTest {
 	private final FingerprintActivityService fingerprintActivityService = mock(FingerprintActivityService.class);
 	private final AppViewModelAdvice advice = new AppViewModelAdvice("2.0.0", userPagePreferenceService,
 			appSettingService, executionQueryService, inventoryWatchService, appUserRepository,
-			fingerprintActivityService, new UpdateCheckService(Optional::empty, event -> {
+			fingerprintActivityService, new UpdateCheckService(Optional::empty, _ -> {
 			}, Clock.systemDefaultZone()));
 
 	private final Authentication user = new TestingAuthenticationToken("bob", "x", "ROLE_USER");

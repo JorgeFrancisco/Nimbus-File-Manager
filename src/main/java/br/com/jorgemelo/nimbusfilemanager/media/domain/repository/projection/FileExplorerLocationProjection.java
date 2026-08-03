@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection;
+package br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection;
 
 import java.util.UUID;
 

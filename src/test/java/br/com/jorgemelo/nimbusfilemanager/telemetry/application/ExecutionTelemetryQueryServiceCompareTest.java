@@ -17,10 +17,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionPhaseRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ExecutionComparison;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ExecutionTelemetryQueryServiceCompareTest {

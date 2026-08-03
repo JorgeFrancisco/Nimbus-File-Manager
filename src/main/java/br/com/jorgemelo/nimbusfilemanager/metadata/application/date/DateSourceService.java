@@ -11,9 +11,9 @@ import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileValidationUtils;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FileSystemDates;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.filename.FileNameDateRuleEngine;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.FileValidationUtils;
 
 @Service
 public class DateSourceService {

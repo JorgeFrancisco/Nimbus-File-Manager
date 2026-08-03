@@ -10,15 +10,15 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionStep;
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionStepRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionStep;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionStepRepository;
 
 @Service
 public class ExecutionProgressService {

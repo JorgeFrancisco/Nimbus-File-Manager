@@ -5,8 +5,8 @@ import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.EMBEDDED_PROPERTY;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.EXTERNAL_HOST_VARIABLE;
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.EmbeddedDatabaseConstants.EXTERNAL_URL_VARIABLE;
+import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 import static br.com.jorgemelo.nimbusfilemanager.database.domain.enums.EmbeddedDatabaseDecision.BINARIES_MISSING;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 
 import java.nio.file.Path;
 

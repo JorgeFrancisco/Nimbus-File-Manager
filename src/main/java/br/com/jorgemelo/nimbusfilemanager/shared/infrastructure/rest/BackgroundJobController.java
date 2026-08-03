@@ -4,8 +4,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 import io.swagger.v3.oas.annotations.Operation;
 
 /**

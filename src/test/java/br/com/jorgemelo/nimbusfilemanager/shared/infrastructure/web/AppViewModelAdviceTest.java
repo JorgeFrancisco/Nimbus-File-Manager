@@ -137,7 +137,7 @@ class AppViewModelAdviceTest {
 	private AppViewModelAdvice advice(String version) {
 		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, executionQueryService,
 				inventoryWatchService, appUserRepository, fingerprintActivityService,
-				new UpdateCheckService(Optional::empty, event -> {
+				new UpdateCheckService(Optional::empty, _ -> {
 				}, Clock.systemDefaultZone()));
 	}
 }

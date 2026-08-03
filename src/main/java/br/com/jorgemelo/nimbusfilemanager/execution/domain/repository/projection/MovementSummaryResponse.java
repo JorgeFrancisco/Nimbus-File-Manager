@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection;
+package br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection;
 
 /**
  * One row of the post-move integrity report: how many movements ended with a

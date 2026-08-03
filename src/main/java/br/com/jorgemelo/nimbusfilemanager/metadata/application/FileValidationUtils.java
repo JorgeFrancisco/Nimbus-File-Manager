@@ -1,4 +1,4 @@
-package br.com.jorgemelo.nimbusfilemanager.shared.util;
+package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

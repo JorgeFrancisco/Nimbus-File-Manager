@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
-import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.WorkspaceConstants.WORKSPACE_FOLDER;
+import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.INSTALLED_FOLDER;
+import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.WORKSPACE_FOLDER;
 
 import java.nio.file.Path;
 

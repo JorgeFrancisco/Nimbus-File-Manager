@@ -4,8 +4,8 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
