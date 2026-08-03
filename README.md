@@ -1543,25 +1543,27 @@ here. The class-level exclusions mirror the JaCoCo / Sonar coverage exclusions
 Most recent local PIT run:
 
 ```text
-Line coverage for mutated classes: 10578/10919 (97%)
-Generated mutations:              6306
-Killed mutations:                 5248
-Survived mutations:               837
-No coverage:                      196
+Line coverage for mutated classes: 11710/12095 (97%)
+Generated mutations:              6784
+Killed mutations:                 5701
+Survived mutations:               932
+No coverage:                      126
 Timed out:                        25
 Run error:                        0
 Mutation score:                   84%
 Test strength:                    86%
-Duration:                         24m38s
+Duration:                         29m39s
 ```
 
 Where the survivors are: by a wide margin the most common surviving mutator is
 `VoidMethodCallMutator` - a call whose removal no assertion notices, typically a
 progress update, a log-adjacent notification or a cache invalidation that the test
-exercises without checking. The conditional-boundary and math mutators come next,
-in the paging and percentage arithmetic. The single largest block of *no coverage*
-is one icon-mapping utility reached only from templates: a unit test there would
-restate the map rather than verify behaviour, so it stays as declared residue.
+exercises without checking. Negated conditionals, conditional boundaries and math
+follow it, clustered in the paging and percentage arithmetic. The largest blocks of
+*no coverage* are the asynchronous runners of the fingerprint backlog and the JDBC
+URL parsing the backup relies on - production code that the integration tests do
+cover and this profile excludes, which is the effect described above rather than a
+hole in the suite.
 
 Reports:
 
