@@ -2,6 +2,8 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchFilter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.CameraFilter;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.MediaScaleFilter;
 
 /**
  * Small mutable builder so each test can set only the field under test and
@@ -59,6 +61,7 @@ public final class FilterBuilder {
 	}
 
 	public MediaSearchFilter build() {
-		return new MediaSearchFilter(fileType, codec, folder, extension, year, month, minSizeBytes, maxSizeBytes);
+		return new MediaSearchFilter(fileType, codec, folder, extension, year, month,
+				new MediaScaleFilter(minSizeBytes, maxSizeBytes, null, null, null), CameraFilter.ANY, null);
 	}
 }

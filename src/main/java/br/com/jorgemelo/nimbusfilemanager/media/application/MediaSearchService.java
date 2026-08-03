@@ -9,6 +9,9 @@ import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaSearchCrite
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.MediaSearchResponse;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.MediaSearchRepository;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchFilter;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.GeoPresence;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.CameraFilter;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.MediaScaleFilter;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
@@ -35,10 +38,22 @@ public class MediaSearchService {
 	public Page<MediaSearchResponse> search(MediaSearchCriteria criteria, Pageable pageable) {
 		Pageable safePageable = PageUtils.capped(pageable, maxPageSize());
 
+		GeoPresence geo = criteria.geo();
+
+		// Three states, and the middle one is the point: null means the caller does not
+		// care, which is not the same as asking for media without a location.
+		Boolean requiresLocation = geo == null || geo == GeoPresence.ANY ? null : geo == GeoPresence.WITH_LOCATION;
+
+		MediaScaleFilter scale = new MediaScaleFilter(criteria.minSizeBytes(), criteria.maxSizeBytes(),
+				criteria.minDurationSeconds(), criteria.maxDurationSeconds(), criteria.minLongestSide());
+
+		CameraFilter camera = new CameraFilter(TextUtils.blankToNull(criteria.manufacturer()),
+				TextUtils.blankToNull(criteria.model()));
+
 		MediaSearchFilter filter = new MediaSearchFilter(criteria.fileType(),
 				TextUtils.upperBlankToNull(criteria.codec()), TextUtils.blankToNull(criteria.folder()),
-				TextUtils.blankToNull(criteria.extension()), criteria.year(), criteria.month(), criteria.minSizeBytes(),
-				criteria.maxSizeBytes());
+				TextUtils.blankToNull(criteria.extension()), criteria.year(), criteria.month(), scale, camera,
+				requiresLocation);
 
 		return mediaSearchRepository.search(filter, safePageable).map(this::toResponse);
 	}

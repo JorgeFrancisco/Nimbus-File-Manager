@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -29,6 +30,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCountSummary;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineMonthCount;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.GeoPresence;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.CameraFilter;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.CaptureWindow;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.MediaScaleFilter;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,7 +52,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
 
-		repository().findPage(FileType.PHOTO, SUBS, cursorDate, 91L, 121);
+		repository().findPage(FileType.PHOTO, SUBS, TimelineFilter.NONE, cursorDate, 91L, 121);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
@@ -94,7 +100,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null, 120);
+		List<TimelineItemProjection> page = repository().findPage(null, SUBS, TimelineFilter.NONE, null, null, 120);
 
 		Assertions.assertThat(page).containsExactly(new TimelineItemProjection(42L, publicId, "IMG_0042.JPG",
 				FileType.PHOTO, captureDate, DateSource.EXIF, 4032, 3024, null));
@@ -117,7 +123,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineItemProjection> page = repository().findPage(null, SUBS, null, null, 120);
+		List<TimelineItemProjection> page = repository().findPage(null, SUBS, TimelineFilter.NONE, null, null, 120);
 
 		Assertions.assertThat(page.getFirst().durationSeconds()).isEqualTo(92.5D);
 	}
@@ -127,11 +133,11 @@ class TimelineQueryRepositoryTest {
 		TimelineQueryRepository repository = repository();
 
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> repository.findPage(null, SUBS, LocalDateTime.now(), null, 120));
+				.isThrownBy(() -> repository.findPage(null, SUBS, TimelineFilter.NONE, LocalDateTime.now(), null, 120));
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> repository.findPage(null, SUBS, null, 42L, 120));
+				.isThrownBy(() -> repository.findPage(null, SUBS, TimelineFilter.NONE, null, 42L, 120));
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> repository.findPage(null, SUBS, null, null, 0));
+				.isThrownBy(() -> repository.findPage(null, SUBS, TimelineFilter.NONE, null, null, 0));
 	}
 
 	@Test
@@ -139,7 +145,7 @@ class TimelineQueryRepositoryTest {
 		TimelineQueryRepository repository = repository();
 
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> repository.findPage(null, List.of(), null, null, 120))
+				.isThrownBy(() -> repository.findPage(null, List.of(), TimelineFilter.NONE, null, null, 120))
 				.withMessageContaining("subcategory");
 	}
 
@@ -148,7 +154,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
 
-		repository().findPage(null, SUBS, null, null, 120);
+		repository().findPage(null, SUBS, TimelineFilter.NONE, null, null, 120);
 
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
 
@@ -176,7 +182,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		List<TimelineMonthCount> counts = repository().findMonthCounts(FileType.VIDEO, SUBS);
+		List<TimelineMonthCount> counts = repository().findMonthCounts(FileType.VIDEO, SUBS, TimelineFilter.NONE);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
@@ -207,7 +213,7 @@ class TimelineQueryRepositoryTest {
 					return List.of(mapper.mapRow(resultSet, 0));
 				});
 
-		TimelineCountSummary summary = repository().findCountSummary(null, SUBS);
+		TimelineCountSummary summary = repository().findCountSummary(null, SUBS, TimelineFilter.NONE);
 
 		ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
 
@@ -226,7 +232,7 @@ class TimelineQueryRepositoryTest {
 		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
 				ArgumentMatchers.<RowMapper<TimelineCountSummary>>any())).thenReturn(List.of());
 
-		TimelineCountSummary summary = repository().findCountSummary(FileType.PHOTO, SUBS);
+		TimelineCountSummary summary = repository().findCountSummary(FileType.PHOTO, SUBS, TimelineFilter.NONE);
 
 		Assertions.assertThat(summary).isEqualTo(new TimelineCountSummary(0, 0, 0));
 	}
@@ -234,4 +240,64 @@ class TimelineQueryRepositoryTest {
 	private TimelineQueryRepository repository() {
 		return new TimelineQueryRepository(jdbcTemplate, new LocationLabels());
 	}
+	/**
+	 * A filled panel: every optional predicate has to arrive bound, and the two
+	 * conversions have to be right - megabytes were already turned into bytes
+	 * upstream, and the closing day becomes the start of the next one so that the
+	 * last day is included rather than cut at midnight.
+	 */
+	@Test
+	void bindsEveryFilterOfTheePanelIncludingTheInclusiveEndOfTheWindow() {
+		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
+				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
+
+		TimelineFilter filter = new TimelineFilter(
+				new CaptureWindow(LocalDate.of(2008, Month.JANUARY, 1), LocalDate.of(2008, Month.DECEMBER, 31)),
+				new CameraFilter(" Canon ", "EOS 5D"), new MediaScaleFilter(1024L, 2048L, 30.0, 600.0, 1920),
+				GeoPresence.WITHOUT_LOCATION);
+
+		repository().findPage(FileType.PHOTO, SUBS, filter, null, null, 121);
+
+		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
+
+		verify(jdbcTemplate).query(any(String.class), parameters.capture(),
+				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any());
+
+		SqlParameterSource bound = parameters.getValue();
+
+		Assertions.assertThat(bound.getValue("captureFrom"))
+				.isEqualTo(Timestamp.valueOf(LocalDate.of(2008, Month.JANUARY, 1).atStartOfDay()));
+		Assertions.assertThat(bound.getValue("captureTo"))
+				.isEqualTo(Timestamp.valueOf(LocalDate.of(2009, Month.JANUARY, 1).atStartOfDay()));
+		Assertions.assertThat(bound.getValue("manufacturer")).isEqualTo("Canon");
+		Assertions.assertThat(bound.getValue("model")).isEqualTo("EOS 5D");
+		Assertions.assertThat(bound.getValue("minBytes")).isEqualTo(1024L);
+		Assertions.assertThat(bound.getValue("maxBytes")).isEqualTo(2048L);
+		Assertions.assertThat(bound.getValue("minDuration")).isEqualTo(30.0);
+		Assertions.assertThat(bound.getValue("maxDuration")).isEqualTo(600.0);
+		Assertions.assertThat(bound.getValue("minLongestSide")).isEqualTo(1920);
+		Assertions.assertThat(bound.getValue("geo")).isEqualTo("WITHOUT_LOCATION");
+	}
+
+	/** No panel at all is the same as an empty one: every predicate stays inert. */
+	@Test
+	void bindsNothingWhenThereIsNoFilter() {
+		when(jdbcTemplate.query(any(String.class), any(SqlParameterSource.class),
+				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any())).thenReturn(List.of());
+
+		repository().findPage(FileType.PHOTO, SUBS, null, null, null, 121);
+
+		ArgumentCaptor<SqlParameterSource> parameters = ArgumentCaptor.forClass(SqlParameterSource.class);
+
+		verify(jdbcTemplate).query(any(String.class), parameters.capture(),
+				ArgumentMatchers.<RowMapper<TimelineItemProjection>>any());
+
+		SqlParameterSource bound = parameters.getValue();
+
+		Assertions.assertThat(bound.getValue("captureFrom")).isNull();
+		Assertions.assertThat(bound.getValue("captureTo")).isNull();
+		Assertions.assertThat(bound.getValue("manufacturer")).isNull();
+		Assertions.assertThat(bound.getValue("geo")).isNull();
+	}
+
 }

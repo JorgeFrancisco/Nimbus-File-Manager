@@ -1,6 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.web;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -181,4 +184,50 @@ class TimelineWebControllerTest {
 		Assertions.assertThat((MediaSubcategory[]) model.getAttribute("subcategoryOptions"))
 				.containsExactly(MediaSubcategory.values());
 	}
+	/**
+	 * The panel is a screen preference like any other: the rule is that what the
+	 * user picked is reapplied when the screen reopens, never reset to the default.
+	 */
+	@Test
+	void storesEachFilterControlOfThePanel() {
+		controller.saveTimelineFilters(Map.of("from", "2008-01-01", "manufacturer", " Canon ", "geo",
+				"WITHOUT_LOCATION"), auth);
+
+		verify(userPagePreferenceService).save("bob", "timeline", "filter.from", "2008-01-01");
+		verify(userPagePreferenceService).save("bob", "timeline", "filter.manufacturer", "Canon");
+		verify(userPagePreferenceService).save("bob", "timeline", "filter.geo", "WITHOUT_LOCATION");
+	}
+
+	/**
+	 * The request is a free-form map, so anything not on the whitelist would
+	 * otherwise become a preference row of its own.
+	 */
+	@Test
+	void ignoresAnythingThatIsNotAFilterControl() {
+		Map<String, String> stored = controller.saveTimelineFilters(Map.of("dropTable", "yes"), auth);
+
+		Assertions.assertThat(stored).isEmpty();
+
+		verify(userPagePreferenceService, never()).save(any(), any(), eq("filter.dropTable"), any());
+	}
+
+	@Test
+	void reopensTheScreenWithThePanelTheUserLeft() {
+		when(mediaLocationService.enabled()).thenReturn(false);
+		when(mediaLocationService.pendingCount()).thenReturn(0L);
+		when(userPagePreferenceService.find("bob", "layout")).thenReturn(Map.of());
+		when(userPagePreferenceService.find("bob", "timeline"))
+				.thenReturn(Map.of("filter.minSizeMb", "50", "filter.geo", "WITH_LOCATION"));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.timeline(auth, model);
+
+		@SuppressWarnings("unchecked")
+		Map<String, String> saved = (Map<String, String>) model.get("savedFilters");
+
+		Assertions.assertThat(saved).containsEntry("minSizeMb", "50").containsEntry("geo", "WITH_LOCATION")
+				.containsEntry("model", "");
+	}
+
 }

@@ -28,6 +28,38 @@
 					</label>
 				</div>
 			</details>
+			<details class="timeline-filter filter-menu" id="timelineMore">
+				<summary><span th:text="#{timeline.filters.title}">Filtros</span><span class="filter-badge" id="timelineFilterBadge" hidden></span></summary>
+				<div class="filter-menu-panel filter-menu-form">
+					<label class="filter-field"><span th:text="#{timeline.filters.from}">De</span>
+						<input type="date" id="filterFrom" th:value="${savedFilters['from']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.to}">Até</span>
+						<input type="date" id="filterTo" th:value="${savedFilters['to']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.manufacturer}">Fabricante</span>
+						<input type="text" id="filterManufacturer" th:value="${savedFilters['manufacturer']}"
+								th:placeholder="#{timeline.filters.manufacturerHint}" autocomplete="off"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.model}">Modelo</span>
+						<input type="text" id="filterModel" th:value="${savedFilters['model']}"
+								th:placeholder="#{timeline.filters.modelHint}" autocomplete="off"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.minSize}">Tamanho mín. (MB)</span>
+						<input type="number" min="0" step="1" id="filterMinSize" th:value="${savedFilters['minSizeMb']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.maxSize}">Tamanho máx. (MB)</span>
+						<input type="number" min="0" step="1" id="filterMaxSize" th:value="${savedFilters['maxSizeMb']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.minDuration}">Duração mín. (s)</span>
+						<input type="number" min="0" step="1" id="filterMinDuration" th:value="${savedFilters['minDurationSeconds']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.maxDuration}">Duração máx. (s)</span>
+						<input type="number" min="0" step="1" id="filterMaxDuration" th:value="${savedFilters['maxDurationSeconds']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.minLongestSide}">Lado maior (px)</span>
+						<input type="number" min="0" step="1" id="filterMinLongestSide" th:value="${savedFilters['minLongestSide']}"></label>
+					<label class="filter-field"><span th:text="#{timeline.filters.geo}">Localização</span>
+						<select id="filterGeo">
+							<option th:each="option : ${geoOptions}" th:value="${option.name()}"
+									th:selected="${savedFilters['geo'] == option.name()}"
+									th:text="${#messages.msg('timeline.filters.geo.' + option.name())}">Qualquer</option>
+						</select></label>
+					<button type="button" class="button secondary" id="filterClear" th:text="#{timeline.filters.clear}">Limpar</button>
+				</div>
+			</details>
 		</div>
 	</header>
 	<div id="geoNotice" class="panel geo-notice" role="status" th:if="${geoNoticeVisible}">

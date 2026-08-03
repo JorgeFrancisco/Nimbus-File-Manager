@@ -32,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.LibraryCatalogCle
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
 @SpringBootTest
@@ -172,10 +173,10 @@ class InventoryOrganizationReinventoryTest {
 		List<String> subcategories = List.of("CAMERA", "CELLPHONE");
 
 		Assertions.assertThatCode(() -> {
-			timelineQueryRepository.findCountSummary(null, subcategories);
-			timelineQueryRepository.findMonthCounts(null, subcategories);
-			timelineQueryRepository.findPage(null, subcategories, null, null, 2);
-			timelineQueryRepository.findUndatedPage(null, subcategories, null, 2);
+			timelineQueryRepository.findCountSummary(null, subcategories, TimelineFilter.NONE);
+			timelineQueryRepository.findMonthCounts(null, subcategories, TimelineFilter.NONE);
+			timelineQueryRepository.findPage(null, subcategories, TimelineFilter.NONE, null, null, 2);
+			timelineQueryRepository.findUndatedPage(null, subcategories, TimelineFilter.NONE, null, 2);
 		}).doesNotThrowAnyException();
 	}
 

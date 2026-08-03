@@ -25,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndat
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedPageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineYearCount;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
@@ -40,8 +41,8 @@ public class TimelineService {
 	}
 
 	@Transactional(readOnly = true)
-	public TimelinePageResponse page(TimelineMediaType type, Collection<MediaSubcategory> subcategories, int limit,
-			String encodedCursor, LocalDate from) {
+	public TimelinePageResponse page(TimelineMediaType type, Collection<MediaSubcategory> subcategories,
+			TimelineFilter filter, int limit, String encodedCursor, LocalDate from) {
 		validateLimit(limit);
 
 		if (encodedCursor != null && from != null) {
@@ -72,7 +73,7 @@ public class TimelineService {
 		}
 
 		List<TimelineItemProjection> rows = timelineQueryRepository.findPage(type.fileType(),
-				resolveSubcategories(subcategories), cursorDate, cursorId, limit + 1);
+				resolveSubcategories(subcategories), filter, cursorDate, cursorId, limit + 1);
 
 		boolean hasMore = rows.size() > limit;
 
@@ -99,13 +100,13 @@ public class TimelineService {
 
 	@Transactional(readOnly = true)
 	public TimelineUndatedPageResponse undated(TimelineMediaType type, Collection<MediaSubcategory> subcategories,
-			int limit, String encodedCursor) {
+			TimelineFilter filter, int limit, String encodedCursor) {
 		validateLimit(limit);
 
 		TimelineUndatedCursor cursor = encodedCursor == null ? null : cursorCodec.decodeUndated(encodedCursor, type);
 
 		List<TimelineItemProjection> rows = timelineQueryRepository.findUndatedPage(type.fileType(),
-				resolveSubcategories(subcategories), cursor == null ? null : cursor.internalId(), limit + 1);
+				resolveSubcategories(subcategories), filter, cursor == null ? null : cursor.internalId(), limit + 1);
 
 		boolean hasMore = rows.size() > limit;
 
@@ -144,16 +145,16 @@ public class TimelineService {
 	}
 
 	@Transactional(readOnly = true)
-	public TimelineIndex index(FileType fileType, Collection<MediaSubcategory> subcategories) {
+	public TimelineIndex index(FileType fileType, Collection<MediaSubcategory> subcategories, TimelineFilter filter) {
 		validateFileType(fileType);
 
 		List<String> names = resolveSubcategories(subcategories);
 
-		TimelineCountSummary summary = timelineQueryRepository.findCountSummary(fileType, names);
+		TimelineCountSummary summary = timelineQueryRepository.findCountSummary(fileType, names, filter);
 
 		Map<Integer, List<TimelineMonthCount>> monthsByYear = new LinkedHashMap<>();
 
-		timelineQueryRepository.findMonthCounts(fileType, names)
+		timelineQueryRepository.findMonthCounts(fileType, names, filter)
 				.forEach(month -> monthsByYear.computeIfAbsent(month.year(), _ -> new ArrayList<>()).add(month));
 
 		List<TimelineYearCount> years = monthsByYear.entrySet().stream().map(entry -> {

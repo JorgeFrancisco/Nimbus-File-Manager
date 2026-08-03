@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.web;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.constants.TimelineConstants;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.GeoPresence;
 
 /**
  * Timeline page plus the dismissible "geographic dataset not configured"
@@ -43,6 +45,13 @@ public class TimelineWebController {
 	private static final String GEO_NOTICE_DISMISSED = "geo-notice-dismissed";
 	private static final String SUBCATEGORIES_KEY = "subcategories";
 	private static final Set<String> TIMELINE_TYPES = Set.of(ALL, "PHOTO", "VIDEO");
+
+	/**
+	 * What the panel may store. A whitelist because the request is a free-form map:
+	 * without it, anything posted would become a preference row.
+	 */
+	private static final Set<String> FILTER_FIELDS = Set.of("from", "to", "manufacturer", "model", "minSizeMb",
+			"maxSizeMb", "minDurationSeconds", "maxDurationSeconds", "minLongestSide", "geo");
 
 	private final MediaLocationService mediaLocationService;
 	private final OfflineGeoDataset offlineGeoDataset;
@@ -70,6 +79,11 @@ public class TimelineWebController {
 		model.addAttribute("timelineType", savedTimelineType(authentication));
 		model.addAttribute("subcategoryOptions", MediaSubcategory.values());
 		model.addAttribute("selectedSubcategories", savedSubcategories(authentication));
+		model.addAttribute("geoOptions", GeoPresence.values());
+
+		// The panel reopens as the user left it, like every other screen preference.
+		// Handed over as ready values rather than as a blob for the page to parse.
+		model.addAttribute("savedFilters", savedFilters(authentication));
 
 		return "app/timeline";
 	}
@@ -136,6 +150,48 @@ public class TimelineWebController {
 
 		return Arrays.stream(csv.split(",")).map(String::trim).filter(value -> !value.isEmpty())
 				.map(name -> EnumUtils.valueOfOrNull(MediaSubcategory.class, name)).filter(Objects::nonNull).toList();
+	}
+
+	/**
+	 * Stores the filter panel, one preference per control. An empty value removes
+	 * the narrowing rather than storing an empty string, so that "cleared" and
+	 * "never set" are the same state when the screen reopens.
+	 */
+	@PostMapping("/app/timeline/filters")
+	@ResponseBody
+	public Map<String, String> saveTimelineFilters(@RequestParam Map<String, String> filters,
+			Authentication authentication) {
+		Map<String, String> stored = new LinkedHashMap<>();
+
+		filters.forEach((key, value) -> {
+			if (!FILTER_FIELDS.contains(key)) {
+				return;
+			}
+
+			String clean = value == null || value.isBlank() ? "" : value.trim();
+
+			userPagePreferenceService.save(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY,
+					TimelineConstants.FILTER_KEY_PREFIX + key, clean);
+
+			stored.put(key, clean);
+		});
+
+		return stored;
+	}
+
+	private Map<String, String> savedFilters(Authentication authentication) {
+		Map<String, String> saved = userPagePreferenceService.find(username(authentication),
+				TimelineConstants.TIMELINE_PAGE_KEY);
+
+		Map<String, String> panel = new LinkedHashMap<>();
+
+		FILTER_FIELDS.forEach(field -> {
+			String value = saved.get(TimelineConstants.FILTER_KEY_PREFIX + field);
+
+			panel.put(field, value == null ? "" : value);
+		});
+
+		return panel;
 	}
 
 	/** Called by timeline.js when the user clicks "não mostrar mais este aviso". */

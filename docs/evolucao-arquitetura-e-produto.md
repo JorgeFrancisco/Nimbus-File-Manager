@@ -4,7 +4,7 @@ Documento **vivo** de sugestões, não de decisões. O que virar decisão desce 
 `docs/adr/`; o que virar estado atual pertence ao README.
 
 **Item concluído é removido daqui**, e não marcado como feito: a lista existe para dizer o que falta,
-e histórico é assunto do git. Os identificadores (`A5`, `P7`, …) **não são renumerados** quando algo
+e histórico é assunto do git. Os identificadores (`A5`, `P8`, …) **não são renumerados** quando algo
 sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item — e o que ele era
 se acha em `git log -S"P4." -- docs/evolucao-arquitetura-e-produto.md`, que é onde vive o histórico.
 
@@ -52,13 +52,6 @@ segundo plano" — e essa percepção define review de produto.
 
 ## Produto
 
-### Complexidade média — semanas
-
-**P7. Só duas telas usam o que o catálogo sabe.** Timeline e Mapa exploram metadados; o resto é
-gestão. Há riqueza subaproveitada: câmera, dimensões, duração, subcategoria, data confiável.
-*Entrega:* busca avançada e coleções salvas ("fotos de 2008 sem GPS", "vídeos acima de 1 GB") usam
-dados que já existem, sem processar nada de novo. É o melhor retorno por esforço do produto hoje.
-
 ### Complexidade alta — meses
 
 **P8. O produto organiza, mas não conta histórias.** Hoje ele responde "o que eu tenho e onde está".
@@ -88,7 +81,7 @@ O produto está bom o suficiente para escolher uma direção; tentar as três ao
 real desta fase.
 
 **Caminho 1 — Ferramenta de curadoria séria.** Público: quem tem 100 mil fotos e um problema de
-organização. Prioriza P7. O diferencial é a integridade: mover arquivo com verificação
+organização. O diferencial é a integridade: mover arquivo com verificação
 byte a byte, undo, trilha de auditoria. Ninguém no mercado de consumo faz isso.
 
 **Caminho 2 — Substituto do Google Fotos local.** Público: família que quer sair da nuvem. Prioriza
@@ -96,14 +89,14 @@ P8, P9, A7. Exige a camada de encantamento e multiusuário de verdade. Concorrê
 (Immich, PhotoPrism) e barra alta de UX.
 
 **Caminho 3 — Motor de organização para profissionais.** Público: fotógrafo, arquivista, quem recebe
-cartão de memória toda semana. Prioriza A6 (API), P7, regras de ingestão automáticas. Menor público,
+cartão de memória toda semana. Prioriza A6 (API) e regras de ingestão automáticas. Menor público,
 maior disposição a pagar, e é onde a arquitetura atual já está mais pronta.
 
 Minha leitura: o **Caminho 1** é o que exige menos desvio do que já existe. Os dois gargalos que eram
 comuns aos três já saíram: instalar exigia criar role no PostgreSQL, e depois a versão instalada era
-a versão eterna, e o move sobre disco hostil passou a ser testado onde ele realmente falha. Não sobra
-um gargalo comum aos três: daqui em diante a ordem depende do caminho escolhido, e **P7** é o que
-rende em dois deles.
+a versão eterna, o move sobre disco hostil passou a ser testado onde ele realmente falha, e o catálogo
+ficou explorável pela Timeline. Não sobra gargalo comum aos três: daqui em diante a ordem depende
+inteiramente do caminho escolhido.
 
 ---
 
@@ -111,8 +104,7 @@ rende em dois deles.
 
 Ordem por dependência e risco, não por valor isolado:
 
-1. **P7** (busca e coleções) — primeiro ganho de produto que não exige arquitetura nova.
-2. Só então escolher entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**, conforme o caminho.
+1. Escolher o caminho, e com ele entre **A7** (multi-biblioteca), **P8** (álbuns) e **A6/P9**.
 
 ## O que eu não recomendaria agora
 
@@ -126,5 +118,5 @@ Dizer não também é sugestão:
 - **Trocar o PostgreSQL.** Ele sustenta o modelo com folga, e o motivo histórico para cogitar a
   troca — obrigar quem instala a instalar um servidor antes — deixou de existir: a aplicação
   baixa o servidor, cria o cluster e o desliga no fechamento, sem ninguém saber que ele está ali.
-- **Reconhecimento facial (P10) como próximo passo.** Recurso vistoso antes de o catálogo ser
-  explorável (P7) é esforço mal colocado: primeiro se acha o que já se tem.
+- **Reconhecimento facial (P10) como próximo passo.** É o único item que envolve dado biométrico e
+  modelo de ML embarcado; fazê-lo antes de A7 ou P8 é escolher o mais caro primeiro.

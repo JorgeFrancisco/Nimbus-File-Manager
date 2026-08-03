@@ -18,8 +18,14 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineIndex
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedPageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineFilterForm;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 
 class TimelineControllerTest {
+
+	/** The empty panel: what the controller receives when nobody filtered anything. */
+	private static final TimelineFilterForm NO_FILTER = new TimelineFilterForm(null, null, null, null, null, null,
+			null, null, null, null);
 
 	private final TimelineService timelineService = mock(TimelineService.class);
 	private final TimelineController controller = new TimelineController(timelineService);
@@ -33,16 +39,16 @@ class TimelineControllerTest {
 		List<MediaSubcategory> subcategories = List.of(MediaSubcategory.CAMERA);
 		TimelineIndex index = new TimelineIndex(10, 8, 2, List.of());
 
-		when(timelineService.index(FileType.PHOTO, subcategories)).thenReturn(index);
+		when(timelineService.index(FileType.PHOTO, subcategories, TimelineFilter.NONE)).thenReturn(index);
 
-		Assertions.assertThat(controller.index(TimelineMediaType.PHOTO, subcategories)).isSameAs(index);
+		Assertions.assertThat(controller.index(TimelineMediaType.PHOTO, subcategories, NO_FILTER)).isSameAs(index);
 	}
 
 	@Test
 	void indexShouldPassANullFileTypeForAll() {
-		controller.index(TimelineMediaType.ALL, null);
+		controller.index(TimelineMediaType.ALL, null, NO_FILTER);
 
-		verify(timelineService).index(null, null);
+		verify(timelineService).index(null, null, TimelineFilter.NONE);
 	}
 
 	/**
@@ -55,9 +61,10 @@ class TimelineControllerTest {
 		List<MediaSubcategory> subcategories = List.of(MediaSubcategory.SCREENSHOT);
 		TimelinePageResponse page = new TimelinePageResponse(List.of(), "cursor-2", true);
 
-		when(timelineService.page(TimelineMediaType.VIDEO, subcategories, 50, "cursor-1", from)).thenReturn(page);
+		when(timelineService.page(TimelineMediaType.VIDEO, subcategories, TimelineFilter.NONE, 50, "cursor-1",
+				from)).thenReturn(page);
 
-		Assertions.assertThat(controller.items(TimelineMediaType.VIDEO, subcategories, 50, "cursor-1", from))
+		Assertions.assertThat(controller.items(TimelineMediaType.VIDEO, subcategories, NO_FILTER, 50, "cursor-1", from))
 				.isSameAs(page);
 	}
 
@@ -65,8 +72,8 @@ class TimelineControllerTest {
 	void undatedShouldForwardTheKeysetArgumentsUnchanged() {
 		TimelineUndatedPageResponse page = new TimelineUndatedPageResponse(List.of(), null, false);
 
-		when(timelineService.undated(TimelineMediaType.ALL, null, 120, null)).thenReturn(page);
+		when(timelineService.undated(TimelineMediaType.ALL, null, TimelineFilter.NONE, 120, null)).thenReturn(page);
 
-		Assertions.assertThat(controller.undated(TimelineMediaType.ALL, null, 120, null)).isSameAs(page);
+		Assertions.assertThat(controller.undated(TimelineMediaType.ALL, null, NO_FILTER, 120, null)).isSameAs(page);
 	}
 }

@@ -134,7 +134,8 @@ class ControllersTest {
 
 		new MetadataController(metadataRebuildService).rebuild(metadataRequest);
 		new MediaController(mediaSearchService)
-				.search(new MediaSearchCriteria(FileType.PHOTO, "h264", "folder", "jpg", 2024, 5, 1L, 10L), pageable);
+				.search(new MediaSearchCriteria(FileType.PHOTO, "h264", "folder", "jpg", 2024, 5, 1L, 10L, null, null,
+						null, null, null, null), pageable);
 
 		DuplicateController duplicateController = new DuplicateController(duplicateService, photoSimilarityService,
 				phashBacklogService, videoSimilarityService, videoFingerprintBacklogService,

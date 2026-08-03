@@ -787,6 +787,52 @@ a.button.disabled {
 	z-index: 20;
 }
 
+/*
+ * The filter panel of the timeline: the same dropdown as the origin checkboxes,
+ * but holding a form. Wider and two-column because a single column of ten
+ * controls is taller than the viewport on a laptop.
+ */
+.filter-menu-form {
+	gap: 10px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	max-width: 420px;
+	min-width: 320px;
+	padding: 12px;
+}
+
+.filter-field {
+	display: grid;
+	font-size: .85rem;
+	gap: 4px;
+}
+
+.filter-field input,
+.filter-field select {
+	width: 100%;
+}
+
+.filter-menu-form .button {
+	grid-column: 1 / -1;
+}
+
+/* How many filters are on, so a narrowed timeline never reads as an empty one. */
+.filter-badge {
+	background: var(--accent, #4f8cff);
+	border-radius: 999px;
+	color: #fff;
+	font-size: .7rem;
+	font-weight: 600;
+	margin-left: 6px;
+	padding: 1px 7px;
+}
+
+@media (max-width: 620px) {
+	.filter-menu-form {
+		grid-template-columns: minmax(0, 1fr);
+		min-width: 240px;
+	}
+}
+
 .filter-menu-option {
 	align-items: flex-start;
 	border-radius: 6px;

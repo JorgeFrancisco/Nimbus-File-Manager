@@ -22,6 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageR
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedCursor;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineUndatedPageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
@@ -44,17 +45,18 @@ class TimelineServicePageTest {
 	@Test
 	void pageRejectsLimitOutsideRange() {
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, 0, null, null))
+				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 0, null, null))
 				.withMessageContaining("between 1 and 250");
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, 251, null, null))
+				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 251, null, null))
 				.withMessageContaining("between 1 and 250");
 	}
 
 	@Test
 	void pageRejectsCursorAndFromCombined() {
 		Assertions.assertThatIllegalArgumentException().isThrownBy(
-				() -> service.page(TimelineMediaType.ALL, null, 10, "cursor", LocalDate.of(2026, Month.JULY, 1)))
+				() -> service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 10, "cursor", LocalDate.of(2026,
+						Month.JULY, 1)))
 				.withMessageContaining("cannot be combined");
 	}
 
@@ -68,11 +70,11 @@ class TimelineServicePageTest {
 
 		when(cursorCodec.decode("cur", TimelineMediaType.ALL)).thenReturn(decoded);
 		// limit 2 -> asks for 3; returning 3 rows means hasMore = true.
-		when(repository.findPage(isNull(), any(), eq(decoded.captureDate()), eq(99L), eq(3)))
+		when(repository.findPage(isNull(), any(), any(), eq(decoded.captureDate()), eq(99L), eq(3)))
 				.thenReturn(List.of(item(1, d1), item(2, d2), item(3, d2)));
 		when(cursorCodec.encode(any(TimelineCursor.class))).thenReturn("next-cursor");
 
-		TimelinePageResponse response = service.page(TimelineMediaType.ALL, null, 2, "cur", null);
+		TimelinePageResponse response = service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 2, "cur", null);
 
 		Assertions.assertThat(response.hasMore()).isTrue();
 		Assertions.assertThat(response.nextCursor()).isEqualTo("next-cursor");
@@ -82,10 +84,10 @@ class TimelineServicePageTest {
 
 	@Test
 	void pageWithoutCursorReturnsAllWhenNoMorePages() {
-		when(repository.findPage(isNull(), any(), isNull(), isNull(), eq(11)))
+		when(repository.findPage(isNull(), any(), any(), isNull(), isNull(), eq(11)))
 				.thenReturn(List.of(item(1, LocalDateTime.now())));
 
-		TimelinePageResponse response = service.page(TimelineMediaType.ALL, null, 10, null, null);
+		TimelinePageResponse response = service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 10, null, null);
 
 		Assertions.assertThat(response.hasMore()).isFalse();
 		Assertions.assertThat(response.nextCursor()).isNull();
@@ -94,11 +96,12 @@ class TimelineServicePageTest {
 
 	@Test
 	void undatedEmitsNextCursorWhenMorePagesExist() {
-		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), isNull(), eq(3)))
+		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), any(), isNull(), eq(3)))
 				.thenReturn(List.of(item(1, null), item(2, null), item(3, null)));
 		when(cursorCodec.encodeUndated(any(TimelineUndatedCursor.class))).thenReturn("u-next");
 
-		TimelineUndatedPageResponse response = service.undated(TimelineMediaType.PHOTO, null, 2, null);
+		TimelineUndatedPageResponse response = service.undated(TimelineMediaType.PHOTO, null, TimelineFilter.NONE, 2,
+				null);
 
 		Assertions.assertThat(response.hasMore()).isTrue();
 		Assertions.assertThat(response.nextCursor()).isEqualTo("u-next");
@@ -109,9 +112,11 @@ class TimelineServicePageTest {
 	void undatedDecodesCursorAndReturnsWithoutNextWhenNoMore() {
 		when(cursorCodec.decodeUndated("uc", TimelineMediaType.PHOTO))
 				.thenReturn(new TimelineUndatedCursor(7L, TimelineMediaType.PHOTO));
-		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), eq(7L), eq(11))).thenReturn(List.of(item(1, null)));
+		when(repository.findUndatedPage(eq(FileType.PHOTO), any(), any(), eq(7L), eq(11))).thenReturn(List.of(item(1,
+				null)));
 
-		TimelineUndatedPageResponse response = service.undated(TimelineMediaType.PHOTO, null, 10, "uc");
+		TimelineUndatedPageResponse response = service.undated(TimelineMediaType.PHOTO, null, TimelineFilter.NONE, 10,
+				"uc");
 
 		Assertions.assertThat(response.hasMore()).isFalse();
 		Assertions.assertThat(response.nextCursor()).isNull();
@@ -121,7 +126,7 @@ class TimelineServicePageTest {
 	@Test
 	void undatedRejectsInvalidLimit() {
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.undated(TimelineMediaType.PHOTO, null, 0, null))
+				.isThrownBy(() -> service.undated(TimelineMediaType.PHOTO, null, TimelineFilter.NONE, 0, null))
 				.withMessageContaining("between 1 and 250");
 	}
 }

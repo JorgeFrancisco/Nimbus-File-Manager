@@ -52,7 +52,8 @@ class MediaControllerTest {
 		verify(mediaSearchService).search(criteria.capture(), pageable.capture());
 
 		Assertions.assertThat(criteria.getValue())
-				.isEqualTo(new MediaSearchCriteria(FileType.PHOTO, "h264", "D:/x", "jpg", 2026, 1, 10L, 99L));
+				.isEqualTo(new MediaSearchCriteria(FileType.PHOTO, "h264", "D:/x", "jpg", 2026, 1, 10L, 99L, null,
+						null, null, null, null, null));
 		Assertions.assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
 	}
 }

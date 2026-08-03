@@ -92,10 +92,43 @@
 		}
 		return params;
 	}
+	// The filter panel. Read live from the controls, like the origin checkboxes:
+	// there is no second copy of the state to keep in step, and a value the user
+	// cleared is simply absent from the next request.
+	var FILTER_FIELDS = {
+		from: "filterFrom", to: "filterTo", manufacturer: "filterManufacturer", model: "filterModel",
+		minSizeMb: "filterMinSize", maxSizeMb: "filterMaxSize", minDurationSeconds: "filterMinDuration",
+		maxDurationSeconds: "filterMaxDuration", minLongestSide: "filterMinLongestSide", geo: "filterGeo"
+	};
+	function readFilters() {
+		var values = {};
+		Object.keys(FILTER_FIELDS).forEach(function (field) {
+			var control = document.getElementById(FILTER_FIELDS[field]);
+			var value = control ? String(control.value || "").trim() : "";
+			// "ANY" is the absence of a geo filter, not a value to send.
+			values[field] = (field === "geo" && value === "ANY") ? "" : value;
+		});
+		return values;
+	}
+	function appendFilters(params) {
+		var values = readFilters();
+		Object.keys(values).forEach(function (field) { if (values[field]) params.set(field, values[field]); });
+		return params;
+	}
+	// The badge exists so a filtered timeline never reads as an empty library: the
+	// count of active filters sits on the panel even when it is collapsed.
+	function refreshFilterBadge() {
+		var badge = document.getElementById("timelineFilterBadge");
+		if (!badge) return;
+		var values = readFilters();
+		var active = Object.keys(values).filter(function (field) { return values[field]; }).length;
+		badge.textContent = active > 0 ? String(active) : "";
+		badge.hidden = active === 0;
+	}
 	function pageUrl(cursor) {
 		var params = new URLSearchParams({ type: state.type, limit: "120" }); if (cursor) params.set("cursor", cursor);
 		else if (state.from) params.set("from", state.from);
-		appendSubcategories(params);
+		appendSubcategories(params); appendFilters(params);
 		return "/api/timeline/items?" + params.toString();
 	}
 	function fetchPage(cursor, signal) {
@@ -141,7 +174,7 @@
 	}
 	function loadNavigator(type) {
 		var target = document.getElementById("timelineNavigatorItems"); target.textContent = t("js.timeline.loading");
-		var params = new URLSearchParams({ type: type }); appendSubcategories(params);
+		var params = new URLSearchParams({ type: type }); appendSubcategories(params); appendFilters(params);
 		fetch("/api/timeline/index?" + params.toString()).then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
 			.then(function (index) {
 				target.replaceChildren();
@@ -223,6 +256,36 @@
 				loadNavigator(type.value); resetAndLoad(type.value, null, "push");
 			});
 		});
+		function saveFilters() {
+			var token = document.querySelector("input[name='_csrf']");
+			var values = readFilters();
+			var body = Object.keys(values).map(function (field) {
+				return encodeURIComponent(field) + "=" + encodeURIComponent(values[field]);
+			}).join("&");
+			fetch("/app/timeline/filters", {
+				method: "POST",
+				headers: { "X-CSRF-TOKEN": token ? token.value : "", "Content-Type": "application/x-www-form-urlencoded" },
+				body: body
+			}).catch(function () { });
+		}
+		function applyFilters() {
+			refreshFilterBadge(); saveFilters(); window.NimbusFileManagerLightbox.close();
+			loadNavigator(type.value); resetAndLoad(type.value, null, "push");
+		}
+		Object.keys(FILTER_FIELDS).forEach(function (field) {
+			var control = document.getElementById(FILTER_FIELDS[field]);
+			// change rather than input: a half-typed camera model is not a search.
+			if (control) control.addEventListener("change", applyFilters);
+		});
+		var clearFilters = document.getElementById("filterClear");
+		if (clearFilters) clearFilters.addEventListener("click", function () {
+			Object.keys(FILTER_FIELDS).forEach(function (field) {
+				var control = document.getElementById(FILTER_FIELDS[field]);
+				if (control) control.value = field === "geo" ? "ANY" : "";
+			});
+			applyFilters();
+		});
+		refreshFilterBadge();
 		var observer = new IntersectionObserver(function (entries) { if (entries.some(function (entry) { return entry.isIntersecting; })) loadNext(); }, { rootMargin: "1000px" });
 		observer.observe(document.getElementById("timelineSentinel"));
 		window.addEventListener("scroll", scheduleVisibleYearUpdate, { passive: true });

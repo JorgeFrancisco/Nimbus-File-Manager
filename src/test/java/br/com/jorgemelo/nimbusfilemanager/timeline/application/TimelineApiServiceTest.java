@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelineCursor;
 import br.com.jorgemelo.nimbusfilemanager.timeline.application.dto.TimelinePageResponse;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.TimelineMediaType;
+import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineItemProjection;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
 
@@ -46,9 +47,10 @@ class TimelineApiServiceTest {
 		var two = item(2, older);
 		var extra = item(1, older.minusHours(1));
 
-		when(repository.findPage(isNull(), any(), isNull(), isNull(), eq(3))).thenReturn(List.of(one, two, extra));
+		when(repository.findPage(isNull(), any(), any(), isNull(), isNull(), eq(3))).thenReturn(List.of(one, two,
+				extra));
 
-		TimelinePageResponse page = service.page(TimelineMediaType.ALL, null, 2, null, null);
+		TimelinePageResponse page = service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 2, null, null);
 
 		Assertions.assertThat(page.groups()).hasSize(2);
 		Assertions.assertThat(page.groups().getFirst().date()).isEqualTo(newest.toLocalDate());
@@ -70,9 +72,9 @@ class TimelineApiServiceTest {
 		String cursor = codec.encode(new TimelineCursor(LocalDateTime.now(), 2, TimelineMediaType.PHOTO));
 
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.page(TimelineMediaType.VIDEO, null, 120, cursor, null));
+				.isThrownBy(() -> service.page(TimelineMediaType.VIDEO, null, TimelineFilter.NONE, 120, cursor, null));
 		Assertions.assertThatIllegalArgumentException()
-				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, 251, null, null));
+				.isThrownBy(() -> service.page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 251, null, null));
 	}
 
 	private TimelineCursorCodec codec() {
