@@ -50,6 +50,8 @@ import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.model.AppSetting;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.LocaleConfig;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WebMvcConfig;
+import br.com.jorgemelo.nimbusfilemanager.update.application.dto.UpdateStatus;
+import br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web.UpdateSettingsModel;
 
 /**
  * Renders the settings page for real, template included. The controller unit
@@ -98,6 +100,9 @@ class SettingsPageRenderTest {
 
 	@MockitoBean
 	private EmbeddedDatabaseSettingsModel embeddedDatabaseSettingsModel;
+
+	@MockitoBean
+	private UpdateSettingsModel updateSettingsModel;
 
 	// Dependencies of the MVC interceptors and of the settings advices the slice
 	// always loads, not of the controller under test. The metadata advice is kept
@@ -180,6 +185,16 @@ class SettingsPageRenderTest {
 
 			return null;
 		}).when(embeddedDatabaseSettingsModel).addTo(any(), any());
+
+		// A packaged run that has not found anything: the section renders its version
+		// and the check, which is the state every installation is in most of the time.
+		doAnswer(invocation -> {
+			Model model = invocation.getArgument(0);
+
+			model.addAttribute("updateStatus", new UpdateStatus("6.0.0.147", false, null, null, true, false));
+
+			return null;
+		}).when(updateSettingsModel).addTo(any(), any());
 	}
 
 	private AppSetting setting(String key, String value, String valueType) {

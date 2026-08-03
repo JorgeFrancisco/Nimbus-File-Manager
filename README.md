@@ -92,6 +92,38 @@ temporary files, fixed with `icacls C:\Windows\Temp /grant '*S-1-5-32-545:(CI)(S
 failed attempt also leaves an `msiexec` behind, which answers 1500 ("another installation is in
 progress") until it is killed.
 
+## Updating
+
+An installed copy checks whether a newer version has been published — a couple of minutes after it
+starts, then once a day — and the settings screen has a *Check now* alongside it. When one is
+found, the screen offers to install it: the installer is downloaded into the workspace, its
+SHA-256 is compared against the one published beside it, and only then is it started. A file that
+does not match is deleted rather than kept, because an installer of unknown provenance sitting
+under the name of a real release is worse than no download at all.
+
+Installing ends the run, and the screen says so before it happens. The MSI replaces the files the
+application is executing from, so it cannot finish while the application is up; the shutdown is the
+graceful one the tray's *Exit* uses, so the embedded PostgreSQL is stopped rather than left behind.
+
+**Only releases whose `MAJOR.MINOR.PATCH` moved are offered.** Windows Installer records three
+fields, so two releases differing only in the build are the same version to the machine that would
+install them — announcing one would offer an upgrade that cannot be applied. This costs nothing:
+by the versioning policy a build-only bump is refactoring, documentation or a test, which has
+nothing to deliver to anyone.
+
+This check is the only thing in the application that reaches the network without being asked, so it
+is switchable and the reasoning is written down in
+[ADR 0001](docs/adr/0001-verificacao-de-atualizacao-sai-do-computador.md):
+
+```text
+nimbus-file-manager.update.enabled=false
+nimbus-file-manager.update.release-url=https://your-mirror/releases/latest
+```
+
+Nothing identifying is sent — no installation id, and not even the installed version, which never
+leaves the machine because the comparison happens locally. A run with no manifest of its own (from
+the IDE, from Maven) does not check at all, so a development machine never contacts the endpoint.
+
 Everything from here on is about running from source.
 
 ## Running
@@ -1410,8 +1442,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2518 run, 0 failures, 0 errors, 9 skipped
-JaCoCo:      98.46% instruction, 92.23% branch, 98.05% line, 98.81% method, 100.00% class
+Tests:       2596 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.46% instruction, 92.25% branch, 97.98% line, 98.87% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1423,11 +1455,32 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.46% instruction, 92.22% branch, 98.05% line, 98.81% method, 100.00% class
+Floor:  98.46% instruction, 92.22% branch, 97.95% line, 98.87% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-Instruction, branch and line were recalculated downward by a hundredth each, and no code lost
+Method rose and line was recalculated downward by a tenth when the update domain arrived - the
+check, the download, the verification and the installer that ends the run. The order *Recalcular o
+piso* asks for was followed: the honest harvest came first, and it came from anywhere in the
+project rather than only from the new code. In the new domain it covered the release document in
+every shape a server can answer with, the installer being refused when its bytes disagree with the
+published hash, and both HTTP adapters against a real server on the loopback interface. In old
+code it covered three paths that had never been exercised: changing or resetting the password of
+an address that belongs to nobody - which has to be refused by the lookup rather than by the
+password check, or the answer would tell a registered address from an unregistered one - and
+restoring a file whose catalog record was purged between the listing and the click. That harvest
+carried instruction back to its floor and pushed method above it.
+
+What it could not reach is 13 lines and 42 instructions of residue: the `catch (InterruptedException)`
+of two HTTP calls, which needs the thread interrupted mid-request; the `catch` for SHA-256 being
+absent, which the platform guarantees it is not; the I/O failure paths of re-reading and deleting a
+file that was just written; and the anti-instantiation guard of a utility class, which *Piso de
+cobertura* forbids covering by reflection. `SpringApplicationShutdown` is out of the measurement
+under `@CoverageGenerated`, because its two methods start the thread that ends the process, and in
+a test the process is the suite - what *decides* to end the run stayed in `UpdateInstallService`
+and is asserted there, in both directions.
+
+Earlier, instruction, branch and line were recalculated downward by a hundredth each, and no code lost
 coverage to earn it: the tool paths leaving the catalog **deleted** a fully covered class
 (`ExternalToolPathRefresh`), a properties record, a seeding helper and the eleven tests that
 exercised them. Removing code that sat above the project average lowers the average, which is the

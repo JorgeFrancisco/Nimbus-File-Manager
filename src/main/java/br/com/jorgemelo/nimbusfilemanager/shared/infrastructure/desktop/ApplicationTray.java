@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.imageio.ImageIO;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.TrayText;
 
 /**
@@ -207,13 +208,13 @@ public final class ApplicationTray {
 	 * no version to show and shows no item rather than the word "unknown".
 	 */
 	private static Optional<MenuItem> version(TrayText text) {
-		String version = ApplicationTray.class.getPackage().getImplementationVersion();
+		Optional<String> version = InstalledVersion.current();
 
-		if (version == null || version.isBlank()) {
+		if (version.isEmpty()) {
 			return Optional.empty();
 		}
 
-		MenuItem item = new MenuItem(MessageFormat.format(text.get("tray.version"), version));
+		MenuItem item = new MenuItem(MessageFormat.format(text.get("tray.version"), version.get()));
 
 		// It states, it does not act.
 		item.setEnabled(false);

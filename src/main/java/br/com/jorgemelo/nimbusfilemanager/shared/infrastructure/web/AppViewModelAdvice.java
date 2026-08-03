@@ -44,6 +44,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.BackgroundJobAc
 		"br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.statistics.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.web",
+		"br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web" })
 public class AppViewModelAdvice {
 

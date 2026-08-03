@@ -294,6 +294,46 @@ class AppUserAccountServiceTest {
 		Assertions.assertThat(user.getPasswordChangeRequired()).isFalse();
 	}
 
+	/**
+	 * An address nobody owns reaches the same call as one that does, so the
+	 * refusal has to come from the lookup rather than from the password check -
+	 * otherwise a caller could tell a registered address from an unregistered one
+	 * by which complaint comes back.
+	 */
+	@Test
+	void changePasswordShouldRejectAnAddressThatBelongsToNobody() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder,
+				mock(AccountLockService.class), Clock.systemDefaultZone());
+
+		when(repository.findByUsernameIgnoreCase("ghost@example.com")).thenReturn(Optional.empty());
+
+		Assertions.assertThatThrownBy(() -> service.changePassword(" Ghost@Example.COM ", "old", "newSecret"))
+				.isInstanceOf(IllegalArgumentException.class);
+
+		verify(repository, never()).save(ArgumentMatchers.any());
+	}
+
+	@Test
+	void resetRequiredPasswordShouldRejectAnAddressThatBelongsToNobody() {
+		AppUserRepository repository = mock(AppUserRepository.class);
+
+		PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+
+		AppUserAccountService service = new AppUserAccountService(repository, passwordEncoder,
+				mock(AccountLockService.class), Clock.systemDefaultZone());
+
+		when(repository.findByUsernameIgnoreCase("ghost@example.com")).thenReturn(Optional.empty());
+
+		Assertions.assertThatThrownBy(() -> service.resetRequiredPassword("ghost@example.com", "newSecret"))
+				.isInstanceOf(IllegalArgumentException.class);
+
+		verify(repository, never()).save(ArgumentMatchers.any());
+	}
+
 	@Test
 	void resetRequiredPasswordShouldRejectWhenChangeIsNotRequired() {
 		AppUserRepository repository = mock(AppUserRepository.class);

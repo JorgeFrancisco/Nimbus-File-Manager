@@ -28,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -59,6 +60,9 @@ public class CatalogBackupService {
 	private static final String SUFFIX = ".zip";
 	private static final String MANIFEST = "manifest.json";
 	private static final String DUMP = "catalog.dump";
+	// What a build with no manifest records, so the field is never absent from an
+	// archive - a restore reads it to say where the backup came from.
+	private static final String UNKNOWN_VERSION = "unknown";
 
 	private final CatalogSchemaRepository catalogSchemaRepository;
 	private final CatalogDump catalogDump;
@@ -332,9 +336,7 @@ public class CatalogBackupService {
 	}
 
 	private String applicationVersion() {
-		Package pack = getClass().getPackage();
-
-		return pack.getImplementationVersion() == null ? "unknown" : pack.getImplementationVersion();
+		return InstalledVersion.current().orElse(UNKNOWN_VERSION);
 	}
 
 	private void deleteQuietly(Path file) {

@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +62,33 @@ class DuplicateDeletionPersistenceTest {
 		// The reason is the caller's, not a constant of this class: the same quarantine
 		// serves duplicate removal and video conversion.
 		Assertions.assertThat(recorded.getValue().getReason()).isEqualTo(MovementReason.CONVERTED_QUARANTINED);
+	}
+
+	@Test
+	void applyRestoreRefusesAFileWhoseCatalogRecordIsGone() {
+		UUID filePublicId = UUID.randomUUID();
+
+		CatalogFile detached = mock(CatalogFile.class);
+
+		when(detached.getPublicId()).thenReturn(filePublicId);
+
+		Movement movement = mock(Movement.class);
+
+		when(movement.getCatalogFile()).thenReturn(detached);
+
+		// Purged between the listing that offered the restore and the click that
+		// asked for it: there is nothing left to repoint, and writing the reversal
+		// anyway would leave a movement trail describing a file that no longer
+		// exists.
+		when(catalogFileRepository.findByPublicIdIn(List.of(filePublicId))).thenReturn(List.of());
+
+		Execution restoreExecution = mock(Execution.class);
+
+		Assertions.assertThatThrownBy(() -> persistence.applyRestore(movement, original, restoreExecution))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining(filePublicId.toString());
+
+		verify(catalogFileRepository, never()).save(any());
+		verify(movementRepository, never()).save(any());
 	}
 
 	@Test
