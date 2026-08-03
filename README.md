@@ -60,6 +60,8 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Configurable organization folder layouts (date-only, date+category, category-first, ...), described in [Organization Layouts](#organization-layouts).
 - Batch video conversion to H.265/HEVC inside MP4 with FFmpeg, described in [Video Conversion](#video-conversion): two quality profiles, three audio options and a choice of keeping or quarantining the original, carrying over audio, chapters, metadata and every subtitle track MP4 can hold.
 - Role-based web UI: the operational screens (Files, Organization, Duplicates, Quarantine, Conversion, Statistics) and their data/export APIs, plus Users, Access history and system settings, are restricted to `ADMIN` accounts; Dashboard, Timeline and Map stay open to any authenticated user.
+- Catalog backup and restore from the settings screen, described in [Catalog backup](#catalog-backup): what the files on disk cannot rebuild is the catalog, and a backup taken on an older version still restores.
+- Diagnostics archive (`GET /api/diagnostics/export`) collecting what a bug report needs about an installation.
 - Runtime settings stored in PostgreSQL with creation/update audit fields.
 - User access history for login, 2FA and logout events, searchable by e-mail.
 
@@ -98,16 +100,25 @@ Requirements:
 
 - Java 25
 - Maven 3.9+
-- PostgreSQL 14+ running locally, with the target database and user already created
 - Docker (only for the integration tests, which use Testcontainers - the app itself does not need it)
 - FFmpeg and FFprobe, for video conversion, video thumbnails and perceptual hashing. Nothing to do
   on Windows, where the application installs them on the first start that finds them missing; on
   Linux and macOS install them with the package manager. See [External Tools](#external-tools).
 
+**PostgreSQL is not one of them.** A fresh clone starts without a server installed: every run
+manages its own cluster under the workspace, created on first start, described in
+[The embedded database](#the-embedded-database). `./mvnw spring-boot:run` is the whole procedure.
+
 It runs on Windows, Linux and macOS. Two things differ by platform, and both degrade to a working
 default rather than failing: the real-time file-system watcher uses Windows APIs and falls back to
 the portable `WatchService` elsewhere, and the external tools are installed by the application on
 Windows and by the package manager elsewhere.
+
+### Pointing it at a PostgreSQL of your own
+
+Supported, and the rest of this section is about that case only — setting
+`NIMBUS_FILE_MANAGER_DB_HOST` or `SPRING_DATASOURCE_URL` is what keeps the embedded cluster down,
+because a database somebody configured by hand is one whose data they mean to keep.
 
 Create the application role and database while connected as `postgres` or another PostgreSQL administrator:
 
@@ -173,7 +184,7 @@ The commands in this section are destructive. Run them as `postgres` or another 
 
 ### Integration tests (Testcontainers)
 
-The six `@SpringBootTest` integration tests start their own throwaway PostgreSQL container
+The `@SpringBootTest` integration tests start their own throwaway PostgreSQL container
 via Testcontainers (`@ServiceConnection`), so **no manual test database is required** - only
 a running Docker engine. Each test class gets an isolated container, so they run in parallel
 and need no shared test DB or `NIMBUS_FILE_MANAGER_TEST_DB_*` variables.
@@ -693,6 +704,11 @@ POST   /api/organization/execute/{executionId}/undo
 GET    /api/media
 GET    /api/media/{publicId}
 GET    /api/media/{publicId}/content
+GET    /api/media/{publicId}/thumbnail
+
+GET    /api/files/properties
+POST   /api/files/rename
+POST   /api/files/delete
 
 GET    /api/duplicates
 GET    /api/duplicates/{sha256}/files
@@ -719,6 +735,9 @@ GET    /api/statistics/errors/files
 GET    /api/statistics/errors/files/details
 
 GET    /api/catalog/export
+GET    /api/diagnostics/export
+
+GET    /api/background-job
 
 GET    /api/executions
 GET    /api/executions/{id}
@@ -1131,22 +1150,47 @@ curl "http://localhost:8088/api/executions/{id}/movements"
 ```bash
 curl "http://localhost:8088/api/statistics"
 curl "http://localhost:8088/api/statistics/codecs"
+curl "http://localhost:8088/api/statistics/extensions"
 curl "http://localhost:8088/api/statistics/folders"
 curl "http://localhost:8088/api/statistics/errors"
 curl "http://localhost:8088/api/statistics/errors/files"
 curl "http://localhost:8088/api/statistics/errors/files/details"
 ```
 
+## Catalog backup
+
+The backup tab of the settings screen creates a backup, restores one, deletes one, and cancels a
+run in progress. Files land in `<workspace>/backup` as `nimbus-catalog-<timestamp>.zip`.
+
+What it protects is not the media — those are on disk, and a filesystem backup already covers them.
+It is the catalog: extracted metadata, perceptual hashes that cost hours of ffmpeg, resolved
+locations, the movement history that makes an organization undoable, and the duplicate decisions
+taken by hand. Losing the database with every file intact still means starting all of that over,
+which is the difference between reinstalling and continuing, and reinstalling and beginning again.
+
+Each archive holds a logical dump plus a manifest naming the schema it came from. The dump carries
+the tables and their shape rather than rows alone, so a backup taken before a migration renamed a
+column still restores: what comes back is the database as it was, and the migrations bring it
+forward from there. Rows alone could only ever load into tables shaped exactly as they were on the
+day the dump was taken.
+
+The dump and restore shell out to `pg_dump`/`pg_restore` from the same PostgreSQL the application
+manages, so the client always matches the server — a client older than the server refuses to read
+what it wrote.
+
 ## Database Migrations
 
-Flyway applies schema changes at startup. The schema was squashed into a single consolidated baseline (`V1__initial_schema.sql`, on 2026-07-12 for a fresh-database reset); later changes are added as new versions on top of it (currently up to `V3__media_fingerprint_video_payload.sql`, which extends the `media_fingerprint` payload check so the multi-frame video fingerprint algorithm is validated alongside the photo one; `V2__catalog_file_lifecycle_changed_at.sql` adds the retention anchor for the catalog missing-record purge). Example startup log for a new database:
+Flyway applies schema changes at startup. The schema was squashed into a single consolidated
+baseline (`V1__initial_schema.sql`, on 2026-07-12 for a fresh-database reset); every later change is
+a new version on top of it, and the folder `src/main/resources/db/migration` is the current list —
+reading it beats any count repeated here.
 
-```text
-Migrating schema "public" to version "1 - initial schema"
-Migrating schema "public" to version "2 - catalog file lifecycle changed at"
-Migrating schema "public" to version "3 - media fingerprint video payload"
-Successfully applied 3 migrations to schema "public", now at version v3
-```
+A migration that changes the shape of a column carries the data across in the same file, rather than
+running the DDL alone: an installation being upgraded has a populated catalog, and structure-only
+changes pass a clean test database while silently discarding years of work on a real one. Several
+of the versions on top of the baseline exist only to re-queue rows for reprocessing after a bug was
+fixed (`V10`, `V12`, `V13`, `V14`), which is the same idea seen from the other side — the migration
+knows how yesterday's data becomes today's.
 
 Check applied migrations with:
 
@@ -1249,6 +1293,16 @@ toolchain that has only the base tool the build fails inside `wix` with no menti
 missing. The WiX 5 installer ships them, so nothing else is needed — but `wix extension list
 --global` is what confirms it, and their version has to match the toolset: adding them by name
 alone fetches the newest from NuGet, which a v5 `wix.exe` then refuses.
+
+On a machine without `winget` — a CI runner, for one — the same toolset comes from the .NET tool
+feed, and there the extensions are **not** bundled, so all three are named explicitly and pinned to
+the same version:
+
+```powershell
+dotnet tool install --global wix --version 5.0.2
+wix extension add -g WixToolset.Util.wixext/5.0.2
+wix extension add -g WixToolset.UI.wixext/5.0.2
+```
 
 The MSI is packaged from the image the first profile produced (`--app-image`), so what ships is
 what was already built rather than a second pass over the jar. `--win-upgrade-uuid` is fixed in
@@ -1418,7 +1472,7 @@ the missing lines; what it could not reach is what the floor was then set to.
 Of the 237 lines still uncovered, 141 are I/O `catch` blocks, 28 are the anti-instantiation guards
 of utility classes, and the remainder is largely unreachable by construction — a `continue` or
 `break` the compiler reaches only through a condition that cannot occur, a symlink branch that
-needs the operating system to refuse something. 29 of the 238 are in the two newest domains. None
+needs the operating system to refuse something. 29 of the 237 are in the two newest domains. None
 of it is coverable by a test that asserts real behaviour, and the alternative — instantiating
 private constructors by reflection — is what *Piso de cobertura* forbids by name.
 

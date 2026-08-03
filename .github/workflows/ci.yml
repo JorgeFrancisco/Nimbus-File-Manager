@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # The 4 @SpringBootTest integration tests use Testcontainers to start a throwaway
+    # The @SpringBootTest integration tests use Testcontainers to start a throwaway
     # PostgreSQL per test class, so no `services:` Postgres is needed - the ubuntu-latest
     # runner ships with Docker, which Testcontainers drives.
 
