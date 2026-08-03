@@ -63,6 +63,35 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Runtime settings stored in PostgreSQL with creation/update audit fields.
 - User access history for login, 2FA and logout events, searchable by e-mail.
 
+## Installing
+
+Every entry of the [releases page](https://github.com/JorgeFrancisco/Nimbus-File-Manager/releases)
+carries a Windows `.msi` built by the pipeline, with its SHA-256 beside it. Installing is a double
+click: the application lands in Programs and Features and in the Start menu, and uninstalls from
+the same place.
+
+Nothing has to be installed first. The bundled runtime takes Java off the list, and PostgreSQL and
+FFmpeg are fetched into the workspace by the first start that finds them missing — which is why
+that first start takes minutes, and why it reports its progress through the tray icon rather than
+through a window that does not exist yet.
+
+Checking the download against the published checksum, in PowerShell:
+
+```powershell
+(Get-FileHash '.\Nimbus.File.Manager-<version>.msi' -Algorithm SHA256).Hash.ToLower()
+```
+
+A machine that answers the double click with **2502 and 2503 followed by 1603** is not describing a
+broken package — those codes mean "called out of sequence", which is the symptom of the `msiexec`
+server failing to elevate, and the cause is local. Any other MSI is the cheapest way to tell the
+two apart: one that fails the same way proves the machine is at fault. The case seen here was the
+`Users` group having no write permission on `C:\Windows\Temp`, where that server creates its own
+temporary files, fixed with `icacls C:\Windows\Temp /grant '*S-1-5-32-545:(CI)(S,WD,AD,X)'`. Every
+failed attempt also leaves an `msiexec` behind, which answers 1500 ("another installation is in
+progress") until it is killed.
+
+Everything from here on is about running from source.
+
 ## Running
 
 Requirements:
@@ -1227,15 +1256,14 @@ the `pom.xml` and must stay that way: Windows decides "upgrade this installation
 "install a second one" by that code alone, and `jpackage` invents a fresh one per build when it
 is absent.
 
-Installing it is a double click on the `.msi`: Programs and Features lists the application, the
-Start menu entry opens it, and the uninstaller removes it. A machine that answers that with
-**2502 and 2503 followed by 1603** is not describing a broken package — those codes mean "called
-out of sequence", which is the symptom of the `msiexec` server failing to elevate, and the cause
-is local. Any other MSI is the cheapest way to tell the two apart: one that fails the same way
-proves the machine is at fault. The case seen here was the `Users` group having no write
-permission on `C:\Windows\Temp`, where that server creates its own temporary files, fixed with
-`icacls C:\Windows\Temp /grant '*S-1-5-32-545:(CI)(S,WD,AD,X)'`. Every failed attempt also leaves
-an `msiexec` behind, which answers 1500 ("another installation is in progress") until it is killed.
+Building it by hand is not how it reaches anyone, though. Pushing a tag `v*` runs the
+`release.yml` workflow on a Windows runner, which builds the MSI exactly as above, refuses to go
+on if the tag disagrees with `<version>` — a release whose name contradicts the installer under it
+is worse than no release — and publishes both the installer and its SHA-256 under a release named
+after the tag. Running the same workflow from the Actions tab builds without publishing and leaves
+the MSI as a workflow artifact, which is how a change to the packaging gets tried before a tag is
+spent on it: a tag cannot be pushed a second time. Installing what comes out is
+[Installing](#installing).
 
 ### No console, an icon by the clock
 
