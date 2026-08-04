@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -190,10 +191,10 @@ class TimelineWebControllerTest {
 	 */
 	@Test
 	void storesEachFilterControlOfThePanel() {
-		controller.saveTimelineFilters(Map.of("from", "2008-01-01", "manufacturer", " Canon ", "geo",
+		controller.saveTimelineFilters(Map.of("capturedFrom", "2008-01-01", "manufacturer", " Canon ", "geo",
 				"WITHOUT_LOCATION"), auth);
 
-		verify(userPagePreferenceService).save("bob", "timeline", "filter.from", "2008-01-01");
+		verify(userPagePreferenceService).save("bob", "timeline", "filter.capturedFrom", "2008-01-01");
 		verify(userPagePreferenceService).save("bob", "timeline", "filter.manufacturer", "Canon");
 		verify(userPagePreferenceService).save("bob", "timeline", "filter.geo", "WITHOUT_LOCATION");
 	}
@@ -228,6 +229,28 @@ class TimelineWebControllerTest {
 
 		Assertions.assertThat(saved).containsEntry("minSizeMb", "50").containsEntry("geo", "WITH_LOCATION")
 				.containsEntry("model", "");
+	}
+
+	/**
+	 * Clearing a filter has to survive leaving the screen. It did not: the
+	 * preference store ignores a blank value, so storing "" left the previous one
+	 * in place and the panel came back filled - "Limpar filtros" looked like it had
+	 * worked until the user navigated away and returned.
+	 */
+	@Test
+	void clearingAFilterRemovesItInsteadOfStoringAnEmptyValue() {
+		Map<String, String> campos = new LinkedHashMap<>();
+		campos.put("geo", "");
+		campos.put("manufacturer", "  ");
+		campos.put("minSizeMb", "50");
+
+		controller.saveTimelineFilters(campos, auth);
+
+		verify(userPagePreferenceService).remove("bob", "timeline", "filter.geo");
+		verify(userPagePreferenceService).remove("bob", "timeline", "filter.manufacturer");
+		verify(userPagePreferenceService).save("bob", "timeline", "filter.minSizeMb", "50");
+
+		verify(userPagePreferenceService, never()).save(any(), any(), eq("filter.geo"), any());
 	}
 
 }

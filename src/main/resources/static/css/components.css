@@ -792,6 +792,15 @@ a.button.disabled {
  * but holding a form. Wider and two-column because a single column of ten
  * controls is taller than the viewport on a laptop.
  */
+/*
+ * Wider than the other dropdowns because it holds a form, and it keeps the
+ * right: 0 of .filter-menu-panel, so it grows leftwards from its button.
+ *
+ * The width is the two columns and nothing else. That only holds because the
+ * fields below carry min-width: 0 - a grid item defaults to min-width: auto,
+ * and the select is wide enough on its own ("Sem localização") to push its
+ * column past the panel and the panel past the toolbar.
+ */
 .filter-menu-form {
 	gap: 10px;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -804,10 +813,16 @@ a.button.disabled {
 	display: grid;
 	font-size: .85rem;
 	gap: 4px;
+	min-width: 0;
 }
 
+/*
+ * min-width: 0 is the whole fix: without it a select is as wide as its widest
+ * option, whatever the column says, and the longest label decides the layout.
+ */
 .filter-field input,
 .filter-field select {
+	min-width: 0;
 	width: 100%;
 }
 

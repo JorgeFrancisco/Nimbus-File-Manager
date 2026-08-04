@@ -76,4 +76,22 @@ class TimelineControllerTest {
 
 		Assertions.assertThat(controller.undated(TimelineMediaType.ALL, null, NO_FILTER, 120, null)).isSameAs(page);
 	}
+	/**
+	 * Jumping to a month and filtering by a capture window are two different
+	 * things that both want a date. They shared the name {@code from} in the query
+	 * string, so clicking a month in the index bound that date as a filter as well:
+	 * the index counted six items and the grid showed none, because the page asked
+	 * for "captured on or after the 1st" and "before the cursor of the 2nd" at once.
+	 * The window is {@code capturedFrom} for that reason, and this pins it down.
+	 */
+	@Test
+	void keepsTheMonthJumpApartFromTheCaptureWindow() {
+		LocalDate month = LocalDate.of(2000, Month.FEBRUARY, 1);
+
+		controller.items(TimelineMediaType.ALL, null, NO_FILTER, 120, null, month);
+
+		// The navigation date arrives as the jump, and nothing narrows the query.
+		verify(timelineService).page(TimelineMediaType.ALL, null, TimelineFilter.NONE, 120, null, month);
+	}
+
 }

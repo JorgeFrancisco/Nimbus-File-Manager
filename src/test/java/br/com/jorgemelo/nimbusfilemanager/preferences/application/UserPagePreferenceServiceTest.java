@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.preferences.application;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -111,4 +113,46 @@ class UserPagePreferenceServiceTest {
 
 		verifyNoInteractions(repository, appUserRepository);
 	}
+	/**
+	 * The operation {@code save} cannot express. Clearing a field on a screen used
+	 * to store an empty value, which save ignores - so the old preference survived
+	 * and the screen came back filled on the next visit.
+	 */
+	@Test
+	void removeDeletesTheStoredPreference() {
+		userExists("user", 7L);
+
+		UserPagePreference stored = UserPagePreference.builder().userId(7L).pageKey("timeline")
+				.preferenceKey("filter.geo").preferenceValue("WITH_LOCATION").build();
+
+		when(repository.findByUserIdAndPageKeyAndPreferenceKey(7L, "timeline", "filter.geo"))
+				.thenReturn(Optional.of(stored));
+
+		service.remove("user", "timeline", "filter.geo");
+
+		verify(repository).delete(stored);
+	}
+
+	/** Nothing stored is not a failure: clearing what was never set is a no-op. */
+	@Test
+	void removeIsQuietWhenThereIsNothingStored() {
+		userExists("user", 7L);
+
+		when(repository.findByUserIdAndPageKeyAndPreferenceKey(7L, "timeline", "filter.geo"))
+				.thenReturn(Optional.empty());
+
+		service.remove("user", "timeline", "filter.geo");
+
+		verify(repository, never()).delete(any());
+	}
+
+	@Test
+	void removeNoOpsWhenUserUnknown() {
+		when(appUserRepository.findByUsernameIgnoreCase("ghost")).thenReturn(Optional.empty());
+
+		service.remove("ghost", "timeline", "filter.geo");
+
+		verifyNoInteractions(repository);
+	}
+
 }

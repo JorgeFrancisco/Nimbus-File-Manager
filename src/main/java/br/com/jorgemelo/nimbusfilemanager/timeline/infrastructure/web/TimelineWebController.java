@@ -50,7 +50,7 @@ public class TimelineWebController {
 	 * What the panel may store. A whitelist because the request is a free-form map:
 	 * without it, anything posted would become a preference row.
 	 */
-	private static final Set<String> FILTER_FIELDS = Set.of("from", "to", "manufacturer", "model", "minSizeMb",
+	private static final Set<String> FILTER_FIELDS = Set.of("capturedFrom", "capturedTo", "manufacturer", "model", "minSizeMb",
 			"maxSizeMb", "minDurationSeconds", "maxDurationSeconds", "minLongestSide", "geo");
 
 	private final MediaLocationService mediaLocationService;
@@ -170,8 +170,16 @@ public class TimelineWebController {
 
 			String clean = value == null || value.isBlank() ? "" : value.trim();
 
-			userPagePreferenceService.save(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY,
-					TimelineConstants.FILTER_KEY_PREFIX + key, clean);
+			// Cleared means removed, not stored empty: save() ignores a blank value, so
+			// clearing a field used to leave the old one in place, and the panel came back
+			// filled on the next visit.
+			if (clean.isEmpty()) {
+				userPagePreferenceService.remove(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY,
+						TimelineConstants.FILTER_KEY_PREFIX + key);
+			} else {
+				userPagePreferenceService.save(username(authentication), TimelineConstants.TIMELINE_PAGE_KEY,
+						TimelineConstants.FILTER_KEY_PREFIX + key, clean);
+			}
 
 			stored.put(key, clean);
 		});

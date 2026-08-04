@@ -7,7 +7,10 @@
 .timeline-toolbar h1 { margin: 0 0 3px; }
 .timeline-toolbar p { margin: 0; }
 .timeline-filter { align-items: center; display: flex; gap: 8px; white-space: nowrap; }
-.timeline-filter select { min-width: 170px; }
+/* Direct child only: the class also wraps the filter dropdown, and this width
+   would otherwise reach the selects inside it - it is loaded after
+   components.css, so it won every tie. */
+.timeline-filter > select { min-width: 170px; }
 .timeline-filters { align-items: center; display: flex; flex-wrap: wrap; gap: 16px; }
 .timeline-status, .timeline-empty { margin-top: 16px; padding: 32px; text-align: center; }
 /* Geo notice: had no styles of its own (only .panel), so its icon/text/actions were cramped

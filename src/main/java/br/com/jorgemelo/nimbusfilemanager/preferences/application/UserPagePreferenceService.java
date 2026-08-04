@@ -54,6 +54,19 @@ public class UserPagePreferenceService {
 		userPagePreferenceRepository.save(preference);
 	}
 
+	/**
+	 * Removes a preference, which {@link #save} cannot express: a blank value is a
+	 * no-op there, so a screen that cleared a field had no way of saying so and the
+	 * old value came back on the next visit. Clearing a filter is a decision the
+	 * user made, and it has to survive leaving the screen.
+	 */
+	public void remove(String username, String pageKey, String preferenceKey) {
+		resolveUserId(username)
+				.flatMap(userId -> userPagePreferenceRepository.findByUserIdAndPageKeyAndPreferenceKey(userId, pageKey,
+						preferenceKey))
+				.ifPresent(userPagePreferenceRepository::delete);
+	}
+
 	private Optional<Long> resolveUserId(String username) {
 		if (username == null || username.isBlank()) {
 			return Optional.empty();

@@ -96,7 +96,7 @@
 	// there is no second copy of the state to keep in step, and a value the user
 	// cleared is simply absent from the next request.
 	var FILTER_FIELDS = {
-		from: "filterFrom", to: "filterTo", manufacturer: "filterManufacturer", model: "filterModel",
+		capturedFrom: "filterFrom", capturedTo: "filterTo", manufacturer: "filterManufacturer", model: "filterModel",
 		minSizeMb: "filterMinSize", maxSizeMb: "filterMaxSize", minDurationSeconds: "filterMinDuration",
 		maxDurationSeconds: "filterMaxDuration", minLongestSide: "filterMinLongestSide", geo: "filterGeo"
 	};

@@ -34,7 +34,7 @@ public final class TimelineFilters {
 			return TimelineFilter.NONE;
 		}
 
-		return new TimelineFilter(new CaptureWindow(form.from(), form.to()),
+		return new TimelineFilter(new CaptureWindow(form.capturedFrom(), form.capturedTo()),
 				new CameraFilter(form.manufacturer(), form.model()),
 				new MediaScaleFilter(toBytes(form.minSizeMb()), toBytes(form.maxSizeMb()), form.minDurationSeconds(),
 						form.maxDurationSeconds(), form.minLongestSide()),

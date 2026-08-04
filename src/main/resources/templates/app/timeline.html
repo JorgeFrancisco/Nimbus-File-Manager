@@ -32,9 +32,9 @@
 				<summary><span th:text="#{timeline.filters.title}">Filtros</span><span class="filter-badge" id="timelineFilterBadge" hidden></span></summary>
 				<div class="filter-menu-panel filter-menu-form">
 					<label class="filter-field"><span th:text="#{timeline.filters.from}">De</span>
-						<input type="date" id="filterFrom" th:value="${savedFilters['from']}"></label>
+						<input type="date" id="filterFrom" th:value="${savedFilters['capturedFrom']}"></label>
 					<label class="filter-field"><span th:text="#{timeline.filters.to}">Até</span>
-						<input type="date" id="filterTo" th:value="${savedFilters['to']}"></label>
+						<input type="date" id="filterTo" th:value="${savedFilters['capturedTo']}"></label>
 					<label class="filter-field"><span th:text="#{timeline.filters.manufacturer}">Fabricante</span>
 						<input type="text" id="filterManufacturer" th:value="${savedFilters['manufacturer']}"
 								th:placeholder="#{timeline.filters.manufacturerHint}" autocomplete="off"></label>
