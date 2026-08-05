@@ -3,7 +3,6 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -12,10 +11,16 @@ import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateMessages;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
@@ -23,7 +28,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -47,36 +51,38 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	private final CatalogFileRepository catalogFileRepository;
 	private final ExecutionRepository executionRepository;
 	private final QuarantineIntakeService quarantineIntakeService;
-	private final SimilarityCaches similarityCaches;
 	private final OperationLockService operationLockService;
+	private final ExecutionProgressService executionProgressService;
+	private final ExecutionCancellationService executionCancellationService;
 	private final ExecutionErrorService executionErrorService;
 	private final Clock clock;
 
 	public DuplicateDeletionService(CatalogFileRepository catalogFileRepository,
 			ExecutionRepository executionRepository, QuarantineIntakeService quarantineIntakeService,
-			SimilarityCaches similarityCaches, OperationLockService operationLockService,
-			ExecutionErrorService executionErrorService, Clock clock) {
+			OperationLockService operationLockService, ExecutionProgressService executionProgressService,
+			ExecutionCancellationService executionCancellationService, ExecutionErrorService executionErrorService,
+			Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.executionRepository = executionRepository;
 		this.quarantineIntakeService = quarantineIntakeService;
-		this.similarityCaches = similarityCaches;
 		this.operationLockService = operationLockService;
+		this.executionProgressService = executionProgressService;
+		this.executionCancellationService = executionCancellationService;
 		this.executionErrorService = executionErrorService;
 		this.clock = clock;
 	}
 
-	public DuplicateDeletionResult delete(Collection<UUID> publicIds) {
-		return delete(publicIds, (_, _) -> {
-		});
-	}
-
 	/**
-	 * Same as {@link #delete(Collection)} but reports how many files have been
-	 * processed (moved, skipped or errored) out of the total to {@code progress},
-	 * so a background runner can drive a "Movendo X de N" bar while the sequential
-	 * secure moves run off the request thread.
+	 * Sends the named duplicates to quarantine, under the execution a worker
+	 * claimed.
+	 *
+	 * @param ownership the claim on the paths, asked before each move. Everything
+	 * already moved was moved under the locks and verified byte for byte; what must
+	 * not happen is the next file leaving the library on the strength of a lock
+	 * that is gone
 	 */
-	public DuplicateDeletionResult delete(Collection<UUID> publicIds, DeletionProgressCallback progress) {
+	public DuplicateDeletionResult delete(Collection<UUID> publicIds, Execution execution,
+			ExecutionOwnership ownership) {
 		Optional<Path> configured = quarantineIntakeService.root();
 
 		if (configured.isEmpty()) {
@@ -97,10 +103,12 @@ public class DuplicateDeletionService extends LocalizedComponent {
 						files.stream().map(file -> PathUtils.normalizePath(file.getFileKey())))
 				.distinct().toArray(Path[]::new);
 
-		progress.update(0, publicIds.size());
+		executionProgressService.updateTotal(execution, publicIds.size());
 
+		// The files are scattered across the library and no column could name them, so
+		// the worker holds the quarantine root and these join the same session here.
 		try (var _ = operationLockService.acquire(ExecutionType.DEDUP_DELETE, lockedPaths)) {
-			return deleteLocked(publicIds, files, quarantineRoot, progress);
+			return deleteLocked(publicIds, files, quarantineRoot, execution, ownership);
 		} catch (OperationLockException lockError) {
 			log.warn("Duplicate deletion blocked because another operation is using one of its paths: {}",
 					lockError.getMessage());
@@ -111,20 +119,20 @@ public class DuplicateDeletionService extends LocalizedComponent {
 	}
 
 	private DuplicateDeletionResult deleteLocked(Collection<UUID> publicIds, List<CatalogFile> files,
-			Path quarantineRoot, DeletionProgressCallback progress) {
-		Execution execution = startExecution(quarantineRoot);
-
+			Path quarantineRoot, Execution execution, ExecutionOwnership ownership) {
 		try {
-			return deleteEach(execution, publicIds, files, quarantineRoot, progress);
+			return deleteEach(execution, publicIds, files, quarantineRoot, ownership);
 		} catch (RuntimeException deletionError) {
 			failExecution(execution, deletionError.getMessage());
 
 			throw deletionError;
+		} finally {
+			executionCancellationService.forget(execution.getId());
 		}
 	}
 
 	private DuplicateDeletionResult deleteEach(Execution execution, Collection<UUID> publicIds, List<CatalogFile> files,
-			Path quarantineRoot, DeletionProgressCallback progress) {
+			Path quarantineRoot, ExecutionOwnership ownership) {
 		// Selected ids that map to no active catalog entry never reach the loop below;
 		// count them as skipped up front so moved + skipped + errors always equals the
 		// number the user requested (publicIds.size()), and the progress total matches.
@@ -140,15 +148,16 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			log.warn("Duplicate deletion skipped {} selected id(s) with no active catalog entry", unresolved);
 		}
 
-		List<UUID> movedIds = new ArrayList<>();
-
 		for (CatalogFile file : files) {
-			switch (quarantineIntakeService.intake(execution, file, quarantineRoot,
-					MovementReason.DUPLICATE_QUARANTINED)) {
-			case MOVED -> {
-				moved++;
-				movedIds.add(file.getPublicId());
+			if (executionCancellationService.isCancelled(execution.getId())) {
+				break;
 			}
+
+			ownership.assertStillOwned();
+
+			switch (quarantineIntakeService.intake(execution, file, quarantineRoot,
+					MovementReason.DUPLICATE_QUARANTINED, execution.getId())) {
+			case MOVED -> moved++;
 			case SKIPPED -> skipped++;
 			case ERROR -> {
 				errors++;
@@ -160,35 +169,24 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			}
 			}
 
-			progress.update(++processed, total);
+			executionProgressService.updateLiveProgress(execution, total, ++processed, skipped, errors,
+					ExecutionMessages.processing(file.getFileName()));
 		}
 
 		// Keep the (cached) similar-photos AND similar-videos groups consistent without
 		// a full recompute: drop the just-quarantined media from both caches so the
 		// Duplicados screen reflects the deletion.
-		similarityCaches.evictAll(movedIds);
 
-		String message = message("backend.duplicates.deletionCompleted", moved, skipped, errors);
+		ExecutionMessage message = DuplicateMessages.deletionCompleted(moved, skipped, errors);
 
 		finishExecution(execution, errors > 0 ? ExecutionStatus.FINISHED_WITH_ERRORS : ExecutionStatus.FINISHED, total,
 				moved, skipped, errors, message);
 
+		// The screen reads the report from the row, where the message is a code the
+		// request localises. This one is only for whoever called in-process.
 		return new DuplicateDeletionResult(true, total, moved, skipped, errors,
-				UuidV7.orLegacy(execution.getPublicId(), execution.getId()), message);
-	}
-
-	private Execution startExecution(Path quarantineRoot) {
-		// sourcePath mirrors the target (the quarantine root) instead of null: the
-		// shared undo
-		// path feeds both through PathUtils.normalizePath for the operation lock.
-		Execution execution = Execution.builder().executionType(ExecutionType.DEDUP_DELETE)
-				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
-				.sourcePath(PathUtils.normalize(quarantineRoot)).targetPath(PathUtils.normalize(quarantineRoot))
-				.recursive(false).executeFlag(true)
-				.statusMessage(StatusMessage.raw(message("backend.duplicates.deletionStarted"))).filesFound(0)
-				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
-
-		return executionRepository.save(execution);
+				UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+				message("backend.duplicates.deletionCompleted", moved, skipped, errors));
 	}
 
 	/**
@@ -200,13 +198,14 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 		managed.setStatus(ExecutionStatus.ERROR);
 		managed.setFinishedAt(LocalDateTime.now(clock));
-		managed.setStatusMessage(StatusMessage.raw(message("backend.execution.operationFailed", detail)));
+
+		executionProgressService.applyMessage(managed, DuplicateMessages.failed(detail));
 
 		executionRepository.save(managed);
 	}
 
 	private void finishExecution(Execution execution, ExecutionStatus status, long filesFound, long moved, long skipped,
-			long errors, String message) {
+			long errors, ExecutionMessage message) {
 		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
 
 		managed.setStatus(status);
@@ -216,7 +215,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 		managed.setFilesMoved((int) moved);
 		managed.setCacheHits((int) skipped);
 		managed.setErrors((int) errors);
-		managed.setStatusMessage(StatusMessage.raw(message));
+
+		executionProgressService.applyMessage(managed, message);
 
 		executionRepository.save(managed);
 

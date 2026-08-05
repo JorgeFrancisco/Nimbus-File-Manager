@@ -38,7 +38,8 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeo
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web.GeoDatasetSettingsModel;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildLauncher;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
@@ -117,7 +118,10 @@ class SettingsPageRenderTest {
 	private AppUserRepository appUserRepository;
 
 	@MockitoBean
-	private MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
+	private MetadataRebuildLauncher metadataRebuildLauncher;
+
+	@MockitoBean
+	private MetadataRunReader metadataRunReader;
 
 	@MockitoBean
 	private InventoryRunningState inventoryRunningState;

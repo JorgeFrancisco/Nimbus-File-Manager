@@ -6,6 +6,8 @@ import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.SchemaHistoryRepository;
+
 /**
  * What the catalog schema looks like right now, for the backup manifest.
  *
@@ -36,10 +38,15 @@ public class CatalogSchemaRepository {
 			ORDER BY table_name
 			""";
 
-	private final NamedParameterJdbcTemplate jdbcTemplate;
+	private static final String UNKNOWN_VERSION = "unknown";
 
-	public CatalogSchemaRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+	private final NamedParameterJdbcTemplate jdbcTemplate;
+	private final SchemaHistoryRepository schemaHistoryRepository;
+
+	public CatalogSchemaRepository(NamedParameterJdbcTemplate jdbcTemplate,
+			SchemaHistoryRepository schemaHistoryRepository) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.schemaHistoryRepository = schemaHistoryRepository;
 	}
 
 	public List<String> tables() {
@@ -66,12 +73,12 @@ public class CatalogSchemaRepository {
 		jdbcTemplate.getJdbcTemplate().execute("ANALYZE");
 	}
 
-	/** Current schema version, as Flyway recorded it. */
+	/**
+	 * Current schema version, as Flyway recorded it, for the manifest. A database
+	 * Flyway never migrated has no version to name, and the manifest says so
+	 * rather than leaving the field out.
+	 */
 	public String schemaVersion() {
-		List<String> versions = jdbcTemplate.queryForList(
-				"SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1",
-				Map.of(), String.class);
-
-		return versions.isEmpty() ? "unknown" : versions.get(0);
+		return schemaHistoryRepository.currentVersion().orElse(UNKNOWN_VERSION);
 	}
 }

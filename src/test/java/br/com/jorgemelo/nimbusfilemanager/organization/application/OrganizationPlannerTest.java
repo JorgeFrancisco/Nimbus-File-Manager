@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
@@ -74,7 +75,7 @@ class OrganizationPlannerTest {
 	@Mock
 	private ExecutionProgressService executionProgressService;
 
-	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionCancellationService executionCancellationService = NoCancellations.none();
 
 	@Test
 	void previewShouldBuildPlanAndDetectConflicts() {
@@ -243,10 +244,9 @@ class OrganizationPlannerTest {
 
 		verify(candidateFilter, never()).matches(eq(second), any(), any());
 
-		// preview() unregisters in its finally block once it stops, cancelled or not,
-		// so this
-		// confirms cleanup happened instead of leaving a stale entry behind.
-		Assertions.assertThat(executionCancellationService.isCancelled(execution.getId())).isFalse();
+		// The cancellation stays on the row - a request that survives the thread is
+		// the whole point of persisting it.
+		Assertions.assertThat(executionCancellationService.isCancelled(execution.getId())).isTrue();
 	}
 
 	/**

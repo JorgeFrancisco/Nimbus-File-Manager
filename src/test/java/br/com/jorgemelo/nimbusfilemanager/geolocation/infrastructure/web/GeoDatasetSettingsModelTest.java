@@ -10,29 +10,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.ui.ExtendedModelMap;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.ReverseGeocodingStrategyRegistry;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 class GeoDatasetSettingsModelTest {
 
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
 	private final MediaLocationService mediaLocationService = mock(MediaLocationService.class);
-	private final GeoDatasetAsyncRunner geoDatasetAsyncRunner = mock(GeoDatasetAsyncRunner.class);
-	private final LocationRebuildAsyncRunner locationRebuildAsyncRunner = mock(LocationRebuildAsyncRunner.class);
+	private final GeoRunReader geoRunReader = mock(GeoRunReader.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
-	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
+	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
+	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionRepository);
 	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry = mock(
 			ReverseGeocodingStrategyRegistry.class);
 	private final GeoDatasetSettingsModel model = new GeoDatasetSettingsModel(offlineGeoDataset, mediaLocationService,
-			geoDatasetAsyncRunner, locationRebuildAsyncRunner, preferences, inventoryRunningState,
+			geoRunReader, preferences, inventoryRunningState,
 			reverseGeocodingStrategyRegistry);
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
 

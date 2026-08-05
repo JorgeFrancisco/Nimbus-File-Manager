@@ -7,8 +7,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
@@ -37,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
+@Profile(NimbusProfiles.APP)
 public class GeoDatasetAutoUpdateScheduler {
 
 	/** Enough to notice the configured time without polling hard. */
@@ -46,7 +49,7 @@ public class GeoDatasetAutoUpdateScheduler {
 
 	private final AppSettingService appSettingService;
 	private final OfflineGeoDataset offlineGeoDataset;
-	private final GeoDatasetAsyncRunner geoDatasetAsyncRunner;
+	private final GeoLauncher geoLauncher;
 	private final InventoryRunningState inventoryRunningState;
 	private final Clock clock;
 
@@ -61,11 +64,11 @@ public class GeoDatasetAutoUpdateScheduler {
 	private volatile LocalDate lastCheckedOn;
 
 	public GeoDatasetAutoUpdateScheduler(AppSettingService appSettingService, OfflineGeoDataset offlineGeoDataset,
-			GeoDatasetAsyncRunner geoDatasetAsyncRunner, InventoryRunningState inventoryRunningState, Clock clock,
+			GeoLauncher geoLauncher, InventoryRunningState inventoryRunningState, Clock clock,
 			BoundaryDatasetProperties properties) {
 		this.appSettingService = appSettingService;
 		this.offlineGeoDataset = offlineGeoDataset;
-		this.geoDatasetAsyncRunner = geoDatasetAsyncRunner;
+		this.geoLauncher = geoLauncher;
 		this.inventoryRunningState = inventoryRunningState;
 		this.clock = clock;
 
@@ -97,13 +100,14 @@ public class GeoDatasetAutoUpdateScheduler {
 				return;
 			}
 
-			if (!geoDatasetAsyncRunner.start()) {
+			// It asks; it does not do. A second ask joins the row already waiting, so
+			// the timer firing beside a click - or beside itself after a restart - costs
+			// one query and produces one update.
+			if (geoLauncher.updateDataset().isEmpty()) {
 				return;
 			}
 
 			lastCheckedOn = LocalDate.now(clock);
-
-			geoDatasetAsyncRunner.downloadAndImport();
 		} catch (Exception e) {
 			// A failed pass must never kill the timer: the next tick tries again.
 			log.warn("Geographic dataset auto-update pass failed", e);

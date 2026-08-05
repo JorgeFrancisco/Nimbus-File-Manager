@@ -107,8 +107,6 @@ public class OrganizationPlanner {
 			executionProgressService.updateTotal(execution, page.getNumberOfElements());
 		}
 
-		register(execution);
-
 		try {
 			List<OrganizationItem> items = new ArrayList<>();
 
@@ -148,7 +146,7 @@ public class OrganizationPlanner {
 
 			return new OrganizationPlan(sourcePathText, targetPathText, layout, false, summary, items);
 		} finally {
-			unregister(execution);
+			forget(execution);
 		}
 	}
 
@@ -169,15 +167,14 @@ public class OrganizationPlanner {
 		return mediaLocationService.locationsOf(ids);
 	}
 
-	private void register(Execution execution) {
+	/**
+	 * Drops the cached cancellation answer once the preview is over, whether it
+	 * finished or was stopped. Housekeeping of a cache, not of state: what a
+	 * cancellation means is on the row.
+	 */
+	private void forget(Execution execution) {
 		if (execution != null) {
-			executionCancellationService.register(execution.getId());
-		}
-	}
-
-	private void unregister(Execution execution) {
-		if (execution != null) {
-			executionCancellationService.unregister(execution.getId());
+			executionCancellationService.forget(execution.getId());
 		}
 	}
 

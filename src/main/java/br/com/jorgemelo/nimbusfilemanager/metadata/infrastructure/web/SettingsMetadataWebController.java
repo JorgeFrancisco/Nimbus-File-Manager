@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildLauncher;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -24,23 +24,26 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 
 /**
- * Starts the metadata rebuild from the settings page. The rebuild runs in the
- * background and the panel polls its progress, because a library-wide pass
- * takes far longer than a request should be held open - the REST endpoint of
- * the same service stays synchronous for scripted use.
+ * Asks for a metadata rebuild from the settings page.
+ *
+ * <p>
+ * What it writes is a request; the pass itself happens in the worker, which is
+ * where the exiftool processes belong. The panel then polls the row, so a
+ * library-wide rebuild is followed rather than waited for - and is still there
+ * to follow after either process restarts.
  */
 @Controller
 public class SettingsMetadataWebController extends LocalizedComponent {
 
-	private final MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
+	private final MetadataRebuildLauncher metadataRebuildLauncher;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final InventoryRunningState inventoryRunningState;
 	private final Clock clock;
 
-	public SettingsMetadataWebController(MetadataRebuildAsyncRunner metadataRebuildAsyncRunner,
+	public SettingsMetadataWebController(MetadataRebuildLauncher metadataRebuildLauncher,
 			UserPagePreferenceService userPagePreferenceService, InventoryRunningState inventoryRunningState,
 			Clock clock) {
-		this.metadataRebuildAsyncRunner = metadataRebuildAsyncRunner;
+		this.metadataRebuildLauncher = metadataRebuildLauncher;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.inventoryRunningState = inventoryRunningState;
 		this.clock = clock;
@@ -82,22 +85,24 @@ public class SettingsMetadataWebController extends LocalizedComponent {
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		if (!metadataRebuildAsyncRunner.start(request)) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.metadataRebuildRunning"));
+		// The queue is what refuses a second one now, and it refuses it by joining:
+		// asking twice for the same folder in the same mode gives back the row that is
+		// already waiting. The screen says the rebuild started either way, because
+		// from the user's side it did - what they asked for is going to happen once.
+		if (metadataRebuildLauncher
+				.launch(request.sourcePath(), request.refresh(), dryRun, request.notAnalysedSince()).isEmpty()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message("backend.settings.blocked"));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		// Stamped only once the run is really under way, and with the instant taken
-		// before it: a file it rebuilds gets a later stamp, so the next continuing run
-		// skips it and picks up exactly where this one stopped. A dry run changes
-		// nothing on disk, so it must not move the mark either.
+		// Stamped with the instant taken before the request was written: a file the
+		// run rebuilds gets a later stamp, so the next continuing run skips it and
+		// picks up exactly where this one stopped. A dry run changes nothing on disk,
+		// so it must not move the mark either.
 		if (!dryRun) {
 			save(username, MetadataRebuildPreferences.LAST_RUN_KEY, startedAt.toString());
 		}
-
-		metadataRebuildAsyncRunner.rebuild(request);
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
 				message("backend.settings.metadataRebuildStarted"));

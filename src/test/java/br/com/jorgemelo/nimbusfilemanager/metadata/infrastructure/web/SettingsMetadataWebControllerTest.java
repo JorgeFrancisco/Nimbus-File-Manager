@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -21,15 +22,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildLauncher;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
  * Metadata rebuild action of the settings page: the guards that keep it from
@@ -45,13 +48,13 @@ class SettingsMetadataWebControllerTest {
 
 	private static final LocalDateTime PREVIOUS_RUN = LocalDateTime.of(2026, Month.JULY, 26, 11, 16);
 
-	private final MetadataRebuildAsyncRunner runner = mock(MetadataRebuildAsyncRunner.class);
+	private final MetadataRebuildLauncher launcher = mock(MetadataRebuildLauncher.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
-	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
+	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
+	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionRepository);
 	private final Clock clock = Clock.fixed(Instant.parse("2026-07-26T14:00:00Z"), ZoneOffset.UTC);
 
-	private final SettingsMetadataWebController controller = new SettingsMetadataWebController(runner, preferences,
+	private final SettingsMetadataWebController controller = new SettingsMetadataWebController(launcher, preferences,
 			inventoryRunningState, clock);
 
 	private final TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@x", "pw");
@@ -64,13 +67,13 @@ class SettingsMetadataWebControllerTest {
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
 
-		verify(runner, never()).start(any());
-		verify(runner, never()).rebuild(any());
+		verify(launcher, never()).launch(any(), any(), anyBoolean(), any());
 	}
 
 	@Test
 	void rejectedWhileAnInventoryIsRunning() {
-		when(executionQueryService.active()).thenReturn(Optional.of(inventoryExecution()));
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -78,25 +81,23 @@ class SettingsMetadataWebControllerTest {
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
 
-		verify(runner, never()).rebuild(any());
+		verify(launcher, never()).launch(any(), any(), anyBoolean(), any());
 	}
 
 	@Test
-	void rejectedWhenAnotherRebuildIsAlreadyRunning() {
-		when(runner.start(any())).thenReturn(false);
+	void rejectedWhileTheApplicationIsClosing() {
+		when(launcher.launch(any(), any(), anyBoolean(), any())).thenReturn(Optional.empty());
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		controller.rebuildMetadata(FOLDER, FIELDS, false, MetadataRebuildScope.CONTINUE, auth, redirect);
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
-
-		verify(runner, never()).rebuild(any());
 	}
 
 	@Test
 	void startsInBackgroundAndRemembersTheChoices() {
-		when(runner.start(any())).thenReturn(true);
+		queued();
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -104,7 +105,7 @@ class SettingsMetadataWebControllerTest {
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 
-		verify(runner).rebuild(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, null));
+		verify(launcher).launch(FOLDER, FIELDS, false, null);
 		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.SOURCE_PATH_KEY, FOLDER);
 		verify(preferences).save("admin@x", MetadataRebuildPreferences.PAGE_KEY, MetadataRebuildPreferences.FIELDS_KEY,
@@ -121,26 +122,26 @@ class SettingsMetadataWebControllerTest {
 	 */
 	@Test
 	void forcingAllIgnoresWhatThePreviousRunAlreadyRebuilt() {
-		when(runner.start(any())).thenReturn(true);
+		queued();
 		when(preferences.find("admin@x", MetadataRebuildPreferences.PAGE_KEY))
 				.thenReturn(Map.of(MetadataRebuildPreferences.LAST_RUN_KEY, PREVIOUS_RUN.toString()));
 
 		controller.rebuildMetadata(FOLDER, FIELDS, false, MetadataRebuildScope.ALL, auth,
 				new RedirectAttributesModelMap());
 
-		verify(runner).rebuild(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, null));
+		verify(launcher).launch(FOLDER, FIELDS, false, null);
 	}
 
 	@Test
 	void continuingSkipsWhatWasRebuiltSinceThePreviousRunStarted() {
-		when(runner.start(any())).thenReturn(true);
+		queued();
 		when(preferences.find("admin@x", MetadataRebuildPreferences.PAGE_KEY))
 				.thenReturn(Map.of(MetadataRebuildPreferences.LAST_RUN_KEY, PREVIOUS_RUN.toString()));
 
 		controller.rebuildMetadata(FOLDER, FIELDS, false, MetadataRebuildScope.CONTINUE, auth,
 				new RedirectAttributesModelMap());
 
-		verify(runner).rebuild(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, PREVIOUS_RUN));
+		verify(launcher).launch(FOLDER, FIELDS, false, PREVIOUS_RUN);
 	}
 
 	/**
@@ -149,12 +150,12 @@ class SettingsMetadataWebControllerTest {
 	 */
 	@Test
 	void continuingCoversTheFolderWhileNoRunHasBeenRecorded() {
-		when(runner.start(any())).thenReturn(true);
+		queued();
 
 		controller.rebuildMetadata(FOLDER, FIELDS, false, MetadataRebuildScope.CONTINUE, auth,
 				new RedirectAttributesModelMap());
 
-		verify(runner).rebuild(MetadataRebuildRequest.forFolder(FOLDER, FIELDS, false, null));
+		verify(launcher).launch(FOLDER, FIELDS, false, null);
 	}
 
 	/**
@@ -164,7 +165,7 @@ class SettingsMetadataWebControllerTest {
 	 */
 	@Test
 	void stampsTheRunOnlyWhenItReallyStartsAndIsNotASimulation() {
-		when(runner.start(any())).thenReturn(true);
+		queued();
 
 		controller.rebuildMetadata(FOLDER, FIELDS, false, MetadataRebuildScope.CONTINUE, auth,
 				new RedirectAttributesModelMap());
@@ -203,8 +204,8 @@ class SettingsMetadataWebControllerTest {
 				"true");
 	}
 
-	private static ExecutionResponse inventoryExecution() {
-		return new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1,
-				0, 0, 0, 0, null, null, "running", false);
+	private void queued() {
+		when(launcher.launch(any(), any(), anyBoolean(), any()))
+				.thenReturn(Optional.of(Execution.builder().id(1L).build()));
 	}
 }

@@ -6,12 +6,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -26,11 +30,12 @@ import lombok.extern.slf4j.Slf4j;
  * reconcile in {@link InventoryWatchService}, this one is independent of the
  * watcher's running state, so drift heals even while monitoring is stopped. It
  * is concurrency-safe against an active operation because
- * {@link OrganizationReconcileService#reconcileAndApply} defers (no-op) when
+ * {@code OrganizationReconcileApply} defers (no-op) when
  * the tree is locked, rather than corrupting it.
  */
 @Slf4j
 @Service
+@Profile(NimbusProfiles.APP)
 public class ReconcileScheduler {
 
 	/**
@@ -40,8 +45,7 @@ public class ReconcileScheduler {
 	private static final long INITIAL_DELAY_MILLIS = 60_000;
 
 	private final AppSettingService appSettingService;
-	private final OrganizationReconcileService organizationReconcileService;
-	private final ReconcileExecutionRecorder reconcileExecutionRecorder;
+	private final ExecutionEnqueueService executionEnqueueService;
 	private final long reconciliationIntervalMillis;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "nimbus-file-manager-reconcile");
@@ -53,11 +57,9 @@ public class ReconcileScheduler {
 	private volatile boolean shuttingDown;
 
 	public ReconcileScheduler(AppSettingService appSettingService,
-			OrganizationReconcileService organizationReconcileService,
-			ReconcileExecutionRecorder reconcileExecutionRecorder, NimbusFileManagerProperties properties) {
+			ExecutionEnqueueService executionEnqueueService, NimbusFileManagerProperties properties) {
 		this.appSettingService = appSettingService;
-		this.organizationReconcileService = organizationReconcileService;
-		this.reconcileExecutionRecorder = reconcileExecutionRecorder;
+		this.executionEnqueueService = executionEnqueueService;
 		this.reconciliationIntervalMillis = properties.inventory().reconciliationIntervalMillis();
 
 		executor.scheduleWithFixedDelay(this::runOnce, INITIAL_DELAY_MILLIS, reconciliationIntervalMillis,
@@ -84,15 +86,21 @@ public class ReconcileScheduler {
 				return;
 			}
 
-			OrganizationReconcileRequest request = new OrganizationReconcileRequest(configuredFolder,
-					appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true),
-					appSettingService.booleanValue(SettingsConstants.WATCH_INCLUDE_HIDDEN, false), Integer.MAX_VALUE);
-
-			OrganizationReconcileResponse response = organizationReconcileService.reconcileAndApply(request);
-
-			reconcileExecutionRecorder.recordIfRepaired(ExecutionTrigger.TIMER, folder, response);
+			// Queued, never run here. An empty pass is not cheap - it walks the whole
+			// tree and reads every catalogued location under it, measured at roughly
+			// 40 microseconds per file, which is about six seconds over a 145k-file
+			// library, every five minutes. That belongs in the worker.
+			//
+			// Deduplication keeps this from piling up: at most one RECONCILE waiting
+			// and one running per folder, so a pass that outlives the interval simply
+			// finds its successor already queued.
+			executionEnqueueService.enqueue(Execution.builder().executionType(ExecutionType.RECONCILE)
+					.triggerEvent(ExecutionTrigger.TIMER).sourcePath(folder.toString())
+					.recursive(appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true))
+					.executeFlag(true).dedupKey(OperationPathKey.canonical(folder))
+					.statusMessage(StatusMessage.code(ExecutionMessages.RECONCILE_REPAIRED)).build());
 		} catch (Exception e) {
-			// A deferred/lock-contention response is normal (reconcileAndApply returns it,
+			// A deferred/lock-contention response is normal (the apply returns it,
 			// never throws), so only genuinely unexpected failures reach here.
 			if (shuttingDown || Thread.currentThread().isInterrupted()) {
 				log.debug("Scheduled reconcile interrupted during shutdown", e);

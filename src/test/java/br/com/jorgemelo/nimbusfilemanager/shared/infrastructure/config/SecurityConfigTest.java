@@ -89,7 +89,7 @@ class SecurityConfigTest {
 
 	@Test
 	void organizationExecuteRequiresAdmin() throws Exception {
-		when(organizationService.execute(any())).thenReturn(null);
+		when(organizationService.executeAsync(any())).thenReturn(null);
 
 		String body = """
 				{"sourcePath":"C:/workspace/source","targetPath":"C:/workspace/target"}
@@ -105,8 +105,10 @@ class SecurityConfigTest {
 				.contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
 		mockMvc.perform(post("/api/organization/execute").with(user("user").roles("USER")).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+		// The admin's request is accepted rather than answered with a finished run:
+		// the move is queued and a worker does it.
 		mockMvc.perform(post("/api/organization/execute").with(user("admin").roles("ADMIN")).with(csrf())
-				.contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+				.contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isAccepted());
 	}
 
 	@Test
@@ -117,7 +119,7 @@ class SecurityConfigTest {
 		mockMvc.perform(post("/api/organization/execute/00000000-0000-7000-8000-000000000001/undo")
 				.with(user("user").roles("USER")).with(csrf())).andExpect(status().isForbidden());
 		mockMvc.perform(post("/api/organization/execute/00000000-0000-7000-8000-000000000001/undo")
-				.with(user("admin").roles("ADMIN")).with(csrf())).andExpect(status().isOk());
+				.with(user("admin").roles("ADMIN")).with(csrf())).andExpect(status().isAccepted());
 	}
 
 	@Test

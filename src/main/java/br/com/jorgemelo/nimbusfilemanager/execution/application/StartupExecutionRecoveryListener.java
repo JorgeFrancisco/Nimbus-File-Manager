@@ -2,36 +2,47 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
+import br.com.jorgemelo.nimbusfilemanager.worker.application.ExecutionReclaim;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * If the app is restarted (or crashes) while an inventory/organization run is
- * in progress, that execution's row is left behind still marked
- * STARTED/SCANNING_FILES/PROCESSING_FILES forever - there's no way to actually
- * resume a scan mid-way (no cursor is persisted), so the honest thing to do is
- * flag it. Previously this only happened lazily, right before the next
- * inventory run started; that left the row stuck (and the progress screen
- * polling forever if reopened) for as long as the user didn't happen to start
- * another inventory. Running it once here, as soon as the app is back up, means
- * the user sees "INTERRUPTED" on their next visit instead of a scan that looks
- * like it's silently still running.
+ * Deals with the work a previous run left behind, as soon as the application is
+ * up.
+ *
+ * <p>
+ * Without it a row abandoned by a crash stays RUNNING until somebody happens to
+ * start a worker: the progress screen polls a scan that is not happening, and
+ * the user has no way to tell. Doing it here means they see what really became
+ * of it on their next visit.
+ *
+ * <p>
+ * What it applies is not its own idea of recovery. It used to have one - mark
+ * everything interrupted - guarded by a set of ids in this JVM's memory, which
+ * only ever answered for this JVM and, once the work moved to the worker, was
+ * permanently empty here. The question it was really asking is answered by the
+ * lease, for every process at once, so this now runs the same policy the worker
+ * runs: requeue what can simply be run again, close what cannot and ask for the
+ * divergence it may have left to be reconciled.
  */
 @Slf4j
 @Component
+@Profile(NimbusProfiles.APP)
 public class StartupExecutionRecoveryListener implements ApplicationListener<ApplicationReadyEvent> {
 
-	private final ExecutionProgressService executionProgressService;
+	private final ExecutionReclaim executionReclaim;
 
-	public StartupExecutionRecoveryListener(ExecutionProgressService executionProgressService) {
-		this.executionProgressService = executionProgressService;
+	public StartupExecutionRecoveryListener(ExecutionReclaim executionReclaim) {
+		this.executionReclaim = executionReclaim;
 	}
 
 	@Override
 	public void onApplicationEvent(ApplicationReadyEvent event) {
-		log.info("Marking any execution left running from a previous shutdown as INTERRUPTED.");
+		log.info("Recovering executions whose owner stopped renewing before this start.");
 
-		executionProgressService.markInterruptedExecutions();
+		executionReclaim.reclaimAbandoned();
 	}
 }

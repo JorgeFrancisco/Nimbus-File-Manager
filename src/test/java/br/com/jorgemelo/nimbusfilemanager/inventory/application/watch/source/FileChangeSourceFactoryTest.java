@@ -14,11 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 class FileChangeSourceFactoryTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 
 	/**
 	 * Whichever source the platform offers, it reaches the watcher wrapped so the
@@ -34,7 +36,8 @@ class FileChangeSourceFactoryTest {
 		when(provided.root()).thenReturn(dir);
 		when(provided.pollChangedFiles()).thenReturn(List.of(changed));
 
-		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry, mock(ScanExclusionService.class)).create(dir,
+		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry,
+				mock(ScanExclusionService.class)).create(dir,
 				true);
 
 		Assertions.assertThat(source.root()).isEqualTo(dir);
@@ -52,7 +55,8 @@ class FileChangeSourceFactoryTest {
 
 		pathRegistry.announce(ours);
 
-		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry, mock(ScanExclusionService.class)).create(dir,
+		FileChangeSource source = new FileChangeSourceFactory(_ -> Optional.of(provided), pathRegistry,
+				mock(ScanExclusionService.class)).create(dir,
 				true);
 
 		Assertions.assertThat(source.pollChangedFiles()).isEmpty();
@@ -60,7 +64,8 @@ class FileChangeSourceFactoryTest {
 
 	@Test
 	void fallsBackToTheWatchServiceSourceWhenTheProviderDeclines(@TempDir Path dir) throws IOException {
-		FileChangeSourceFactory factory = new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry, mock(ScanExclusionService.class));
+		FileChangeSourceFactory factory = new FileChangeSourceFactory(_ -> Optional.empty(), pathRegistry,
+				mock(ScanExclusionService.class));
 
 		FileChangeSource source = factory.create(dir, false);
 

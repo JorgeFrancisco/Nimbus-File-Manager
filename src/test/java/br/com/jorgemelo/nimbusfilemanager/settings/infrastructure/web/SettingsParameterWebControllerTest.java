@@ -7,8 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -17,14 +15,15 @@ import org.mockito.ArgumentMatchers;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.LibrarySwitchService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.LibrarySwitchLauncher;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
  * The quarantine policy is the real one rather than a mock: what matters here
@@ -35,19 +34,14 @@ class SettingsParameterWebControllerTest {
 
 	private final AppSettingService settings = mock(AppSettingService.class);
 	private final InventoryWatchService watcher = mock(InventoryWatchService.class);
-	private final LibrarySwitchService librarySwitch = mock(LibrarySwitchService.class);
-	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
-	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
+	private final LibrarySwitchLauncher librarySwitch = mock(LibrarySwitchLauncher.class);
+	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
+	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionRepository);
 	private final QuarantineFolderPolicy quarantineFolderPolicy = new QuarantineFolderPolicy(settings);
 	private final SettingsParameterWebController controller = new SettingsParameterWebController(settings, watcher,
 			librarySwitch, inventoryRunningState, quarantineFolderPolicy);
 
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");
-
-	private static ExecutionResponse inventoryExecution() {
-		return new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1,
-				0, 0, 0, 0, null, null, "running", false);
-	}
 
 	@Test
 	void updateShouldConfirmAndStartLibrarySwitch() {
@@ -59,7 +53,7 @@ class SettingsParameterWebControllerTest {
 				authentication, redirect)).isEqualTo("redirect:/app/settings");
 
 		verify(librarySwitch).validateNewFolder("C:/media");
-		verify(librarySwitch).switchLibrary("C:/old-media", "C:/media", "Admin@Example.com");
+		verify(librarySwitch).launch("C:/old-media", "C:/media", "Admin@Example.com");
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 
@@ -83,7 +77,7 @@ class SettingsParameterWebControllerTest {
 		Assertions.assertThat(redirect.getFlashAttributes()).extractingByKey("error")
 				.isEqualTo("Confirme a troca da biblioteca monitorada.");
 
-		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+		verify(librarySwitch, never()).launch(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
 				ArgumentMatchers.anyString());
 	}
 
@@ -109,7 +103,7 @@ class SettingsParameterWebControllerTest {
 
 		controller.update(SettingsConstants.WATCH_FOLDER, " C:/media ", false, auth, redirect);
 
-		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+		verify(librarySwitch, never()).launch(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
 				ArgumentMatchers.anyString());
 		verify(settings).update(SettingsConstants.WATCH_FOLDER, " C:/media ", "admin@x");
 		verify(watcher).reconfigureAndInventory();
@@ -118,7 +112,8 @@ class SettingsParameterWebControllerTest {
 	@Test
 	void systemSettingUpdateBlockedWhileInventoryRunning() {
 		var auth = new TestingAuthenticationToken("admin@x", "pw");
-		when(executionQueryService.active()).thenReturn(Optional.of(inventoryExecution()));
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -199,7 +194,7 @@ class SettingsParameterWebControllerTest {
 		Assertions.assertThat(redirect.getFlashAttributes().get("error").toString())
 				.contains("não pode ficar dentro da biblioteca monitorada");
 
-		verify(librarySwitch, never()).switchLibrary(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
+		verify(librarySwitch, never()).launch(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(),
 				ArgumentMatchers.anyString());
 	}
 }

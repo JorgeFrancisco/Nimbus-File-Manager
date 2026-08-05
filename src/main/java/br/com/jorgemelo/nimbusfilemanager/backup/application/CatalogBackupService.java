@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
+import static br.com.jorgemelo.nimbusfilemanager.backup.application.constants.BackupEntries.DUMP;
+import static br.com.jorgemelo.nimbusfilemanager.backup.application.constants.BackupEntries.MANIFEST;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -26,7 +29,6 @@ import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupManifest;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.backup.domain.enums.BackupPhase;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.InstalledVersion;
 import lombok.extern.slf4j.Slf4j;
@@ -58,8 +60,6 @@ public class CatalogBackupService {
 
 	private static final String PREFIX = "nimbus-catalog-";
 	private static final String SUFFIX = ".zip";
-	private static final String MANIFEST = "manifest.json";
-	private static final String DUMP = "catalog.dump";
 	// What a build with no manifest records, so the field is never absent from an
 	// archive - a restore reads it to say where the backup came from.
 	private static final String UNKNOWN_VERSION = "unknown";
@@ -70,13 +70,14 @@ public class CatalogBackupService {
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 	private final BackupProgress progress;
-	private final SecureFileMove secureFileMove;
+	private final BackupArchive backupArchive;
+	private final BackupDelivery backupDelivery;
 	private final ApplicationEventPublisher eventPublisher;
 	private final BackgroundWorkGate backgroundWorkGate;
 
 	public CatalogBackupService(CatalogSchemaRepository catalogSchemaRepository, CatalogDump catalogDump,
 			BackupFolderResolver backupFolderResolver, ObjectMapper objectMapper, Clock clock, BackupProgress progress,
-			SecureFileMove secureFileMove, ApplicationEventPublisher eventPublisher,
+			BackupArchive backupArchive, BackupDelivery backupDelivery, ApplicationEventPublisher eventPublisher,
 			BackgroundWorkGate backgroundWorkGate) {
 		this.catalogSchemaRepository = catalogSchemaRepository;
 		this.catalogDump = catalogDump;
@@ -84,7 +85,8 @@ public class CatalogBackupService {
 		this.objectMapper = objectMapper;
 		this.clock = clock;
 		this.progress = progress;
-		this.secureFileMove = secureFileMove;
+		this.backupArchive = backupArchive;
+		this.backupDelivery = backupDelivery;
 		this.eventPublisher = eventPublisher;
 		this.backgroundWorkGate = backgroundWorkGate;
 	}
@@ -127,17 +129,24 @@ public class CatalogBackupService {
 
 			pack(dump, built);
 
+			// The same reading, now of the archive rather than of the dump: what was
+			// written is opened, its entries are read to the end and the CRC-32 each one
+			// carries is confronted. The dump was intact when it was packed; this says
+			// the packing produced something a restore can open.
+			backupArchive.verify(built);
+
 			// The finished file appears in its folder in one step. Built there instead,
 			// it would grow for minutes while the inventory watcher, a cloud client and
 			// an antivirus each reacted to every batch of bytes.
 			//
-			// The secure move rather than a plain one: this is the file a rescue reads,
-			// and when the destination is another disk the move is a copy that nothing
-			// else would verify. It also announces both paths to the watcher, which is
-			// what keeps the arrival from waking an inventory.
+			// The delivery proves the archive that arrives is the one just validated -
+			// a different question from whether it is intact, and the reason the two
+			// checks are not one: this is the file a rescue reads, and when the
+			// destination is another disk the move is a copy that nothing else would
+			// check.
 			progress.start(BackupPhase.EXPORTING, target);
 
-			secureFileMove.move(built, target, true);
+			backupDelivery.deliver(built, target);
 		} catch (IOException exception) {
 			deleteQuietly(target);
 

@@ -39,7 +39,7 @@ class ExecutionMapperTest {
 
 	@Test
 	void resolvesMessageCodeInPortugueseAndEnglish() {
-		Execution execution = execution(ExecutionStatus.STARTED, ExecutionMessages.INVENTORY_STARTED, null);
+		Execution execution = execution(ExecutionStatus.RUNNING, ExecutionMessages.INVENTORY_STARTED, null);
 
 		LocaleContextHolder.setLocale(PT_BR);
 		assertThat(mapper().toResponse(execution).message()).isEqualTo("Inventário iniciado.");
@@ -76,13 +76,13 @@ class ExecutionMapperTest {
 
 	@Test
 	void reportsNotFinishedForActiveStatus() {
-		Execution execution = execution(ExecutionStatus.PROCESSING_FILES, ExecutionMessages.PROCESSING_FILES, null);
+		Execution execution = execution(ExecutionStatus.RUNNING, ExecutionMessages.PROCESSING_FILES, null);
 
 		LocaleContextHolder.setLocale(Locale.ENGLISH);
 
 		ExecutionResponse response = mapper().toResponse(execution);
 
-		assertThat(response.statusLabel()).isEqualTo("Processing files");
+		assertThat(response.statusLabel()).isEqualTo("Running");
 		assertThat(response.finished()).isFalse();
 	}
 
@@ -90,9 +90,8 @@ class ExecutionMapperTest {
 	void resolvesEveryStatusLabelInPortuguese() {
 		LocaleContextHolder.setLocale(PT_BR);
 
-		assertThat(labelOf(ExecutionStatus.STARTED)).isEqualTo("Iniciando");
-		assertThat(labelOf(ExecutionStatus.SCANNING_FILES)).isEqualTo("Contando arquivos");
-		assertThat(labelOf(ExecutionStatus.PROCESSING_FILES)).isEqualTo("Processando arquivos");
+		assertThat(labelOf(ExecutionStatus.PENDING)).isEqualTo("Na fila");
+		assertThat(labelOf(ExecutionStatus.RUNNING)).isEqualTo("Em execução");
 		assertThat(labelOf(ExecutionStatus.FINISHED)).isEqualTo("Concluído");
 		assertThat(labelOf(ExecutionStatus.FINISHED_WITH_ERRORS)).isEqualTo("Concluído com erros");
 		assertThat(labelOf(ExecutionStatus.INTERRUPTED)).isEqualTo("Interrompido");
@@ -105,9 +104,8 @@ class ExecutionMapperTest {
 	void resolvesEveryStatusLabelInEnglish() {
 		LocaleContextHolder.setLocale(Locale.ENGLISH);
 
-		assertThat(labelOf(ExecutionStatus.STARTED)).isEqualTo("Starting");
-		assertThat(labelOf(ExecutionStatus.SCANNING_FILES)).isEqualTo("Counting files");
-		assertThat(labelOf(ExecutionStatus.PROCESSING_FILES)).isEqualTo("Processing files");
+		assertThat(labelOf(ExecutionStatus.PENDING)).isEqualTo("Queued");
+		assertThat(labelOf(ExecutionStatus.RUNNING)).isEqualTo("Running");
 		assertThat(labelOf(ExecutionStatus.FINISHED)).isEqualTo("Completed");
 		assertThat(labelOf(ExecutionStatus.FINISHED_WITH_ERRORS)).isEqualTo("Completed with errors");
 		assertThat(labelOf(ExecutionStatus.INTERRUPTED)).isEqualTo("Interrupted");
@@ -124,8 +122,8 @@ class ExecutionMapperTest {
 		assertThat(mapper().toResponse(execution(ExecutionStatus.ERROR, null, null)).finished()).isTrue();
 		assertThat(mapper().toResponse(execution(ExecutionStatus.CANCELLED, null, null)).finished()).isTrue();
 		assertThat(mapper().toResponse(execution(ExecutionStatus.REJECTED, null, null)).finished()).isTrue();
-		assertThat(mapper().toResponse(execution(ExecutionStatus.STARTED, null, null)).finished()).isFalse();
-		assertThat(mapper().toResponse(execution(ExecutionStatus.SCANNING_FILES, null, null)).finished()).isFalse();
+		assertThat(mapper().toResponse(execution(ExecutionStatus.RUNNING, null, null)).finished()).isFalse();
+		assertThat(mapper().toResponse(execution(ExecutionStatus.RUNNING, null, null)).finished()).isFalse();
 	}
 
 	@Test
@@ -140,7 +138,7 @@ class ExecutionMapperTest {
 
 	@Test
 	void resolvesStepMessageCodeWithArguments() {
-		Execution execution = execution(ExecutionStatus.PROCESSING_FILES, null, null);
+		Execution execution = execution(ExecutionStatus.RUNNING, null, null);
 
 		ExecutionStep step = ExecutionStep.builder().id(10L).execution(execution)
 				.stepType(ExecutionStepType.PROGRESS_UPDATED).statusMessage(StatusMessage

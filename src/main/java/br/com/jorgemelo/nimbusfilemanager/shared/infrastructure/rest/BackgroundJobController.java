@@ -9,9 +9,15 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.Fing
 import io.swagger.v3.oas.annotations.Operation;
 
 /**
- * What the page banner polls to keep showing background work that has no
- * execution record of its own. Answers {@code null} when nothing is running,
- * which is what tells the banner to disappear.
+ * What the page banner polls, and it answers {@code null} when nothing is
+ * running - which is what tells the banner to disappear.
+ *
+ * <p>
+ * It existed because the fingerprint backlogs had no execution record of their
+ * own. They do now, and this stayed for a different reason: the banner wants
+ * something ready to draw - a label, a link, done out of total, a percentage and
+ * an estimate - and an execution row is none of those. The numbers come from the
+ * row either way.
  */
 @RestController
 @RequestMapping("/api/background-job")
@@ -25,8 +31,8 @@ public class BackgroundJobController {
 
 	@GetMapping
 	@Operation(summary = "Returns the background job in progress",
-			description = "Reports work that runs outside an execution - today the photo and video fingerprint"
-					+ " backlogs - so the page banner can show it. Null when nothing is running.")
+			description = "Reports the background job the page banner shows - today the photo and video"
+					+ " fingerprint backlogs - ready to draw. Null when nothing is running.")
 	public BackgroundJobActivity current() {
 		return fingerprintActivityService.current().orElse(null);
 	}

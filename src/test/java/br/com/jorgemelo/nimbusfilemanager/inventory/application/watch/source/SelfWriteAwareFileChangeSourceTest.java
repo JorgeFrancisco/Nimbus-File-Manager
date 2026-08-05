@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -24,7 +25,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegi
  */
 class SelfWriteAwareFileChangeSourceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final FileChangeSource delegate = mock(FileChangeSource.class);
 	private final ScanExclusionService scanExclusionService = mock(ScanExclusionService.class);
 

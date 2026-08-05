@@ -4,7 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 
 import jakarta.annotation.PreDestroy;
 
@@ -21,6 +24,7 @@ import jakarta.annotation.PreDestroy;
  * correct: before the context there is no server to leave behind.
  */
 @Component
+@Profile(NimbusProfiles.APP)
 class TrayLifecycle {
 
 	private final ApplicationContext applicationContext;

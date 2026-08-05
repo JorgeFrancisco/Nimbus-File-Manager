@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>6.3.1.166</version>
+	<version>8.1.5.202</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -22,6 +22,23 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<maven.resources.encoding>UTF-8</maven.resources.encoding>
 		<argLine/>
+		<!--
+		     The installed application's heap, and the only place it is set. jpackage bakes
+		     these into the launcher it produces, so the copy a user installs starts with
+		     them without anyone passing arguments. They are Maven properties rather than
+		     literals so a build can override them (-Dinstaller.app.max-heap=2g) without a
+		     code change.
+
+		     The application serves screens and produces work; the heavy processing happens
+		     in the worker, which gets its own budget from the application when it starts
+		     the second JVM. Deliberately not raised to fill the machine: a bigger heap on
+		     the process that answers requests buys nothing and costs longer pauses.
+
+		     -Xmx is the Java heap, not the process's memory. Native buffers, thread stacks,
+		     the JVM itself, and the ffmpeg and PostgreSQL processes are all outside it.
+		-->
+		<installer.app.initial-heap>256m</installer.app.initial-heap>
+		<installer.app.max-heap>1g</installer.app.max-heap>
 		<springdoc.version>2.8.14</springdoc.version>
 		<lombok.version>1.18.46</lombok.version>
 		<metadata-extractor.version>2.19.0</metadata-extractor.version>
@@ -33,6 +50,7 @@
 		<bootstrap-icons.version>1.13.1</bootstrap-icons.version>
 		<leaflet.version>1.9.4</leaflet.version>
 		<jts.version>1.20.0</jts.version>
+		<archunit.version>1.4.1</archunit.version>
 		<twelvemonkeys.version>3.12.0</twelvemonkeys.version>
 		<sonar-maven-plugin.version>5.7.0.6970</sonar-maven-plugin.version>
 		<!-- SonarQube / SonarScanner. projectKey/projectName/host.url/token can also be
@@ -93,10 +111,6 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-batch</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<dependency>
@@ -109,14 +123,16 @@
 			<artifactId>leaflet</artifactId>
 			<version>${leaflet.version}</version>
 		</dependency>
-		<!-- Runtime only: no production class imports org.postgresql. It was compile
-		     scope while the backup copied tables through the driver's COPY API; the
-		     backup now runs pg_dump, and the driver went back to being what it always
-		     was here - the JDBC implementation Spring loads by name. -->
+		<!-- Compile scope again, for one reason: asynchronous notifications are not
+		     in the JDBC API, so a worker that waits for LISTEN has to hold a
+		     PGConnection. It was runtime-only while nothing needed the driver by
+		     name - the backup had moved from the COPY API to pg_dump - and the single
+		     class that imports it now (ExecutionQueueSignals) is an adapter in
+		     infrastructure, which is where a dependency on a concrete database
+		     belongs. Nothing in application or domain names it. -->
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springdoc</groupId>
@@ -126,6 +142,17 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!--
+			Waiting for a condition another thread will produce. The worker half writes an
+			outcome to a row and nothing signals when; a hand-rolled sleep loop is the
+			alternative, and it is the thing this replaces rather than hides. Version comes
+			from the Spring Boot BOM.
+		-->
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -150,6 +177,16 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Test only: the architecture rules that keep mutation of the user's files
+		     inside its port. What they check is a shape the compiler cannot - who may
+		     depend on what, transitively - and reimplementing that by hand would be a
+		     worse version of this library. -->
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>${archunit.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -409,6 +446,14 @@
 					<!-- Same reason, and a stronger one: the PostgreSQL archive is several hundred MB,
 					     and a test context that fetched it would do so before it could report why. -->
 					<nimbus-file-manager.database.auto-install>false</nimbus-file-manager.database.auto-install>
+					<!-- No second JVM during tests. Every @SpringBootTest starts a context, and the
+					     application role supervises a worker process - which would be hundreds of
+					     JVMs over one run, and a suite that never finishes. WorkerSupervisorTest
+					     covers the supervisor against a mocked Process; the real process boundary
+					     belongs to the out-of-process tests. Set here rather than in a test
+					     application.properties, because that file would shadow the main one and
+					     take spring.profiles.default with it. -->
+					<nimbus-file-manager.worker.supervise>false</nimbus-file-manager.worker.supervise>
 					<!-- Third of the same family, and the one that was actually happening: every
 					     @SpringBootTest found the boundary dataset missing, took the "acquire it
 					     now, whatever the hour" branch, and pulled ~382 MB into target/, which the
@@ -736,6 +781,13 @@
 										     Windows change source warns on every start. -->
 										<argument>--java-options</argument>
 										<argument>--enable-native-access=ALL-UNNAMED</argument>
+										<!-- The installed application's heap. One source: the launcher carries it, so
+										     nothing has to be configured after installing and no property can pretend to
+										     change a JVM that is already running. -->
+										<argument>--java-options</argument>
+										<argument>-Xms${installer.app.initial-heap}</argument>
+										<argument>--java-options</argument>
+										<argument>-Xmx${installer.app.max-heap}</argument>
 										<!-- The launcher, the taskbar and the installer all show this. Without it they
 										     show the generic Java cup, which reads as "some Java thing" rather than as a
 										     product. The same file the browser tab already uses. -->

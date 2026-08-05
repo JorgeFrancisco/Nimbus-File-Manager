@@ -2,12 +2,14 @@ package br.com.jorgemelo.nimbusfilemanager.security.application;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.security.domain.enums.Role;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,9 +22,18 @@ import lombok.extern.slf4j.Slf4j;
  * password still wins, because provisioning a container or a CI environment
  * needs a value known in advance; it is treated as published either way, so the
  * change on first login stays required.
+ *
+ * <p>
+ * The application role only. Accounts exist to sign in to the screens, and a
+ * worker serves none - so provisioning one there is a write it has no reason to
+ * make, and two processes racing to create the first administrator is a race
+ * with nothing to win. Not a defect today, since the check is idempotent and
+ * the application is ready before a worker is launched; it is the role boundary
+ * being said out loud rather than left to timing.
  */
 @Slf4j
 @Component
+@Profile(NimbusProfiles.APP)
 public class DefaultUserInitializer implements ApplicationRunner {
 
 	private final AppUserRepository appUserRepository;

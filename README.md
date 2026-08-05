@@ -50,7 +50,7 @@ It provides a REST API, OpenAPI documentation and a lightweight Thymeleaf web in
 - Organization execution that physically moves files.
 - Integrity-checked moves: each physical move is verified and its catalog update plus movement record are written atomically per file, so disk and database never diverge silently.
 - Self-healing reconciliation that repairs catalog drift after moves (stale `current_path`, renames, missing files) in the background, with no manual trigger. Each reconcile that actually repairs the catalog is recorded as a distinct `RECONCILE` execution (silent no-op checks are not, to avoid flooding the history) and the topbar shows a lightweight "last reconciliation" heartbeat; every execution also records what triggered it (manual, file event or periodic check).
-- Scheduled catalog retention purge that permanently removes records whose file has been missing from disk (`MISSING`) longer than a configurable number of days, anchored on when the record became missing. The window is read from Settings (`nimbus-file-manager.catalog.missing-retention-days`); a blank or non-positive value disables it (fail-safe). `DELETED` records are left to the quarantine purge.
+- Scheduled catalog retention purge that permanently removes records whose file has been missing from disk (`MISSING`) longer than a configurable number of days, anchored on when the record became missing. It runs as an execution of its own, so the screen says when it ran and how many records it removed instead of leaving nothing but a log line, and a day with nothing past the window is not queued at all. The window is read from Settings (`nimbus-file-manager.catalog.missing-retention-days`) when the purge runs, not when it is queued; a blank or non-positive value disables it (fail-safe). `DELETED` records are left to the quarantine purge.
 - Organization movement log with original path, target path, status and error message.
 - Undo for organization executions.
 - Execution history, steps, analysis errors and movement records.
@@ -222,6 +222,103 @@ Application:
 ```text
 http://localhost:8088
 ```
+
+### Roles
+
+> **The architecture in full:** [`docs/architecture/worker-architecture.md`](docs/architecture/worker-architecture.md)
+> describes how App and Worker fit together - the queue, ownership and leases, path exclusion,
+> durable results, and what the build enforces. The decisions behind it are ADRs 0003 to 0008 in
+> [`docs/adr/`](docs/adr/); what is left to accept, to weigh up or deliberately not to do is in
+> [`docs/backlog-operacional.md`](docs/backlog-operacional.md).
+
+The same jar starts in one of three roles, chosen by profile:
+
+| Profile | Process | Role |
+| --- | --- | --- |
+| `app` | main JVM | screens, API, database supervision, and producing work |
+| `worker` | second JVM | claiming that work from the queue and running it |
+| `app-worker-combined` | one JVM | both of the above together, for development |
+
+`app` is the default: starting the jar with no profile argument - which is what the installed copy,
+the tray and every launcher do - gets the application.
+
+Everything that moves, writes or deletes a file of yours runs in the worker: organizing, undoing an
+organization, converting video, sending duplicates to quarantine, restoring a selection from
+quarantine and purging it for good, renaming, deleting and quarantining from the Files screen, plus
+the inventory walk and the reconcile that follows it. The application queues the request and the
+screen follows the row.
+
+The heavy analysis that touches nothing goes the same way, and by now that is all of it:
+fingerprinting the library, rebuilding the metadata of a folder (and the dry run that says what such
+a pass would change), resolving locations from GPS coordinates, and downloading and importing the
+boundary dataset those answers are read from. Nothing about any of them is held in memory: a run
+appears in the executions history, its progress and its estimate are read from the row, and a run
+interrupted by a restart is picked up again because the work is a query rather than a checkpoint -
+whatever is still missing a fingerprint, or has not been re-read since the last pass.
+
+Two of them cannot run at once - replacing the boundaries under a running location rebuild would
+change the answers halfway through - and that is expressed as data rather than as a flag: both name
+the geodata folder as their path, and the lock every execution takes over the paths it names is what
+keeps them apart. Across processes, and without either of them knowing the other exists. Everything
+else carries on beside them.
+
+Three background jobs stay in the application on purpose: installing an update (it ends the
+application), installing ffmpeg (the worker needs it to exist first), and backing up or restoring the
+database (the restore drops every connection, the worker's included).
+
+The Files screen still answers the way it always did when the work is quick. Renaming, deleting for
+good and sending to quarantine are written to the queue and the answer waits a second for them: with
+a worker idle, that is long enough for the whole thing, and the dialog reports what happened. When it
+is not - a large folder, or a worker busy with something else - the answer says the work was accepted
+and is still coming, and the listing updates itself once it finishes. Nothing is refused for taking
+too long, and nothing is carried out by the application instead.
+
+What stays in the application is the conversation, not the work. Restoring a single quarantined file
+can raise a question - a name collision, a missing origin folder - and a question is put to you
+before anything is queued; the new name for a collision is chosen while you are still there. What
+reaches the worker is a destination already decided, moved under the same locks and the same
+verified move as everything else. The answer waits a second for it and says the restore is on its
+way when it takes longer, exactly like the Files screen.
+
+The worker learns of a new request through a PostgreSQL notification published in the same
+transaction that writes the row, so it starts within milliseconds instead of waiting for its next
+poll. The notification carries nothing: the request is the row, and the worker still polls on its own
+schedule, so a lost signal delays work rather than losing it. Each worker also writes a heartbeat,
+which is what lets the application tell "your request is being processed" from "your request is
+queued and there is nothing running to pick it up" - readable at `GET /api/worker`.
+
+For Run/Debug from an IDE, start `NimbusFileManagerApplication` as a Java Application with:
+
+```text
+--spring.profiles.active=app-worker-combined
+```
+
+Eclipse users have this ready: **Nimbus - App Worker Combined.launch** is versioned with the project,
+so a fresh clone can Run or Debug it without typing arguments.
+
+### Memory
+
+Each role gets its own heap, which is one of the reasons the roles are separate processes at all.
+
+| Role | Heap | Where it is set |
+| --- | --- | --- |
+| App (installed) | `-Xms256m -Xmx1g` | `--java-options` in the jpackage step of `pom.xml`, from the `installer.app.*-heap` properties |
+| Worker (second JVM) | `-Xms512m -Xmx4g` | the application builds the command line, from `nimbus-file-manager.worker.initial-heap` / `.max-heap` |
+| `app-worker-combined` | `-Xms512m -Xmx4g` | the shared Eclipse launch configuration |
+
+One source each, and no property pretends to resize a JVM that is already running - a heap can only
+be chosen as a process starts. The combined profile is one JVM, so the two budgets are **not** added
+up: it takes the worker's, because that is the half doing the heavy work.
+
+These bound the **Java heap** only. Thread stacks, native buffers, the JVM itself and the ffmpeg and
+PostgreSQL processes all live outside it, so neither number is a limit on what the application costs
+the machine. Every start logs the heap it actually got, the processors it can see and its role.
+
+Both halves then live in one JVM, so a breakpoint in a controller and one in a job handler are hit by
+the same debugger. It is a Spring profile group - it activates `app` and `worker` and adds nothing of
+its own, so work still travels the queue, the claim, the lock and the lease exactly as in production.
+What it does not give is the isolation the split exists for: one JVM means one heap and one garbage
+collector, which is why production runs the two apart.
 
 On Windows the change source calls `kernel32` through the Foreign Function & Memory API. The
 packaged executable jar (`java -jar`) already declares `Enable-Native-Access: ALL-UNNAMED` in its
@@ -739,8 +836,9 @@ REST API picks up from there:
 
 Important behavior:
 
-- `/api/organization/preview` only builds a plan; it does not persist a plan and does not move files.
-- `/api/organization/execute` recalculates the plan internally; there is no `previewId`.
+- `/api/organization/preview` queues the building of a plan and answers `202` with the execution; it moves no files.
+- The plan is published by a worker, read back from `/api/organization/preview/{executionId}` one page at a time, and expires on its own short schedule (12 h by default, `nimbus-file-manager.organization.plan.ttl-hours`).
+- `/api/organization/execute` recalculates the plan internally; there is no `previewId`. A published plan reports `catalogChanged` when the library moved since it was built, so the difference is stated rather than discovered afterwards.
 - `/api/organization/execute` moves files physically.
 - `/api/organization/execute/{executionId}/undo` moves files back using stored movement records.
 - There is no `dryRun` flag for organization execution.
@@ -749,10 +847,11 @@ Important behavior:
 ## Endpoints
 
 ```text
-POST   /api/metadata/rebuild
+POST   /api/metadata/rebuild                            202, queues the rebuild
 
-POST   /api/organization/preview
-POST   /api/organization/preview/export
+POST   /api/organization/preview                        202, queues the plan
+GET    /api/organization/preview/{executionId}          the published plan, paginated
+GET    /api/organization/preview/{executionId}/export   the published plan as a ZIP
 POST   /api/organization/execute
 POST   /api/organization/execute/{executionId}/undo
 
@@ -769,9 +868,9 @@ GET    /api/duplicates
 GET    /api/duplicates/{sha256}/files
 GET    /api/duplicates/summary
 GET    /api/duplicates/candidates
-GET    /api/duplicates/similar-photos
+GET    /api/duplicates/similar-photos          200 published · 202 queued
 GET    /api/duplicates/similar-photos/failures
-GET    /api/duplicates/similar-videos
+GET    /api/duplicates/similar-videos          200 published · 202 queued
 GET    /api/duplicates/similar-videos/failures
 
 GET    /api/timeline/index
@@ -830,7 +929,6 @@ curl -X POST "http://localhost:8088/api/organization/preview" \
     "targetPath": "C:/nimbus-file-manager/workspace/organized",
     "recursive": true,
     "layout": "DEFAULT",
-    "limit": 10000,
     "rebuildMetadata": false,
     "skipAlreadyOrganized": true
   }'
@@ -847,6 +945,12 @@ Useful optional filters:
 }
 ```
 
+The answer is the queued execution. Poll it, then read the published plan a page at a time:
+
+```bash
+curl "http://localhost:8088/api/organization/preview/{executionId}?page=0&size=50&onlyConflicts=false"
+```
+
 Typical response shape:
 
 ```json
@@ -854,27 +958,23 @@ Typical response shape:
   "sourcePath": "C:\\nimbus-file-manager\\workspace\\temp",
   "targetPath": "C:\\nimbus-file-manager\\workspace\\organized",
   "layout": "DEFAULT",
-  "execute": false,
+  "catalogChanged": false,
+  "page": 0,
+  "size": 50,
+  "totalItems": 8,
   "summary": {
     "totalFiles": 8,
-    "filesWithDate": 8,
-    "filesWithoutDate": 0,
     "alreadyOrganized": 0,
     "plannedMoves": 8,
-    "conflicts": 4,
-    "targetAlreadyExists": 0,
-    "duplicateTargets": 4
+    "totalSizeBytes": 41231234,
+    "conflicts": 4
   },
   "items": [
     {
-      "catalogFileId": 1,
+      "catalogFileId": "0193f1a2-7c4d-7000-8000-000000000001",
       "fileName": "20251230_115630.jpg",
       "sourcePath": "...workspace\\temp\\dup1\\20251230_115630.jpg",
       "targetPath": "...workspace\\organized\\202512\\30\\CAMERA\\IMAGENS\\20251230_115630.jpg",
-      "samePath": false,
-      "missingDate": false,
-      "targetExists": false,
-      "duplicateTarget": true,
       "conflict": true,
       "conflictType": "DUPLICATE_TARGET"
     }
@@ -884,21 +984,13 @@ Typical response shape:
 
 ## Organization Preview Export
 
-Streams a ZIP file containing the JSON organization preview.
+Streams the published plan as a ZIP containing its JSON. It reads what a worker published rather than
+recalculating, so the file describes exactly the plan the screen showed - and it reads in pages, so a
+plan at the item cap never has to be held in memory to be serialized.
 
 ```bash
-curl -X POST "http://localhost:8088/api/organization/preview/export" \
-  -H "Content-Type: application/json" \
-  -o organization-preview.zip \
-  -d '{
-    "sourcePath": "C:/nimbus-file-manager/workspace/temp",
-    "targetPath": "C:/nimbus-file-manager/workspace/organized",
-    "recursive": true,
-    "layout": "DEFAULT",
-    "limit": 10000,
-    "rebuildMetadata": false,
-    "skipAlreadyOrganized": true
-  }'
+curl "http://localhost:8088/api/organization/preview/{executionId}/export" \
+  -o organization-preview.zip
 ```
 
 ## Organization Execute
@@ -1015,7 +1107,9 @@ If `refresh` is empty or omitted, only `DATE` is rebuilt by default. The REST ca
 
 ## Duplicates
 
-Three tabs: byte-identical duplicates (SHA-256), visually **similar photos** (256-bit DCT pHash confirmed by SSIM) and visually **similar videos**. Video similarity samples several frames at deterministic relative positions in a single ffmpeg pass, hashes each with the same pHash as photos, and matches videos frame-for-frame with a trimmed-mean aggregation plus a concordant-frame quorum — robust to re-encoding, bitrate, resolution, small duration differences and compression. Both similarity kinds are derived off-inventory by a shared background fingerprint backlog, and new algorithms plug in via the `VideoSimilarityAlgorithm` contract without touching the orchestrator.
+Three tabs: byte-identical duplicates (SHA-256), visually **similar photos** (256-bit DCT pHash confirmed by SSIM) and visually **similar videos**. Video similarity samples several frames at deterministic relative positions in a single ffmpeg pass, hashes each with the same pHash as photos, and matches videos frame-for-frame with a trimmed-mean aggregation plus a concordant-frame quorum — robust to re-encoding, bitrate, resolution, small duration differences and compression. Both similarity kinds are derived off-inventory by a shared fingerprint backlog, itself a queued execution the worker drains, and new algorithms plug in via the `VideoSimilarityAlgorithm` contract without touching the orchestrator.
+
+The grouping itself is **durable**: a worker runs it as a queued execution and publishes the result, which the screen and the API then read instead of recomputing. A published analysis records which files it examined, so it can say that the library has moved since - and it stays on screen, still usable, while a new one is being computed and after a failed recomputation. A half-built result is never visible. When no analysis has been published for the current parameters, the similarity endpoints answer `202 Accepted` with the execution to follow rather than grouping the library inside the request.
 
 ```bash
 curl "http://localhost:8088/api/duplicates/summary"
@@ -1200,6 +1294,11 @@ curl "http://localhost:8088/api/executions/{id}/movements"
 
 `/movements` returns the file movement records for an organization execution (source path, target path, status) as a separate call - they are not embedded in the `/api/executions/{id}` response itself.
 
+Every long-running or file-changing operation is one of these rows, including administrative ones:
+changing the monitored library queues a `LIBRARY_SWITCH` that forgets the old library's catalog and
+adopts the new one, so it survives a restart and is followed on the executions screen like anything
+else. Nothing about it runs in the process serving the screen.
+
 ## Statistics
 
 ```bash
@@ -1232,6 +1331,16 @@ day the dump was taken.
 The dump and restore shell out to `pg_dump`/`pg_restore` from the same PostgreSQL the application
 manages, so the client always matches the server — a client older than the server refuses to read
 what it wrote.
+
+A backup is checked three times before it is kept, and the three answer different questions. The
+dump is read back with `pg_restore --list`, which walks the whole compressed file, so a truncated
+one is discarded while taking it again is still an option. The finished archive is then opened and
+read to the end of every entry: the first pass proves the archive has the index a restore will look
+for, and the second confronts the CRC-32 each entry stores, which is what catches a byte that
+changed after it was written. Only then is it delivered, and the delivery compares the SHA-256 of
+what left with the SHA-256 of what arrived — when the destination is another disk, the move is a
+copy that nothing else would verify. An archive that fails any of these is discarded in staging: the
+previous backup stays where it is, and nothing that looks like a backup is left behind.
 
 ## Database Migrations
 
@@ -1465,8 +1574,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       2660 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.48% instruction, 92.26% branch, 98.00% line, 98.89% method, 100.00% class
+Tests:       3293 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.49% instruction, 92.50% branch, 97.97% line, 98.90% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1478,9 +1587,42 @@ the same commit — that is what makes the ratchet advance. See *Piso de cobertu
 `AGENTS.md` for the policy.
 
 ```text
-Floor:  98.46% instruction, 92.24% branch, 97.97% line, 98.88% method, 100.00% class
+Floor:  98.49% instruction, 92.43% branch, 98.02% line, 98.92% method, 100.00% class
 Goal:   98.75% instruction, 92.50% branch, 98.25% line, 99.00% method, 100.00% class
 ```
+
+**The run above meets the floor on instruction and clears it on branch; line and method are five and
+two hundredths short, and the floor was deliberately left where it is.** Moving the
+writers to the worker added code whose remaining gaps are the residue the policy already accepts -
+private anti-instantiation constructors, which may not be covered by reflection, and failure paths
+that need the operating system to refuse something. That residue alone is larger than the shortfall:
+36 methods are uncovered and the shortfall is one. It closes and reopens by a
+few units as each slice removes a fully covered bean along with the workload that used it, which
+lowers a percentage without anything having gone untested. Lowering the floor needs
+the *Recalcular o piso* procedure, which is a deliberate decision rather than a side effect of a task,
+so it is tracked as an open item in [`docs/backlog-operacional.md`](docs/backlog-operacional.md)
+instead of being resolved by editing the numbers here.
+
+**Branch clears the floor and the floor was not raised with it.** Retiring the last in-memory
+liveness check and then closing the claim-to-attempt window left branch six hundredths above the
+floor - well within the width
+of the drift this suite is known to have between runs (*A medição varia entre execuções* in `AGENTS.md` records up
+to 0.16 on branch, from parallel test classes and self-skipping tests). Raising the floor to the top
+of that band would turn ordinary noise into a red build on the next task, which is the opposite of
+what a ratchet is for. It rises when a run clears it by more than the drift.
+
+Instruction, line and method were recalculated again when the application became a producer and a
+supervisor. Branch rose. What is left uncovered in the new code is the one method that starts the
+worker process: it can only be exercised by starting a JVM, which is the same reason the project
+already excludes `**/*ProcessRunner`. The command line it builds - the profile and flags that make
+the second process a worker - is asserted without starting anything, and every other class the change
+added is fully covered.
+
+Instruction and line were recalculated down by three hundredths when the role profiles arrived. The
+cause is what is measured, not what is covered: the composition tests start a context per role, and a
+role that leaves a bean out still loads the configuration class that decided to. Those classes joined
+the denominator without any of them being new code that went untested - every class added in the same
+change is covered, and the reduction reproduces exactly across clean runs rather than drifting.
 
 Method rose and line was recalculated downward by a tenth when the update domain arrived - the
 check, the download, the verification and the installer that ends the run. The order *Recalcular o
@@ -1636,7 +1778,7 @@ Where the survivors are: by a wide margin the most common surviving mutator is
 progress update, a log-adjacent notification or a cache invalidation that the test
 exercises without checking. Negated conditionals, conditional boundaries and math
 follow it, clustered in the paging and percentage arithmetic. The largest blocks of
-*no coverage* are the asynchronous runners of the fingerprint backlog and the JDBC
+*no coverage* are the fingerprint backlog drain and the JDBC
 URL parsing the backup relies on - production code that the integration tests do
 cover and this profile excludes, which is the effect described above rather than a
 hole in the suite.

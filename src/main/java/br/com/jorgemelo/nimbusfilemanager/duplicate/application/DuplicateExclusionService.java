@@ -76,6 +76,26 @@ public class DuplicateExclusionService {
 		return fileRepository.findAllPublicIds();
 	}
 
+	/**
+	 * A deterministic fingerprint of both lists, so a similarity result computed
+	 * before the user changed one of them is never reused as if it still applied.
+	 *
+	 * <p>
+	 * Saying "these two are not duplicates" changes what the analysis is allowed to
+	 * find, which makes it a parameter of the analysis in every sense that matters.
+	 * Until now it was invisible to the key: the cache was cleared by hand from the
+	 * controller, which worked only because the cache lived in the same process as
+	 * the click.
+	 */
+	@Transactional(readOnly = true)
+	public String signature() {
+		List<String> files = fileRepository.findAllPublicIds().stream().map(UUID::toString).sorted().toList();
+
+		List<String> folders = folderRepository.findAllFolderPaths().stream().sorted().toList();
+
+		return SimilarityDigest.ofExclusions(files, folders);
+	}
+
 	@Transactional(readOnly = true)
 	public List<String> excludedFolders() {
 		return folderRepository.findAllFolderPaths();

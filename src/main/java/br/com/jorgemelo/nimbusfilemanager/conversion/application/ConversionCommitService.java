@@ -11,9 +11,12 @@ import org.springframework.stereotype.Service;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -45,14 +48,16 @@ public class ConversionCommitService {
 	private final QuarantineIntakeService quarantineIntakeService;
 	private final ConversionCatalogService conversionCatalogService;
 	private final ConversionFileNaming conversionFileNaming;
+	private final LibraryFileMutations libraryFileMutations;
 
 	public ConversionCommitService(ConversionFilePlacement conversionFilePlacement,
 			QuarantineIntakeService quarantineIntakeService, ConversionCatalogService conversionCatalogService,
-			ConversionFileNaming conversionFileNaming) {
+			ConversionFileNaming conversionFileNaming, LibraryFileMutations libraryFileMutations) {
 		this.conversionFilePlacement = conversionFilePlacement;
 		this.quarantineIntakeService = quarantineIntakeService;
 		this.conversionCatalogService = conversionCatalogService;
 		this.conversionFileNaming = conversionFileNaming;
+		this.libraryFileMutations = libraryFileMutations;
 	}
 
 	/** The configured quarantine root, or empty when there is none. */
@@ -62,19 +67,34 @@ public class ConversionCommitService {
 
 	/**
 	 * @param quarantineRoot where the original goes, or {@code null} to keep it
+	 * @param ownership asked once, here, and nowhere else in the conversion. The
+	 * encode has already finished into the workspace and cost whatever it cost;
+	 * what must not happen is that result being moved into the library by a process
+	 * that no longer holds the paths. The guard closes the commit, not the
+	 * computing
 	 */
 	public CommitResult commit(Execution execution, CatalogFile file, Path converted, Path quarantineRoot,
-			ConversionOptions options, ResolvedMediaDate originalDate) {
+			ConversionOptions options, ResolvedMediaDate originalDate, ExecutionOwnership ownership) {
 		Path source = Path.of(file.getFileKey());
 
 		FileTime sourceModified = lastModifiedOf(source);
 
 		Path placed;
 
+		// The last moment at which walking away is free: nothing of this file has
+		// entered the library yet, and the temporary is ours to discard.
 		try {
-			placed = conversionFilePlacement.place(converted, source, options);
+			ownership.assertStillOwned();
+		} catch (OwnershipLostException ownershipLost) {
+			conversionFileNaming.discard(converted);
 
-			inheritModifiedTime(placed, sourceModified);
+			throw ownershipLost;
+		}
+
+		try {
+			placed = conversionFilePlacement.place(converted, source, options, execution.getId());
+
+			inheritModifiedTime(placed, sourceModified, execution.getId());
 
 			log.info("Converted {} placed as {}", source.getFileName(), placed.getFileName());
 		} catch (Exception e) {
@@ -90,7 +110,7 @@ public class ConversionCommitService {
 		}
 
 		IntakeOutcome outcome = quarantineIntakeService.intake(execution, file, quarantineRoot,
-				MovementReason.CONVERTED_QUARANTINED);
+				MovementReason.CONVERTED_QUARANTINED, execution.getId());
 
 		if (outcome != IntakeOutcome.MOVED) {
 			log.warn("The converted file for {} is in place, but the original could not be quarantined ({})", source,
@@ -102,7 +122,7 @@ public class ConversionCommitService {
 		// With an affix configured the converted name is the one the user asked for,
 		// so only an unnamed conversion inherits the original's name.
 		Path finalPath = conversionFileNaming.affix(options).isEmpty()
-				? conversionFilePlacement.renameToOriginalName(placed, source)
+				? conversionFilePlacement.renameToOriginalName(placed, source, execution.getId())
 				: placed;
 
 		return catalogQuietly(finalPath, true, null, originalDate);
@@ -145,15 +165,7 @@ public class ConversionCommitService {
 	 * out of today's timeline. It also keeps the file honest for Explorer, Photos
 	 * and any backup tool that sorts by date.
 	 */
-	private void inheritModifiedTime(Path placed, FileTime sourceModified) {
-		if (sourceModified == null) {
-			return;
-		}
-
-		try {
-			Files.setLastModifiedTime(placed, sourceModified);
-		} catch (IOException e) {
-			log.debug("Could not carry the modified time over to {}", placed, e);
-		}
+	private void inheritModifiedTime(Path placed, FileTime sourceModified, Long executionId) {
+		libraryFileMutations.carryModifiedTime(placed, sourceModified, executionId);
 	}
 }

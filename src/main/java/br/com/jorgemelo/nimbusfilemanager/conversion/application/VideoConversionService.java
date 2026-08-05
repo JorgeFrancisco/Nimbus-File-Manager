@@ -18,11 +18,13 @@ import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionMessages;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionAdjustments;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionRun;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionTotals;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRequest;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeResult;
@@ -31,6 +33,10 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionOutc
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.ConversionCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
@@ -69,24 +75,37 @@ public class VideoConversionService extends LocalizedComponent {
 	private final VideoTranscoder videoTranscoder;
 	private final ConversionCommitService conversionCommitService;
 	private final ConversionExecutionRecorder conversionExecutionRecorder;
+	private final ExecutionProgressService executionProgressService;
 	private final OperationLockService operationLockService;
 	private final ExecutionCancellationService executionCancellationService;
 
 	public VideoConversionService(CatalogFileRepository catalogFileRepository,
 			ConversionCandidateRepository conversionCandidateRepository, VideoTranscoder videoTranscoder,
 			ConversionCommitService conversionCommitService, ConversionExecutionRecorder conversionExecutionRecorder,
-			OperationLockService operationLockService, ExecutionCancellationService executionCancellationService) {
+			ExecutionProgressService executionProgressService, OperationLockService operationLockService,
+			ExecutionCancellationService executionCancellationService) {
 		this.catalogFileRepository = catalogFileRepository;
 		this.conversionCandidateRepository = conversionCandidateRepository;
 		this.videoTranscoder = videoTranscoder;
 		this.conversionCommitService = conversionCommitService;
 		this.conversionExecutionRecorder = conversionExecutionRecorder;
+		this.executionProgressService = executionProgressService;
 		this.operationLockService = operationLockService;
 		this.executionCancellationService = executionCancellationService;
 	}
 
-	public ConversionResult convert(Collection<UUID> publicIds, ConversionOptions options,
-			ConversionProgressCallback progress, BooleanSupplier cancelled) {
+	/**
+	 * Converts the batch a worker claimed.
+	 *
+	 * <p>
+	 * The execution is handed in rather than opened here: the row already exists,
+	 * reserved with a lease, and opening a second one would give the same batch two
+	 * identities. The ownership travels with it because the one thing that must not
+	 * happen is a converted file entering the library from a process that has lost
+	 * the right to write there.
+	 */
+	public ConversionResult convert(Collection<UUID> publicIds, ConversionOptions options, Execution execution,
+			ExecutionOwnership ownership) {
 		ConversionOptions effective = options == null ? ConversionOptions.defaults() : options;
 
 		if (publicIds == null || publicIds.isEmpty()) {
@@ -107,14 +126,14 @@ public class VideoConversionService extends LocalizedComponent {
 
 		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds);
 
-		progress.update(0, publicIds.size(), 0, null);
+		executionProgressService.updateTotal(execution, publicIds.size());
 
 		// The batch waits rather than refusing on the spot: what it collides with is
 		// almost always background maintenance that finishes on its own, and the user
 		// has no way to see it - being told "busy" for that reads as a broken button.
 		try (var _ = operationLockService.acquireWithin(ConversionConstants.LOCK_WAIT, ExecutionType.CONVERSION,
 				lockedPaths(files, quarantineRoot))) {
-			return convertLocked(publicIds, files, effective, quarantineRoot, progress, cancelled);
+			return convertLocked(publicIds, files, effective, quarantineRoot, execution, ownership);
 		} catch (OperationLockException lockError) {
 			log.warn("Conversion blocked after waiting {}: another operation is using one of its paths: {}",
 					ConversionConstants.LOCK_WAIT, lockError.getMessage());
@@ -124,36 +143,27 @@ public class VideoConversionService extends LocalizedComponent {
 	}
 
 	private ConversionResult convertLocked(Collection<UUID> publicIds, List<CatalogFile> files,
-			ConversionOptions options, Path quarantineRoot, ConversionProgressCallback progress,
-			BooleanSupplier cancelled) {
-		Execution execution = conversionExecutionRecorder.start(folderOf(files), publicIds.size());
-
-		// Declaring the id is how the rest of the application learns this batch is
-		// alive: the orphan sweep that cleans executions left behind by a crash reads
-		// exactly this, and without it a running conversion was swept as INTERRUPTED -
-		// which in turn told the folder watcher nothing was running and let it start a
-		// full inventory over the very tree being converted. Registering also means a
-		// cancellation asked for by execution id now reaches the loop below, so the
-		// request can never be acknowledged and then ignored.
-		executionCancellationService.register(execution.getId());
-
-		BooleanSupplier stopRequested = () -> cancelled.getAsBoolean()
-				|| executionCancellationService.isCancelled(execution.getId());
+			ConversionOptions options, Path quarantineRoot, Execution execution, ExecutionOwnership ownership) {
+		// Declaring the id is how the rest of this process learns the batch is alive.
+		// The durable answer is the lease on the row; this is what keeps the local
+		// cancellation cache honest while the loop below runs.
+		BooleanSupplier stopRequested = () -> executionCancellationService.isCancelled(execution.getId());
 
 		try {
-			return convertRegistered(execution, publicIds, files, options, quarantineRoot, progress, stopRequested);
+			return convertRegistered(execution, publicIds, files, options, quarantineRoot, ownership, stopRequested);
 		} catch (RuntimeException conversionError) {
 			conversionExecutionRecorder.fail(execution, conversionError.getMessage());
 
 			throw conversionError;
 		} finally {
-			executionCancellationService.unregister(execution.getId());
+			executionCancellationService.forget(execution.getId());
 		}
 	}
 
 	private ConversionResult convertRegistered(Execution execution, Collection<UUID> publicIds, List<CatalogFile> files,
-			ConversionOptions options, Path quarantineRoot, ConversionProgressCallback progress,
-			BooleanSupplier cancelled) {
+			ConversionOptions options, Path quarantineRoot, ExecutionOwnership ownership, BooleanSupplier cancelled) {
+		ConversionRun run = new ConversionRun(execution, ownership, cancelled, quarantineRoot, options);
+
 		int total = publicIds.size();
 
 		Map<UUID, ConversionSource> sources = sourcesById(publicIds);
@@ -178,15 +188,14 @@ public class VideoConversionService extends LocalizedComponent {
 				break;
 			}
 
-			int done = processed;
+			reportFileStarted(execution, processed, converted, skipped, errors, file.getFileName());
 
-			progress.update(done, total, 0, file.getFileName());
-
-			ConversionFileResult item = convertOne(execution, file, options, quarantineRoot,
-					sources.get(file.getPublicId()),
-					percent -> progress.update(done, total, percent, file.getFileName()), cancelled);
+			ConversionFileResult item = convertOne(run, file, sources.get(file.getPublicId()),
+					percent -> executionProgressService.updateCurrentItem(execution, percent));
 
 			items.add(item);
+
+			conversionExecutionRecorder.recordItem(execution, item);
 
 			switch (item.outcome()) {
 			case CONVERTED -> {
@@ -206,7 +215,8 @@ public class VideoConversionService extends LocalizedComponent {
 
 			processed++;
 
-			progress.update(processed, total, 100, file.getFileName());
+			executionProgressService.updateLiveProgress(execution, total, processed, skipped, errors,
+					ExecutionMessages.processing(file.getFileName()));
 		}
 
 		long savedBytes = originalBytes - convertedBytes;
@@ -216,19 +226,33 @@ public class VideoConversionService extends LocalizedComponent {
 
 		boolean stopped = cancelled.getAsBoolean();
 
-		String message = stopped ? message("backend.conversion.cancelledBatch", converted, errors)
-				: message("backend.conversion.completed", converted, skipped, errors,
+		ExecutionMessage outcome = stopped ? ConversionMessages.cancelledBatch(converted, errors)
+				: ConversionMessages.completed(converted, skipped, errors,
 						SizeFormatter.format(Math.max(0, savedBytes)));
 
-		conversionExecutionRecorder.finish(execution, totals, message, stopped);
+		conversionExecutionRecorder.finish(execution, totals, outcome, stopped);
+
+		String message = resolve(outcome);
 
 		return new ConversionResult(true, total, converted, skipped, errors, originalBytes, convertedBytes, savedBytes,
 				SizeFormatter.format(Math.max(0, savedBytes)), savedPercent(originalBytes, savedBytes),
 				UuidV7.orLegacy(execution.getPublicId(), execution.getId()), message, List.copyOf(items));
 	}
 
-	private ConversionFileResult convertOne(Execution execution, CatalogFile file, ConversionOptions options,
-			Path quarantineRoot, ConversionSource source, IntConsumer onFilePercent, BooleanSupplier cancelled) {
+	/**
+	 * Says which file the batch has reached, and clears the per-item bar so the
+	 * second level starts from zero rather than from where the last encode ended.
+	 */
+	private void reportFileStarted(Execution execution, int processed, int converted, int skipped, int errors,
+			String fileName) {
+		executionProgressService.updateLiveProgress(execution, converted + skipped + errors, processed, skipped, errors,
+				ExecutionMessages.processing(fileName));
+
+		executionProgressService.startsCurrentItem(execution);
+	}
+
+	private ConversionFileResult convertOne(ConversionRun run, CatalogFile file, ConversionSource source,
+			IntConsumer onFilePercent) {
 		Optional<String> ineligible = ineligibilityOf(file, source);
 
 		if (ineligible.isPresent()) {
@@ -239,8 +263,8 @@ public class VideoConversionService extends LocalizedComponent {
 
 		Double duration = source == null ? null : source.durationSeconds();
 
-		TranscodeResult transcode = videoTranscoder
-				.transcode(new TranscodeRequest(path, duration, options, isHevc(source)), onFilePercent, cancelled);
+		TranscodeResult transcode = videoTranscoder.transcode(
+				new TranscodeRequest(path, duration, run.options(), isHevc(source)), onFilePercent, run.cancelled());
 
 		if (transcode.failure() == ConversionFailure.CANCELLED) {
 			return cancelledItem(file);
@@ -250,8 +274,8 @@ public class VideoConversionService extends LocalizedComponent {
 			return failed(file, transcode);
 		}
 
-		CommitResult commit = conversionCommitService.commit(execution, file, transcode.output(), quarantineRoot,
-				options, resolvedDateOf(source));
+		CommitResult commit = conversionCommitService.commit(run.execution(), file, transcode.output(),
+				run.quarantineRoot(), run.options(), resolvedDateOf(source), run.ownership());
 
 		if (!commit.successful()) {
 			return failed(file, TranscodeResult.failed(commit.failure(), transcode.audioFallback(),
@@ -405,13 +429,11 @@ public class VideoConversionService extends LocalizedComponent {
 	}
 
 	/**
-	 * The folder the conversion ran in, recorded on the execution so the history
-	 * shows where it happened. Only informative - each file is locked by its own
-	 * path.
+	 * The same sentence, for the result this call returns in-process. The row keeps
+	 * the code, which the request that reads it localises.
 	 */
-	private Path folderOf(List<CatalogFile> files) {
-		return files.stream().findFirst().map(file -> PathUtils.normalizePath(file.getFileKey()).getParent())
-				.orElse(null);
+	private String resolve(ExecutionMessage outcome) {
+		return message(outcome.code(), outcome.args().toArray());
 	}
 
 	private Path[] lockedPaths(List<CatalogFile> files, Path quarantineRoot) {

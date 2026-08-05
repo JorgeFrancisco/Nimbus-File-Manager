@@ -3,40 +3,35 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.AnalyzedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.SimilarityConstants;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityComposition;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityFamily;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaQualityRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.MediaQuality;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PhotoHashRawResponse;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 class PhotoSimilarityServiceTest {
-
 	private final MediaFingerprintRepository repository = mock(MediaFingerprintRepository.class);
-	private final AppSettingService settings = mock(AppSettingService.class);
 	private final MediaQualityRepository mediaQualityRepository = mock(MediaQualityRepository.class);
 	private final DuplicateExclusionService exclusions = mock(DuplicateExclusionService.class);
 
@@ -58,15 +53,16 @@ class PhotoSimilarityServiceTest {
 						new MediaQuality(id2, 100, 100, newer, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
 						new MediaQuality(id3, 100, 100, older, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
 
-		Page<SimilarPhotoGroupResponse> result = service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20));
+		List<AnalyzedGroup> result = service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups();
 
-		Assertions.assertThat(result.getTotalElements()).isEqualTo(1);
+		Assertions.assertThat(result).hasSize(1);
 
-		SimilarPhotoGroupResponse group = result.getContent().getFirst();
+		AnalyzedGroup group = result.getFirst();
 
-		Assertions.assertThat(group.files()).isEqualTo(2);
+		Assertions.assertThat(group.members()).hasSize(2);
 		Assertions.assertThat(group.similarityPercent()).isEqualTo(100);
-		Assertions.assertThat(group.keep().id()).isEqualTo(UuidV7.fromLegacy(1L));
+		Assertions.assertThat(group.members().getFirst().mediaPublicId()).isEqualTo(UuidV7.fromLegacy(1L));
 	}
 
 	@Test
@@ -77,11 +73,12 @@ class PhotoSimilarityServiceTest {
 				new PageImpl<>(List.of(photo(1L, hash(0), sample(100), when), photo(2L, hash(0), sample(100), when))));
 		when(exclusions.excludedFilePublicIds()).thenReturn(List.of(UuidV7.fromLegacy(2L)));
 
-		Page<SimilarPhotoGroupResponse> result = service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20));
+		List<AnalyzedGroup> result = service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups();
 
 		// Only photo 1 survives the exclusion filter, so the identical pair can never
 		// group.
-		Assertions.assertThat(result.getTotalElements()).isZero();
+		Assertions.assertThat(result).isEmpty();
 	}
 
 	@Test
@@ -99,24 +96,11 @@ class PhotoSimilarityServiceTest {
 		when(exclusions.excludedFolders()).thenReturn(List.of("C:/Fotos"));
 		when(exclusions.isUnderExcludedFolder(any(), any())).thenCallRealMethod();
 
-		Page<SimilarPhotoGroupResponse> result = service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20));
+		List<AnalyzedGroup> result = service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups();
 
-		Assertions.assertThat(result.getTotalElements()).isEqualTo(1);
-		Assertions.assertThat(result.getContent().getFirst().files()).isEqualTo(2);
-	}
-
-	@Test
-	void invalidateCacheForcesTheNextLoadToRecompute() {
-		when(repository.findFingerprintedPhotos(any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		service.groups(70, PageRequest.of(0, 20));
-		Assertions.assertThat(service.isCached(70)).isTrue();
-
-		service.invalidateCache();
-
-		Assertions.assertThat(service.isCached(70)).isFalse();
+		Assertions.assertThat(result).hasSize(1);
+		Assertions.assertThat(result.getFirst().members()).hasSize(2);
 	}
 
 	@Test
@@ -125,7 +109,8 @@ class PhotoSimilarityServiceTest {
 				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(0), LocalDateTime.now()),
 						photo(2L, hash(0), sample(255), LocalDateTime.now()))));
 
-		Assertions.assertThat(service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20))).isEmpty();
+		Assertions.assertThat(service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	@Test
@@ -137,7 +122,8 @@ class PhotoSimilarityServiceTest {
 				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(1), LocalDateTime.now()),
 						photo(2L, hash(0), sample(2), LocalDateTime.now()))));
 
-		Assertions.assertThat(service(ssim).groups(50, PageRequest.of(0, 20))).isEmpty();
+		Assertions.assertThat(service(ssim).analyze(50, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	@Test
@@ -146,8 +132,8 @@ class PhotoSimilarityServiceTest {
 				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
 						photo(2L, hash(0), sample(100), LocalDateTime.now()))));
 
-		Assertions.assertThat(service(new PhotoSsimService()).groups(150, PageRequest.of(0, 20)).getTotalElements())
-				.isEqualTo(1);
+		Assertions.assertThat(service(new PhotoSsimService()).analyze(150, (_, _) -> {
+		}).groups()).hasSize(1);
 	}
 
 	@Test
@@ -156,7 +142,8 @@ class PhotoSimilarityServiceTest {
 				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
 						photo(2L, hash(255), sample(100), LocalDateTime.now()))));
 
-		Assertions.assertThat(service(new PhotoSsimService()).groups(70, PageRequest.of(0, 20))).isEmpty();
+		Assertions.assertThat(service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	@Test
@@ -173,176 +160,28 @@ class PhotoSimilarityServiceTest {
 						photo(2L, hash(0), sample(2), LocalDateTime.now()),
 						photo(3L, hash(0), sample(3), LocalDateTime.now()))));
 
-		Page<SimilarPhotoGroupResponse> result = service(ssim).groups(90, PageRequest.of(0, 20));
+		List<AnalyzedGroup> result = service(ssim).analyze(90, (_, _) -> {
+		}).groups();
 
-		Assertions.assertThat(result.getTotalElements()).isEqualTo(1);
-		Assertions.assertThat(result.getContent().getFirst().files()).isEqualTo(2);
+		Assertions.assertThat(result).hasSize(1);
+		Assertions.assertThat(result.getFirst().members()).hasSize(2);
 	}
 
 	@Test
-	void groupsArePaginatedAfterSsimConfirmation() {
+	void distantClustersBecomeSeparateGroups() {
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
 				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(10), LocalDateTime.now()),
 						photo(2L, hash(0), sample(10), LocalDateTime.now()),
 						photo(3L, hash(255), sample(20), LocalDateTime.now()),
 						photo(4L, hash(255), sample(20), LocalDateTime.now()))));
 
-		Page<SimilarPhotoGroupResponse> result = service(new PhotoSsimService()).groups(70, PageRequest.of(0, 1));
+		List<AnalyzedGroup> result = service(new PhotoSsimService()).analyze(70, (_, _) -> {
+		}).groups();
 
-		Assertions.assertThat(result.getContent()).hasSize(1);
-		Assertions.assertThat(result.getTotalElements()).isEqualTo(2);
-		Assertions.assertThat(result.hasNext()).isTrue();
-	}
+		Assertions.assertThat(result).hasSize(2);
 
-	@Test
-	void reusesCachedGroupingWhenFingerprintSignatureIsUnchanged() {
-		when(repository.fingerprintSignature(any(), any()))
-				.thenReturn(Collections.singletonList(new Object[] { 2L, 2L, null }));
-		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now()))));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		service.groups(70, PageRequest.of(0, 20));
-		service.groups(70, PageRequest.of(0, 20));
-
-		verify(repository, times(1)).findFingerprintedPhotos(any(), any(), any());
-	}
-
-	@SuppressWarnings("unchecked")
-	@Test
-	void recomputesWhenFingerprintSignatureChanges() {
-		when(repository.fingerprintSignature(any(), any())).thenReturn(
-				Collections.singletonList(new Object[] { 1L, 1L, null }),
-				Collections.singletonList(new Object[] { 2L, 2L, null }));
-		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now()))));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		service.groups(70, PageRequest.of(0, 20));
-		service.groups(70, PageRequest.of(0, 20));
-
-		verify(repository, times(2)).findFingerprintedPhotos(any(), any(), any());
-	}
-
-	@Test
-	void evictFromCacheDropsAffectedGroupsWithoutRecomputing() {
-		when(repository.fingerprintSignature(any(), any()))
-				.thenReturn(Collections.singletonList(new Object[] { 2L, 2L, null }));
-		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now()))));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		Assertions.assertThat(service.groups(70, PageRequest.of(0, 20)).getTotalElements()).isEqualTo(1);
-
-		service.evictFromCache(List.of(UuidV7.fromLegacy(2L)));
-
-		Assertions.assertThat(service.groups(70, PageRequest.of(0, 20)).getTotalElements()).isZero();
-
-		verify(repository, times(1)).findFingerprintedPhotos(any(), any(), any());
-	}
-
-	@Test
-	void evictFromCacheDropsGroupWhenRemovedFileIsAReviewCandidate() {
-		LocalDateTime older = LocalDateTime.of(2023, Month.JANUARY, 1, 10, 0);
-		LocalDateTime newer = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
-
-		UUID keepId = UuidV7.fromLegacy(1L);
-		UUID reviewId = UuidV7.fromLegacy(2L);
-
-		when(repository.fingerprintSignature(any(), any()))
-				.thenReturn(Collections.singletonList(new Object[] { 2L, 2L, null }));
-
-		when(repository.findFingerprintedPhotos(any(), any(), any())).thenReturn(new PageImpl<>(
-				List.of(photo(1L, hash(0), sample(100), older), photo(2L, hash(0), sample(100), newer))));
-
-		/*
-		 * Both files carry the original signals (camera subcategory, EXIF date source
-		 * and a camera EXIF header). Since this is a group of similar photos with more
-		 * than one original, the policy keeps only one as the highlight and sends the
-		 * other to review.
-		 */
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of(
-				new MediaQuality(keepId, 100, 100, older, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-				new MediaQuality(reviewId, 100, 100, newer, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		Page<SimilarPhotoGroupResponse> initial = service.groups(70, PageRequest.of(0, 20));
-
-		Assertions.assertThat(initial.getTotalElements()).isEqualTo(1);
-
-		SimilarPhotoGroupResponse group = initial.getContent().getFirst();
-
-		Assertions.assertThat(group.keep().id()).isEqualTo(keepId);
-		Assertions.assertThat(group.deleteCandidates()).isEmpty();
-		Assertions.assertThat(group.reviewCandidates()).extracting(candidate -> candidate.id())
-				.containsExactly(reviewId);
-
-		service.evictFromCache(List.of(reviewId));
-
-		Page<SimilarPhotoGroupResponse> cached = service.cachedPage(70, PageRequest.of(0, 20)).orElseThrow();
-
-		Assertions.assertThat(cached.getTotalElements()).isZero();
-		Assertions.assertThat(cached.getContent()).isEmpty();
-
-		/*
-		 * The removal must modify only the existing cache, without running the grouping
-		 * again.
-		 */
-		verify(repository, times(1)).findFingerprintedPhotos(any(), any(), any());
-	}
-
-	@Test
-	void cachedPageIsEmptyBeforeComputeAndPresentAfter() {
-		when(repository.fingerprintSignature(any(), any()))
-				.thenReturn(Collections.singletonList(new Object[] { 2L, 2L, null }));
-		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now()))));
-
-		PhotoSimilarityService service = service(new PhotoSsimService());
-
-		Assertions.assertThat(service.isCached(70)).isFalse();
-		Assertions.assertThat(service.cachedPage(70, PageRequest.of(0, 20))).isEmpty();
-
-		verify(repository, times(0)).findFingerprintedPhotos(any(), any(), any());
-
-		service.computeAndCache(70, (_, _) -> {
-		});
-
-		Assertions.assertThat(service.isCached(70)).isTrue();
-		Assertions.assertThat(service.cachedPage(70, PageRequest.of(0, 20))).isPresent();
-		Assertions.assertThat(service.cachedPage(70, PageRequest.of(0, 20)).orElseThrow().getTotalElements())
-				.isEqualTo(1);
-
-		verify(repository, times(1)).findFingerprintedPhotos(any(), any(), any());
-	}
-
-	@Test
-	void computeAndCacheReportsProgressUpToTheCandidateTotal() {
-		when(repository.fingerprintSignature(any(), any()))
-				.thenReturn(Collections.singletonList(new Object[] { 3L, 3L, null }));
-		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(new PageImpl<>(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now()),
-						photo(3L, hash(255), sample(100), LocalDateTime.now()))));
-
-		AtomicInteger lastProcessed = new AtomicInteger();
-		AtomicInteger reportedTotal = new AtomicInteger();
-
-		service(new PhotoSsimService()).computeAndCache(70, (processed, total) -> {
-			lastProcessed.set(processed);
-			reportedTotal.set(total);
-		});
-
-		Assertions.assertThat(reportedTotal.get()).isEqualTo(3);
-		Assertions.assertThat(lastProcessed.get()).isEqualTo(3);
+		Assertions.assertThat(result.getFirst().members()).hasSize(2);
+		Assertions.assertThat(result.get(1).members()).hasSize(2);
 	}
 
 	private PhotoHashRawResponse photo(Long id, byte[] phash, byte[] luminance, LocalDateTime modifiedAt) {
@@ -372,16 +211,68 @@ class PhotoSimilarityServiceTest {
 		return sample;
 	}
 
-	private PhotoSimilarityService service(PhotoSsimService ssim) {
-		NimbusFileManagerProperties properties = new NimbusFileManagerProperties("C:/workspace", null,
-				new Api(100, 2, 50), null, null);
+	@Test
+	void theFamilyNamesTheAlgorithmAndEveryEffectiveParameter() {
+		when(exclusions.signature()).thenReturn("none");
 
-		lenient().when(settings.intValue(any(), any(Integer.class)))
-				.thenAnswer(invocation -> invocation.getArgument(1));
+		PhotoSimilarityService service = service(new PhotoSsimService());
+
+		SimilarityFamily family = service.family(70);
+
+		Assertions.assertThat(service.mediaType()).isEqualTo(FileType.PHOTO);
+		Assertions.assertThat(family.mediaType()).isEqualTo(FileType.PHOTO);
+		Assertions.assertThat(family.algorithmId()).isEqualTo(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1);
+		Assertions.assertThat(family.groupingVersion()).isEqualTo(SimilarityConstants.GROUPING_VERSION);
+		Assertions.assertThat(family.parametersDigest()).hasSize(64);
+	}
+
+	@Test
+	void aStricterThresholdIsADifferentFamilyAndSoIsADifferentSetOfExclusions() {
+		when(exclusions.signature()).thenReturn("none");
+
+		PhotoSimilarityService service = service(new PhotoSsimService());
+
+		String atSeventy = service.family(70).parametersDigest();
+
+		Assertions.assertThat(service.family(95).parametersDigest()).isNotEqualTo(atSeventy);
+
+		when(exclusions.signature()).thenReturn("one-folder");
+
+		Assertions.assertThat(service.family(70).parametersDigest()).isNotEqualTo(atSeventy);
+	}
+
+	@Test
+	void theCompositionCountsWhatIsEligibleAndNamesWhatWillBeAnalysed() {
+		UUID first = UuidV7.fromLegacy(1L);
+		UUID second = UuidV7.fromLegacy(2L);
+
+		when(repository.countEligibleForSimilarity(any(), any())).thenReturn(9);
+		when(repository.findPhotoCompositionRows(any(), any(), any()))
+				.thenReturn(List.of(new CompositionRow(first, "C:/Fotos"), new CompositionRow(second, "C:/Outros")));
+
+		SimilarityComposition composition = service(new PhotoSsimService()).composition();
+
+		Assertions.assertThat(composition.eligibleCount()).isEqualTo(9);
+		Assertions.assertThat(composition.analyzedCount()).isEqualTo(2);
+		Assertions.assertThat(composition.candidateLimit()).isEqualTo(service(new PhotoSsimService()).candidateLimit());
+		Assertions.assertThat(composition.selectionPolicy()).isEqualTo(SimilarityConstants.SELECTION_OLDEST_FIRST);
+		Assertions.assertThat(composition.digest()).hasSize(64);
+		Assertions.assertThat(composition.coverageComplete()).isFalse();
+	}
+
+	@Test
+	void aLibraryWithinTheCapReportsCompleteCoverage() {
+		when(repository.countEligibleForSimilarity(any(), any())).thenReturn(1);
+		when(repository.findPhotoCompositionRows(any(), any(), any()))
+				.thenReturn(List.of(new CompositionRow(UuidV7.fromLegacy(1L), "C:/Fotos")));
+
+		Assertions.assertThat(service(new PhotoSsimService()).composition().coverageComplete()).isTrue();
+	}
+
+	private PhotoSimilarityService service(PhotoSsimService ssim) {
 		lenient().when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
 
 		return new PhotoSimilarityService(repository,
-				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository), ssim, settings,
-				properties, exclusions);
+				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository), ssim, exclusions);
 	}
 }

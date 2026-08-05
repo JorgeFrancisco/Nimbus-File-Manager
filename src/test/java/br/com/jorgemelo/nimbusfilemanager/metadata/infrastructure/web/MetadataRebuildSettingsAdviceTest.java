@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -26,7 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePrefer
  */
 class MetadataRebuildSettingsAdviceTest {
 
-	private final MetadataRebuildAsyncRunner runner = mock(MetadataRebuildAsyncRunner.class);
+	private final MetadataRunReader runner = mock(MetadataRunReader.class);
 	private final UserPagePreferenceService userPagePreferenceService = mock(UserPagePreferenceService.class);
 	private final MetadataRebuildSettingsAdvice advice = new MetadataRebuildSettingsAdvice(runner,
 			userPagePreferenceService);

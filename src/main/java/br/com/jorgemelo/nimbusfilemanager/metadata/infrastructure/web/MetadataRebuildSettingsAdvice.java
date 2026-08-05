@@ -11,7 +11,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -45,24 +45,24 @@ public class MetadataRebuildSettingsAdvice {
 	private static final List<MetadataRebuildField> SELECTABLE_FIELDS = Arrays.stream(MetadataRebuildField.values())
 			.filter(field -> field != MetadataRebuildField.ALL).toList();
 
-	private final MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
+	private final MetadataRunReader metadataRunReader;
 	private final UserPagePreferenceService userPagePreferenceService;
 
-	public MetadataRebuildSettingsAdvice(MetadataRebuildAsyncRunner metadataRebuildAsyncRunner,
+	public MetadataRebuildSettingsAdvice(MetadataRunReader metadataRunReader,
 			UserPagePreferenceService userPagePreferenceService) {
-		this.metadataRebuildAsyncRunner = metadataRebuildAsyncRunner;
+		this.metadataRunReader = metadataRunReader;
 		this.userPagePreferenceService = userPagePreferenceService;
 	}
 
 	@ModelAttribute
 	public void addTo(Model model, Authentication authentication) {
-		model.addAttribute("metadataRebuildRunning", metadataRebuildAsyncRunner.isRunning());
-		model.addAttribute("metadataRebuildProcessed", metadataRebuildAsyncRunner.processed());
-		model.addAttribute("metadataRebuildTotal", metadataRebuildAsyncRunner.total());
-		model.addAttribute("metadataRebuildPercent", metadataRebuildAsyncRunner.percent());
-		model.addAttribute("metadataRebuildEta", metadataRebuildAsyncRunner.etaSeconds());
-		model.addAttribute("metadataRebuildError", metadataRebuildAsyncRunner.lastError());
-		model.addAttribute("metadataRebuildResult", metadataRebuildAsyncRunner.lastResult());
+		model.addAttribute("metadataRebuildRunning", metadataRunReader.isRunning());
+		model.addAttribute("metadataRebuildProcessed", metadataRunReader.processed());
+		model.addAttribute("metadataRebuildTotal", metadataRunReader.total());
+		model.addAttribute("metadataRebuildPercent", metadataRunReader.percent());
+		model.addAttribute("metadataRebuildEta", metadataRunReader.etaSeconds());
+		model.addAttribute("metadataRebuildError", metadataRunReader.lastError());
+		model.addAttribute("metadataRebuildResult", metadataRunReader.lastResult());
 		model.addAttribute("metadataRebuildFields", SELECTABLE_FIELDS);
 
 		Map<String, String> preferences = userPagePreferenceService

@@ -1,70 +1,52 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
+import java.sql.Connection;
 import java.util.Set;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 
+/**
+ * Ownership of a set of paths, held for as long as this object is open.
+ *
+ * <p>
+ * It used to carry the paths themselves and the logic deciding whether two sets
+ * overlapped, because a map in memory had to answer that question on its own.
+ * PostgreSQL answers it now: the ancestors are already part of the key chain,
+ * so a lock on a folder and a lock on a file inside it collide without anyone
+ * comparing strings. What remains is what the holder still needs - the session
+ * the locks live in, so ownership can be re-verified, and the way to let go.
+ */
 public final class OperationLock implements AutoCloseable {
 
-	private final String id;
-	private final long ownerThreadId;
 	private final ExecutionType executionType;
-	private final Set<String> paths;
+	private final String displayPath;
+	private final Connection session;
+	private final Set<PathLockKey> keys;
 	private final Runnable releaseAction;
 
-	OperationLock(String id, long ownerThreadId, ExecutionType executionType, Set<String> paths,
+	OperationLock(ExecutionType executionType, String displayPath, Connection session, Set<PathLockKey> keys,
 			Runnable releaseAction) {
-		this.id = id;
-		this.ownerThreadId = ownerThreadId;
 		this.executionType = executionType;
-		this.paths = paths;
+		this.displayPath = displayPath;
+		this.session = session;
+		this.keys = keys;
 		this.releaseAction = releaseAction;
 	}
 
-	String id() {
-		return id;
-	}
-
-	ExecutionType executionType() {
+	public ExecutionType executionType() {
 		return executionType;
 	}
 
-	long ownerThreadId() {
-		return ownerThreadId;
+	public String displayPath() {
+		return displayPath;
 	}
 
-	String displayPath() {
-		return paths.iterator().next();
+	Connection session() {
+		return session;
 	}
 
-	boolean conflictsWith(Set<String> requestedPaths) {
-		return paths.stream()
-				.anyMatch(current -> requestedPaths.stream().anyMatch(requested -> overlaps(current, requested)));
-	}
-
-	/**
-	 * Two paths conflict when they are the same, or when either one contains the
-	 * other.
-	 */
-	private boolean overlaps(String first, String second) {
-		return first.equals(second) || contains(first, second) || contains(second, first);
-	}
-
-	/**
-	 * Whether {@code candidate} lives inside {@code ancestor}. The prefix comes
-	 * from {@link #asPrefix} rather than from appending a separator, because a
-	 * drive root is the one path whose normalised form already ends in one:
-	 * {@code D:\} plus a separator is a prefix nothing can match, so a lock held on
-	 * a file used to be invisible to a request for the drive containing it - and a
-	 * library that sits on a whole drive lost the mutual exclusion this class
-	 * exists to provide.
-	 */
-	private boolean contains(String ancestor, String candidate) {
-		return candidate.startsWith(asPrefix(ancestor, "\\")) || candidate.startsWith(asPrefix(ancestor, "/"));
-	}
-
-	private String asPrefix(String path, String separator) {
-		return path.endsWith(separator) ? path : path + separator;
+	Set<PathLockKey> keys() {
+		return keys;
 	}
 
 	@Override

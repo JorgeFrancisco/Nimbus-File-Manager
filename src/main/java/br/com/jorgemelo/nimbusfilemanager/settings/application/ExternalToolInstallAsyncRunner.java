@@ -3,9 +3,11 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ToolInstallSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
@@ -17,7 +19,13 @@ import lombok.extern.slf4j.Slf4j;
  * {@code @Async} proxy is honored.
  */
 @Slf4j
+/**
+ * Application role only: it installs the ffmpeg a worker depends on. Putting it
+ * in the worker would make the first use of a missing tool depend on the tool
+ * being there.
+	 */
 @Service
+@Profile(NimbusProfiles.APP)
 public class ExternalToolInstallAsyncRunner {
 
 	private final ExternalToolInstaller installer;

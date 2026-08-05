@@ -53,7 +53,7 @@ class LocationRebuildServiceTest {
 
 		AtomicLong lastProgress = new AtomicLong();
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set, () -> false);
 
 		Assertions.assertThat(result.scope()).isEqualTo(LocationRebuildScope.ALL);
 		Assertions.assertThat(result.candidates()).isEqualTo(2);
@@ -80,7 +80,7 @@ class LocationRebuildServiceTest {
 
 		AtomicLong lastProgress = new AtomicLong();
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set, () -> false);
 
 		Assertions.assertThat(result.candidates()).isEqualTo(50);
 		Assertions.assertThat(result.resolved()).isEqualTo(50);
@@ -124,7 +124,7 @@ class LocationRebuildServiceTest {
 
 		AtomicLong lastProgress = new AtomicLong();
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, lastProgress::set, () -> false);
 
 		Assertions.assertThat(result.candidates()).isEqualTo(totalMedia);
 		Assertions.assertThat(result.resolved()).isEqualTo(totalMedia);
@@ -144,7 +144,7 @@ class LocationRebuildServiceTest {
 		when(repository.findCoordinatesByIds(any())).thenReturn(List.of(projection(1L, -25.0, -49.0)));
 		when(mediaLocationService.resolveAndPersist(eq(1L), any())).thenReturn(true);
 
-		LocationRebuildResult result = singleThreaded.rebuild(LocationRebuildScope.ALL, null);
+		LocationRebuildResult result = singleThreaded.rebuild(LocationRebuildScope.ALL, null, () -> false);
 
 		Assertions.assertThat(result.resolved()).isEqualTo(1);
 	}
@@ -156,7 +156,7 @@ class LocationRebuildServiceTest {
 		when(repository.findCoordinatesByIds(any())).thenReturn(List.of(projection(1L, -25.0, -49.0)));
 		when(mediaLocationService.resolveAndPersist(eq(1L), any())).thenThrow(new RuntimeException("boom"));
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, null);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, null, () -> false);
 
 		Assertions.assertThat(result.candidates()).isEqualTo(1);
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -169,7 +169,7 @@ class LocationRebuildServiceTest {
 		when(repository.findAllResolvableIds(eq(1L), any())).thenReturn(List.of());
 		when(repository.findCoordinatesByIds(any())).thenReturn(List.of(projection(1L, null, -49.0)));
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, null);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.ALL, null, () -> false);
 
 		Assertions.assertThat(result.unresolved()).isEqualTo(1);
 		Assertions.assertThat(result.resolved()).isZero();
@@ -179,7 +179,7 @@ class LocationRebuildServiceTest {
 	void rebuildUsesPendingQueryForPendingScope() {
 		when(repository.findPendingIds(eq(0L), any())).thenReturn(List.of());
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.PENDING, null);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.PENDING, null, () -> false);
 
 		Assertions.assertThat(result.scope()).isEqualTo(LocationRebuildScope.PENDING);
 		Assertions.assertThat(result.candidates()).isZero();
@@ -189,7 +189,7 @@ class LocationRebuildServiceTest {
 	void rebuildUsesConfidenceQueryForLowConfidenceScope() {
 		when(repository.findIdsByConfidence(any(), eq(0L), any())).thenReturn(List.of());
 
-		LocationRebuildResult result = service.rebuild(LocationRebuildScope.LOW_CONFIDENCE, null);
+		LocationRebuildResult result = service.rebuild(LocationRebuildScope.LOW_CONFIDENCE, null, () -> false);
 
 		Assertions.assertThat(result.scope()).isEqualTo(LocationRebuildScope.LOW_CONFIDENCE);
 		Assertions.assertThat(result.candidates()).isZero();

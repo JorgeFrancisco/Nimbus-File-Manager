@@ -1,0 +1,67 @@
+package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
+
+import org.springframework.stereotype.Component;
+
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionJobHandler;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgePayload;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+
+/**
+ * Expunges quarantined files for good, off the queue.
+ *
+ * <p>
+ * Two ways in and one loop out: the daily pass names a retention window and the
+ * purge decides what is overdue when it actually runs, and a person names the
+ * items directly. Deciding the overdue set here rather than at queueing time is
+ * deliberate - a request that waited behind a long conversion must not expunge
+ * by yesterday's clock.
+ *
+ * <p>
+ * Never resumable. This is the one operation with nothing to undo.
+ */
+@Component
+public class QuarantinePurgeJobHandler implements ExecutionJobHandler {
+
+	private final QuarantinePurgeService quarantinePurgeService;
+	private final ExecutionPayloadCodec executionPayloadCodec;
+
+	public QuarantinePurgeJobHandler(QuarantinePurgeService quarantinePurgeService,
+			ExecutionPayloadCodec executionPayloadCodec) {
+		this.quarantinePurgeService = quarantinePurgeService;
+		this.executionPayloadCodec = executionPayloadCodec;
+	}
+
+	@Override
+	public ExecutionType type() {
+		return ExecutionType.QUARANTINE_PURGE;
+	}
+
+	@Override
+	public void handle(Execution execution, ClaimedExecution claimed, ExecutionOwnership ownership) {
+		QuarantinePurgePayload payload = executionPayloadCodec.decode(claimed.requestPayload(),
+				QuarantinePurgePayload.class);
+
+		if (payload.schemaVersion() == null || payload.schemaVersion() != QuarantineConstants.PAYLOAD_SCHEMA_VERSION) {
+			throw new IllegalArgumentException("Quarantine purge payload schema " + payload.schemaVersion()
+					+ " cannot be run by this version, which writes and reads schema "
+					+ QuarantineConstants.PAYLOAD_SCHEMA_VERSION);
+		}
+
+		if (payload.movementIds() != null && !payload.movementIds().isEmpty()) {
+			quarantinePurgeService.purgeSelected(payload.movementIds(), execution, ownership);
+
+			return;
+		}
+
+		if (payload.retentionDays() == null || payload.retentionDays() <= 0) {
+			throw new IllegalArgumentException("A quarantine purge has to name either the items or a window");
+		}
+
+		quarantinePurgeService.purgeOlderThan(payload.retentionDays(), execution, ownership);
+	}
+}

@@ -9,33 +9,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterProtection;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 public class LibraryCatalogCleanupService {
 
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogMutations catalogMutations;
 	private final WorkspaceManager workspaceManager;
 
-	public LibraryCatalogCleanupService(CatalogFileRepository catalogFileRepository,
+	public LibraryCatalogCleanupService(CatalogMutations catalogMutations,
 			WorkspaceManager workspaceManager) {
-		this.catalogFileRepository = catalogFileRepository;
+		this.catalogMutations = catalogMutations;
 		this.workspaceManager = workspaceManager;
 	}
 
 	@Transactional
 	public int clear(String libraryPath) {
-		Path root = PathUtils.normalizePath(libraryPath);
-
-		String rootText = PathUtils.normalize(root);
-
-		String prefix = rootText + root.getFileSystem().getSeparator();
-
-		int deleted = catalogFileRepository.deleteWithinLibrary(rootText, prefix);
+		int deleted = catalogMutations.forgetLibrary(libraryPath);
 
 		clearThumbnailCache();
 

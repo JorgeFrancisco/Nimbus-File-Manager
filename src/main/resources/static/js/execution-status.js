@@ -98,7 +98,7 @@ window.NimbusFileManagerExecutionStatus = (function () {
 		percent: percentText,
 
 		estimatedRemaining: function (data) {
-			if (!data || data.status !== "PROCESSING_FILES" || !data.startedAt || !data.totalExpected
+			if (!data || data.phase !== "PROCESSING" || !data.startedAt || !data.totalExpected
 					|| !data.filesFound || data.filesFound < 10 || data.filesFound >= data.totalExpected) return null;
 
 			var now = Date.now();

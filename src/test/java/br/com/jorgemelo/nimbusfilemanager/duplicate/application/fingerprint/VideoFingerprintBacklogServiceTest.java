@@ -24,6 +24,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
@@ -34,13 +35,14 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,7 +60,7 @@ class VideoFingerprintBacklogServiceTest {
 	private VideoSimilarityAlgorithm algorithm;
 
 	@Mock
-	private ExecutionQueryService executionQueryService;
+	private ExecutionRepository executionRepository;
 
 	/**
 	 * The Duplicados screen offers retry, listing and rebuild for videos exactly as
@@ -104,6 +106,22 @@ class VideoFingerprintBacklogServiceTest {
 		verify(mediaFingerprintRepository).deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM);
 	}
 
+	/**
+	 * What the handler asks before it starts and again while it drains. A
+	 * conversion holds the ffmpeg this needs, and an inventory is adding the very
+	 * videos it would hash - either one is a reason to step aside, and the video
+	 * side has to answer it for itself because the run is its own.
+	 */
+	@Test
+	void aConversionOrAnInventoryIsReasonEnoughToStepAside() {
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY, ExecutionStatusNames.ACTIVE))
+				.thenReturn(false);
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.CONVERSION,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
+
+		assertThat(build().pausedByActiveExecution()).isTrue();
+	}
+
 	private VideoFingerprintBacklogService service() {
 		when(algorithm.kind()).thenReturn(FingerprintKind.VIDEO_PHASH);
 		when(algorithm.algorithm()).thenReturn(ALGORITHM);
@@ -118,7 +136,7 @@ class VideoFingerprintBacklogServiceTest {
 	private VideoFingerprintBacklogService build() {
 		return new VideoFingerprintBacklogService(mediaFingerprintRepository, fingerprintFailureRepository, algorithm,
 				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
-				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
+				executionRepository, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 	}
 
 	private VideoPerceptualFingerprint fingerprint(int frames) {
@@ -138,7 +156,6 @@ class VideoFingerprintBacklogServiceTest {
 		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
 				any())).thenReturn(List.of(video), List.of());
 		when(algorithm.fingerprint(Path.of("/tmp/clip.mp4"), 10.0)).thenReturn(fingerprint(3));
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
 		});
@@ -187,7 +204,6 @@ class VideoFingerprintBacklogServiceTest {
 				.thenThrow(new UnsupportedVideoFingerprintException("no frames"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(2L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
 		});
@@ -216,7 +232,6 @@ class VideoFingerprintBacklogServiceTest {
 				.thenThrow(new IllegalStateException("ffmpeg vanished"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
 		});

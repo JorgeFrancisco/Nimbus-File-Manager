@@ -24,7 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncR
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
@@ -39,12 +39,12 @@ class OnboardingWebControllerTest {
 	@Test
 	void onboardingShouldShowWizardWhenNotConfigured() {
 		AppSettingService appSettingService = mock(AppSettingService.class);
-		InventoryBatchLauncherService inventoryBatchLauncherService = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService inventoryLauncherService = mock(InventoryLauncherService.class);
 		InventoryWatchService inventoryWatchService = mock(InventoryWatchService.class);
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("");
 
-		String view = controller(appSettingService, inventoryBatchLauncherService, inventoryWatchService)
+		String view = controller(appSettingService, inventoryLauncherService, inventoryWatchService)
 				.onboarding(new ExtendedModelMap());
 
 		Assertions.assertThat(view).isEqualTo("app/onboarding");
@@ -53,12 +53,12 @@ class OnboardingWebControllerTest {
 	@Test
 	void onboardingShouldRedirectToDashboardWhenAlreadyConfigured() {
 		AppSettingService appSettingService = mock(AppSettingService.class);
-		InventoryBatchLauncherService inventoryBatchLauncherService = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService inventoryLauncherService = mock(InventoryLauncherService.class);
 		InventoryWatchService inventoryWatchService = mock(InventoryWatchService.class);
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("C:/media");
 
-		String view = controller(appSettingService, inventoryBatchLauncherService, inventoryWatchService)
+		String view = controller(appSettingService, inventoryLauncherService, inventoryWatchService)
 				.onboarding(new ExtendedModelMap());
 
 		Assertions.assertThat(view).isEqualTo("redirect:/app");
@@ -67,52 +67,52 @@ class OnboardingWebControllerTest {
 	@Test
 	void onboardingConfigureShouldSaveSettingsStartInventoryAndRedirectToProgress() throws Exception {
 		AppSettingService appSettingService = mock(AppSettingService.class);
-		InventoryBatchLauncherService inventoryBatchLauncherService = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService inventoryLauncherService = mock(InventoryLauncherService.class);
 		InventoryWatchService inventoryWatchService = mock(InventoryWatchService.class);
 		ExtendedModelMap model = new ExtendedModelMap();
 		ExecutionResponse execution = execution();
 		Path source = Files.createDirectories(tempDir.resolve("onboarding"));
 		TestingAuthenticationToken authentication = new TestingAuthenticationToken("admin@example.com", "password");
 
-		when(inventoryBatchLauncherService.launch(any(), any())).thenReturn(execution);
+		when(inventoryLauncherService.launch(any(), any())).thenReturn(execution);
 
-		String view = controller(appSettingService, inventoryBatchLauncherService, inventoryWatchService)
+		String view = controller(appSettingService, inventoryLauncherService, inventoryWatchService)
 				.configure(source.toString(), true, false, true, true, authentication, model);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/app/progress/" + execution.executionId() + "?kind=inventory");
 		verify(appSettingService).update(SettingsConstants.WATCH_RECURSIVE, "true", "admin@example.com");
 		verify(appSettingService).update(SettingsConstants.WATCH_FOLDER, source.toString(), "admin@example.com");
-		verify(inventoryBatchLauncherService).launch(any(), any());
+		verify(inventoryLauncherService).launch(any(), any());
 	}
 
 	@Test
 	void onboardingConfigureShouldShowErrorWhenSourcePathIsBlank() {
 		AppSettingService appSettingService = mock(AppSettingService.class);
-		InventoryBatchLauncherService inventoryBatchLauncherService = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService inventoryLauncherService = mock(InventoryLauncherService.class);
 		InventoryWatchService inventoryWatchService = mock(InventoryWatchService.class);
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		String view = controller(appSettingService, inventoryBatchLauncherService, inventoryWatchService)
+		String view = controller(appSettingService, inventoryLauncherService, inventoryWatchService)
 				.configure(" ", true, false, true, true, null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/onboarding");
 		Assertions.assertThat(model).containsEntry("error", "Informe a pasta que deseja monitorar.");
-		Mockito.verifyNoInteractions(inventoryBatchLauncherService);
+		Mockito.verifyNoInteractions(inventoryLauncherService);
 		verify(appSettingService, never()).update(any(), any(), any());
 	}
 
 	@Test
 	void onboardingConfigureShouldShowErrorWhenSourcePathDoesNotExist() {
 		AppSettingService appSettingService = mock(AppSettingService.class);
-		InventoryBatchLauncherService inventoryBatchLauncherService = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService inventoryLauncherService = mock(InventoryLauncherService.class);
 		InventoryWatchService inventoryWatchService = mock(InventoryWatchService.class);
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		String view = controller(appSettingService, inventoryBatchLauncherService, inventoryWatchService)
+		String view = controller(appSettingService, inventoryLauncherService, inventoryWatchService)
 				.configure(tempDir.resolve("does-not-exist").toString(), true, false, true, true, null, model);
 
 		Assertions.assertThat(view).isEqualTo("app/onboarding");
-		Mockito.verifyNoInteractions(inventoryBatchLauncherService);
+		Mockito.verifyNoInteractions(inventoryLauncherService);
 	}
 
 	/**
@@ -136,7 +136,7 @@ class OnboardingWebControllerTest {
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		String view = new OnboardingWebController(appSettingService, mock(InventoryBatchLauncherService.class),
+		String view = new OnboardingWebController(appSettingService, mock(InventoryLauncherService.class),
 				mock(InventoryWatchService.class), catalogBackupService, backupRunner, backupFolderResolver)
 						.onboarding(model);
 
@@ -158,7 +158,7 @@ class OnboardingWebControllerTest {
 		TestingAuthenticationToken authentication = new TestingAuthenticationToken("admin@example.com", "password");
 		RedirectAttributesModelMap redirectAttributes = new RedirectAttributesModelMap();
 
-		String view = controller(appSettingService, mock(InventoryBatchLauncherService.class),
+		String view = controller(appSettingService, mock(InventoryLauncherService.class),
 				mock(InventoryWatchService.class)).chooseBackupFolder(folder.toString(), authentication,
 						redirectAttributes);
 
@@ -173,7 +173,7 @@ class OnboardingWebControllerTest {
 		AppSettingService appSettingService = mock(AppSettingService.class);
 		RedirectAttributesModelMap redirectAttributes = new RedirectAttributesModelMap();
 
-		String view = controller(appSettingService, mock(InventoryBatchLauncherService.class),
+		String view = controller(appSettingService, mock(InventoryLauncherService.class),
 				mock(InventoryWatchService.class)).chooseBackupFolder(tempDir.resolve("gone").toString(), null,
 						redirectAttributes);
 
@@ -189,7 +189,7 @@ class OnboardingWebControllerTest {
 		AppSettingService appSettingService = mock(AppSettingService.class);
 		RedirectAttributesModelMap redirectAttributes = new RedirectAttributesModelMap();
 
-		String view = controller(appSettingService, mock(InventoryBatchLauncherService.class),
+		String view = controller(appSettingService, mock(InventoryLauncherService.class),
 				mock(InventoryWatchService.class)).chooseBackupFolder("   ", null, redirectAttributes);
 
 		Assertions.assertThat(view).isEqualTo("redirect:/app/onboarding");
@@ -204,14 +204,14 @@ class OnboardingWebControllerTest {
 	 * the wizard, so they answer nothing by default.
 	 */
 	private OnboardingWebController controller(AppSettingService appSettingService,
-			InventoryBatchLauncherService inventoryBatchLauncherService, InventoryWatchService inventoryWatchService) {
+			InventoryLauncherService inventoryLauncherService, InventoryWatchService inventoryWatchService) {
 		CatalogBackupService catalogBackupService = mock(CatalogBackupService.class);
 		BackupFolderResolver backupFolderResolver = mock(BackupFolderResolver.class);
 
 		when(catalogBackupService.list()).thenReturn(List.of());
 		when(backupFolderResolver.folder()).thenReturn(tempDir);
 
-		return new OnboardingWebController(appSettingService, inventoryBatchLauncherService, inventoryWatchService,
+		return new OnboardingWebController(appSettingService, inventoryLauncherService, inventoryWatchService,
 				catalogBackupService, mock(CatalogBackupAsyncRunner.class), backupFolderResolver);
 	}
 

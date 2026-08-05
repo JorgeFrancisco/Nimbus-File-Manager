@@ -30,6 +30,7 @@ public final class ExecutionMessages {
 	public static final String PROCESSING_ITEM = "backend.execution.processing";
 	public static final String ERROR_PROCESSING_FILE = "backend.execution.errorProcessingFile";
 	public static final String INTERRUPTED = "backend.execution.interrupted";
+	public static final String SUPERSEDED = "backend.execution.superseded";
 	public static final String ORGANIZATION_STARTED = "backend.execution.organizationStarted";
 	public static final String PREVIEW_STARTED = "backend.execution.previewStarted";
 	public static final String REJECTED_CONFLICTS = "backend.execution.rejectedConflicts";
@@ -109,6 +110,15 @@ public final class ExecutionMessages {
 	 */
 	public static ExecutionMessage operationFailed(String detail) {
 		return of(OPERATION_FAILED, detail);
+	}
+
+	/**
+	 * An identical request was already waiting, so this one had nothing left to
+	 * add. Its own sentence, under its own status, so that reading the history to
+	 * ask whether a cancel worked never finds this instead.
+	 */
+	public static ExecutionMessage executionSuperseded() {
+		return of(SUPERSEDED);
 	}
 
 	public static ExecutionMessage executionInterrupted() {

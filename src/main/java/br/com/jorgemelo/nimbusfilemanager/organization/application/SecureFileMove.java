@@ -46,14 +46,25 @@ public class SecureFileMove {
 	 * applies its own rollback/audit policy (mirrors the organization executor).
 	 */
 	public void move(Path source, Path target, boolean overwrite) throws IOException {
+		move(source, target, overwrite, null);
+	}
+
+	/**
+	 * @param executionId the execution this move belongs to, or {@code null} for a
+	 * move nobody queued. Naming it is what lets a move that outlasts the
+	 * announcement ceiling - a very large file crossing volumes - go on being
+	 * recognised as this product's own work for as long as the execution
+	 * demonstrably still holds its paths
+	 */
+	public void move(Path source, Path target, boolean overwrite, Long executionId) throws IOException {
 		MoveBaseline baseline = capture(source);
 
 		// Announced before the file actually moves, because the folder watcher can
 		// poll the event milliseconds later: every move through here is the
 		// application rearranging its own library, and it updates the catalog itself,
 		// so the watcher has nothing to discover and no reason to re-scan the tree.
-		selfWrittenPathRegistry.announce(source);
-		selfWrittenPathRegistry.announce(target);
+		selfWrittenPathRegistry.announce(source, executionId);
+		selfWrittenPathRegistry.announce(target, executionId);
 
 		Path parent = target.getParent();
 

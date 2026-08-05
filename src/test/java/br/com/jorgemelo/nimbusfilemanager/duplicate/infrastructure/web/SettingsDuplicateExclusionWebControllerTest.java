@@ -8,36 +8,32 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityCaches;
 
 class SettingsDuplicateExclusionWebControllerTest {
 
 	private final DuplicateExclusionService duplicateExclusions = mock(DuplicateExclusionService.class);
-	private final SimilarityCaches similarityCaches = mock(SimilarityCaches.class);
 	private final SettingsDuplicateExclusionWebController controller = new SettingsDuplicateExclusionWebController(
-			duplicateExclusions, similarityCaches);
+			duplicateExclusions);
 
 	@Test
-	void removeDuplicateFileExclusionDeletesItAndRefreshesTheSimilarCache() {
+	void removeDuplicateFileExclusionDeletesIt() {
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		Assertions.assertThat(controller.removeDuplicateFileExclusion(5L, redirect))
 				.isEqualTo("redirect:/app/settings");
 
 		verify(duplicateExclusions).removeFileExclusion(5L);
-		verify(similarityCaches).invalidateAll();
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
 
 	@Test
-	void removeDuplicateFolderExclusionDeletesItAndRefreshesTheSimilarCache() {
+	void removeDuplicateFolderExclusionDeletesIt() {
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		Assertions.assertThat(controller.removeDuplicateFolderExclusion(8L, redirect))
 				.isEqualTo("redirect:/app/settings");
 
 		verify(duplicateExclusions).removeFolderExclusion(8L);
-		verify(similarityCaches).invalidateAll();
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
 }

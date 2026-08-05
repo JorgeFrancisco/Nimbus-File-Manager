@@ -23,7 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
@@ -58,12 +58,12 @@ public class PhashBacklogService
 	public PhashBacklogService(MediaFingerprintRepository mediaFingerprintRepository,
 			FingerprintFailureRepository fingerprintFailureRepository,
 			PhotoPerceptualHashService photoPerceptualHashService, ProcessingCoordinator processingCoordinator,
-			ExecutionQueryService executionQueryService, PlatformTransactionManager transactionManager, Clock clock) {
+			ExecutionRepository executionRepository, PlatformTransactionManager transactionManager, Clock clock) {
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
 		this.photoPerceptualHashService = photoPerceptualHashService;
 		this.engine = new FingerprintBacklogEngine(mediaFingerprintRepository, fingerprintFailureRepository,
-				processingCoordinator, executionQueryService, transactionManager, clock);
+				processingCoordinator, executionRepository, transactionManager, clock);
 		this.clock = clock;
 	}
 

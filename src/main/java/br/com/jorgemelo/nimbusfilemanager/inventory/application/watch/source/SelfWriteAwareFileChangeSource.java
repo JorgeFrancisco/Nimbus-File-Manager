@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
@@ -33,28 +34,37 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 		this.scanExclusionService = scanExclusionService;
 	}
 
+	/**
+	 * The registry is asked once for the whole round rather than once per path: it
+	 * lives in the database now, because the process that wrote the file is often
+	 * not this one, and a question per path would be a round trip per path.
+	 */
 	@Override
 	public List<Path> pollChangedFiles() {
-		return delegate.pollChangedFiles().stream().filter(this::worthAnInventory).toList();
+		List<Path> changed = delegate.pollChangedFiles().stream().filter(this::worthAnInventory).toList();
+
+		if (changed.isEmpty()) {
+			return changed;
+		}
+
+		Set<Path> announced = selfWrittenPathRegistry.announcedAmong(changed);
+
+		return changed.stream().filter(path -> !announced.contains(path)).toList();
 	}
 
 	/**
-	 * Two kinds of change the application caused itself.
+	 * The changes the application caused itself and can tell without asking
+	 * anybody.
 	 *
 	 * <p>
-	 * A single registered write is consumed once and forgotten. A folder the
-	 * application owns is excluded for as long as it is configured: quarantine,
-	 * and the catalog backups - which are deliberately put on a synchronised
-	 * drive, often inside the watched library. A backup written there looks like
-	 * hundreds of MB of new files arriving, and answering it means inventorying
-	 * while the file is still being written.
+	 * A folder the application owns is excluded for as long as it is configured:
+	 * quarantine, and the catalog backups - which are deliberately put on a
+	 * synchronised drive, often inside the watched library. A backup written there
+	 * looks like hundreds of MB of new files arriving, and answering it means
+	 * inventorying while the file is still being written.
 	 */
 	private boolean worthAnInventory(Path changed) {
-		if (scanExclusionService.isApplicationOwned(changed) || isHidden(changed)) {
-			return false;
-		}
-
-		return !selfWrittenPathRegistry.consume(changed);
+		return !scanExclusionService.isApplicationOwned(changed) && !isHidden(changed);
 	}
 
 	/**

@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.web;
 
 import static br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants.MESSAGE_BLOCKED;
 import static br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants.MESSAGE_WAIT_IMPORT;
-import static br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants.MESSAGE_WAIT_REBUILD;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -12,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoLauncher;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
@@ -28,10 +27,17 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 /**
  * Geographic Database administration actions on the Sistema tab (admin):
  * rebuild of resolved locations, offline-dataset download/removal and cache
- * clearing. Every action blocks while an inventory, an import or a rebuild is
- * running, because each of those reads or writes the boundary dataset or the
- * location cache and a concurrent change would corrupt work in flight. The
- * read-side model for this same section lives in
+ * clearing.
+ *
+ * <p>
+ * The two long ones are queued rather than carried out: they hold the geodata
+ * folder in the worker, so a rebuild asked for beside an update waits for it and
+ * then runs, instead of being refused. What is still refused here is what cannot
+ * be queued and undone - removing the dataset, turning the feature off, clearing
+ * the cache - and that question is asked of the queue, not of a field.
+ *
+ * <p>
+ * The read-side model for this same section lives in
  * {@link GeoDatasetSettingsModel}.
  */
 @Controller
@@ -40,21 +46,21 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final OfflineGeoDataset offlineGeoDataset;
 	private final MediaLocationService mediaLocationService;
-	private final GeoDatasetAsyncRunner geoDatasetAsyncRunner;
-	private final LocationRebuildAsyncRunner locationRebuildAsyncRunner;
+	private final GeoLauncher geoLauncher;
+	private final GeoRunReader geoRunReader;
 	private final InventoryRunningState inventoryRunningState;
 	private final AppSettingService appSettingService;
 
 	@Autowired
 	public SettingsGeodataWebController(UserPagePreferenceService userPagePreferenceService,
 			OfflineGeoDataset offlineGeoDataset, MediaLocationService mediaLocationService,
-			GeoDatasetAsyncRunner geoDatasetAsyncRunner, LocationRebuildAsyncRunner locationRebuildAsyncRunner,
-			InventoryRunningState inventoryRunningState, AppSettingService appSettingService) {
+			GeoLauncher geoLauncher, GeoRunReader geoRunReader, InventoryRunningState inventoryRunningState,
+			AppSettingService appSettingService) {
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.mediaLocationService = mediaLocationService;
-		this.geoDatasetAsyncRunner = geoDatasetAsyncRunner;
-		this.locationRebuildAsyncRunner = locationRebuildAsyncRunner;
+		this.geoLauncher = geoLauncher;
+		this.geoRunReader = geoRunReader;
 		this.inventoryRunningState = inventoryRunningState;
 		this.appSettingService = appSettingService;
 	}
@@ -73,20 +79,15 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		if (geoDatasetAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_IMPORT));
+		// Nothing checks here whether an update is running: the two hold the same
+		// path in the worker, so a rebuild queued beside one simply waits for it and
+		// then runs. Refusing the click would make the user watch for a moment that
+		// the queue can wait for on its own.
+		if (geoLauncher.rebuildLocations(scope).isEmpty()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
-
-		if (!locationRebuildAsyncRunner.start(scope)) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.rebuildRunning"));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		locationRebuildAsyncRunner.rebuild(scope);
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.rebuildStarted"));
 
@@ -102,21 +103,13 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 		}
 
 		// Replacing the boundary dataset mid-rebuild would pull the ground out from
-		// under the running resolution, so the whole geo section waits for it.
-		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
+		// under the running resolution - which is why both declare the geodata folder
+		// and the worker's own lock keeps them apart. Queued here, waited for there.
+		if (geoLauncher.updateDataset().isEmpty()) {
+			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_BLOCKED));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
-
-		if (!geoDatasetAsyncRunner.start()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
-					message("backend.settings.geoImportRunning"));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		geoDatasetAsyncRunner.downloadAndImport();
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
 				message("backend.settings.geoImportStarted"));
@@ -146,14 +139,8 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 	@PostMapping("/app/settings/geodata/disable")
 	public String disableLocation(@RequestParam(defaultValue = "false") boolean removeData,
 			Authentication authentication, RedirectAttributes redirectAttributes) {
-		if (geoDatasetAsyncRunner.isRunning()) {
+		if (geoRunReader.busy()) {
 			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_IMPORT));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
 
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
@@ -178,14 +165,9 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		// Removing the boundaries a rebuild is actively reading would break it.
-		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		if (geoDatasetAsyncRunner.isRunning()) {
+		// Removing the boundaries a rebuild is actively reading would break it, and
+		// so would removing them mid-update. One question, asked of the queue.
+		if (geoRunReader.busy()) {
 			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR,
 					message("backend.settings.waitRunningImport"));
 
@@ -210,13 +192,7 @@ public class SettingsGeodataWebController extends LocalizedComponent {
 			return SharedConstants.REDIRECT_SETTINGS;
 		}
 
-		if (locationRebuildAsyncRunner.isRunning()) {
-			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_REBUILD));
-
-			return SharedConstants.REDIRECT_SETTINGS;
-		}
-
-		if (geoDatasetAsyncRunner.isRunning()) {
+		if (geoRunReader.busy()) {
 			redirectAttributes.addFlashAttribute(SharedConstants.ATTR_ERROR, message(MESSAGE_WAIT_IMPORT));
 
 			return SharedConstants.REDIRECT_SETTINGS;

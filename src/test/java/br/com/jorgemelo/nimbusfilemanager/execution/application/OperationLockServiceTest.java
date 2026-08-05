@@ -1,287 +1,187 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import org.assertj.core.api.Assertions;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.AdvisoryPathLockRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 
+/**
+ * What happens to file exclusion when the database is not there.
+ *
+ * <p>
+ * Whether two paths conflict is PostgreSQL's answer and is asserted against a
+ * real server in {@code OperationLockServiceIntegrationTest}. What is left for
+ * a unit test is the part no live database will produce on demand: the moment
+ * the connection fails. It matters because the answer must always be the safe
+ * one - refuse the lock, deny ownership - and never "carry on, probably fine".
+ */
 class OperationLockServiceTest {
 
-	private final OperationLockService operationLockService = new OperationLockService();
+	private final AdvisoryPathLockRepository advisoryPathLockRepository = mock(AdvisoryPathLockRepository.class);
+
+	private final OperationLockService service = new OperationLockService(advisoryPathLockRepository);
 
 	@Test
-	void acquireShouldAllowNestedLockInSameThreadAndReleaseItAfterClose() {
-		Path parent = Path.of("C:/media");
-		Path child = Path.of("C:/media/2024");
+	void refusesTheLockWhenTheDatabaseCannotBeReached(@TempDir Path folder) throws Exception {
+		when(advisoryPathLockRepository.openLockSession()).thenThrow(new SQLException("connection refused"));
 
-		try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, parent)) {
-			try (var nested = operationLockService.acquire(ExecutionType.ORGANIZATION, child)) {
-				Assertions.assertThat(nested).isNotNull();
-			}
-		}
-
-		try (var ignored = operationLockService.acquire(ExecutionType.ORGANIZATION, child)) {
-			Assertions.assertThat(ignored).isNotNull();
-		}
+		assertThatExceptionOfType(OperationLockException.class)
+				.isThrownBy(() -> service.acquire(ExecutionType.INVENTORY, folder))
+				.withMessageContaining("connection refused");
 	}
 
 	@Test
-	void acquireShouldAllowOnlyOneConcurrentExecutionForSamePath() throws Exception {
-		CountDownLatch firstLockAcquired = new CountDownLatch(1);
-		CountDownLatch releaseFirstLock = new CountDownLatch(1);
+	void refusesTheLockAndReturnsTheConnectionWhenTakingTheKeysFails(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		AtomicReference<Throwable> firstThreadFailure = new AtomicReference<>();
-		AtomicReference<Throwable> secondThreadFailure = new AtomicReference<>();
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenThrow(new SQLException("gone"));
 
-		Thread firstThread = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, Path.of("C:/media"))) {
-				firstLockAcquired.countDown();
-				releaseFirstLock.await();
-			} catch (Throwable e) {
-				firstThreadFailure.set(e);
-			}
-		});
+		assertThatExceptionOfType(OperationLockException.class)
+				.isThrownBy(() -> service.acquire(ExecutionType.INVENTORY, folder));
 
-		Thread secondThread = new Thread(() -> {
-			try {
-				firstLockAcquired.await(2, TimeUnit.SECONDS);
-				operationLockService.acquire(ExecutionType.ORGANIZATION, Path.of("C:/media"));
-			} catch (Throwable e) {
-				secondThreadFailure.set(e);
-			}
-		});
-
-		firstThread.start();
-		secondThread.start();
-		secondThread.join();
-		releaseFirstLock.countDown();
-		firstThread.join();
-
-		Assertions.assertThat(firstThreadFailure.get()).isNull();
-		Assertions.assertThat(secondThreadFailure.get()).isInstanceOf(OperationLockException.class);
-	}
-
-	@Test
-	void isBusyShouldReportConflictingLockHeldByAnotherThreadWithoutThrowing() throws Exception {
-		CountDownLatch acquired = new CountDownLatch(1);
-		CountDownLatch release = new CountDownLatch(1);
-
-		Thread holder = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, Path.of("C:/media"))) {
-				acquired.countDown();
-				release.await(2, TimeUnit.SECONDS);
-			} catch (Exception _) {
-				// interrupted; nothing to do
-			}
-		});
-
-		holder.start();
-
-		Assertions.assertThat(acquired.await(2, TimeUnit.SECONDS)).isTrue();
-
-		// Containment-aware: a lock on C:/media makes the whole subtree busy.
-		Assertions.assertThat(operationLockService.isBusy(Path.of("C:/media/2024"))).isTrue();
-		Assertions.assertThat(operationLockService.isBusy(Path.of("C:/other"))).isFalse();
-
-		release.countDown();
-		holder.join();
-
-		Assertions.assertThat(operationLockService.isBusy(Path.of("C:/media"))).isFalse();
+		verify(session).close();
 	}
 
 	/**
-	 * A library often sits on a whole drive, and a drive root is the one path whose
-	 * normalised form already ends in a separator. Building the containment prefix
-	 * by appending another one produced something no path could start with, so a
-	 * lock on a file did not conflict with a request for the drive holding it: a
-	 * conversion could run while the watcher started an inventory over the same
-	 * tree. The temporary directory gives a real root on both operating systems - a
-	 * literal would be a relative path on the Linux build.
+	 * Failing to hand the connection back must not replace the original failure:
+	 * the caller needs to hear why the lock was refused, not why the cleanup was
+	 * untidy.
 	 */
 	@Test
-	void isBusyShouldSeeThroughADriveRootInEitherDirection(@TempDir Path folder) throws Exception {
-		Path root = folder.getRoot();
+	void keepsTheOriginalFailureWhenTheConnectionAlsoFailsToClose(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		whileLockedOnAnotherThread(folder, () -> Assertions.assertThat(operationLockService.isBusy(root)).isTrue());
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenThrow(new SQLException("gone"));
+		doThrow(new SQLException("cannot close")).when(session).close();
 
-		whileLockedOnAnotherThread(root, () -> Assertions.assertThat(operationLockService.isBusy(folder)).isTrue());
+		assertThatExceptionOfType(OperationLockException.class)
+				.isThrownBy(() -> service.acquire(ExecutionType.INVENTORY, folder)).withMessageContaining("gone");
+	}
+
+	@Test
+	void refusesToAnswerWhetherATreeIsBusyWhenTheDatabaseIsGone(@TempDir Path folder) throws Exception {
+		when(advisoryPathLockRepository.lockedByAnyone(anyCollection())).thenThrow(new SQLException("gone"));
+
+		assertThatExceptionOfType(OperationLockException.class).isThrownBy(() -> service.isBusy(folder));
 	}
 
 	/**
-	 * A batch the user started has nobody to retry it, so it waits for background
-	 * maintenance to finish instead of refusing the click. Here the holder releases
-	 * while the waiter is already waiting, which is the case that used to fail.
+	 * The check every long operation makes before touching another file. An
+	 * unreachable database is indistinguishable from a server that restarted and
+	 * dropped the locks, so both have to answer no - answering yes would let a
+	 * worker keep moving files with no exclusion at all.
 	 */
 	@Test
-	void acquireWithinWaitsForTheHolderToReleaseAndThenTakesTheLock(@TempDir Path tmp) throws Exception {
-		Path locked = tmp.resolve("library");
+	void deniesOwnershipWhenTheDatabaseCannotConfirmIt(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		AtomicReference<OperationLock> taken = new AtomicReference<>();
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenReturn(true);
+		when(advisoryPathLockRepository.stillHolds(any(), anyCollection())).thenThrow(new SQLException("gone"));
 
-		Thread waiter = new Thread(() -> {
-			try (var lock = operationLockService.acquireWithin(Duration.ofSeconds(10), ExecutionType.CONVERSION,
-					locked)) {
-				taken.set(lock);
-			}
-		});
+		OperationLock lock = service.acquire(ExecutionType.INVENTORY, folder);
 
-		whileLockedOnAnotherThread(locked, () -> {
-			waiter.start();
-
-			awaitWaitingOnTheLock(waiter);
-		});
-
-		waiter.join();
-
-		Assertions.assertThat(taken.get()).isNotNull();
+		assertThat(service.stillHolds(lock)).isFalse();
 	}
 
-	/** The wait is bounded: a holder that never lets go still gets a refusal. */
 	@Test
-	void acquireWithinGivesUpOnceTheTimeoutPasses(@TempDir Path tmp) throws Exception {
-		Path locked = tmp.resolve("library");
-		Duration shortWait = Duration.ofMillis(120);
+	void closesQuietlyWhenReleasingCannotReachTheDatabase(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		whileLockedOnAnotherThread(locked,
-				() -> Assertions
-						.assertThatThrownBy(
-								() -> operationLockService.acquireWithin(shortWait, ExecutionType.CONVERSION, locked))
-						.isInstanceOf(OperationLockException.class).hasMessageContaining("already running"));
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenReturn(true);
+		doThrow(new SQLException("gone")).when(advisoryPathLockRepository).unlockAll(session);
+
+		OperationLock lock = service.acquire(ExecutionType.INVENTORY, folder);
+
+		assertThatCode(lock::close).doesNotThrowAnyException();
 	}
 
 	/**
-	 * A shutdown interrupts whoever is waiting. The wait has to end as a refusal
-	 * with the interrupt flag preserved, never as a thread stuck until its own
-	 * deadline.
+	 * A waiting acquire has to answer an interrupt, not swallow it: the thread is
+	 * being asked to stop - a shutdown, usually - and sleeping out the rest of a
+	 * ten-minute wait would hold the process open for no reason. The interrupt
+	 * flag is restored so whoever asked can tell it worked.
 	 */
 	@Test
-	void acquireWithinStopsWaitingWhenTheThreadIsInterrupted(@TempDir Path tmp) throws Exception {
-		Path locked = tmp.resolve("library");
+	void refusesAndKeepsTheInterruptFlagWhenTheWaitIsInterrupted(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		AtomicReference<Throwable> failure = new AtomicReference<>();
-		AtomicReference<Boolean> interrupted = new AtomicReference<>();
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenReturn(false);
 
-		CountDownLatch acquired = new CountDownLatch(1);
-		CountDownLatch release = new CountDownLatch(1);
+		Thread.currentThread().interrupt();
 
-		// This holder keeps the lock until the test says otherwise. The shared helper
-		// lets go after two seconds, which on a loaded CI runner arrived before the
-		// waiter had even been scheduled: it then took the lock legitimately and the
-		// test called that a failure.
-		Thread holder = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, locked)) {
-				acquired.countDown();
-				release.await(30, TimeUnit.SECONDS);
-			} catch (InterruptedException _) {
-				Thread.currentThread().interrupt();
-			}
-		});
+		try {
+			assertThatExceptionOfType(OperationLockException.class).isThrownBy(() -> acquireWaiting(folder))
+					.withMessageContaining("Interrupted");
 
-		Thread waiter = new Thread(() -> {
-			try (var _ = operationLockService.acquireWithin(Duration.ofMinutes(5), ExecutionType.CONVERSION, locked)) {
-				failure.set(new AssertionError("the lock should never have been granted"));
-			} catch (OperationLockException _) {
-				interrupted.set(Thread.currentThread().isInterrupted());
-			}
-		});
-
-		holder.start();
-
-		Assertions.assertThat(acquired.await(10, TimeUnit.SECONDS)).isTrue();
-
-		waiter.start();
-
-		Assertions.assertThat(awaitWaitingOnTheLock(waiter)).isTrue();
-
-		waiter.interrupt();
-		waiter.join();
-
-		release.countDown();
-		holder.join();
-
-		Assertions.assertThat(failure.get()).isNull();
-		Assertions.assertThat(interrupted.get()).isTrue();
-	}
-
-	/**
-	 * Waits until the thread is parked inside the timed wait, so the release (or
-	 * the interrupt) that follows lands while it is genuinely waiting.
-	 *
-	 * <p>
-	 * It yields rather than spinning: a busy spin starves the very thread it is
-	 * waiting for when the runner has few cores, which is how this passed on a
-	 * developer machine and failed in CI. Bounded so a wait that never happens
-	 * fails the test instead of hanging the build.
-	 */
-	private static boolean awaitWaitingOnTheLock(Thread waiter) {
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-
-		while (waiter.getState() != Thread.State.TIMED_WAITING) {
-			if (System.nanoTime() > deadline) {
-				return false;
-			}
-
-			Thread.yield();
-		}
-
-		return true;
-	}
-
-	/** A free path is granted immediately, with no wait at all. */
-	@Test
-	void acquireWithinDoesNotWaitWhenNothingConflicts(@TempDir Path tmp) {
-		try (var lock = operationLockService.acquireWithin(Duration.ofMinutes(5), ExecutionType.CONVERSION,
-				tmp.resolve("library"))) {
-			Assertions.assertThat(lock).isNotNull();
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		} finally {
+			Thread.interrupted();
 		}
 	}
 
 	/**
-	 * Runs {@code assertions} while another thread holds a lock on {@code locked},
-	 * because both {@code acquire} and {@code isBusy} ignore the thread that owns
-	 * the lock and would report no conflict from inside the test thread.
+	 * A nested acquire that fails must not take the session with it - the outer
+	 * lock is still holding it, and closing it there would release locks the
+	 * caller still believes it owns.
 	 */
-	private void whileLockedOnAnotherThread(Path locked, Runnable assertions) throws Exception {
-		CountDownLatch acquired = new CountDownLatch(1);
-		CountDownLatch release = new CountDownLatch(1);
+	private void acquireWaiting(Path folder) {
+		service.acquireWithin(Duration.ofSeconds(30), ExecutionType.INVENTORY, folder).close();
+	}
 
-		Thread holder = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.CONVERSION, locked)) {
-				acquired.countDown();
-				release.await(2, TimeUnit.SECONDS);
-			} catch (Exception _) {
-				// interrupted; nothing to do
-			}
-		});
+	@Test
+	void keepsTheSessionOpenWhenANestedAcquireFails(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		holder.start();
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenReturn(true)
+				.thenThrow(new SQLException("gone"));
 
-		Assertions.assertThat(acquired.await(2, TimeUnit.SECONDS)).isTrue();
+		try (var _ = service.acquire(ExecutionType.ORGANIZATION, folder)) {
+			assertThatExceptionOfType(OperationLockException.class)
+					.isThrownBy(() -> service.acquire(ExecutionType.ORGANIZATION, folder));
 
-		assertions.run();
-
-		release.countDown();
-		holder.join();
+			verify(session, never()).close();
+		}
 	}
 
 	/**
-	 * A lock over no path would guard nothing while looking acquired, so a caller
-	 * that forgot the path is refused instead of silently unprotected.
+	 * Closing twice happens - a {@code try-with-resources} inside another one,
+	 * both naming the same lock - and the second close has no session left to
+	 * return.
 	 */
 	@Test
-	void acquireRefusesToLockNothing() {
-		OperationLockService service = new OperationLockService();
+	void ignoresAReleaseWhenNoSessionIsHeld(@TempDir Path folder) throws Exception {
+		Connection session = mock(Connection.class);
 
-		Assertions.assertThatThrownBy(() -> service.acquire(ExecutionType.INVENTORY))
-				.isInstanceOf(IllegalArgumentException.class);
-		Assertions.assertThatThrownBy(() -> service.acquire(ExecutionType.INVENTORY, (Path) null))
-				.isInstanceOf(IllegalArgumentException.class);
+		when(advisoryPathLockRepository.openLockSession()).thenReturn(session);
+		when(advisoryPathLockRepository.tryLockAll(any(), anyCollection())).thenReturn(true);
+
+		OperationLock lock = service.acquire(ExecutionType.INVENTORY, folder);
+
+		lock.close();
+
+		assertThatCode(lock::close).doesNotThrowAnyException();
 	}
 }

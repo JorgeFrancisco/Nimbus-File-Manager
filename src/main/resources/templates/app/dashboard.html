@@ -20,7 +20,7 @@
 					<td th:text="${execution.executionId()}">1</td>
 					<td th:text="${execution.typeLabel()}">INVENTORY</td>
 					<td th:text="${execution.triggerLabel()}">Manual</td>
-					<td><span class="badge" th:classappend="${execution.status() == 'FINISHED' ? 'ok' : ((execution.status() == 'FINISHED_WITH_ERRORS' or execution.status() == 'REJECTED') ? 'warn' : ((execution.status() == 'STARTED' or execution.status() == 'SCANNING_FILES' or execution.status() == 'PROCESSING_FILES') ? 'info' : 'error'))}" th:text="${execution.statusLabel()}">FINISHED</span></td>
+					<td><span class="badge" th:classappend="${execution.status() == 'FINISHED' ? 'ok' : ((execution.status() == 'FINISHED_WITH_ERRORS' or execution.status() == 'REJECTED') ? 'warn' : ((execution.status() == 'PENDING' or execution.status() == 'RUNNING') ? 'info' : 'error'))}" th:text="${execution.statusLabel()}">FINISHED</span></td>
 					<td th:text="${execution.startedAtLabel()}">2026</td>
 					<td class="path" th:text="${execution.sourcePath()}">path</td>
 					<td th:text="${execution.errors()}">0</td>

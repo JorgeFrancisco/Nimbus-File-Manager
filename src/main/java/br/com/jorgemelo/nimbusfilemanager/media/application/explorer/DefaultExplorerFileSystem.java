@@ -1,17 +1,15 @@
 package br.com.jorgemelo.nimbusfilemanager.media.application.explorer;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.DosFileAttributeView;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 
 /**
  * The real disk behind {@link ExplorerFileSystem}. No walk here follows links:
@@ -29,10 +27,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegi
 @Component
 class DefaultExplorerFileSystem implements ExplorerFileSystem {
 
-	private final SelfWrittenPathRegistry selfWrittenPathRegistry;
+	private final LibraryFileMutations libraryFileMutations;
 
-	DefaultExplorerFileSystem(SelfWrittenPathRegistry selfWrittenPathRegistry) {
-		this.selfWrittenPathRegistry = selfWrittenPathRegistry;
+	DefaultExplorerFileSystem(LibraryFileMutations libraryFileMutations) {
+		this.libraryFileMutations = libraryFileMutations;
 	}
 
 	@Override
@@ -48,9 +46,9 @@ class DefaultExplorerFileSystem implements ExplorerFileSystem {
 	}
 
 	@Override
-	public int deleteRecursively(Path path) throws IOException {
+	public int deleteRecursively(Path path, Long executionId) throws IOException {
 		if (!Files.isDirectory(path)) {
-			delete(path);
+			delete(path, executionId);
 
 			return 1;
 		}
@@ -63,7 +61,7 @@ class DefaultExplorerFileSystem implements ExplorerFileSystem {
 			for (Path entry : (Iterable<Path>) entries.sorted(Comparator.reverseOrder())::iterator) {
 				boolean file = !Files.isDirectory(entry);
 
-				delete(entry);
+				delete(entry, executionId);
 
 				if (file) {
 					deleted++;
@@ -75,50 +73,24 @@ class DefaultExplorerFileSystem implements ExplorerFileSystem {
 	}
 
 	@Override
-	public void deleteEmptyTree(Path folder) throws IOException {
+	public void deleteEmptyTree(Path folder, Long executionId) throws IOException {
 		if (!listFiles(folder).isEmpty()) {
 			return;
 		}
 
 		try (Stream<Path> entries = Files.walk(folder)) {
 			for (Path entry : (Iterable<Path>) entries.sorted(Comparator.reverseOrder())::iterator) {
-				delete(entry);
+				delete(entry, executionId);
 			}
 		}
 	}
 
 	/**
-	 * Announced before the removal, never after: the watcher can poll the event
-	 * within milliseconds, so registering afterwards would lose the race and the
-	 * inventory would run for a file the application itself just deleted.
+	 * Both the announcement to the watcher and the retry over the read-only
+	 * attribute now live in the port, which is where every deletion of a user's
+	 * file goes through - here or anywhere else.
 	 */
-	private void delete(Path path) throws IOException {
-		selfWrittenPathRegistry.announce(path);
-
-		try {
-			Files.delete(path);
-		} catch (AccessDeniedException _) {
-			// Windows refuses to delete anything carrying the read-only attribute, and
-			// folders synced from a phone routinely arrive with it - the WhatsApp media
-			// folders are all read-only. Clearing it and retrying is what a file manager
-			// is expected to do. A refusal the attribute does not explain simply fails
-			// again on the retry, and that failure is what the caller sees.
-			clearReadOnly(path);
-
-			Files.delete(path);
-		}
-	}
-
-	/**
-	 * Best effort: filesystems without DOS attributes (anything but Windows) have
-	 * nothing to clear, and there the retry above just reproduces the original
-	 * refusal.
-	 */
-	private void clearReadOnly(Path path) throws IOException {
-		DosFileAttributeView attributes = Files.getFileAttributeView(path, DosFileAttributeView.class);
-
-		if (attributes != null) {
-			attributes.setReadOnly(false);
-		}
+	private void delete(Path path, Long executionId) throws IOException {
+		libraryFileMutations.deleteFile(path, executionId);
 	}
 }

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
 
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -37,7 +38,8 @@ import ch.qos.logback.core.read.ListAppender;
  */
 class SecureFileMoveTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
 	private final SecureFileMove secureFileMove = new SecureFileMove(verifier, pathRegistry);
 
@@ -72,8 +74,7 @@ class SecureFileMoveTest {
 
 		secureFileMove.move(source, target, false);
 
-		assertThat(pathRegistry.consume(source)).isTrue();
-		assertThat(pathRegistry.consume(target)).isTrue();
+		assertThat(pathRegistry.announcedAmong(List.of(source, target))).containsExactlyInAnyOrder(source, target);
 	}
 
 	/**

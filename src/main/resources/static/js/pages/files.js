@@ -451,13 +451,52 @@
 	 * Shows what the server said and reloads on success so the listing matches disk
 	 * again. The sentence is always the backend's: it is the side that knows why an
 	 * action was refused, and a refusal with no explanation reads as a silent no-op.
+	 *
+	 * A pending answer is neither: the command was accepted and is being carried out
+	 * elsewhere, so the screen says so and then watches the execution it was handed.
 	 */
 	function announce(result) {
 		window.alert(result.message);
 
+		if (result.pending) {
+			watchExecution(result.executionId);
+			return;
+		}
+
 		if (result.success) {
 			window.location.reload();
 		}
+	}
+
+	/**
+	 * Follows a command that outlived the wait, by asking the execution it left
+	 * behind - the same row every other screen reads, never a channel of its own.
+	 * An ending that is not plain success is told, because an action that did not
+	 * happen has to say why; a successful one only refreshes, since interrupting
+	 * someone to confirm that what they asked for happened is noise.
+	 */
+	function watchExecution(executionId) {
+		if (!executionId) {
+			return;
+		}
+
+		window.setTimeout(function () {
+			fetch("/api/executions/" + executionId)
+					.then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+					.then(function (execution) {
+						if (!execution.finished) {
+							watchExecution(executionId);
+							return;
+						}
+
+						if (execution.status !== "FINISHED") {
+							window.alert(execution.message);
+						}
+
+						window.location.reload();
+					})
+					.catch(function () { /* the listing refreshes on its own schedule anyway */ });
+		}, 1500);
 	}
 
 	function failed() {

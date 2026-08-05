@@ -7,8 +7,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.windows.WindowsUsnElevation;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.StartupRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceBootstrapListener;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.OrganizationPlanProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.LocationRebuildProperties;
@@ -18,11 +20,14 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.desktop.ApplicationTray;
+import br.com.jorgemelo.nimbusfilemanager.worker.application.WorkerProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties({ NimbusFileManagerProperties.class, BoundaryDatasetProperties.class,
 		ProcessingProperties.class, InventoryWatchProperties.class, LocationRebuildProperties.class,
-		UsnJournalProperties.class, VideoSimilarityProperties.class, UpdateProperties.class })
+		UsnJournalProperties.class, VideoSimilarityProperties.class, UpdateProperties.class,
+		OrganizationPlanProperties.class,
+		WorkerProperties.class })
 public class NimbusFileManagerApplication {
 
 	public static void main(String[] args) {
@@ -39,7 +44,13 @@ public class NimbusFileManagerApplication {
 
 		Path workspace = Path.of(WorkspaceLocation.resolve());
 
-		ApplicationTray.install(workspace.resolve("logs"), workspace);
+		// A worker has no screens to open and no shutdown of its own to offer, so a
+		// second icon in the tray would be one the application did not put there and
+		// nothing behind it. Decided from the arguments because the tray is installed
+		// before there is an environment to ask.
+		if (!StartupRole.isStandaloneWorker(args)) {
+			ApplicationTray.install(workspace.resolve("logs"), workspace);
+		}
 
 		SpringApplication application = new SpringApplication(NimbusFileManagerApplication.class);
 

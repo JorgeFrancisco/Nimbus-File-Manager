@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 
@@ -75,16 +76,80 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	List<Execution> findTop20ByOrderByStartedAtDesc();
 
 	/**
-	 * Backs the Dashboard's infinite-scroll execution list (DashboardWebController)
-	 * - unlike findTop20ByOrderByStartedAtDesc, which is a fixed snapshot for the
-	 * REST API, this lets the page keep loading further back in history as the user
-	 * scrolls.
+	 * The functional history: what the user is shown, and what backs the
+	 * Dashboard's infinite-scroll list - unlike findTop20ByOrderByStartedAtDesc,
+	 * which is a fixed snapshot for the REST API, this lets the page keep loading
+	 * further back as the user scrolls.
+	 *
+	 * <p>
+	 * Everything except the automatic reconciles that changed nothing. Those run
+	 * every few minutes and, on a library that is not moving, find nothing to do -
+	 * hundreds of identical rows a day saying so would bury the runs that matter.
+	 * The rows stay in the table: the queue and the technical audit are complete,
+	 * and this is the one query that narrows them.
+	 *
+	 * <p>
+	 * The exclusion is deliberately narrow. Only RECONCILE, only TIMER, only
+	 * FINISHED, and only with nothing repaired - a manual reconcile, one queued by
+	 * recovery, one that fixed anything, or any run that failed, was interrupted or
+	 * was cancelled is always shown, because each of those is something someone
+	 * might need to explain.
 	 */
-	Page<Execution> findAllByOrderByStartedAtDesc(Pageable pageable);
+	@Query("""
+			SELECT e FROM Execution e
+			 WHERE e.executionType <> br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType.RECONCILE
+			    OR e.triggerEvent IS NULL
+			    OR e.triggerEvent <> br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger.TIMER
+			    OR e.status <> br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus.FINISHED
+			    OR e.repairedItems > 0
+			 ORDER BY e.startedAt DESC
+			""")
+	Page<Execution> findFunctionalHistory(Pageable pageable);
 
 	List<Execution> findByFinishedAtIsNullAndStatusIn(Collection<ExecutionStatus> statuses);
 
+	/**
+	 * The most recent run of one kind, whatever state it is in. The conversion
+	 * screen asks it to answer both of its questions at once: whether a batch is
+	 * going on, and - when none is - what the last one reported.
+	 */
+	Optional<Execution> findFirstByExecutionTypeOrderByCreatedAtDesc(ExecutionType executionType);
+
+	/**
+	 * The last reconciliation that actually completed - what the layout labels as
+	 * such. Read rather than remembered, because the pass runs in the worker and
+	 * the process rendering the page never sees it happen.
+	 */
+	Optional<Execution> findFirstByExecutionTypeAndStatusOrderByFinishedAtDesc(ExecutionType executionType,
+			ExecutionStatus status);
+
+	/**
+	 * The request that made a duplicate a duplicate - the one already waiting or
+	 * running for this type and target. Newest first, because a queue holds at
+	 * most one pending and one running of a deduplicated type and the pending one
+	 * is what a second asker is being told about.
+	 */
+	Optional<Execution> findFirstByExecutionTypeAndDedupKeyAndStatusInOrderByCreatedAtDesc(ExecutionType executionType,
+			String dedupKey, Collection<ExecutionStatus> statuses);
+
 	Optional<Execution> findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(
+			Collection<ExecutionStatus> statuses);
+
+	/**
+	 * Whether a run of one kind is going on right now, asked of every active row
+	 * rather than of the most recent one. The difference matters since a worker
+	 * runs more than one execution at a time: "the newest active execution is an
+	 * inventory" stops being the same question as "is an inventory running", and
+	 * answers it wrong whenever something else started later.
+	 */
+	boolean existsByExecutionTypeAndStatusIn(ExecutionType executionType, Collection<ExecutionStatus> statuses);
+
+	/**
+	 * The run of this type that is going on, if one is. Asked by the screens that
+	 * describe a background job to the user: what it is doing has to be read from
+	 * the row, because the process doing it is not this one.
+	 */
+	Optional<Execution> findFirstByExecutionTypeAndStatusInOrderByStartedAtDesc(ExecutionType executionType,
 			Collection<ExecutionStatus> statuses);
 
 	// --- Retention (cleanup of old executions) -----------------------------------

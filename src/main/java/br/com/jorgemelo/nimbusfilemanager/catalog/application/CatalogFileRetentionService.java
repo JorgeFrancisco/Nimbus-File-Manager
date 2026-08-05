@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -27,11 +27,11 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 class CatalogFileRetentionService {
 
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogMutations catalogMutations;
 	private final Clock clock;
 
-	CatalogFileRetentionService(CatalogFileRepository catalogFileRepository, Clock clock) {
-		this.catalogFileRepository = catalogFileRepository;
+	CatalogFileRetentionService(CatalogMutations catalogMutations, Clock clock) {
+		this.catalogMutations = catalogMutations;
 		this.clock = clock;
 	}
 
@@ -51,7 +51,7 @@ class CatalogFileRetentionService {
 
 		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
 
-		int purged = catalogFileRepository.deleteMissingBefore(cutoff);
+		int purged = catalogMutations.purgeMissingBefore(cutoff);
 
 		log.info("Catalog missing purge finished. removed={}, cutoff={}", purged, cutoff);
 

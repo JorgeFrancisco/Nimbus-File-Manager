@@ -4,16 +4,15 @@
 <body>
 <div th:replace="~{fragments/layout :: app(~{::section}, #{duplicates.title})}">
 <section>
-	<!-- Whole screen blocked while an inventory runs: results would be partial and this
-	     screen previews/executes deletions, so acting on them could delete the wrong file. -->
+	<!-- An inventory in progress narrows what has been analysed; it does not make the
+	     analysis wrong. The notice stays, the results stay with it. -->
 	<section class="panel section" id="duplicatesInventoryProgress" th:if="${inventoryActive}" role="status"
 			data-refresh-ms="4000">
 		<h2 th:text="#{duplicates.inventory.running}">Inventário em andamento</h2>
-		<p class="muted" th:text="#{duplicates.inventory.running.description}">Os duplicados ficam indisponíveis até o inventário terminar. Enquanto ele roda, os resultados seriam parciais — e como esta tela permite pré-visualizar (e em breve executar) exclusões, agir sobre eles poderia apagar o arquivo errado. Este painel se atualiza sozinho.</p>
+		<p class="muted" th:text="#{duplicates.inventory.running.description}">Arquivos que estão entrando agora ainda não foram analisados, então um grupo pode aparecer incompleto ou não aparecer. O que já foi analisado continua disponível. Este painel se atualiza sozinho.</p>
 		<progress></progress>
 	</section>
 
-	<th:block th:unless="${inventoryActive}">
 	<nav class="tab-strip">
 		<a th:href="@{/app/duplicates(tab='exact', view=${view})}" th:classappend="${activeTab == 'exact'} ? 'active'" th:text="#{duplicates.tab.exact}">Exatos</a>
 		<a th:href="@{/app/duplicates(tab='similar', view=${view})}" th:classappend="${activeTab == 'similar'} ? 'active'" th:text="#{duplicates.tab.similar}">Fotos semelhantes</a>
@@ -96,20 +95,38 @@
 	<section class="panel section" id="similarityProgressRegion"
 			th:if="${similarityComputing}" role="status" data-refresh-ms="3000">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.similarity.calculatingVideos} : #{duplicates.similarity.calculating}">Calculando fotos semelhantes…</h2>
-		<p class="muted" th:text="#{duplicates.similarity.calculating.description}">O agrupamento por semelhança roda em segundo plano para não travar a página. Este painel se atualiza automaticamente a cada 3 segundos e os grupos aparecem assim que o cálculo terminar.</p>
-		<p class="progress-text"><strong th:text="${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)}">0%</strong></p>
-		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(similarityPercent / 100.0, 1, 2)})}"
-				th:attr="aria-valuenow=${similarityPercent},aria-valuemin=0,aria-valuemax=100">
-			<div class="fingerprint-progress-fill" th:style="|width: ${similarityPercent}%|"></div>
-		</div>
-		<p th:if="${similarityTotal> 0}"><strong th:text="${similarityProcessed}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong th:text="${similarityTotal}">0</strong> <span th:text="${activeTab == 'videos'} ? #{duplicates.videosCompared} : #{duplicates.photosCompared}">fotos comparadas</span></p>
-		<p th:unless="${similarityTotal> 0}" class="muted" th:text="#{duplicates.similarity.preparing}">Preparando a comparação…</p>
+		<p class="muted" th:text="#{duplicates.similarity.calculating.description}">A análise roda no worker, em segundo plano.</p>
+		<p class="muted" th:text="#{duplicates.similarity.eligible(${similarityEligible})}">0 arquivo(s) elegível(is).</p>
 	</section>
 
-	<div class="panel section" th:if="${groups.isEmpty() and !similarityComputing}">
+	<!-- Nothing published for these parameters yet. The screen never computes: it asks for the
+	     analysis, which becomes a queued execution a worker takes. Saying "no similar photos found"
+	     here would be a lie - nothing was compared. -->
+	<section class="panel section"
+			th:if="${(activeTab == 'similar' or activeTab == 'videos') and !similarityPublished and !similarityComputing}">
+		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.similarity.notAnalyzedVideos} : #{duplicates.similarity.notAnalyzed}">Nenhuma análise publicada ainda</h2>
+		<p class="muted" th:text="#{duplicates.similarity.notAnalyzed.description}">Estes arquivos ainda não foram comparados com os parâmetros atuais.</p>
+		<p class="muted" th:text="#{duplicates.similarity.eligible(${similarityEligible})}">0 arquivo(s) elegível(is).</p>
+		<form th:action="@{${similarityAnalyzeAction}}" method="post">
+			<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+			<input type="hidden" name="minSimilarity" th:value="${minSimilarity}">
+			<button type="submit" class="button secondary" th:text="#{duplicates.similarity.analyze}">Analisar semelhança</button>
+		</form>
+	</section>
+
+	<div class="alert" role="status" th:if="${similarityPublished and similarityOutdated}">
+		<span th:text="#{duplicates.similarity.outdated}">A biblioteca mudou desde esta análise.</span>
+	</div>
+
+	<div class="alert" role="status" th:if="${similarityPublished and !similarityCoverageComplete}">
+		<span th:text="#{duplicates.similarity.partial(${similarityAnalyzed}, ${similarityEligible}, ${similarityCandidateLimit})}">A análise examinou parte dos arquivos.</span>
+	</div>
+
+	<div class="panel section"
+			th:if="${groups.isEmpty() and !similarityComputing and (activeTab == 'exact' or similarityPublished)}">
 		<p th:if="${activeTab == 'exact'}" th:text="#{duplicates.empty.exact}">Nenhum arquivo duplicado encontrado.</p>
-		<p th:if="${activeTab == 'similar'}" th:text="#{duplicates.empty.similar}">Nenhum grupo de fotos semelhantes encontrado com esse nível de semelhança.</p>
-		<p th:if="${activeTab == 'videos'}" th:text="#{duplicates.empty.videos}">Nenhum grupo de vídeos semelhantes encontrado com esse nível de semelhança.</p>
+		<p th:if="${activeTab == 'similar' and similarityPublished}" th:text="#{duplicates.empty.similar}">Nenhum grupo de fotos semelhantes encontrado com esse nível de semelhança.</p>
+		<p th:if="${activeTab == 'videos' and similarityPublished}" th:text="#{duplicates.empty.videos}">Nenhum grupo de vídeos semelhantes encontrado com esse nível de semelhança.</p>
 	</div>
 
 	<div class="panel section table-toolbar pagination-toolbar" th:if="${totalElements> 0}">
@@ -376,7 +393,6 @@
 			</button>
 		</div>
 	</dialog>
-	</th:block>
 </section>
 </div>
 <script th:src="@{/js/pages/duplicates.js}"></script>

@@ -1,38 +1,59 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
+
 /**
- * Tracks which in-progress executions have been asked to stop. The inventory
- * batch job, OrganizationPlanner and OrganizationExecutor each register their
- * executionId when their work starts and check {@link #isCancelled(Long)}
- * periodically; the "Cancelar" button on the progress screen calls
- * {@link #requestCancellation(Long)} from the HTTP request thread to flip that
- * flag.
+ * Whether an execution has been asked to stop.
  *
  * <p>
- * This is intentionally in-memory only (no DB flag): cancellation only makes
- * sense for an execution whose background thread is still alive in this JVM,
- * and the map entry disappears the moment that thread finishes, so there's
- * nothing to reconcile after a restart.
+ * This used to be a map of flags in this JVM, on the reasoning that
+ * cancellation only made sense while the thread doing the work was alive here.
+ * That stops being true the moment the work runs in another process: the button
+ * is pressed in one JVM and has to be seen in another, so the request lives in
+ * the {@code execution} row and nowhere else.
+ *
+ * <p>
+ * Read through a short-lived cache because the check sits in tight loops - once
+ * per file, in places - and a query per file would be a query per file. A
+ * request is honoured within {@link #FRESHNESS}, which is far below what anyone
+ * waiting for a cancel would notice, and the cache holds no negative answer
+ * longer than that.
  */
 @Service
 public class ExecutionCancellationService {
 
-	private final ConcurrentHashMap<Long, AtomicBoolean> flags = new ConcurrentHashMap<>();
+	private static final Duration FRESHNESS = Duration.ofMillis(500);
 
-	public void register(Long executionId) {
-		if (executionId != null) {
-			flags.put(executionId, new AtomicBoolean(false));
-		}
+	private final Map<Long, CancellationAnswer> answers = new ConcurrentHashMap<>();
+
+	private final ExecutionQueue executionQueue;
+	private final Clock clock;
+
+	public ExecutionCancellationService(ExecutionQueue executionQueue, Clock clock) {
+		this.executionQueue = executionQueue;
+		this.clock = clock;
 	}
 
-	public void unregister(Long executionId) {
+	/**
+	 * Drops the cached answer for an execution that has ended.
+	 *
+	 * <p>
+	 * Housekeeping, not state: without it a worker running for days would keep one
+	 * entry per execution it had ever run. Nothing decides anything by whether an
+	 * id is in the cache - the row decides, and the cache only says how recently it
+	 * was asked.
+	 */
+	public void forget(Long executionId) {
 		if (executionId != null) {
-			flags.remove(executionId);
+			answers.remove(executionId);
 		}
 	}
 
@@ -42,36 +63,51 @@ public class ExecutionCancellationService {
 	 * started).
 	 */
 	public boolean requestCancellation(Long executionId) {
-		AtomicBoolean flag = executionId == null ? null : flags.get(executionId);
-
-		if (flag == null) {
+		if (executionId == null || !executionQueue.requestCancel(executionId)) {
 			return false;
 		}
 
-		flag.set(true);
+		// The asker is usually not the runner, so nothing here can act on the request
+		// - but a stale "not cancelled" in this JVM's cache would delay it needlessly.
+		answers.remove(executionId);
 
 		return true;
 	}
 
+	/**
+	 * Asks everything in flight to stop, wherever it is running.
+	 *
+	 * <p>
+	 * This used to walk the set of executions started by this process, which was
+	 * true while there was only one. With the work in another JVM it meant an
+	 * administrative operation - changing the monitored library - asking the
+	 * database whether anything was still active, seeing the worker's inventory,
+	 * and cancelling nothing, because the worker's execution was in the worker's
+	 * memory. It waited for something it had not asked to stop, and gave up.
+	 */
 	public int requestAllCancellations() {
-		flags.values().forEach(flag -> flag.set(true));
+		answers.clear();
 
-		return flags.size();
+		return executionQueue.requestCancelOfEverything();
 	}
 
 	public boolean isCancelled(Long executionId) {
-		AtomicBoolean flag = executionId == null ? null : flags.get(executionId);
+		if (executionId == null) {
+			return false;
+		}
 
-		return flag != null && flag.get();
-	}
+		Instant now = clock.instant();
 
-	/**
-	 * Whether a background thread for this execution is still alive in this JVM
-	 * (registered its id and has not finished). Used to avoid marking a
-	 * genuinely-running execution as INTERRUPTED: the map is in-memory only, so
-	 * after a restart it is empty and every stale execution is correctly orphaned.
-	 */
-	public boolean isLive(Long executionId) {
-		return executionId != null && flags.containsKey(executionId);
+		CancellationAnswer cached = answers.get(executionId);
+
+		if (cached != null && cached.isFresh(now, FRESHNESS)) {
+			return cached.cancelled();
+		}
+
+		boolean cancelled = executionQueue.isCancelRequested(executionId);
+
+		answers.put(executionId, new CancellationAnswer(cancelled, now));
+
+		return cancelled;
 	}
 }

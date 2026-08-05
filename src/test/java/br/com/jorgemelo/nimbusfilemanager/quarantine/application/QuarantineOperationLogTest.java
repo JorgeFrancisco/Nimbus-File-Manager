@@ -19,8 +19,8 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorSe
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineMessages;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
@@ -33,22 +33,10 @@ class QuarantineOperationLogTest {
 			executionProgressService, Clock.fixed(Instant.parse("2026-07-28T10:15:30Z"), ZoneOffset.UTC));
 
 	@Test
-	void startOpensAnExecutionOfItsOwnType() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-		Execution execution = log.startRestore(3);
-
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_RESTORE);
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(3);
-		Assertions.assertThat(execution.getFinishedAt()).isNull();
-	}
-
-	@Test
 	void finishCountsPendingDecisionsApartFromFailures() {
 		Execution execution = managedExecution();
 
-		log.finish(execution, 5, 3, 2, 0, "done");
+		log.finish(execution, 5, 3, 2, 0, QuarantineMessages.batchCompleted(0, 0, 0, 0));
 
 		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
 		Assertions.assertThat(execution.getFilesMoved()).isEqualTo(3);
@@ -61,35 +49,31 @@ class QuarantineOperationLogTest {
 	void finishFlagsTheExecutionWhenAFileFailed() {
 		Execution execution = managedExecution();
 
-		log.finish(execution, 2, 1, 0, 1, "one failed");
+		log.finish(execution, 2, 1, 0, 1, QuarantineMessages.batchCompleted(0, 0, 0, 0));
 
 		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED_WITH_ERRORS);
 		Assertions.assertThat(execution.getErrors()).isEqualTo(1);
 	}
 
 	/**
-	 * Clearing missing records deletes nothing from disk, so it must not read on
-	 * the executions screen as the purge that erases files.
+	 * A run that stopped before its last item reports how far it got, not the whole
+	 * selection: the counters are what really happened, and the status says why it
+	 * ended - which is the difference between "cancelei e parou" and "deu erro".
 	 */
 	@Test
-	void startAbsentCleanupIsToldApartFromThePurgeThatErasesFiles() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+	void stopClosesTheRowWithHowFarItGotAndWhyItEnded() {
+		Execution cancelled = managedExecution();
 
-		Execution execution = log.startAbsentCleanup(4);
+		log.stop(cancelled, ExecutionStatus.CANCELLED, 10, 3, 1, 0, QuarantineMessages.batchCancelled(3, 1, 0, 0));
 
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_CLEANUP);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(4);
-	}
+		Assertions.assertThat(cancelled.getStatus()).isEqualTo(ExecutionStatus.CANCELLED);
+		Assertions.assertThat(cancelled.getFilesFound()).isEqualTo(10);
+		Assertions.assertThat(cancelled.getFilesMoved()).isEqualTo(3);
+		Assertions.assertThat(cancelled.getFinishedAt()).isNotNull();
 
-	@Test
-	void startPurgeOpensAnExecutionOfItsOwnType() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-		Execution execution = log.startPurge(9);
-
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_PURGE);
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(9);
+		// Four of the ten were seen; claiming the whole selection was analysed would
+		// make the history say it ran to the end.
+		Assertions.assertThat(cancelled.getFilesAnalyzed()).isEqualTo(4);
 	}
 
 	/**

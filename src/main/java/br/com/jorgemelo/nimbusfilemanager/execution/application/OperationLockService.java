@@ -1,33 +1,60 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.AdvisoryPathLockRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
+/**
+ * Stops two operations from working on the same files at the same time.
+ *
+ * <p>
+ * The rule has not changed - an operation owns the paths it was given, plus
+ * everything under them - but where it is enforced has. It used to be a map
+ * guarded by {@code synchronized}, which is exactly as wide as one JVM. With
+ * the work moving to a process of its own, a lock only one of the two processes
+ * can see is no lock at all: the Explorer would rename a file an organization
+ * was in the middle of moving, and neither side would ever know.
+ *
+ * <p>
+ * So exclusion lives in PostgreSQL now, as session advisory locks over the
+ * hashed path chain from {@link OperationPathKey}. What callers see is
+ * unchanged: acquire, optionally wait a while, ask whether a tree is busy, and
+ * close.
+ */
 @Service
 public class OperationLockService {
 
+	private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
+
 	/**
-	 * A plain map, guarded by its own monitor. Every read and every write here
-	 * happens inside {@code synchronized (activeLocks)}, because the critical
-	 * section is composite - look for a conflict, wait for it to clear, then
-	 * insert - and no concurrent collection makes a sequence like that atomic. It
-	 * was a {@link java.util.concurrent.ConcurrentHashMap}, which guaranteed
-	 * nothing extra and suggested a thread-safety that came from the monitor all
-	 * along. The monitor is also what {@code wait}/{@code notifyAll} signal on.
+	 * The session this thread is already holding locks in, if any.
+	 *
+	 * <p>
+	 * Nesting is real and predates this change: {@code OrganizationService} takes
+	 * the lock and then calls {@code OrganizationExecutor}, which takes the same
+	 * paths again. The old in-memory lock allowed it by ignoring conflicts from
+	 * the owning thread. Reusing the session restores exactly that, and gets it
+	 * from PostgreSQL rather than from a special case - advisory locks are
+	 * reentrant within a session, so the inner acquire simply succeeds. The
+	 * connection is handed back when the outermost lock closes.
 	 */
-	private final Map<String, OperationLock> activeLocks = new HashMap<>();
+	private final ThreadLocal<NestedLockSession> currentSession = new ThreadLocal<>();
+
+	private final AdvisoryPathLockRepository advisoryPathLockRepository;
+
+	public OperationLockService(AdvisoryPathLockRepository advisoryPathLockRepository) {
+		this.advisoryPathLockRepository = advisoryPathLockRepository;
+	}
 
 	public OperationLock acquire(ExecutionType executionType, Path... paths) {
 		return acquireWithin(Duration.ZERO, executionType, paths);
@@ -35,109 +62,201 @@ public class OperationLockService {
 
 	/**
 	 * Same as {@link #acquire}, but waits up to {@code timeout} for a conflicting
-	 * lock to be released instead of failing on the first look.
+	 * operation to finish before refusing.
 	 *
 	 * <p>
-	 * This exists for work the user asked for. Background maintenance that loses
-	 * the lock simply retries on its next pass, so it must not wait; a batch the
-	 * user started has nobody to retry it, and refusing it because a scheduled pass
-	 * happened to start seconds earlier makes the application look broken for
-	 * something the user cannot see. Waiting weakens no guarantee - the lock is
-	 * still exclusive, and every path is still checked before it is granted.
+	 * Polling rather than blocking inside the database, deliberately:
+	 * {@code pg_advisory_lock} waits with no deadline, and a background pass that
+	 * waits forever is a connection held forever. Retrying keeps the caller's
+	 * deadline where the caller can see it.
 	 */
 	public OperationLock acquireWithin(Duration timeout, ExecutionType executionType, Path... paths) {
-		Set<String> requestedPaths = normalizedPaths(paths);
+		List<Path> requested = requestedPaths(paths);
 
-		synchronized (activeLocks) {
-			long deadline = System.nanoTime() + timeout.toNanos();
-			long currentThreadId = Thread.currentThread().threadId();
+		Set<PathLockKey> keys = OperationPathKey.chainOf(requested);
 
-			OperationLock conflict = conflicting(requestedPaths, currentThreadId);
+		long deadline = System.nanoTime() + timeout.toNanos();
 
-			while (conflict != null) {
-				awaitRelease(deadline - System.nanoTime(), conflict);
+		NestedLockSession nested = currentSession.get();
 
-				conflict = conflicting(requestedPaths, currentThreadId);
+		boolean outermost = nested == null;
+
+		Connection session = outermost ? openSession() : nested.connection();
+
+		try {
+			while (!advisoryPathLockRepository.tryLockAll(session, keys)) {
+				awaitRelease(deadline - System.nanoTime(), executionType, requested);
 			}
 
-			String lockId = UUID.randomUUID().toString();
+			if (outermost) {
+				currentSession.set(new NestedLockSession(session));
+			} else {
+				nested.enter();
+			}
 
-			OperationLock lock = new OperationLock(lockId, currentThreadId, executionType, requestedPaths,
-					() -> release(lockId));
+			return new OperationLock(executionType, displayPath(requested), session, keys, this::release);
+		} catch (SQLException exception) {
+			releaseWhenOutermost(session, outermost);
 
-			activeLocks.put(lock.id(), lock);
+			throw lockFailure(exception);
+		} catch (RuntimeException exception) {
+			releaseWhenOutermost(session, outermost);
 
-			return lock;
+			throw exception;
 		}
 	}
 
 	/**
-	 * Waits for {@code release} to signal, or refuses once the deadline has passed.
-	 * The caller holds the monitor, which {@code timedWait} releases while it
-	 * waits, so a holder on another thread can finish and hand the lock over.
+	 * Takes the paths on behalf of one execution, and ties the two together.
+	 *
+	 * <p>
+	 * The tie is the point. A lock on its own can be lost silently; an execution
+	 * on its own goes on being renewed as though nothing happened. Held as one
+	 * thing, losing the session is something the execution and its lease both find
+	 * out about.
 	 */
-	private void awaitRelease(long remainingNanos, OperationLock conflict) {
-		if (remainingNanos <= 0) {
-			throw new OperationLockException("Another " + conflict.executionType()
-					+ " execution is already running for path: " + conflict.displayPath());
-		}
-
-		try {
-			TimeUnit.NANOSECONDS.timedWait(activeLocks, remainingNanos);
-		} catch (InterruptedException _) {
-			Thread.currentThread().interrupt();
-
-			throw new OperationLockException("Interrupted while waiting for the " + conflict.executionType()
-					+ " execution holding path: " + conflict.displayPath());
-		}
+	public ExecutionOwnership acquireFor(long executionId, ExecutionType executionType, Path... paths) {
+		return new ExecutionOwnership(executionId, acquire(executionType, paths), this);
 	}
 
-	private OperationLock conflicting(Set<String> requestedPaths, long currentThreadId) {
-		return activeLocks.values().stream()
-				.filter(lock -> lock.ownerThreadId() != currentThreadId && lock.conflictsWith(requestedPaths))
-				.findFirst().orElse(null);
+	/**
+	 * Ownership for work that holds no tree, because its work is a query rather
+	 * than a folder - draining a backlog, grouping what is already fingerprinted,
+	 * deleting catalog rows past their retention.
+	 *
+	 * <p>
+	 * It takes no lock and it excludes nobody, which is the whole point: making
+	 * such an execution invent a path would have it wait for - and block - work it
+	 * has nothing to do with. What it still gives is the shape everything else
+	 * has, so the lease is renewed and the handler asks the same question; it
+	 * simply always gets yes.
+	 *
+	 * <p>
+	 * Who may use this is not the caller's choice: the handler declares it through
+	 * {@link ExecutionJobHandler#requiresPathLock()}, and a handler that can reach
+	 * the port that changes the user's files may not declare it.
+	 */
+	public ExecutionOwnership acquireNothingFor(long executionId) {
+		return new ExecutionOwnership(executionId, null, this);
 	}
 
 	/**
 	 * Non-throwing check used by background coordination (the folder watcher) to
-	 * decide whether to even start a reconcile/inventory this cycle. Returns true
-	 * when another thread already holds a lock that conflicts with {@code paths}.
-	 * Same-thread reentrancy is ignored, mirroring {@link #acquire}.
+	 * decide whether to even start a reconcile/inventory this cycle. It answers
+	 * for every process now, rather than only for this one.
 	 */
 	public boolean isBusy(Path... paths) {
-		Set<String> requestedPaths = normalizedPaths(paths);
-
-		synchronized (activeLocks) {
-			long currentThreadId = Thread.currentThread().threadId();
-
-			return activeLocks.values().stream()
-					.anyMatch(lock -> lock.ownerThreadId() != currentThreadId && lock.conflictsWith(requestedPaths));
+		try {
+			return advisoryPathLockRepository.lockedByAnyone(OperationPathKey.chainOf(requestedPaths(paths)));
+		} catch (SQLException exception) {
+			throw lockFailure(exception);
 		}
 	}
 
-	private Set<String> normalizedPaths(Path[] paths) {
-		Set<String> normalized = new LinkedHashSet<>();
+	/**
+	 * Whether the caller still owns what it took. A restarted server drops every
+	 * advisory lock without telling anyone, and an operation that keeps moving
+	 * files on the strength of a lock it no longer holds is the one way two
+	 * processes end up writing the same file.
+	 */
+	public boolean stillHolds(OperationLock lock) {
+		try {
+			return advisoryPathLockRepository.stillHolds(lock.session(), lock.keys());
+		} catch (SQLException _) {
+			// An unreachable database is indistinguishable from lost ownership, and both
+			// deserve the same answer: stop touching files.
+			return false;
+		}
+	}
+
+	/**
+	 * The type in the message is the one that <em>waited</em>, never the one that
+	 * is holding: an advisory lock says a key is taken, not by whom. It used to
+	 * read "another RECONCILE is already running", which was a guess presented as a
+	 * fact - the holder was as likely to be the inventory over the same drive.
+	 */
+	private void awaitRelease(long remainingNanos, ExecutionType executionType, List<Path> requested) {
+		if (remainingNanos <= 0) {
+			throw new OperationLockException("This " + executionType
+					+ " is waiting for another execution to release the path: " + displayPath(requested));
+		}
+
+		try {
+			TimeUnit.NANOSECONDS.sleep(Math.min(remainingNanos, POLL_INTERVAL.toNanos()));
+		} catch (InterruptedException _) {
+			Thread.currentThread().interrupt();
+
+			throw new OperationLockException("Interrupted while waiting for the " + executionType
+					+ " execution holding path: " + displayPath(requested));
+		}
+	}
+
+	/**
+	 * Releases the locks and hands the connection back. Unlocking explicitly
+	 * matters as much as closing: a pooled connection returned while still holding
+	 * an advisory lock would carry it into whatever borrows it next.
+	 */
+	private void release() {
+		NestedLockSession nested = currentSession.get();
+
+		if (nested == null || nested.leave()) {
+			return;
+		}
+
+		currentSession.remove();
+
+		try (Connection session = nested.connection()) {
+			advisoryPathLockRepository.unlockAll(session);
+		} catch (SQLException _) {
+			// The connection is going away either way, and the server releases every lock
+			// of a session it loses - so there is nothing left here to repair or report.
+		}
+	}
+
+	private void releaseWhenOutermost(Connection session, boolean outermost) {
+		if (outermost) {
+			closeQuietly(session);
+		}
+	}
+
+	private Connection openSession() {
+		try {
+			return advisoryPathLockRepository.openLockSession();
+		} catch (SQLException exception) {
+			throw lockFailure(exception);
+		}
+	}
+
+	private void closeQuietly(Connection session) {
+		try {
+			session.close();
+		} catch (SQLException _) {
+			// Already failing; the pool discards a connection it cannot take back.
+		}
+	}
+
+	private List<Path> requestedPaths(Path[] paths) {
+		List<Path> requested = new ArrayList<>();
 
 		for (Path path : paths) {
 			if (path != null) {
-				normalized.add(PathUtils.normalize(path).toLowerCase(Locale.ROOT));
+				requested.add(path);
 			}
 		}
 
-		if (normalized.isEmpty()) {
+		if (requested.isEmpty()) {
 			throw new IllegalArgumentException("At least one path is required to acquire an operation lock.");
 		}
 
-		return normalized;
+		return requested;
 	}
 
-	private void release(String lockId) {
-		synchronized (activeLocks) {
-			activeLocks.remove(lockId);
+	private String displayPath(List<Path> requested) {
+		return requested.getFirst().toString();
+	}
 
-			// Wakes whoever is waiting in acquireWithin: without this the waiter would
-			// sit until its own deadline even though the path is already free.
-			activeLocks.notifyAll();
-		}
+	private OperationLockException lockFailure(SQLException exception) {
+		return new OperationLockException(
+				"Could not reach the database to coordinate file operations: " + exception.getMessage());
 	}
 }

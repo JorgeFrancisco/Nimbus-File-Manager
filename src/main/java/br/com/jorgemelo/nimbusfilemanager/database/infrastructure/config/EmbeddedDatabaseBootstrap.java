@@ -13,8 +13,10 @@ import java.nio.file.Path;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Profiles;
 import org.springframework.core.env.MapPropertySource;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.database.application.BootstrapProgress;
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterLayout;
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterPropertiesStore;
@@ -60,6 +62,10 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 
 	@Override
 	public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+		if (isStandaloneWorker(environment)) {
+			return;
+		}
+
 		ClusterLayout layout = new ClusterLayout(workspace(environment));
 
 		EmbeddedDatabaseDecision decision = decide(environment, layout);
@@ -115,6 +121,28 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	/** Whether the embedded cluster is the one serving this run. */
 	public static boolean serving() {
 		return running != null;
+	}
+
+	/**
+	 * Whether this process is a worker on its own, and therefore not the one that
+	 * runs the database.
+	 *
+	 * <p>
+	 * A worker connects to the cluster the application already supervises - two
+	 * processes starting the same data directory would be a second postmaster on
+	 * the same files. The check lives here, alone, because this runs before the
+	 * context exists and no bean can guard it; every other role difference is a
+	 * profile on a component.
+	 *
+	 * <p>
+	 * Asked as "am I a worker?" rather than "am I the application?" on purpose.
+	 * This runs more than once and, early on, runs before profiles are resolved -
+	 * so the application's absence is not evidence of anything, while the worker
+	 * profile's presence is. Getting that backwards made an ordinary start
+	 * announce, repeatedly, that it was not starting the database.
+	 */
+	private boolean isStandaloneWorker(ConfigurableEnvironment environment) {
+		return environment.acceptsProfiles(Profiles.of(NimbusProfiles.WORKER + " & !" + NimbusProfiles.APP));
 	}
 
 	private EmbeddedDatabaseDecision decide(ConfigurableEnvironment environment, ClusterLayout layout) {

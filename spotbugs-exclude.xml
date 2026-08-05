@@ -224,4 +224,16 @@
 		<Bug pattern="CT_CONSTRUCTOR_THROW,SIC_INNER_SHOULD_BE_STATIC_ANON"/>
 	</Match>
 
+	<!--
+	     Ending this process is the entire purpose of this class, and the reason it is
+	     a class of its own: a worker whose application has died, or whose database is
+	     not the schema it was built for, has to leave. Bound to the one class that may
+	     do it - everywhere else, shutting down the virtual machine would be the defect
+	     the detector is describing.
+	-->
+	<Match>
+		<Class name="~br\.com\.jorgemelo\.nimbusfilemanager\..*\.RuntimeWorkerProcessExit"/>
+		<Bug pattern="DM_EXIT"/>
+	</Match>
+
 </FindBugsFilter>

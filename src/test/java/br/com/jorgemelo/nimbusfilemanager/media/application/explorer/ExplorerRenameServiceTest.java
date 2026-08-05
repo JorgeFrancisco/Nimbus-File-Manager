@@ -1,7 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.media.application.explorer;
 
+import static br.com.jorgemelo.nimbusfilemanager.media.application.explorer.CarriedMessages.carrying;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,224 +14,162 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
+import java.time.Clock;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.context.support.ResourceBundleMessageSource;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerActionResult;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
+import br.com.jorgemelo.nimbusfilemanager.media.application.constants.ExplorerMessages;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
- * Renaming is the one explorer action that writes a new path into the catalog,
- * so what matters here is that a bad name never reaches the disk and that a
- * successful rename leaves the catalog pointing at the new file rather than at
- * a path that no longer exists.
+ * Renaming off the queue. The name was already judged when the command was
+ * asked for; what matters here is what happens under the locks - that the file
+ * still may be renamed, that the target is still free, and that the catalog is
+ * left describing where the files actually are rather than where they were.
  */
 class ExplorerRenameServiceTest {
 
-	private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
+	private static final long EXECUTION_ID = 42L;
 
 	private final ExplorerDeletionGuard guard = mock(ExplorerDeletionGuard.class);
-	private final SecureFileMove secureFileMove = mock(SecureFileMove.class);
-	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
-	private final OperationLockService operationLockService = mock(OperationLockService.class);
-	private final MessageSource messages = messageSource();
+	private final LibraryFileMutations libraryFileMutations = mock(LibraryFileMutations.class);
+	private final ExplorerRenamePersistence explorerRenamePersistence = mock(ExplorerRenamePersistence.class);
+	private final CatalogMutations catalogMutations = mock(CatalogMutations.class);
+	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
+	private final ExecutionOwnership ownership = mock(ExecutionOwnership.class);
 
 	private ExplorerRenameService service() {
-		when(guard.refusal(any())).thenReturn(Optional.empty());
-		when(operationLockService.acquireWithin(any(), any(), any())).thenReturn(mock(OperationLock.class));
-
-		ExplorerRenameService service = new ExplorerRenameService(guard, secureFileMove, catalogFileRepository,
-				operationLockService);
-
-		service.setMessageSource(messages);
-
-		return service;
-	}
-
-	private String expected(String key, Object... arguments) {
-		return messages.getMessage(key, arguments, PT_BR);
-	}
-
-	/**
-	 * The component under test resolves through LocaleContextHolder, so without
-	 * pinning the language these assertions would compare pt-BR text against
-	 * whatever the machine defaults to - green here and red on an English CI
-	 * runner, which is exactly what happened.
-	 */
-	@BeforeEach
-	void useThePortugueseBundle() {
-		LocaleContextHolder.setLocale(PT_BR);
-	}
-
-	@AfterEach
-	void releaseTheLocale() {
-		LocaleContextHolder.resetLocaleContext();
+		return new ExplorerRenameService(guard, libraryFileMutations, explorerRenamePersistence, catalogMutations,
+				executionProgressService, Clock.systemUTC());
 	}
 
 	@Test
-	void refusesANameCarryingAPathSeparator(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		ExplorerActionResult result = service().rename(file, "../escaped.jpg");
-
-		Assertions.assertThat(result.success()).isFalse();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.renameInvalidName"));
-
-		verify(secureFileMove, never()).move(any(), any(), anyBoolean());
-	}
-
-	@Test
-	void refusesABlankName(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		Assertions.assertThat(service().rename(file, "   ").message())
-				.isEqualTo(expected("backend.files.renameInvalidName"));
-	}
-
-	@Test
-	void refusesANullName(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		Assertions.assertThat(service().rename(file, null).message())
-				.isEqualTo(expected("backend.files.renameInvalidName"));
-	}
-
-	/**
-	 * A filesystem root has no parent to rename inside of. The guard already
-	 * refuses it in production; this pins that the service does not dereference the
-	 * missing parent even when asked directly.
-	 */
-	@Test
-	void refusesRenamingSomethingWithoutAParent(@TempDir Path folder) {
-		Assertions.assertThat(service().rename(folder.getRoot(), "novo").message())
-				.isEqualTo(expected("backend.files.renameInvalidName"));
-	}
-
-	/**
-	 * Overwriting the neighbour would destroy a file the user never selected, so
-	 * the collision is refused by name instead of resolved silently.
-	 */
-	@Test
-	void refusesWhenSomethingAlreadyHasTheTargetName(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		Files.createFile(folder.resolve("taken.jpg"));
-
-		Assertions.assertThat(service().rename(file, "taken.jpg").message())
-				.isEqualTo(expected("backend.files.renameTargetExists", "taken.jpg"));
-
-		verify(secureFileMove, never()).move(any(), any(), anyBoolean());
-	}
-
-	@Test
-	void movesTheFileSecurelyAndRepointsTheCatalog(@TempDir Path folder) throws IOException {
+	void movesTheFileUnderItsExecutionAndRepointsTheCatalog(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 		Path renamed = folder.resolve("holiday.jpg");
 
-		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file)).fileName("photo.jpg")
-				.extension("jpg").build();
+		when(guard.refusal(any())).thenReturn(Optional.empty());
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file))).thenReturn(Optional.of(stored));
+		service().execute(rename(file, renamed), ownership);
 
-		ExplorerActionResult result = service().rename(file, "holiday.jpg");
-
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.renameDone", "holiday.jpg"));
-		Assertions.assertThat(stored.getFileKey()).isEqualTo(PathUtils.normalize(renamed));
-		Assertions.assertThat(stored.getFileName()).isEqualTo("holiday.jpg");
-
-		verify(secureFileMove).move(file, renamed, false);
-		verify(catalogFileRepository).save(stored);
+		verify(libraryFileMutations).move(file, renamed, false, EXECUTION_ID);
+		verify(explorerRenamePersistence).rename(file, renamed);
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), eq(ExecutionCounts.one()),
+				carrying("backend.files.renameDone", "holiday.jpg"));
 	}
 
 	/**
-	 * A file the catalog never saw is still renamed on disk; there is simply no row
-	 * to repoint, and that must not be mistaken for a failure.
+	 * The announcement to the watcher is named after the execution, which is what
+	 * lets a folder rename - one call, a notification per file inside it - go on
+	 * being recognised as this product's own work while the run holds its paths.
 	 */
 	@Test
-	void renamesAFileTheCatalogDoesNotKnow(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
-
-		Assertions.assertThat(service().rename(file, "holiday.jpg").success()).isTrue();
-
-		verify(catalogFileRepository, never()).save(any());
-	}
-
-	/**
-	 * A folder carries no bytes of its own to verify, so it is moved plainly; the
-	 * catalog rows under it are left to the reconciliation rather than rewritten
-	 * one by one here.
-	 */
-	@Test
-	void renamesAFolderWithoutTheSecureMoveAndWithoutTouchingTheCatalog(@TempDir Path parent) throws IOException {
+	void renamesAFolderAndMovesTheCatalogueOfItsWholeSubtree(@TempDir Path parent) throws IOException {
 		Path folder = Files.createDirectory(parent.resolve("album"));
+		Path renamed = parent.resolve("viagem");
 
-		Assertions.assertThat(service().rename(folder, "viagem").success()).isTrue();
-		Assertions.assertThat(parent.resolve("viagem")).exists();
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+
+		// The port really renames here: what is being asserted is that a folder takes
+		// the directory operation and not the verified move, and that only shows if
+		// the directory actually moves.
+		doAnswer(invocation -> {
+			Files.move(invocation.getArgument(0), invocation.getArgument(1));
+
+			return null;
+		}).when(libraryFileMutations).renameDirectory(any(), any(), any());
+
+		service().execute(rename(folder, renamed), ownership);
+
+		Assertions.assertThat(renamed).exists();
 		Assertions.assertThat(folder).doesNotExist();
 
-		verify(secureFileMove, never()).move(any(), any(), anyBoolean());
-		verify(catalogFileRepository, never()).save(any());
+		verify(libraryFileMutations).renameDirectory(folder, renamed, EXECUTION_ID);
+		verify(libraryFileMutations, never()).move(any(), any(), anyBoolean(), any());
+		verify(catalogMutations).repointFolder(eq(PathUtils.normalize(folder)), eq(PathUtils.normalize(renamed)),
+				any());
+	}
+
+	/**
+	 * Time passes between the click and the work, and the guard is what answers
+	 * whether the path may still be written to at all.
+	 */
+	@Test
+	void rejectsWhatTheGuardNoLongerAllows(@TempDir Path folder) throws IOException {
+		Path file = Files.createFile(folder.resolve("photo.jpg"));
+
+		when(guard.refusal(any())).thenReturn(Optional.of(ExplorerMessages.pathGone()));
+
+		service().execute(rename(file, folder.resolve("holiday.jpg")), ownership);
+
+		verify(libraryFileMutations, never()).move(any(), any(), anyBoolean(), any());
+		verify(executionProgressService).reject(any(), carrying("backend.files.pathGone"));
+	}
+
+	/**
+	 * Overwriting the neighbour would destroy a file the user never selected. The
+	 * name was free when the command was queued; this is the look that decides.
+	 */
+	@Test
+	void rejectsWhenSomethingTookTheTargetNameWhileTheCommandWaited(@TempDir Path folder) throws IOException {
+		Path file = Files.createFile(folder.resolve("photo.jpg"));
+		Path taken = Files.createFile(folder.resolve("taken.jpg"));
+
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+
+		service().execute(rename(file, taken), ownership);
+
+		verify(libraryFileMutations, never()).move(any(), any(), anyBoolean(), any());
+		verify(executionProgressService).reject(any(), carrying("backend.files.renameTargetExists", "taken.jpg"));
 	}
 
 	/**
 	 * The secure move refuses when it cannot guarantee the copy; the file stays put
-	 * and the dialog says what went wrong instead of reporting a rename that never
+	 * and the row says what went wrong instead of reporting a rename that never
 	 * happened.
 	 */
 	@Test
 	void reportsAFailedMoveInsteadOfClaimingSuccess(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		ExplorerRenameService service = service();
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+		doThrow(new IOException("disk full")).when(libraryFileMutations).move(any(), any(), anyBoolean(), any());
 
-		doThrow(new IOException("disk full")).when(secureFileMove).move(any(), any(), anyBoolean());
+		service().execute(rename(file, folder.resolve("holiday.jpg")), ownership);
 
-		ExplorerActionResult result = service.rename(file, "holiday.jpg");
-
-		Assertions.assertThat(result.success()).isFalse();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.renameFailed", "disk full"));
+		verify(explorerRenamePersistence, never()).rename(any(), any());
+		verify(executionProgressService).fail(any(), carrying("backend.files.renameFailed", "disk full"));
 	}
 
 	/**
-	 * Another operation holding the path is a temporary refusal, not a failure: the
-	 * message invites the user to try again once it finishes.
+	 * The locks can go away while the work is in flight, and nothing may be written
+	 * after they have - so possession is confirmed before the file moves, not after.
 	 */
 	@Test
-	void refusesWhileAnotherOperationHoldsThePath(@TempDir Path folder) throws IOException {
+	void confirmsItStillOwnsThePathsBeforeMovingAnything(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		ExplorerRenameService service = service();
+		when(guard.refusal(any())).thenReturn(Optional.empty());
 
-		when(operationLockService.acquireWithin(any(), any(), any())).thenThrow(new OperationLockException("busy"));
+		service().execute(rename(file, folder.resolve("holiday.jpg")), ownership);
 
-		Assertions.assertThat(service.rename(file, "holiday.jpg").message()).isEqualTo(expected("backend.files.busy"));
+		verify(ownership).assertStillOwned();
 	}
 
-	private MessageSource messageSource() {
-		ResourceBundleMessageSource source = new ResourceBundleMessageSource();
-
-		source.setBasename("messages");
-		source.setDefaultEncoding("UTF-8");
-		source.setFallbackToSystemLocale(false);
-
-		return source;
+	private Execution rename(Path source, Path target) {
+		return Execution.builder().id(EXECUTION_ID).executionType(ExecutionType.EXPLORER_RENAME)
+				.sourcePath(PathUtils.normalize(source)).targetPath(PathUtils.normalize(target)).build();
 	}
+
 }

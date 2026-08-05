@@ -1,10 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.update.infrastructure.web;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
@@ -29,6 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate
  * window that simply disappears.
  */
 @Controller
+@Profile(NimbusProfiles.APP)
 public class SettingsUpdateWebController extends LocalizedComponent {
 
 	private final UpdateCheckService updateCheckService;

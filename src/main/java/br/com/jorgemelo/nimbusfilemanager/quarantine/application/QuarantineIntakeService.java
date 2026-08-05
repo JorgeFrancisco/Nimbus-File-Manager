@@ -7,10 +7,9 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -37,14 +36,15 @@ import lombok.extern.slf4j.Slf4j;
 public class QuarantineIntakeService {
 
 	private final DuplicateDeletionPersistence quarantinePersistence;
-	private final SecureFileMove secureFileMove;
-	private final AppSettingService appSettingService;
+	private final LibraryFileMutations libraryFileMutations;
+	private final QuarantineFolderPolicy quarantineFolderPolicy;
 
-	public QuarantineIntakeService(DuplicateDeletionPersistence quarantinePersistence, SecureFileMove secureFileMove,
-			AppSettingService appSettingService) {
+	public QuarantineIntakeService(DuplicateDeletionPersistence quarantinePersistence,
+			LibraryFileMutations libraryFileMutations,
+			QuarantineFolderPolicy quarantineFolderPolicy) {
 		this.quarantinePersistence = quarantinePersistence;
-		this.secureFileMove = secureFileMove;
-		this.appSettingService = appSettingService;
+		this.libraryFileMutations = libraryFileMutations;
+		this.quarantineFolderPolicy = quarantineFolderPolicy;
 	}
 
 	/**
@@ -52,13 +52,7 @@ public class QuarantineIntakeService {
 	 * in which case no feature may soft-delete anything.
 	 */
 	public Optional<Path> root() {
-		String configured = appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "");
-
-		if (configured == null || configured.isBlank()) {
-			return Optional.empty();
-		}
-
-		return Optional.of(Path.of(configured).toAbsolutePath().normalize());
+		return quarantineFolderPolicy.root();
 	}
 
 	/**
@@ -67,8 +61,13 @@ public class QuarantineIntakeService {
 	 * (already removed, already under quarantine, not a physical file or gone from
 	 * disk) and {@code ERROR} when the move or the catalog write failed - in both
 	 * cases the file is left where it was.
+	 *
+	 * @param executionId the execution this move belongs to, named so the watcher
+	 * goes on recognising it as this product's own work for as long as the run
+	 * demonstrably holds its paths
 	 */
-	public IntakeOutcome intake(Execution execution, CatalogFile file, Path quarantineRoot, MovementReason reason) {
+	public IntakeOutcome intake(Execution execution, CatalogFile file, Path quarantineRoot, MovementReason reason,
+			Long executionId) {
 		if (!file.isActive()) {
 			log.warn("Quarantine intake skipped media file {} because its lifecycle is {}", file.getId(),
 					file.getLifecycleStatus());
@@ -99,20 +98,21 @@ public class QuarantineIntakeService {
 
 		Path target = target(quarantineRoot, execution, file);
 
-		return move(execution, file, source, target, reason);
+		return move(execution, file, source, target, reason, executionId);
 	}
 
-	private IntakeOutcome move(Execution execution, CatalogFile file, Path source, Path target, MovementReason reason) {
+	private IntakeOutcome move(Execution execution, CatalogFile file, Path source, Path target,
+			MovementReason reason, Long executionId) {
 		try {
 			// Same secure move as organization: SHA-256 baseline + byte-for-byte verify.
-			secureFileMove.move(source, target, false);
+			libraryFileMutations.move(source, target, false, executionId);
 		} catch (Exception e) {
 			// An integrity failure leaves the file at target; put it back so nothing is
 			// half-moved. If the move never happened (source still there) there is nothing
 			// to undo; if the roll-back itself fails, the file is orphaned and must be
 			// flagged.
 			boolean orphaned = !Files.exists(source) && Files.exists(target)
-					&& !secureFileMove.rollback(target, source);
+					&& !libraryFileMutations.rollback(target, source);
 
 			if (orphaned) {
 				log.error("Quarantine intake could not securely move {} to quarantine and could not roll back from "
@@ -132,7 +132,7 @@ public class QuarantineIntakeService {
 		try {
 			quarantinePersistence.persistQuarantine(execution, file, source, target, reason);
 		} catch (Exception e) {
-			boolean rolledBack = secureFileMove.rollback(target, source);
+			boolean rolledBack = libraryFileMutations.rollback(target, source);
 
 			if (rolledBack) {
 				log.error("Quarantine intake moved {} but failed to update the catalog; rolled back", source, e);

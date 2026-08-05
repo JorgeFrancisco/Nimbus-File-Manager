@@ -34,6 +34,18 @@ public class QuarantineFolderPolicy extends LocalizedComponent {
 		this.appSettingService = appSettingService;
 	}
 
+	/**
+	 * The configured quarantine folder, or empty when there is none.
+	 *
+	 * <p>
+	 * Answered here because it is a question about configuration, and the screens
+	 * that ask it - "is a quarantine set up?" - have no business holding the
+	 * service that moves files into it just to find out.
+	 */
+	public Optional<Path> root() {
+		return Optional.ofNullable(normalized(configured(SettingsConstants.TRASH_FOLDER)));
+	}
+
 	/** Refuses a quarantine folder that overlaps the monitored library. */
 	public void validateQuarantineFolder(String folder) {
 		validateOverlap(folder, configured(SettingsConstants.WATCH_FOLDER));

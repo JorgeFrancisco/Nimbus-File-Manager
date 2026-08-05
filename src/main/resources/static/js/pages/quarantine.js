@@ -163,11 +163,17 @@
 					return;
 				}
 				button.disabled = true;
-				postJson("/app/quarantine/restore-selected", { ids: ids }).then(function (result) {
+				postJson("/app/quarantine/restore-selected", { ids: ids }).then(function () {
 					discardSelection(ids);
-					status(result.message || t("js.quarantine.restoreCompleted"),
-							result.errors > 0 || result.conflicts > 0 || result.originMissing > 0 ? "warn" : "ok");
-					reloadSoon();
+					status(t("js.quarantine.restoreQueued"), "ok");
+					followBatch(function (result) {
+						status(result.message || t("js.quarantine.restoreCompleted"),
+								result.errors > 0 || result.skipped > 0 ? "warn" : "ok");
+						reloadSoon();
+					}, function () {
+						button.disabled = false;
+						status(t("js.quarantine.restoreSelectedError"), "error");
+					});
 				}).catch(function () {
 					button.disabled = false;
 					status(t("js.quarantine.restoreSelectedError"), "error");
@@ -189,8 +195,26 @@
 		button.addEventListener("click", function () {
 			button.disabled = true;
 			postJson("/app/quarantine/cleanup-absent", {}).then(function (result) {
-				status(t("js.quarantine.absentRemoved", result.removed || 0), "ok");
-				reloadSoon();
+				// Nothing was absent, so nothing ran: that is read in a dialog, because a
+				// status line saying zero is read as the button having worked. The reason
+				// arrives written - the screen only shows it.
+				if (!result.pending && !result.removed) {
+					button.disabled = false;
+					showOutcome(result.message, reloadSoon);
+					return;
+				}
+				status(result.message, "ok");
+				if (!result.pending) {
+					reloadSoon();
+					return;
+				}
+				followBatch(function (finished) {
+					status(finished.message || result.message, finished.errors > 0 ? "warn" : "ok");
+					reloadSoon();
+				}, function () {
+					button.disabled = false;
+					status(t("js.quarantine.cleanupError"), "error");
+				});
 			}).catch(function () {
 				button.disabled = false;
 				status(t("js.quarantine.cleanupError"), "error");
@@ -274,24 +298,64 @@
 			if (!ids.length) {
 				return;
 			}
-			postJson("/app/quarantine/delete-selected", { ids: ids }).then(function (result) {
+			postJson("/app/quarantine/delete-selected", { ids: ids }).then(function () {
 				discardSelection(ids);
+				status(t("js.quarantine.purgeQueued"), "ok");
 
-				status(t("js.quarantine.purgeCompleted", result.purged || 0, result.errors || 0),
-						result.errors > 0 || result.busy > 0 ? "warn" : "ok");
+				followBatch(function (result) {
+					status(t("js.quarantine.purgeCompleted", result.succeeded || 0, result.errors || 0),
+							result.errors > 0 || result.skipped > 0 ? "warn" : "ok");
 
-				// Nothing deleted is never a success: the server says why - most often a
-				// conversion holding the quarantine folder while it moves originals into it.
-				// The refresh waits for the dialog, or it would take the reason with it.
-				if (result.message) {
-					showOutcome(result.message, reloadSoon);
-				} else {
-					reloadSoon();
-				}
+					// Nothing deleted is never a success: the outcome says why - most often a
+					// conversion holding the quarantine folder while it moves originals into
+					// it. The refresh waits for the dialog, or it would take the reason with it.
+					if (!result.succeeded && result.total > 0 && result.message) {
+						showOutcome(result.message, reloadSoon);
+					} else {
+						reloadSoon();
+					}
+				}, function () {
+					status(t("js.quarantine.purgeError"), "error");
+				});
 			}).catch(function () {
 				status(t("js.quarantine.purgeError"), "error");
 			});
 		});
+	}
+
+	// ---- Following a batch that runs in the worker --------------------------
+
+	// The restore and the purge of a selection stopped being answered by the request
+	// that asked for them: a worker does the moving, and what the screen can do is
+	// watch the row. Polled rather than pushed because that is what every other long
+	// operation here already does, and one more mechanism would be one more to keep.
+	var BATCH_POLL_MILLIS = 1000;
+	var BATCH_MAX_POLLS = 600;
+
+	function followBatch(onDone, onError) {
+		var polls = 0;
+
+		function ask() {
+			polls += 1;
+
+			fetch("/app/quarantine/progress").then(function (response) {
+				if (!response.ok) {
+					throw new Error("HTTP " + response.status);
+				}
+
+				return response.json();
+			}).then(function (result) {
+				if (result && result.running && polls < BATCH_MAX_POLLS) {
+					window.setTimeout(ask, BATCH_POLL_MILLIS);
+
+					return;
+				}
+
+				onDone(result || {});
+			}).catch(onError);
+		}
+
+		window.setTimeout(ask, BATCH_POLL_MILLIS);
 	}
 
 	// ---- Single restore + dialogs -------------------------------------------
@@ -315,28 +379,40 @@
 		case "RESTORED":
 			discardSelection([movementId]);
 			status(t("js.quarantine.restoredTo", result.restoredPath || t("js.quarantine.originLocation")), "ok");
+			reloadSoon();
+			break;
+		// The decision was taken and the move is a worker's now. Nothing left to ask,
+		// so the screen stops waiting on the request and starts watching the row.
+		case "PENDING":
+			discardSelection([movementId]);
+			status(result.message, "ok");
+			followBatch(function (finished) {
+				status(finished.message || result.message, finished.errors > 0 ? "warn" : "ok");
 				reloadSoon();
-				break;
-			case "CONFLICT":
-				openConflictDialog(movementId, destinationFolder);
-				break;
-			case "ORIGIN_MISSING":
-				openOriginDialog(movementId);
-				break;
-			case "SKIPPED":
-				status(t("js.quarantine.kept"), "");
-				break;
+			}, function () {
+				status(t("js.quarantine.restoreError"), "error");
+			});
+			break;
+		case "CONFLICT":
+			openConflictDialog(movementId, destinationFolder);
+			break;
+		case "ORIGIN_MISSING":
+			openOriginDialog(movementId);
+			break;
+		case "SKIPPED":
+			status(t("js.quarantine.kept"), "");
+			break;
 		case "MISSING_IN_QUARANTINE":
 			discardSelection([movementId]);
 			status(result.message || t("js.quarantine.missing"), "warn");
-				reloadSoon();
-				break;
-			case "LOCKED":
-				status(result.message || t("js.quarantine.locked"), "warn");
-				break;
-			default:
-				status(result.message || t("js.quarantine.restoreError"), "error");
-				break;
+			reloadSoon();
+			break;
+		case "LOCKED":
+			status(result.message || t("js.quarantine.locked"), "warn");
+			break;
+		default:
+			status(result.message || t("js.quarantine.restoreError"), "error");
+			break;
 		}
 	}
 

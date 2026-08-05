@@ -7,6 +7,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 
 import org.springframework.data.domain.PageRequest;
@@ -62,8 +63,13 @@ public class LocationRebuildService {
 	/**
 	 * @param progressListener receives the running number of processed media (used
 	 * by the admin screen to show progress).
+	 * @param stop asked between batches. The reason to stop lives outside this
+	 * class and outside this process - a cancellation, or an inventory that
+	 * started meanwhile - and a pass that stops keeps every location it already
+	 * wrote, because resolving one again produces the same answer.
 	 */
-	public LocationRebuildResult rebuild(LocationRebuildScope scope, LongConsumer progressListener) {
+	public LocationRebuildResult rebuild(LocationRebuildScope scope, LongConsumer progressListener,
+			BooleanSupplier stop) {
 		int parallelism = parallelism();
 
 		log.info("Starting location rebuild. scope={} parallelism={}", scope, parallelism);
@@ -76,7 +82,7 @@ public class LocationRebuildService {
 			long lastId = 0;
 			long lastLogged = 0;
 
-			while (true) {
+			while (!stop.getAsBoolean()) {
 				List<Long> ids = nextIds(scope, lastId);
 
 				if (ids.isEmpty()) {

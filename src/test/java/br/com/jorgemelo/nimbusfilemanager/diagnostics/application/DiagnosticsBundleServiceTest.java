@@ -191,12 +191,12 @@ class DiagnosticsBundleServiceTest {
 		Map<String, String> files = entries(service());
 
 		Assertions.assertThat(files.get("settings.csv")).contains("nimbus-file-manager.timezone;;2026-08-01");
-		Assertions.assertThat(files.get("executions.csv")).contains("INVENTORY;PROCESSING_FILES");
+		Assertions.assertThat(files.get("executions.csv")).contains("INVENTORY;RUNNING");
 	}
 
 	/** An execution still in flight: no end, no message. */
 	private ExecutionResponse running() {
-		return new ExecutionResponse(UUID.randomUUID(), "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(CLOCK), null,
+		return new ExecutionResponse(UUID.randomUUID(), "INVENTORY", "RUNNING", LocalDateTime.now(CLOCK), null,
 				"D:/library", null, 3, 1, 0, 0, 0, 0, 3, 33D, null, false);
 	}
 }

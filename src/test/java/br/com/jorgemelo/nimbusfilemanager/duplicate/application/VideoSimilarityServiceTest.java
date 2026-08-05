@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -21,19 +21,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.AnalyzedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityComposition;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoSignature;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaQualityRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.MediaQuality;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.VideoFrameRawResponse;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Api;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -47,12 +48,6 @@ class VideoSimilarityServiceTest {
 
 	@Mock
 	private VideoSimilarityAlgorithm algorithm;
-
-	@Mock
-	private AppSettingService appSettingService;
-
-	@Mock
-	private NimbusFileManagerProperties properties;
 
 	@Mock
 	private DuplicateExclusionService duplicateExclusionService;
@@ -71,25 +66,17 @@ class VideoSimilarityServiceTest {
 		when(algorithm.algorithm()).thenReturn(ALGORITHM);
 		when(algorithm.framesPerFingerprint()).thenReturn(5);
 
-		List<Object[]> signatureRows = new ArrayList<>();
-
-		signatureRows.add(new Object[] { 2L, 2L, NOW });
-
-		when(mediaFingerprintRepository.fingerprintSignature(any(), any())).thenReturn(signatureRows);
 		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFilePublicIds()).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFolders()).thenReturn(List.of());
 		when(duplicateExclusionService.isUnderExcludedFolder(any(), any())).thenCallRealMethod();
-		when(appSettingService.intValue(any(), anyInt())).thenReturn(500);
-		when(properties.api()).thenReturn(new Api(500, 20, 500));
 	}
 
 	private VideoSimilarityService service() {
 		DuplicateGroupAssembler assembler = new DuplicateGroupAssembler(new DuplicateKeepPolicy(),
 				mediaQualityRepository);
 
-		return new VideoSimilarityService(mediaFingerprintRepository, assembler, algorithm, appSettingService,
-				properties, duplicateExclusionService,
+		return new VideoSimilarityService(mediaFingerprintRepository, assembler, algorithm, duplicateExclusionService,
 				new VideoSimilarityProperties(null, null, null, null, null, null));
 	}
 
@@ -106,10 +93,11 @@ class VideoSimilarityServiceTest {
 				.thenAnswer(invocation -> invocation.<VideoSignature>getArgument(0).frames().size() == 2
 						&& invocation.<VideoSignature>getArgument(1).frames().size() == 2 ? 92 : -1);
 
-		Page<SimilarVideoGroupResponse> groups = service().groups(90, PageRequest.of(0, 20));
+		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {
+		}).groups();
 
-		assertThat(groups.getContent()).hasSize(1);
-		assertThat(groups.getContent().getFirst().similarityPercent()).isEqualTo(92);
+		assertThat(groups).hasSize(1);
+		assertThat(groups.getFirst().similarityPercent()).isEqualTo(92);
 	}
 
 	@Test
@@ -124,7 +112,8 @@ class VideoSimilarityServiceTest {
 		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
 		when(duplicateExclusionService.excludedFilePublicIds()).thenReturn(List.of(first));
 
-		assertThat(service().groups(90, PageRequest.of(0, 20)).getContent()).isEmpty();
+		assertThat(service().analyze(90, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	@Test
@@ -140,51 +129,8 @@ class VideoSimilarityServiceTest {
 		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
 		when(duplicateExclusionService.excludedFolders()).thenReturn(List.of("C:/"));
 
-		assertThat(service().groups(90, PageRequest.of(0, 20)).getContent()).isEmpty();
-	}
-
-	@Test
-	void cachesGroupingAndInvalidatesOnDemand() {
-		UUID first = UUID.randomUUID();
-		UUID second = UUID.randomUUID();
-
-		when(mediaFingerprintRepository.findFingerprintedVideoFrames(any(), any(), any()))
-				.thenReturn(List.of(row(first, "a"), row(second, "b")));
-		when(algorithm.candidateBuckets(any())).thenReturn(Set.of(1L));
-		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
-
-		VideoSimilarityService service = service();
-
-		assertThat(service.cachedPage(90, PageRequest.of(0, 20))).isEmpty();
-
-		service.groups(90, PageRequest.of(0, 20));
-
-		assertThat(service.isCached(90)).isTrue();
-		assertThat(service.cachedPage(90, PageRequest.of(0, 20))).isPresent();
-
-		service.invalidateCache();
-
-		assertThat(service.isCached(90)).isFalse();
-	}
-
-	@Test
-	void evictFromCacheDropsGroupsThatLostAMember() {
-		UUID keep = UUID.randomUUID();
-		UUID other = UUID.randomUUID();
-
-		when(mediaFingerprintRepository.findFingerprintedVideoFrames(any(), any(), any()))
-				.thenReturn(List.of(row(keep, "a"), row(other, "b")));
-		when(algorithm.candidateBuckets(any())).thenReturn(Set.of(1L));
-		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
-
-		VideoSimilarityService service = service();
-
-		SimilarVideoGroupResponse group = service.groups(90, PageRequest.of(0, 20)).getContent().getFirst();
-
-		service.evictFromCache(List.of(UUID.fromString(group.keep().id().toString())));
-
-		assertThat(service.cachedPage(90, PageRequest.of(0, 20))).get()
-				.satisfies(page -> assertThat(page.getContent()).isEmpty());
+		assertThat(service().analyze(90, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	@Test
@@ -194,11 +140,12 @@ class VideoSimilarityServiceTest {
 		when(algorithm.candidateBuckets(any())).thenReturn(Set.of(1L));
 		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95, 92, 90);
 
-		Page<SimilarVideoGroupResponse> groups = service().groups(90, PageRequest.of(0, 20));
+		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {
+		}).groups();
 
-		assertThat(groups.getContent()).hasSize(1);
-		assertThat(groups.getContent().getFirst().files()).isEqualTo(3);
-		assertThat(groups.getContent().getFirst().similarityPercent()).isEqualTo(90);
+		assertThat(groups).hasSize(1);
+		assertThat(groups.getFirst().members()).hasSize(3);
+		assertThat(groups.getFirst().similarityPercent()).isEqualTo(90);
 	}
 
 	@Test
@@ -212,35 +159,21 @@ class VideoSimilarityServiceTest {
 
 		// A single surviving candidate forms no group, but the null folder must not
 		// throw and must not be dropped by the folder filter.
-		assertThat(service().groups(90, PageRequest.of(0, 20)).getContent()).isEmpty();
-	}
-
-	@Test
-	void clampsRequestedSimilarityToItsBounds() {
-		when(mediaFingerprintRepository.findFingerprintedVideoFrames(any(), any(), any())).thenReturn(List.of());
-
-		VideoSimilarityService service = service();
-
-		service.groups(null, PageRequest.of(0, 20));
-		service.groups(200, PageRequest.of(0, 20));
-		service.groups(50, PageRequest.of(0, 20));
-
-		assertThat(service.isCached(70)).isTrue();
-		assertThat(service.isCached(100)).isTrue();
-	}
-
-	@Test
-	void evictFromCacheIgnoresNullOrEmptyInput() {
-		VideoSimilarityService service = service();
-
-		service.evictFromCache(null);
-		service.evictFromCache(List.of());
-
-		assertThat(service.isCached(90)).isFalse();
+		assertThat(service().analyze(90, (_, _) -> {
+		}).groups()).isEmpty();
 	}
 
 	private VideoFrameRawResponse row(UUID id, String name) {
 		return frameRow(id, name, 0);
+	}
+
+	private MediaQuality quality(UUID id, LocalDateTime capturedAt) {
+		return new MediaQuality(id, 1920, 1080, capturedAt, true, MediaSubcategory.CAMERA, DateSource.EXIF, true);
+	}
+
+	private VideoFrameRawResponse sizedRow(UUID id, String name, long sizeBytes) {
+		return new VideoFrameRawResponse(id, 0, 0L, new byte[32], new byte[1024], name, "mp4", sizeBytes,
+				"C:/" + name + ".mp4", "C:/", NOW, 10.0, 1920, 1080);
 	}
 
 	private VideoFrameRawResponse frameRow(UUID id, String name, int sampleIndex) {
@@ -258,11 +191,45 @@ class VideoSimilarityServiceTest {
 		when(algorithm.candidateBuckets(any())).thenReturn(Set.of(1L));
 		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
 
-		Page<SimilarVideoGroupResponse> groups = service().groups(90, PageRequest.of(0, 20));
+		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {
+		}).groups();
 
-		assertThat(groups.getContent()).hasSize(1);
-		assertThat(groups.getContent().getFirst().files()).isEqualTo(2);
-		assertThat(groups.getContent().getFirst().similarityPercent()).isEqualTo(95);
+		assertThat(groups).hasSize(1);
+		assertThat(groups.getFirst().members()).hasSize(2);
+		assertThat(groups.getFirst().similarityPercent()).isEqualTo(95);
+	}
+
+	@SuppressWarnings("unchecked")
+	@Test
+	void theGroupThatWastesMostComesFirst() {
+		UUID smallA = UUID.randomUUID();
+		UUID smallB = UUID.randomUUID();
+		UUID bigA = UUID.randomUUID();
+		UUID bigB = UUID.randomUUID();
+
+		// Two pairs, each in its own bucket. Their order in the published result is
+		// decided here, once, so paginating it later cannot reshuffle what page two
+		// means - and the pair that frees the most bytes is the one worth seeing first.
+		when(mediaFingerprintRepository.findFingerprintedVideoFrames(any(), any(), any()))
+				.thenReturn(List.of(sizedRow(smallA, "small-a", 1_000L), sizedRow(smallB, "small-b", 1_000L),
+						sizedRow(bigA, "big-a", 900_000L), sizedRow(bigB, "big-b", 900_000L)));
+		when(algorithm.candidateBuckets(any(VideoSignature.class))).thenReturn(Set.of(1L), Set.of(1L), Set.of(2L),
+				Set.of(2L));
+		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
+
+		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of(quality(smallA, NOW.minusDays(1)),
+				quality(smallB, NOW), quality(bigA, NOW.minusDays(1)), quality(bigB, NOW)));
+
+		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {
+		}).groups();
+
+		assertThat(groups).hasSize(2);
+		assertThat(groups).extracting(AnalyzedGroup::members).allSatisfy(members -> assertThat(members).hasSize(2));
+
+		// The order is decided here and frozen: whatever each group frees, the one that
+		// frees most is first. Paginating the published result later cannot reshuffle
+		// what page two means.
+		assertThat(groups).extracting(AnalyzedGroup::wastedBytes).isSortedAccordingTo(Comparator.reverseOrder());
 	}
 
 	@SuppressWarnings("unchecked")
@@ -277,10 +244,34 @@ class VideoSimilarityServiceTest {
 		// {2}).
 		when(algorithm.candidateBuckets(any(VideoSignature.class))).thenReturn(Set.of(1L), Set.of(2L));
 
-		Page<SimilarVideoGroupResponse> groups = service().groups(90, PageRequest.of(0, 20));
+		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {
+		}).groups();
 
 		// Disjoint-bucket pairs never reach the expensive comparison, and never group.
 		verify(algorithm, never()).similarityPercent(any(), any(), anyInt());
-		assertThat(groups.getContent()).isEmpty();
+		assertThat(groups).isEmpty();
+	}
+
+	@Test
+	void theFamilyAndTheCompositionDescribeTheVideoAnalysis() {
+		UUID first = UUID.randomUUID();
+		UUID second = UUID.randomUUID();
+
+		when(mediaFingerprintRepository.countEligibleForSimilarity(any(), any())).thenReturn(7);
+		when(mediaFingerprintRepository.findVideoCompositionRows(any(), any(), any()))
+				.thenReturn(List.of(new CompositionRow(first, "C:/Videos"), new CompositionRow(second, "C:/Videos")));
+
+		VideoSimilarityService service = service();
+
+		assertThat(service.mediaType()).isEqualTo(FileType.VIDEO);
+		assertThat(service.family(70).mediaType()).isEqualTo(FileType.VIDEO);
+		assertThat(service.family(70).parametersDigest()).hasSize(64);
+
+		SimilarityComposition composition = service.composition();
+
+		assertThat(composition.eligibleCount()).isEqualTo(7);
+		assertThat(composition.analyzedCount()).isEqualTo(2);
+		assertThat(composition.digest()).hasSize(64);
+		assertThat(composition.coverageComplete()).isFalse();
 	}
 }

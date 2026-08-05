@@ -1,9 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.media.application.explorer;
 
+import static br.com.jorgemelo.nimbusfilemanager.media.application.explorer.CarriedMessages.carrying;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,54 +14,56 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.context.support.ResourceBundleMessageSource;
+import org.mockito.stubbing.Answer;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerActionResult;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
+import br.com.jorgemelo.nimbusfilemanager.media.application.constants.ExplorerMessages;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
- * The destructive half of the explorer menu. Quarantine has to refuse rather
- * than move a file the catalog cannot record - an unrecorded file in quarantine
- * could never be restored - and a permanent delete has to leave the catalog
- * consistent with a disk that no longer holds the file.
+ * The destructive half of the explorer menu, off the queue. Quarantine has to
+ * refuse rather than move a file the catalog cannot record - an unrecorded file
+ * in quarantine could never be restored - and a permanent delete has to leave
+ * the catalog consistent with a disk that no longer holds the file.
+ *
+ * <p>
+ * Nothing here takes a lock: the dispatcher holds the paths before the handler
+ * is called, which is why the row names both ends of the operation.
  */
 class ExplorerDeletionServiceTest {
 
-	private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
+	private static final long EXECUTION_ID = 7L;
 
 	private final ExplorerDeletionGuard guard = mock(ExplorerDeletionGuard.class);
 	private final QuarantineIntakeService quarantineIntakeService = mock(QuarantineIntakeService.class);
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
-	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
-	private final OperationLockService operationLockService = mock(OperationLockService.class);
-	private final MessageSource messages = messageSource();
+	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
+	private final ExecutionOwnership ownership = mock(ExecutionOwnership.class);
 
 	private ExplorerDeletionService service() {
-		return service(new DefaultExplorerFileSystem(new SelfWrittenPathRegistry(Clock.systemUTC())));
+		return service(new DefaultExplorerFileSystem(libraryFiles()));
 	}
 
 	/**
@@ -68,59 +73,25 @@ class ExplorerDeletionServiceTest {
 	 */
 	private ExplorerDeletionService service(ExplorerFileSystem fileSystem) {
 		when(guard.refusal(any())).thenReturn(Optional.empty());
-		when(operationLockService.acquireWithin(any(), any(), any())).thenReturn(mock(OperationLock.class));
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		ExplorerDeletionService service = new ExplorerDeletionService(guard, quarantineIntakeService,
-				catalogFileRepository, executionRepository, operationLockService,
-				Clock.fixed(Instant.parse("2026-07-31T10:00:00Z"), ZoneOffset.UTC), fileSystem);
-
-		service.setMessageSource(messages);
-
-		return service;
-	}
-
-	private String expected(String key, Object... arguments) {
-		return messages.getMessage(key, arguments, PT_BR);
-	}
-
-	/**
-	 * The component under test resolves through LocaleContextHolder, so without
-	 * pinning the language these assertions would compare pt-BR text against
-	 * whatever the machine defaults to - green here and red on an English CI
-	 * runner, which is exactly what happened.
-	 */
-	@BeforeEach
-	void useThePortugueseBundle() {
-		LocaleContextHolder.setLocale(PT_BR);
-	}
-
-	@AfterEach
-	void releaseTheLocale() {
-		LocaleContextHolder.resetLocaleContext();
+		return new ExplorerDeletionService(guard, quarantineIntakeService, catalogFileRepository,
+				executionProgressService, fileSystem);
 	}
 
 	@Test
-	void refusesWhatTheGuardRefuses(@TempDir Path folder) throws IOException {
+	void rejectsWhatTheGuardRefuses(@TempDir Path folder, @TempDir Path quarantine) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
 		ExplorerDeletionService service = service();
 
-		when(guard.refusal(any())).thenReturn(Optional.of("nope"));
+		when(guard.refusal(any())).thenReturn(Optional.of(ExplorerMessages.pathGone()));
 
-		Assertions.assertThat(service.quarantine(file).message()).isEqualTo("nope");
-		Assertions.assertThat(service.deletePermanently(file).message()).isEqualTo("nope");
+		service.quarantine(command(file, quarantine), ownership);
+		service.deletePermanently(command(file, null), ownership);
+
 		Assertions.assertThat(file).exists();
-	}
 
-	@Test
-	void refusesQuarantineWhileTheQuarantineFolderIsUnset(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
-
-		when(quarantineIntakeService.root()).thenReturn(Optional.empty());
-
-		Assertions.assertThat(service().quarantine(file).message())
-				.isEqualTo(expected("backend.files.quarantineNotConfigured"));
+		verify(executionProgressService, times(2)).reject(any(), carrying("backend.files.pathGone"));
 	}
 
 	/**
@@ -128,18 +99,18 @@ class ExplorerDeletionServiceTest {
 	 * find it, so it stays where it is and the message explains why.
 	 */
 	@Test
-	void refusesQuarantineWhenNothingUnderThePathIsCataloged(@TempDir Path folder, @TempDir Path quarantine)
+	void rejectsQuarantineWhenNothingUnderThePathIsCataloged(@TempDir Path folder, @TempDir Path quarantine)
 			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 
-		Assertions.assertThat(service().quarantine(file).message())
-				.isEqualTo(expected("backend.files.quarantineNothingCataloged"));
+		service().quarantine(command(file, quarantine), ownership);
+
 		Assertions.assertThat(file).exists();
 
-		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any());
+		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any(), any());
+		verify(executionProgressService).reject(any(), carrying("backend.files.quarantineNothingCataloged"));
 	}
 
 	@Test
@@ -149,16 +120,15 @@ class ExplorerDeletionServiceTest {
 
 		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file)).build();
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file))).thenReturn(Optional.of(stored));
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
-		ExplorerActionResult result = service().quarantine(file);
+		service().quarantine(command(file, quarantine), ownership);
 
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(result.processed()).isEqualTo(1);
-
-		verify(quarantineIntakeService).intake(any(Execution.class), any(CatalogFile.class), any(Path.class), any());
+		verify(quarantineIntakeService).intake(any(Execution.class), any(CatalogFile.class), eq(quarantine), any(),
+				eq(EXECUTION_ID));
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(1, 1, 0, 0)), carrying("backend.files.quarantineDone", 1, 0, 0));
 	}
 
 	@Test
@@ -169,14 +139,14 @@ class ExplorerDeletionServiceTest {
 
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file))).thenReturn(Optional.of(stored));
 
-		ExplorerActionResult result = service().deletePermanently(file);
+		service().deletePermanently(command(file, null), ownership);
 
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.deleteDone", 1));
 		Assertions.assertThat(file).doesNotExist();
 		Assertions.assertThat(stored.getLifecycleStatus()).isEqualTo(LifecycleStatus.DELETED);
 
 		verify(catalogFileRepository).saveAll(List.of(stored));
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(1, 1, 0, 0)), carrying("backend.files.deleteDone", 1));
 	}
 
 	/**
@@ -193,10 +163,27 @@ class ExplorerDeletionServiceTest {
 
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 
-		ExplorerActionResult result = service().deletePermanently(folder);
+		service().deletePermanently(command(folder, null), ownership);
 
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.deleteDone", 2));
 		Assertions.assertThat(folder).doesNotExist();
+
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(2, 2, 0, 0)), carrying("backend.files.deleteDone", 2));
+	}
+
+	/**
+	 * Nothing may be destroyed after the locks have gone, so possession is
+	 * confirmed at the last moment where stopping still costs nothing.
+	 */
+	@Test
+	void confirmsItStillOwnsTheTreeBeforeTheFirstRemoval(@TempDir Path folder) throws IOException {
+		Path file = Files.createFile(folder.resolve("photo.jpg"));
+
+		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+
+		service().deletePermanently(command(file, null), ownership);
+
+		verify(ownership).assertStillOwned();
 	}
 
 	/**
@@ -211,56 +198,73 @@ class ExplorerDeletionServiceTest {
 		Path first = Files.createFile(folder.resolve("a.jpg"));
 		Path second = Files.createFile(folder.resolve("b.jpg"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(first)))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(first)).build()));
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(second)))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(second)).build()));
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenAnswer(invocation -> {
-			// The real intake moves the file out; mirroring that here is what lets the
-			// service find the folder empty afterwards.
-			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getFileKey()));
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
 
-			return IntakeOutcome.MOVED;
-		});
+		service().quarantine(command(folder, quarantine), ownership);
 
-		ExplorerActionResult result = service().quarantine(folder);
-
-		Assertions.assertThat(result.processed()).isEqualTo(2);
 		Assertions.assertThat(folder).doesNotExist();
+
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(2, 2, 0, 0)), carrying("backend.files.quarantineDone", 2, 0, 0));
 	}
 
 	/**
 	 * A file the intake could not move is counted as a failure, and the run is
-	 * reported as unsuccessful rather than as a clean sweep.
+	 * reported as finished with errors rather than as a clean sweep.
 	 */
 	@Test
 	void reportsAnIntakeFailureInsteadOfClaimingSuccess(@TempDir Path folder, @TempDir Path quarantine)
 			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenReturn(IntakeOutcome.ERROR);
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.ERROR);
 
-		ExplorerActionResult result = service().quarantine(file);
+		service().quarantine(command(file, quarantine), ownership);
 
-		Assertions.assertThat(result.success()).isFalse();
-		Assertions.assertThat(result.failed()).isEqualTo(1);
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED_WITH_ERRORS),
+				eq(new ExecutionCounts(1, 0, 0, 1)), carrying("backend.files.quarantineDone", 0, 0, 1));
 	}
 
+	/**
+	 * A file the intake decided not to take - already removed, already under
+	 * quarantine, no longer on disk - is neither moved nor failed. It is counted as
+	 * kept, which is also what keeps the folder from being reported as emptied.
+	 */
 	@Test
-	void refusesWhileAnotherOperationHoldsThePath(@TempDir Path folder) throws IOException {
-		Path file = Files.createFile(folder.resolve("photo.jpg"));
+	void countsAFileTheIntakeSkippedAsKeptRatherThanMoved(@TempDir Path parent, @TempDir Path quarantine)
+			throws IOException {
+		Path folder = Files.createDirectory(parent.resolve("album"));
+		Path taken = Files.createFile(folder.resolve("a.jpg"));
+		Path left = Files.createFile(folder.resolve("b.jpg"));
 
-		ExplorerDeletionService service = service();
+		when(catalogFileRepository.findByFileKey(PathUtils.normalize(taken)))
+				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(taken)).build()));
+		when(catalogFileRepository.findByFileKey(PathUtils.normalize(left)))
+				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(left)).build()));
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+			CatalogFile file = invocation.getArgument(1);
 
-		when(operationLockService.acquireWithin(any(), any(), any())).thenThrow(new OperationLockException("busy"));
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(folder));
+			if (file.getFileKey().equals(PathUtils.normalize(left))) {
+				return IntakeOutcome.SKIPPED;
+			}
 
-		Assertions.assertThat(service.quarantine(file).message()).isEqualTo(expected("backend.files.busy"));
-		Assertions.assertThat(service.deletePermanently(file).message()).isEqualTo(expected("backend.files.busy"));
+			Files.deleteIfExists(Path.of(file.getFileKey()));
+
+			return IntakeOutcome.MOVED;
+		});
+
+		service().quarantine(command(folder, quarantine), ownership);
+
+		Assertions.assertThat(folder).exists();
+
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(2, 1, 1, 0)), carrying("backend.files.quarantineDone", 1, 1, 0));
 	}
 
 	/**
@@ -274,16 +278,14 @@ class ExplorerDeletionServiceTest {
 
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
 
-		when(refusing.deleteRecursively(any())).thenThrow(new IOException("in use"));
+		when(refusing.deleteRecursively(any(), any())).thenThrow(new IOException("in use"));
 		when(catalogFileRepository.findByFileKey(any()))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
 
-		ExplorerActionResult result = service(refusing).deletePermanently(file);
-
-		Assertions.assertThat(result.success()).isFalse();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.deleteFailed", "in use"));
+		service(refusing).deletePermanently(command(file, null), ownership);
 
 		verify(catalogFileRepository, never()).saveAll(any());
+		verify(executionProgressService).fail(any(), carrying("backend.files.deleteFailed", "in use"));
 	}
 
 	/**
@@ -291,16 +293,16 @@ class ExplorerDeletionServiceTest {
 	 * instead of reporting that it quarantined nothing successfully.
 	 */
 	@Test
-	void refusesQuarantineWhenTheFolderCannotBeListed(@TempDir Path folder, @TempDir Path quarantine)
+	void rejectsQuarantineWhenTheFolderCannotBeListed(@TempDir Path folder, @TempDir Path quarantine)
 			throws IOException {
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
 
 		when(refusing.isDirectory(any())).thenReturn(true);
 		when(refusing.listFiles(any())).thenThrow(new IOException("permission denied"));
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 
-		Assertions.assertThat(service(refusing).quarantine(folder).message())
-				.isEqualTo(expected("backend.files.quarantineNothingCataloged"));
+		service(refusing).quarantine(command(folder, quarantine), ownership);
+
+		verify(executionProgressService).reject(any(), carrying("backend.files.quarantineNothingCataloged"));
 	}
 
 	/**
@@ -309,24 +311,23 @@ class ExplorerDeletionServiceTest {
 	 * log rather than turned into an error the user cannot act on.
 	 */
 	@Test
-	void keepsTheQuarantineSuccessfulWhenTheEmptiedFolderCannotBeRemoved(@TempDir Path folder, @TempDir Path quarantine)
-			throws IOException {
+	void keepsTheQuarantineSuccessfulWhenTheEmptiedFolderCannotBeRemoved(@TempDir Path folder,
+			@TempDir Path quarantine) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
 
 		when(refusing.isDirectory(folder)).thenReturn(true);
 		when(refusing.listFiles(any())).thenReturn(List.of(file));
-		doThrow(new IOException("not empty")).when(refusing).deleteEmptyTree(any());
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
+		doThrow(new IOException("not empty")).when(refusing).deleteEmptyTree(any(), any());
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
-		ExplorerActionResult result = service(refusing).quarantine(folder);
+		service(refusing).quarantine(command(folder, quarantine), ownership);
 
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.quarantineDoneFolderKept", 1));
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
+				eq(new ExecutionCounts(1, 1, 0, 0)), carrying("backend.files.quarantineDoneFolderKept", 1));
 	}
 
 	/**
@@ -343,16 +344,12 @@ class ExplorerDeletionServiceTest {
 		Path deeper = Files.createDirectory(year.resolve("praia"));
 		Path photo = Files.createFile(deeper.resolve("a.jpg"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
 		when(catalogFileRepository.findByFileKey(PathUtils.normalize(photo)))
 				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(photo)).build()));
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenAnswer(invocation -> {
-			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getFileKey()));
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
 
-			return IntakeOutcome.MOVED;
-		});
+		service().quarantine(command(album, quarantine), ownership);
 
-		Assertions.assertThat(service().quarantine(album).success()).isTrue();
 		Assertions.assertThat(album).doesNotExist();
 		Assertions.assertThat(parent).exists();
 	}
@@ -368,22 +365,15 @@ class ExplorerDeletionServiceTest {
 
 		Files.createFile(album.resolve("unknown.jpg"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(known)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(known)).build()));
 		when(catalogFileRepository.findByFileKey(any())).thenAnswer(invocation -> {
 			String key = invocation.getArgument(0);
 
 			return key.equals(PathUtils.normalize(known)) ? Optional.of(CatalogFile.builder().fileKey(key).build())
 					: Optional.empty();
 		});
-		when(quarantineIntakeService.intake(any(), any(), any(), any())).thenAnswer(invocation -> {
-			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getFileKey()));
+		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
 
-			return IntakeOutcome.MOVED;
-		});
-
-		service().quarantine(album);
+		service().quarantine(command(album, quarantine), ownership);
 
 		Assertions.assertThat(album).exists();
 		Assertions.assertThat(album.resolve("unknown.jpg")).exists();
@@ -400,47 +390,64 @@ class ExplorerDeletionServiceTest {
 
 		Files.createDirectory(album.resolve("2008"));
 
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
+		service().quarantine(command(album, quarantine), ownership);
 
-		ExplorerActionResult result = service().quarantine(album);
-
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.emptyFolderRemoved"));
 		Assertions.assertThat(album).doesNotExist();
 
-		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any());
+		verify(quarantineIntakeService, never()).intake(any(), any(), any(), any(), any());
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), eq(ExecutionCounts.one()),
+				carrying("backend.files.emptyFolderRemoved"));
 	}
 
 	/**
-	 * The folder could not be removed, so the dialog must not claim it was. Saying
+	 * The folder could not be removed, so the row must not claim it was. Saying
 	 * "empty folder removed" while it sits on screen sends the user back to try the
 	 * same thing again, which is exactly what happened with a read-only folder
 	 * synced from a phone.
 	 */
 	@Test
-	void refusesWhenTheEmptyFolderCannotBeRemoved(@TempDir Path parent, @TempDir Path quarantine) throws IOException {
+	void rejectsWhenTheEmptyFolderCannotBeRemoved(@TempDir Path parent, @TempDir Path quarantine) throws IOException {
 		Path album = Files.createDirectory(parent.resolve("album"));
 
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
 
 		when(refusing.isDirectory(any())).thenReturn(true);
 		when(refusing.listFiles(any())).thenReturn(List.of());
-		doThrow(new IOException("access denied")).when(refusing).deleteEmptyTree(any());
-		when(quarantineIntakeService.root()).thenReturn(Optional.of(quarantine));
+		doThrow(new IOException("access denied")).when(refusing).deleteEmptyTree(any(), any());
 
-		ExplorerActionResult result = service(refusing).quarantine(album);
+		service(refusing).quarantine(command(album, quarantine), ownership);
 
-		Assertions.assertThat(result.success()).isFalse();
-		Assertions.assertThat(result.message()).isEqualTo(expected("backend.files.folderNotRemoved"));
+		verify(executionProgressService).reject(any(), carrying("backend.files.folderNotRemoved"));
 	}
 
-	private MessageSource messageSource() {
-		ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+	/**
+	 * The real intake moves the file out; mirroring that here is what lets the
+	 * service find the folder empty afterwards.
+	 */
+	private Answer<IntakeOutcome> movingTheFileOut() {
+		return invocation -> {
+			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getFileKey()));
 
-		source.setBasename("messages");
-		source.setDefaultEncoding("UTF-8");
-		source.setFallbackToSystemLocale(false);
+			return IntakeOutcome.MOVED;
+		};
+	}
 
-		return source;
+	private Execution command(Path target, Path quarantineRoot) {
+		return Execution.builder().id(EXECUTION_ID).executionType(ExecutionType.EXPLORER_QUARANTINE)
+				.sourcePath(PathUtils.normalize(target))
+				.targetPath(quarantineRoot == null ? null : PathUtils.normalize(quarantineRoot)).build();
+	}
+
+	/**
+	 * The real port over a real registry: what is being tested is a deletion that
+	 * actually happens on disk and is actually announced, so a mock here would
+	 * assert that a method was called rather than that a file went away.
+	 */
+	private static SecureLibraryFiles libraryFiles() {
+		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+				Clock.systemUTC());
+
+		return new SecureLibraryFiles(
+				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), registry), registry);
 	}
 }

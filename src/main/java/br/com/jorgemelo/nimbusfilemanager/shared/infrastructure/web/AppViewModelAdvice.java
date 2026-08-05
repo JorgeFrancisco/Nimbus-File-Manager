@@ -2,12 +2,14 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
 import java.util.Map;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
@@ -31,6 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate
  * only - REST controllers under {@code *.infrastructure.rest} don't render a
  * Model/View and shouldn't pay for this lookup.
  */
+@Profile(NimbusProfiles.APP)
 @ControllerAdvice(basePackages = { "br.com.jorgemelo.nimbusfilemanager.conversion.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.database.infrastructure.web",
 		"br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web",

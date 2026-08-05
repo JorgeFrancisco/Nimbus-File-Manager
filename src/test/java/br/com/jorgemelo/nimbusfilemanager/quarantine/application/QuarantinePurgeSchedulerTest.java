@@ -11,34 +11,39 @@ import org.junit.jupiter.api.Test;
 
 class QuarantinePurgeSchedulerTest {
 
-	private final QuarantinePurgeService purgeService = mock(QuarantinePurgeService.class);
-	private final QuarantinePurgeScheduler scheduler = new QuarantinePurgeScheduler(purgeService);
+	private final QuarantineRetentionPolicy retentionPolicy = mock(QuarantineRetentionPolicy.class);
+	private final QuarantineLauncherService launcher = mock(QuarantineLauncherService.class);
+	private final QuarantinePurgeScheduler scheduler = new QuarantinePurgeScheduler(retentionPolicy, launcher);
 
+	/**
+	 * The pass no longer expunges anything itself: it asks, carrying the window, and
+	 * a worker decides what is overdue when it actually runs.
+	 */
 	@Test
-	void runsPurgeWithConfiguredRetention() {
-		when(purgeService.retentionDays()).thenReturn(30);
+	void queuesAPurgeWithTheConfiguredRetention() {
+		when(retentionPolicy.retentionDays()).thenReturn(30);
 
 		scheduler.runOnce();
 
-		verify(purgeService).purgeOlderThan(30);
+		verify(launcher).launchScheduledPurge(30);
 	}
 
 	@Test
 	void skipsPurgeWhenRetentionIsDisabled() {
-		when(purgeService.retentionDays()).thenReturn(0);
+		when(retentionPolicy.retentionDays()).thenReturn(0);
 
 		scheduler.runOnce();
 
-		verify(purgeService, never()).purgeOlderThan(anyInt());
+		verify(launcher, never()).launchScheduledPurge(anyInt());
 	}
 
 	@Test
 	void keepsTheDailyPassAliveWhenOneRunFails() {
-		when(purgeService.retentionDays()).thenThrow(new IllegalStateException("settings unreachable"));
+		when(retentionPolicy.retentionDays()).thenThrow(new IllegalStateException("settings unreachable"));
 
 		Assertions.assertThatCode(scheduler::runOnce).doesNotThrowAnyException();
 
-		verify(purgeService, never()).purgeOlderThan(anyInt());
+		verify(launcher, never()).launchScheduledPurge(anyInt());
 	}
 
 	/**
@@ -47,12 +52,12 @@ class QuarantinePurgeSchedulerTest {
 	 */
 	@Test
 	void swallowsTheFailureOfAPassInterruptedByTheShutdown() {
-		when(purgeService.retentionDays()).thenThrow(new IllegalStateException("closing"));
+		when(retentionPolicy.retentionDays()).thenThrow(new IllegalStateException("closing"));
 
 		scheduler.shutdown();
 
 		Assertions.assertThatCode(scheduler::runOnce).doesNotThrowAnyException();
 
-		verify(purgeService, never()).purgeOlderThan(anyInt());
+		verify(launcher, never()).launchScheduledPurge(anyInt());
 	}
 }

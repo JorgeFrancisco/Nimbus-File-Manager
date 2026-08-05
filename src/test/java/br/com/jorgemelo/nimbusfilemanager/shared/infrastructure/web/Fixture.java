@@ -7,22 +7,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
-import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityLauncher;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityViewService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogLauncher;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintRunReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web.DuplicatesWebController;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web.VideoSimilarityWeb;
@@ -36,38 +35,35 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 public final class Fixture {
 
 	public final DuplicateService duplicates = mock(DuplicateService.class);
-	public final PhotoSimilarityService similarity = mock(PhotoSimilarityService.class);
-	private final PhashBacklogService phash = mock(PhashBacklogService.class);
-	public final PhashBacklogAsyncRunner phashRunner = mock(PhashBacklogAsyncRunner.class);
+	public final SimilarityViewService similarityView = mock(SimilarityViewService.class);
+	public final SimilarityLauncher similarityLauncher = mock(SimilarityLauncher.class);
+	public final PhashBacklogService phash = mock(PhashBacklogService.class);
+	public final FingerprintBacklogLauncher fingerprintLauncher = mock(FingerprintBacklogLauncher.class);
+	public final FingerprintRunReader fingerprintRunReader = mock(FingerprintRunReader.class);
 	public final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-	private final PhotoSimilarityAsyncRunner similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
-	public final DuplicateDeletionAsyncRunner deletionRunner = mock(DuplicateDeletionAsyncRunner.class);
+	public final DuplicateDeletionLauncherService deletionLauncher = mock(DuplicateDeletionLauncherService.class);
+	public final DuplicateDeletionProgressService deletionProgress = mock(DuplicateDeletionProgressService.class);
 	public final DuplicateExclusionService exclusions = mock(DuplicateExclusionService.class);
-	public final VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
-	public final VideoSimilarityAsyncRunner videoSimilarityRunner = mock(VideoSimilarityAsyncRunner.class);
 	public final VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-	public final VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
 
 	public Fixture() {
-		// The screens read progress from the runners' live status, which counts what a
-		// run has finished before its batch is written; the services only answer for
-		// what is already stored.
-		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+		// Nothing pending, nothing running and nothing published: the neutral screen
+		// every test starts from, so each one stubs only the state it is about.
 		when(phash.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
 		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
 		when(duplicates.candidates(any(), any())).thenReturn(Page.empty());
-		when(similarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));
-		when(videoSimilarity.cachedPage(anyInt(), any())).thenReturn(Optional.of(Page.empty()));
+		when(similarityView.photos(anyInt(), any())).thenReturn(SimilarityView.none());
+		when(similarityView.videos(anyInt(), any())).thenReturn(SimilarityView.none());
 	}
 
 	public DuplicatesWebController controller() {
-		return new DuplicatesWebController(duplicates, similarity, phash, phashRunner, preferences, similarityRunner,
-				deletionRunner, exclusions, videoSimilarityWeb(), new DateSourceLabels());
+		return new DuplicatesWebController(duplicates, phash, fingerprintLauncher, fingerprintRunReader, preferences,
+				similarityView, similarityLauncher, deletionLauncher, deletionProgress, exclusions,
+				videoSimilarityWeb(), new DateSourceLabels());
 	}
 
 	private VideoSimilarityWeb videoSimilarityWeb() {
-		return new VideoSimilarityWeb(videoSimilarity, videoSimilarityRunner, videoBacklog, videoBacklogRunner);
+		return new VideoSimilarityWeb(videoBacklog);
 	}
 }

@@ -92,7 +92,7 @@
 				</div>
 			</div>
 			<div class="active-execution-summary">
-				<span class="badge info" id="activeExecutionStatus" th:text="${activeExecution.statusLabel()}">PROCESSING_FILES</span>
+				<span class="badge info" id="activeExecutionStatus" th:text="${activeExecution.statusLabel()}">RUNNING</span>
 				<strong id="activeExecutionPercent"
 						th:text="${activeExecution.percentComplete() != null} ? ${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} : #{execution.preparing}">0%</strong>
 			</div>

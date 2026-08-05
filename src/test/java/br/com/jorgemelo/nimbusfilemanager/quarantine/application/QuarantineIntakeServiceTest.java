@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -21,11 +23,13 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -33,30 +37,36 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 
 class QuarantineIntakeServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
+	private final QuarantineFolderPolicy quarantineFolderPolicy = mock(QuarantineFolderPolicy.class);
 	private final QuarantineIntakeService service = new QuarantineIntakeService(persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
+			new SecureLibraryFiles(
+					new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+					pathRegistry), quarantineFolderPolicy);
 
 	private final Execution execution = Execution.builder().id(1L).build();
 
+	/**
+	 * Where the quarantine is comes from the folder policy now - a question about
+	 * configuration, answered by the class that already validates that folder. This
+	 * kept its own test because callers still ask the intake, and what they get has
+	 * to be what the policy says.
+	 */
 	@Test
 	void reportsTheConfiguredQuarantineRoot(@TempDir Path trash) {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn(trash.toString());
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.of(trash));
 
 		Assertions.assertThat(service.root()).contains(trash);
 	}
 
 	@Test
 	void reportsNoRootWhileTheQuarantineFolderIsUnconfigured() {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn("");
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service.root()).isEmpty();
 
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn(null);
-
-		Assertions.assertThat(service.root()).isEmpty();
 	}
 
 	@Test
@@ -67,7 +77,7 @@ class QuarantineIntakeServiceTest {
 
 		CatalogFile file = file(original);
 
-		IntakeOutcome outcome = service.intake(execution, file, trash, MovementReason.CONVERTED_QUARANTINED);
+		IntakeOutcome outcome = service.intake(execution, file, trash, MovementReason.CONVERTED_QUARANTINED, null);
 
 		Path quarantined = trash.resolve("exec-1").resolve("10__clip.mp4");
 
@@ -88,7 +98,8 @@ class QuarantineIntakeServiceTest {
 		file.setLifecycleStatus(LifecycleStatus.DELETED);
 
 		Assertions
-				.assertThat(service.intake(execution, file, tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED))
+				.assertThat(service.intake(execution, file, tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED,
+						null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(original).exists();
 	}
@@ -98,7 +109,8 @@ class QuarantineIntakeServiceTest {
 		Path trash = Files.createDirectories(tmp.resolve("trash"));
 		Path inside = Files.writeString(trash.resolve("clip.mp4"), "content");
 
-		Assertions.assertThat(service.intake(execution, file(inside), trash, MovementReason.DUPLICATE_QUARANTINED))
+		Assertions.assertThat(service.intake(execution, file(inside), trash, MovementReason.DUPLICATE_QUARANTINED,
+				null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 
 		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
@@ -107,7 +119,7 @@ class QuarantineIntakeServiceTest {
 	@Test
 	void skipsAFileThatIsNoLongerOnDisk(@TempDir Path tmp) {
 		Assertions.assertThat(service.intake(execution, file(tmp.resolve("gone.mp4")), tmp.resolve("trash"),
-				MovementReason.DUPLICATE_QUARANTINED)).isEqualTo(IntakeOutcome.SKIPPED);
+				MovementReason.DUPLICATE_QUARANTINED, null)).isEqualTo(IntakeOutcome.SKIPPED);
 	}
 
 	@Test
@@ -119,7 +131,8 @@ class QuarantineIntakeServiceTest {
 		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any(),
 				any());
 
-		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED))
+		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED,
+				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(original).hasContent("content");
 	}
@@ -138,7 +151,8 @@ class QuarantineIntakeServiceTest {
 			throw new IllegalStateException("db down");
 		}).when(persistence).persistQuarantine(any(), any(), any(), any(), any());
 
-		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED))
+		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED,
+				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__clip.mp4")).exists();
 	}
@@ -148,7 +162,8 @@ class QuarantineIntakeServiceTest {
 		Path shortcut = Files.writeString(tmp.resolve("clip.lnk"), "shortcut");
 
 		Assertions.assertThat(
-				service.intake(execution, file(shortcut), tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED))
+				service.intake(execution, file(shortcut), tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED,
+						null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(shortcut).exists();
 
@@ -169,13 +184,51 @@ class QuarantineIntakeServiceTest {
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
 		QuarantineIntakeService failing = new QuarantineIntakeService(persistence,
-				new SecureFileMove(verifier, pathRegistry), appSettingService);
+				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
+						quarantineFolderPolicy);
 
-		Assertions.assertThat(failing.intake(execution, file(original), trash, MovementReason.DUPLICATE_QUARANTINED))
+		Assertions.assertThat(failing.intake(execution, file(original), trash, MovementReason.DUPLICATE_QUARANTINED,
+				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(original).hasContent("content");
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__clip.mp4")).doesNotExist();
 
+		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+	}
+
+	/**
+	 * The worst case of the three: the file physically left the library, the verify
+	 * refused it and putting it back failed too. Nothing can be done about the file
+	 * from here, so what matters is that the catalog is not told the move happened
+	 * and that the failure is reported as one.
+	 */
+	@Test
+	void reportsAnErrorWhenTheFileIsLeftInQuarantineByAFailedRollback(@TempDir Path tmp) throws Exception {
+		Path library = Files.createDirectories(tmp.resolve("library"));
+		Path trash = tmp.resolve("trash");
+		Path original = Files.writeString(library.resolve("clip.mp4"), "content");
+
+		LibraryFileMutations failing = mock(LibraryFileMutations.class);
+
+		doAnswer(_ -> {
+			// The move happened and then failed its verify, which is what leaves the file
+			// on the far side with nothing pointing at it.
+			Path target = Files.createDirectories(trash.resolve("exec-1")).resolve("10__clip.mp4");
+
+			Files.move(original, target);
+
+			throw new MoveIntegrityException("sha mismatch");
+		}).when(failing).move(any(), any(), anyBoolean(), any());
+
+		when(failing.rollback(any(), any())).thenReturn(false);
+
+		QuarantineIntakeService orphaning = new QuarantineIntakeService(persistence, failing, quarantineFolderPolicy);
+
+		Assertions.assertThat(orphaning.intake(execution, file(original), trash,
+				MovementReason.DUPLICATE_QUARANTINED, 1L)).isEqualTo(IntakeOutcome.ERROR);
+		Assertions.assertThat(original).doesNotExist();
+
+		verify(failing).rollback(any(), any());
 		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
 

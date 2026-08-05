@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
@@ -22,7 +21,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionStepRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -38,21 +39,78 @@ class ExecutionProgressServiceTest {
 	@Mock
 	private ExecutionStepRepository executionStepRepository;
 
-	@Mock
-	private ExecutionCancellationService executionCancellationService;
-
 	private final ExecutionMessageCodec messageCodec = new ExecutionMessageCodec(new ObjectMapper());
 
+	/**
+	 * Reconcile fills different counters from every other type: it analyses
+	 * nothing, hits no cache and moves no file, so what it can honestly report is
+	 * what the walk found and how many entries it corrected.
+	 */
 	@Test
-	void updateStatusShouldUpdateManagedExecutionAndPersistStep() {
+	void finishReconcileShouldRecordWhatWasFoundAndRepaired() {
 		Execution execution = execution(1L);
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
 
-		service().updateStatus(execution, ExecutionStatus.PROCESSING_FILES, ExecutionStepType.PROCESSING_STARTED,
+		service().finishReconcile(execution, 120, 3, ExecutionMessages.reconcileRepaired(1, 1, 1));
+
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(120);
+		Assertions.assertThat(execution.getRepairedItems()).isEqualTo(3);
+		Assertions.assertThat(execution.getFinishedAt()).isNotNull();
+
+		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.FINISHED));
+	}
+
+	@Test
+	void finishReconcileShouldRecordZeroWhenNothingWasRepaired() {
+		Execution execution = execution(1L);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
+
+		service().finishReconcile(execution, 120, 0, ExecutionMessages.reconcileRepaired(0, 0, 0));
+
+		Assertions.assertThat(execution.getRepairedItems()).isZero();
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
+	}
+
+	/**
+	 * A command that acted on a set of items has to say what became of each of
+	 * them, and the counter the general {@code finish} cannot write is the one that
+	 * matters most here: how many it actually carried out. A deletion of forty
+	 * files reporting none moved is a row whose numbers say the opposite of what
+	 * happened.
+	 */
+	@Test
+	void finishCommandShouldRecordWhatWasMovedKeptAndFailed() {
+		Execution execution = execution(1L);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
+
+		service().finishCommand(execution, ExecutionStatus.FINISHED_WITH_ERRORS, new ExecutionCounts(9, 6, 2, 1),
+				ExecutionMessages.operationFailed("parcial"));
+
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED_WITH_ERRORS);
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(9);
+		Assertions.assertThat(execution.getFilesAnalyzed()).isEqualTo(9);
+		Assertions.assertThat(execution.getFilesMoved()).isEqualTo(6);
+		Assertions.assertThat(execution.getCacheHits()).isEqualTo(2);
+		Assertions.assertThat(execution.getErrors()).isEqualTo(1);
+		Assertions.assertThat(execution.getFinishedAt()).isNotNull();
+
+		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.FINISHED));
+	}
+
+	@Test
+	void updatePhaseShouldUpdateManagedExecutionAndPersistStep() {
+		Execution execution = execution(1L);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
+
+		service().updatePhase(execution, ExecutionPhase.PROCESSING, ExecutionStepType.PROCESSING_STARTED,
 				ExecutionMessages.processingFiles());
 
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.PROCESSING_FILES);
+		Assertions.assertThat(execution.getPhase()).isEqualTo(ExecutionPhase.PROCESSING);
 		Assertions.assertThat(execution.getStatusMessage().getCode()).isEqualTo(ExecutionMessages.PROCESSING_FILES);
 		Assertions.assertThat(execution.getStatusMessage().getText()).isNull();
 
@@ -192,10 +250,7 @@ class ExecutionProgressServiceTest {
 	@Test
 	void finishFailAndInterruptedExecutionsShouldUpdateStatus() {
 		Execution execution = execution(1L);
-		Execution interrupted = execution(2L);
-
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
-		when(executionRepository.findByFinishedAtIsNullAndStatusIn(any())).thenReturn(List.of(interrupted));
 
 		service().finish(execution, ExecutionStatus.FINISHED, 5, 4, 1, 0, ExecutionMessages.inventoryCompleted());
 
@@ -214,33 +269,12 @@ class ExecutionProgressServiceTest {
 		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.CANCELLED
 				&& ExecutionMessages.INVENTORY_CANCELLED.equals(step.getStatusMessage().getCode())));
 
-		service().markInterruptedExecutions();
+		service().interrupt(execution, ExecutionMessages.executionInterrupted());
 
-		Assertions.assertThat(interrupted.getStatus()).isEqualTo(ExecutionStatus.INTERRUPTED);
+		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.INTERRUPTED);
 
 		verify(executionRepository, never()).save(any());
 		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.INTERRUPTED));
-	}
-
-	@Test
-	void markInterruptedExecutionsSkipsExecutionsStillRunningInThisJvm() {
-		Execution live = execution(7L);
-		live.setStatus(ExecutionStatus.PROCESSING_FILES);
-
-		when(executionRepository.findByFinishedAtIsNullAndStatusIn(any())).thenReturn(List.of(live));
-		when(executionCancellationService.isLive(7L)).thenReturn(true);
-
-		service().markInterruptedExecutions();
-
-		// Still running (e.g. an organization) while an inventory starts: its real
-		// status must be left
-		// alone instead of being falsely flipped to INTERRUPTED (which used to leave
-		// its lock stuck).
-		Assertions.assertThat(live.getStatus()).isEqualTo(ExecutionStatus.PROCESSING_FILES);
-		Assertions.assertThat(live.getFinishedAt()).isNull();
-
-		verify(executionStepRepository, never())
-				.save(argThat(step -> step.getStepType() == ExecutionStepType.INTERRUPTED));
 	}
 
 	@Test
@@ -249,18 +283,68 @@ class ExecutionProgressServiceTest {
 
 		when(executionRepository.findById(99L)).thenReturn(Optional.empty());
 
-		assertThatIllegalStateException().isThrownBy(() -> service().updateStatus(execution, ExecutionStatus.ERROR,
+		assertThatIllegalStateException().isThrownBy(() -> service().updatePhase(execution, ExecutionPhase.PROCESSING,
 				ExecutionStepType.ERROR, ExecutionMessages.inventoryFailed("missing")))
 				.withMessage("Execution not found: 99");
 	}
 
+
+	/**
+	 * Two endings that are not failures and must not be told apart by reading a
+	 * sentence: an execution whose locks went away stopped through no fault of the
+	 * work, and one the product refused never ran at all. Somebody reading the
+	 * history to ask "did my cancel work?" has to be able to tell all three apart
+	 * by status alone.
+	 */
+	@Test
+	void interruptedAndRejectedEndingsCarryTheirOwnStatusAndStep() {
+		Execution interrupted = execution(1L);
+		Execution rejected = execution(2L);
+
+		interrupted.setCurrentItemPercent(40);
+		rejected.setCurrentItemPercent(70);
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(interrupted));
+		when(executionRepository.findById(2L)).thenReturn(Optional.of(rejected));
+
+		service().interrupt(interrupted, ExecutionMessages.executionInterrupted());
+
+		Assertions.assertThat(interrupted.getStatus()).isEqualTo(ExecutionStatus.INTERRUPTED);
+		Assertions.assertThat(interrupted.getFinishedAt()).isNotNull();
+
+		// Whatever the run was halfway through is over: leaving the column set would
+		// show the old item still advancing on every screen that reads the row.
+		Assertions.assertThat(interrupted.getCurrentItemPercent()).isNull();
+
+		service().reject(rejected, ExecutionMessages.executionSuperseded());
+
+		Assertions.assertThat(rejected.getStatus()).isEqualTo(ExecutionStatus.REJECTED);
+		Assertions.assertThat(rejected.getFinishedAt()).isNotNull();
+		Assertions.assertThat(rejected.getCurrentItemPercent()).isNull();
+
+		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.INTERRUPTED));
+		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.REJECTED));
+	}
+
+	/**
+	 * A row with no id has nothing to throttle against, and the item progress is
+	 * an optimisation - never a reason to fail the work that reported it.
+	 */
+	@Test
+	void ignoresItemProgressForAnExecutionThatHasNoRowYet() {
+		service().updateCurrentItem(Execution.builder().executionType(ExecutionType.CONVERSION).build(), 30);
+
+		verify(executionRepository, never()).save(any());
+	}
+
 	private ExecutionProgressService service() {
-		return new ExecutionProgressService(executionRepository, executionStepRepository, executionCancellationService,
-				messageCodec, Clock.systemDefaultZone());
+		return new ExecutionProgressService(executionRepository,
+				new ExecutionItemProgressWriter(executionRepository), executionStepRepository, messageCodec,
+				Clock.systemDefaultZone());
 	}
 
 	private Execution execution(Long id) {
-		return Execution.builder().id(id).executionType(ExecutionType.INVENTORY).status(ExecutionStatus.STARTED)
+		return Execution.builder().id(id).executionType(ExecutionType.INVENTORY).status(ExecutionStatus.RUNNING)
 				.startedAt(LocalDateTime.now()).filesFound(0).filesAnalyzed(0).cacheHits(0).errors(0).build();
 	}
 }

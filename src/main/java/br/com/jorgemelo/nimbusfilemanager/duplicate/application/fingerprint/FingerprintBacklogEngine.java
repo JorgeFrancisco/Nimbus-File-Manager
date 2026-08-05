@@ -2,9 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,9 +19,11 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
  * Media-agnostic engine that drains a fingerprint backlog OUTSIDE the
@@ -41,8 +43,6 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
  */
 class FingerprintBacklogEngine {
 
-	private static final String INVENTORY = "INVENTORY";
-	private static final String CONVERSION = "CONVERSION";
 
 	static final int BATCH_SIZE = 200;
 	private static final int MAX_ERROR_LENGTH = 500;
@@ -55,17 +55,17 @@ class FingerprintBacklogEngine {
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
 	private final ProcessingCoordinator processingCoordinator;
-	private final ExecutionQueryService executionQueryService;
+	private final ExecutionRepository executionRepository;
 	private final TransactionTemplate writeTransaction;
 	private final Clock clock;
 
 	public FingerprintBacklogEngine(MediaFingerprintRepository mediaFingerprintRepository,
 			FingerprintFailureRepository fingerprintFailureRepository, ProcessingCoordinator processingCoordinator,
-			ExecutionQueryService executionQueryService, PlatformTransactionManager transactionManager, Clock clock) {
+			ExecutionRepository executionRepository, PlatformTransactionManager transactionManager, Clock clock) {
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
 		this.processingCoordinator = processingCoordinator;
-		this.executionQueryService = executionQueryService;
+		this.executionRepository = executionRepository;
 		this.writeTransaction = new TransactionTemplate(transactionManager);
 		this.writeTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		this.clock = clock;
@@ -77,7 +77,7 @@ class FingerprintBacklogEngine {
 	 * inventory's own progress with it, and a conversion is not an inventory.
 	 */
 	public boolean inventoryActive() {
-		return activeTypeIsOneOf(INVENTORY);
+		return activeTypeIsOneOf(ExecutionType.INVENTORY);
 	}
 
 	/**
@@ -87,7 +87,7 @@ class FingerprintBacklogEngine {
 	 * refusing the click afterwards.
 	 */
 	public boolean conversionActive() {
-		return activeTypeIsOneOf(CONVERSION);
+		return activeTypeIsOneOf(ExecutionType.CONVERSION);
 	}
 
 	/**
@@ -102,12 +102,19 @@ class FingerprintBacklogEngine {
 	 * the database and everything already computed was persisted per batch.
 	 */
 	public boolean pausedByActiveExecution() {
-		return activeTypeIsOneOf(INVENTORY, CONVERSION);
+		return activeTypeIsOneOf(ExecutionType.INVENTORY, ExecutionType.CONVERSION);
 	}
 
-	private boolean activeTypeIsOneOf(String... executionTypes) {
-		return executionQueryService.active()
-				.map(execution -> Set.of(executionTypes).contains(execution.executionType())).orElse(false);
+	/**
+	 * Asked of every active row rather than of the most recent one: a worker runs
+	 * several executions at a time, so "the newest active execution is an
+	 * inventory" answers a different question - and answers this one wrong
+	 * whenever something else started later.
+	 */
+	private boolean activeTypeIsOneOf(ExecutionType... executionTypes) {
+		return Arrays.stream(executionTypes)
+				.anyMatch(type -> executionRepository.existsByExecutionTypeAndStatusIn(type,
+						ExecutionStatusNames.ACTIVE));
 	}
 
 	public FingerprintBacklogStatus status(FingerprintProducer<?, ?> producer) {

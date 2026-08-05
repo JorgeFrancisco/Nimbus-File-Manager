@@ -72,8 +72,13 @@ public class GeoBoundariesSource implements BoundarySource {
 	private final HttpClient httpClient;
 	/**
 	 * ETag of each staged file, applied only when the update is published. A single
-	 * update runs at a time (GeoDatasetAsyncRunner refuses a second start), so this
-	 * never holds two updates at once.
+	 * update runs at a time - one slot for its type, and the geodata path held for
+	 * the length of it - so this never holds two updates at once.
+	 *
+	 * <p>
+	 * Per-process, and that is why a restart mid-update publishes nothing: the map
+	 * goes with the process, the staged files stay unpublished beside the previous
+	 * dataset, and the next run re-stages over them.
 	 */
 	private final Map<String, String> pendingEtags = new ConcurrentHashMap<>();
 	private final Clock clock;

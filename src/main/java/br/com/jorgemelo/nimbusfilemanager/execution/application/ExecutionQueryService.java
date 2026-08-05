@@ -55,13 +55,13 @@ public class ExecutionQueryService {
 	 * by scrolling instead of being capped at the most recent 20.
 	 */
 	public Page<ExecutionResponse> page(int page, int size) {
-		return executionRepository.findAllByOrderByStartedAtDesc(PageRequest.of(page, size))
+		return executionRepository.findFunctionalHistory(PageRequest.of(page, size))
 				.map(executionMapper::toResponse);
 	}
 
 	public Optional<ExecutionResponse> active() {
 		return executionRepository
-				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.IN_PROGRESS)
+				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.ACTIVE)
 				.map(executionMapper::toResponse);
 	}
 

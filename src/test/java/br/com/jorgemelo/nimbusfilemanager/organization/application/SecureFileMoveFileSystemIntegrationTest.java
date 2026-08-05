@@ -21,6 +21,7 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -50,7 +51,7 @@ class SecureFileMoveFileSystemIntegrationTest {
 
 	private final SecureFileMove secureFileMove = new SecureFileMove(
 			new OrganizationMoveVerifier(new FileHashService()),
-			new SelfWrittenPathRegistry(Clock.systemDefaultZone()));
+			new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(), Clock.systemDefaultZone()));
 
 	/**
 	 * A library is full of names nobody would type: accents, cedillas, and the

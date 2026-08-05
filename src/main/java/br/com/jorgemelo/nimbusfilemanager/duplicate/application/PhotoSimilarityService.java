@@ -1,45 +1,50 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.SimilarityConstants;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.AnalyzedGroup;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.GroupParts;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PairKey;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityAnalysisResult;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityComposition;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityFamily;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.MediaQuality;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PhotoHashRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 
 /**
  * Finds visually related photos in two stages: a 256-bit pHash cheaply rejects
  * unrelated pairs, then SSIM confirms candidates and supplies the percentage
  * shown in the UI. A pHash match is never described as an equality or
- * percentage. The heavy grouping is cached per threshold by the shared
- * {@link SimilarityGroupCache}.
+ * percentage.
+ *
+ * <p>
+ * The class is an engine, not an entry point: nothing here decides when to run.
+ * A screen asks {@link SimilarityViewService} what was published, and a run is a
+ * row in the queue that a worker takes - so the expensive grouping happens once
+ * per definition and survives a restart, instead of once per process.
  */
 @Service
 @Transactional(readOnly = true)
-public class PhotoSimilarityService implements SimilarityGrouping {
+class PhotoSimilarityService implements SimilarityAnalyzer {
 
 	/** Safety cap while grouping remains an in-memory O(n²) operation. */
 	private static final int MAX_CANDIDATES = 8000;
@@ -54,123 +59,126 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final DuplicateGroupAssembler duplicateGroupAssembler;
 	private final PhotoSsimService photoSsimService;
-	private final AppSettingService appSettingService;
-	private final NimbusFileManagerProperties properties;
 	private final DuplicateExclusionService duplicateExclusionService;
 
-	/**
-	 * Caches the heavy grouping (clustering + SSIM) per similarity threshold,
-	 * invalidated automatically when the fingerprint set changes, so paginating or
-	 * re-opening the Fotos Semelhantes tab is instant instead of recomputing.
-	 */
-	private final SimilarityGroupCache<SimilarPhotoGroupResponse> cache;
-
-	public PhotoSimilarityService(MediaFingerprintRepository mediaFingerprintRepository,
+	PhotoSimilarityService(MediaFingerprintRepository mediaFingerprintRepository,
 			DuplicateGroupAssembler duplicateGroupAssembler, PhotoSsimService photoSsimService,
-			AppSettingService appSettingService, NimbusFileManagerProperties properties,
 			DuplicateExclusionService duplicateExclusionService) {
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.duplicateGroupAssembler = duplicateGroupAssembler;
 		this.photoSsimService = photoSsimService;
-		this.appSettingService = appSettingService;
-		this.properties = properties;
 		this.duplicateExclusionService = duplicateExclusionService;
-		this.cache = new SimilarityGroupCache<>(this::fingerprintSignature, this::maxPageSize);
+	}
+
+	@Override
+	public FileType mediaType() {
+		return FileType.PHOTO;
+	}
+
+	@Override
+	public SimilarityFamily family(int minSimilarityPercent) {
+		return new SimilarityFamily(FileType.PHOTO, FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1,
+				SimilarityConstants.GROUPING_VERSION, parametersDigest(SimilarityBounds.clamp(minSimilarityPercent)));
 	}
 
 	/**
-	 * Synchronous read used by tests and as a fallback: returns the cached page,
-	 * computing (blocking) on a miss. The Duplicados screen does NOT use this - it
-	 * uses {@link #cachedPage} plus the background
-	 * {@code PhotoSimilarityAsyncRunner} so the page never blocks on the heavy
-	 * grouping.
+	 * Every effective parameter of the photo grouping, in a fixed order. The
+	 * candidate cap and the selection policy are in here because they decide
+	 * <em>which</em> files are compared, which changes the answer as surely as the
+	 * threshold does; the exclusion signature is here because a file the user hid
+	 * is a file the analysis may not see.
 	 */
-	public Page<SimilarPhotoGroupResponse> groups(Integer minSimilarityPercent, Pageable pageable) {
+	private String parametersDigest(int minimumSsim) {
+		return new SimilarityParameters().with("minSimilarity", minimumSsim)
+				.with("maxPhashCandidateDistance", MAX_PHASH_CANDIDATE_DISTANCE).with("candidateLimit", MAX_CANDIDATES)
+				.with("selectionPolicy", SimilarityConstants.SELECTION_OLDEST_FIRST)
+				.with("exclusions", duplicateExclusionService.signature()).digest();
+	}
+
+	@Override
+	public int eligibleCount() {
+		return mediaFingerprintRepository.countEligibleForSimilarity(FingerprintKind.PHOTO_PHASH.name(),
+				FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1);
+	}
+
+	@Override
+	public int candidateLimit() {
+		return MAX_CANDIDATES;
+	}
+
+	@Override
+	public SimilarityComposition composition() {
+		return compositionOf(SimilarityGroupSupport.canonicalComposition(
+				mediaFingerprintRepository.findPhotoCompositionRows(FingerprintKind.PHOTO_PHASH,
+						FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1, PageUtils.firstPage(MAX_CANDIDATES)),
+				CompositionRow::mediaPublicId, CompositionRow::currentFolder, duplicateExclusionService));
+	}
+
+	private SimilarityComposition compositionOf(List<CompositionRow> rows) {
+		return new SimilarityComposition(
+				SimilarityDigest.ofComposition(rows.stream().map(CompositionRow::mediaPublicId).toList(),
+						rows.stream().map(CompositionRow::currentFolder).toList()),
+				eligibleCount(), rows.size(), MAX_CANDIDATES, SimilarityConstants.SELECTION_OLDEST_FIRST);
+	}
+
+	/**
+	 * The analysis, and the account of what it was about.
+	 *
+	 * <p>
+	 * The order of the two steps is the historical one and is deliberately kept:
+	 * the cap is applied by the query, and the exclusions are applied to what it
+	 * returned. So a library with many excluded photos analyses fewer than the cap,
+	 * which is what it always did. What changes is that the numbers stop being
+	 * invisible - the composition says how many were eligible, how many were seen,
+	 * and exactly which ones.
+	 */
+	@Override
+	public SimilarityAnalysisResult analyze(int minSimilarityPercent, SimilarityProgressCallback progress) {
 		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
 
-		if (!cache.isCached(minimumSsim)) {
-			computeAndCache(minimumSsim, (_, _) -> {
-			});
-		}
+		List<PhotoHashRawResponse> rows = mediaFingerprintRepository
+				.findFingerprintedPhotos(FingerprintKind.PHOTO_PHASH, FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1,
+						PageUtils.firstPage(MAX_CANDIDATES))
+				.getContent();
 
-		return cache.cachedPage(minimumSsim, pageable).orElseGet(() -> cache.emptyPage(pageable));
+		// The selection happens once, in the primitive the application also calls, and
+		// the heavy rows are filtered by what it chose - rather than being selected a
+		// second time by an equivalent-looking filter.
+		List<CompositionRow> selected = SimilarityGroupSupport.canonicalComposition(rows, PhotoHashRawResponse::id,
+				PhotoHashRawResponse::currentFolder, duplicateExclusionService);
+
+		Set<UUID> analysed = selected.stream().map(CompositionRow::mediaPublicId).collect(Collectors.toSet());
+
+		List<PhotoHashRawResponse> candidates = rows.stream().filter(row -> analysed.contains(row.id())).toList();
+
+		List<SimilarPhotoGroupResponse> responses = group(candidates, minimumSsim, progress);
+
+		SimilarityComposition composition = compositionOf(selected);
+
+		List<AnalyzedGroup> groups = responses.stream()
+				.map(response -> SimilarityGroupSupport.toAnalyzedGroup(response.similarityPercent(),
+						response.wastedSize().bytes(), response.keep(), response.deleteCandidates(),
+						response.reviewCandidates()))
+				.toList();
+
+		return new SimilarityAnalysisResult(family(minimumSsim), composition, groups);
 	}
 
-	/** Whether the grouping for this threshold is already cached. */
-	@Override
-	public boolean isCached(int minSimilarityPercent) {
-		return cache.isCached(SimilarityBounds.clamp(minSimilarityPercent));
-	}
-
-	/**
-	 * Page of the cached grouping for this threshold, or empty when it has not been
-	 * computed yet - no blocking compute happens here.
-	 */
-	public Optional<Page<SimilarPhotoGroupResponse>> cachedPage(int minSimilarityPercent, Pageable pageable) {
-		return cache.cachedPage(SimilarityBounds.clamp(minSimilarityPercent), pageable);
-	}
-
-	/**
-	 * Runs the heavy grouping (clustering + SSIM) for a threshold and caches the
-	 * result, reporting how many candidates have been processed to
-	 * {@code progress}.
-	 */
-	@Override
-	public void computeAndCache(int minSimilarityPercent, SimilarityProgressCallback progress) {
-		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
-
-		String signature = cache.currentSignature();
-
-		List<PhotoHashRawResponse> candidates = SimilarityGroupSupport.withoutExcluded(
-				mediaFingerprintRepository
-						.findFingerprintedPhotos(FingerprintKind.PHOTO_PHASH,
-								FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1, PageUtils.firstPage(MAX_CANDIDATES))
-						.getContent(),
-				duplicateExclusionService, PhotoHashRawResponse::id, PhotoHashRawResponse::currentFolder);
-
+	/** The clustering itself, over the candidates the selection kept. */
+	private List<SimilarPhotoGroupResponse> group(List<PhotoHashRawResponse> candidates, int minimumSsim,
+			SimilarityProgressCallback progress) {
 		List<UUID> allIds = candidates.stream().map(PhotoHashRawResponse::id).toList();
 
 		Map<UUID, MediaQuality> quality = duplicateGroupAssembler.qualityByPublicId(allIds);
 
 		Map<PairKey, Integer> scores = new HashMap<>();
 
-		List<List<PhotoHashRawResponse>> groups = SimilaritySingleLinkageGrouper.cluster(candidates, minimumSsim,
+		List<List<PhotoHashRawResponse>> clusters = SimilarityCompleteLinkageGrouper.cluster(candidates, minimumSsim,
 				(first, second) -> score(first, second, scores), progress);
 
-		List<SimilarPhotoGroupResponse> responses = groups.stream().map(group -> toResponse(group, scores, quality))
+		return clusters.stream().map(group -> toResponse(group, scores, quality))
 				.sorted((first, second) -> Long.compare(second.wastedSize().bytes(), first.wastedSize().bytes()))
 				.toList();
-
-		cache.put(minimumSsim, signature, responses);
-	}
-
-	/**
-	 * Drops the given photos from the cached groupings after a soft-delete, so a
-	 * follow-up reload shows the updated groups without recomputing. A group that
-	 * loses any member is removed entirely.
-	 */
-	void evictFromCache(Collection<UUID> removedPublicIds) {
-		if (removedPublicIds == null || removedPublicIds.isEmpty()) {
-			return;
-		}
-
-		Set<UUID> removed = new HashSet<>(removedPublicIds);
-
-		cache.evict(group -> SimilarityGroupSupport.retains(group.keep().id(), group.deleteCandidates(),
-				group.reviewCandidates(), removed));
-	}
-
-	/**
-	 * Clears every cached grouping so the next Fotos Semelhantes load recomputes.
-	 * Used when the comparison-exclusion lists change.
-	 */
-	public void invalidateCache() {
-		cache.invalidate();
-	}
-
-	private String fingerprintSignature() {
-		return SimilarityGroupSupport.signatureOf(mediaFingerprintRepository
-				.fingerprintSignature(FingerprintKind.PHOTO_PHASH, FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1));
 	}
 
 	private int score(PhotoHashRawResponse first, PhotoHashRawResponse second, Map<PairKey, Integer> scores) {
@@ -189,7 +197,7 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 		GroupParts parts = duplicateGroupAssembler.assemble(files, quality, false);
 
 		return new SimilarPhotoGroupResponse(String.valueOf(parts.keep().id()), group.size(),
-				SimilaritySingleLinkageGrouper.worstScore(group, (first, second) -> score(first, second, scores)),
+				SimilarityCompleteLinkageGrouper.worstScore(group, (first, second) -> score(first, second, scores)),
 				SizeResponse.of(parts.wastedBytes()), parts.keep(), parts.deleteCandidates(), parts.reviewCandidates());
 	}
 
@@ -198,7 +206,4 @@ public class PhotoSimilarityService implements SimilarityGrouping {
 				SizeResponse.of(raw.sizeBytes()), raw.currentPath(), raw.currentFolder(), raw.modifiedAt());
 	}
 
-	private int maxPageSize() {
-		return appSettingService.intValue(SettingsConstants.API_MAX_PAGE_SIZE, properties.api().maxPageSize());
-	}
 }

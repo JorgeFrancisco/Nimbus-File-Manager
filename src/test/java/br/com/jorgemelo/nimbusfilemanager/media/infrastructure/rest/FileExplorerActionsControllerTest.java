@@ -14,25 +14,23 @@ import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerActionResult;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
-import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerDeletionService;
+import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerCommandLauncher;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerPropertiesService;
-import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerRenameService;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.ExplorerDeleteMode;
 
 /**
  * The card menu talks to these three handlers, and the only decision they own
- * is which service answers a delete: the mode picked in the dialog is what
+ * is which command a delete asks for: the mode picked in the dialog is what
  * separates a recoverable removal from an irreversible one, so it is worth
  * pinning that the destructive path is never taken by default.
  */
 class FileExplorerActionsControllerTest {
 
 	private final ExplorerPropertiesService propertiesService = mock(ExplorerPropertiesService.class);
-	private final ExplorerDeletionService deletionService = mock(ExplorerDeletionService.class);
-	private final ExplorerRenameService renameService = mock(ExplorerRenameService.class);
+	private final ExplorerCommandLauncher commandLauncher = mock(ExplorerCommandLauncher.class);
 
 	private final FileExplorerActionsController controller = new FileExplorerActionsController(propertiesService,
-			deletionService, renameService);
+			commandLauncher);
 
 	@Test
 	void returnsThePropertiesOfTheRequestedPath() throws IOException {
@@ -46,36 +44,36 @@ class FileExplorerActionsControllerTest {
 
 	@Test
 	void quarantinesWhenThatIsTheChosenMode() {
-		ExplorerActionResult result = ExplorerActionResult.of("ok");
+		ExplorerActionResult result = ExplorerActionResult.of(true, "ok", 1, 0, 0);
 
-		when(deletionService.quarantine(any())).thenReturn(result);
+		when(commandLauncher.quarantine(any())).thenReturn(result);
 
 		Assertions.assertThat(controller.delete("D:\\photos\\photo.jpg", ExplorerDeleteMode.QUARANTINE))
 				.isSameAs(result);
 
-		verify(deletionService, never()).deletePermanently(any());
+		verify(commandLauncher, never()).deletePermanently(any());
 	}
 
 	@Test
 	void deletesForGoodOnlyWhenThePermanentModeIsAskedFor() {
-		ExplorerActionResult result = ExplorerActionResult.of("ok");
+		ExplorerActionResult result = ExplorerActionResult.of(true, "ok", 1, 0, 0);
 
-		when(deletionService.deletePermanently(any())).thenReturn(result);
+		when(commandLauncher.deletePermanently(any())).thenReturn(result);
 
 		Assertions.assertThat(controller.delete("D:\\photos\\photo.jpg", ExplorerDeleteMode.PERMANENT))
 				.isSameAs(result);
 
-		verify(deletionService, never()).quarantine(any());
+		verify(commandLauncher, never()).quarantine(any());
 	}
 
 	@Test
-	void passesTheNewNameToTheRenameService() {
-		ExplorerActionResult result = ExplorerActionResult.of("ok");
+	void passesTheNewNameToTheRenameCommand() {
+		ExplorerActionResult result = ExplorerActionResult.of(true, "ok", 1, 0, 0);
 
-		when(renameService.rename(any(), any())).thenReturn(result);
+		when(commandLauncher.rename(any(), any())).thenReturn(result);
 
 		Assertions.assertThat(controller.rename("D:\\photos\\photo.jpg", "holiday.jpg")).isSameAs(result);
 
-		verify(renameService).rename(any(Path.class), any());
+		verify(commandLauncher).rename(any(Path.class), any());
 	}
 }

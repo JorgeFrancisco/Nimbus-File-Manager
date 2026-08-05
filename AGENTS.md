@@ -206,6 +206,8 @@ A arquitetura hexagonal deve ser aplicada de forma **pragmática, não cerimonia
 - **Portas e adaptadores nas fronteiras reais.** Adaptadores de I/O externo (ffmpeg/exiftool/mediainfo, HTTP, filesystem, e-mail, glue nativo) ficam **só** em `infrastructure`. Suporte de domínio que atravessa inevitavelmente a fronteira do framework (ex.: `ClockHolder`, ponte estática para os callbacks `@PrePersist`/`@PreUpdate` das entidades, que não recebem injeção) mora no domínio (`shared/domain`), não em `application`.
 - **Abstração só onde paga.** Criar uma porta/interface quando ela isola uma fronteira real — um sistema externo, uma tecnologia que pode mudar, ou um ganho concreto de testabilidade. **Não** criar abstração por rito: uma interface com um único implementador que apenas embrulha o framework, sem ponto de variação nem valor de teste, é cerimônia — evitar.
 - **Exceções pragmáticas conscientes.** As entidades JPA (`@Entity`) **são** o modelo de domínio e os repositórios Spring Data (`extends JpaRepository`) **são** os ports — vivem no `domain` mesmo carregando anotações de tecnologia. Não se separa um modelo POJO das entidades JPA nem se cria adapter só para embrulhar o Spring Data: o boilerplate de mapeamento não se paga numa aplicação (ao contrário de uma biblioteca de domínio complexo). É decisão explícita — o isolamento do primeiro item vale para dependências **entre classes do projeto**; JPA/Spring dentro do `domain` é a fronteira pragmática aceita.
+- **Exceção estreita: repositório JDBC custom lido pela `application`.** A regra acima manda o repositório JDBC custom (classe concreta `@Repository` sobre `NamedParameterJdbcTemplate`, sem interface Spring Data) para `<domínio>/infrastructure/persistence`; a regra de direção proíbe a `application` de conhecer `infrastructure`. Juntas, as duas só se satisfazem criando uma interface de implementador único que apenas embrulha o `JdbcTemplate` — exatamente a cerimônia que o item anterior recusa. **Fica decidido: a `application` pode importar um repositório JDBC custom do próprio projeto**, do mesmo modo que já consome os ports Spring Data que moram no `domain`. É o mesmo conceito — boundary de persistência — implementado direto em vez de atrás de interface, e é o que o código faz em todos os casos existentes.
+  A exceção é **só de persistência**, e **não** abre a `application` para `infrastructure` em geral. **Continuam invisíveis** para a `application`, entre outros: controllers `infrastructure/rest` e `infrastructure/web`, clientes REST/HTTP, ProcessRunners, glue de filesystem e nativo (FFM/kernel32), adaptadores de serviço externo, e qualquer detalhe de framework que não seja boundary de persistência. Para esses vale a direção `infrastructure → application → domain` sem atenuação, e a porta continua sendo o caminho.
 
 ---
 
@@ -401,6 +403,14 @@ A catraca **não** autoriza atalho: continua valendo que teste valida comportame
 ---
 
 # Qualidade estática (Sonar)
+
+A análise roda contra um **SonarQube local**. `host.url`, `projectKey` e `projectName` já vivem no `pom.xml`, então a linha de comando é só:
+
+```bash
+./mvnw clean verify sonar:sonar
+```
+
+O **token de análise nunca entra no repositório**: ele mora no `settings.xml` do Maven de quem roda (`~/.m2/settings.xml`), num profile ativado pela **ausência de uma propriedade** (`<name>!skipSonarToken</name>`), e **não** por `<activeByDefault>` — este o Maven desliga assim que qualquer outro profile é ativado por `-P` (ex.: `-Pspotbugs`), o que derrubaria o token e faria a análise falhar por falta de autorização.
 
 - **Toda tarefa deve terminar sem criar nenhuma issue nova no Sonar.** Rodar a análise ao final e comparar o total — e a contagem **por regra** — com o estado anterior.
 - Issues **preexistentes** podem permanecer apenas quando **não pertencem ao escopo** da tarefa.

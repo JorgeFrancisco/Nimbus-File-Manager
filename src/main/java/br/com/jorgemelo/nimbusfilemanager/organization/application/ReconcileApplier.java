@@ -15,8 +15,8 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.PathSync;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Scan;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,15 +35,15 @@ public class ReconcileApplier {
 
 	private final OrganizationRenameDetectionService renameDetectionService;
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogMutations catalogMutations;
 	private final Clock clock;
 
 	public ReconcileApplier(OrganizationRenameDetectionService renameDetectionService,
-			CatalogFileLocationRepository catalogFileLocationRepository, CatalogFileRepository catalogFileRepository,
+			CatalogFileLocationRepository catalogFileLocationRepository, CatalogMutations catalogMutations,
 			Clock clock) {
 		this.renameDetectionService = renameDetectionService;
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
-		this.catalogFileRepository = catalogFileRepository;
+		this.catalogMutations = catalogMutations;
 		this.clock = clock;
 	}
 
@@ -66,10 +66,11 @@ public class ReconcileApplier {
 				.filter(id -> !renamedIds.contains(id) && !repairedIds.contains(id)).distinct().toList();
 
 		if (!missingIds.isEmpty()) {
-			catalogFileRepository.markMissingByIds(missingIds, LocalDateTime.now(clock));
+			catalogMutations.markMissing(missingIds, LocalDateTime.now(clock));
 		}
 
-		return withRepairs(response, renamedIds.size(), repairedIds.size(), missingIds.size());
+		return withRepairs(response, renamedIds.size(), repairedIds.size(), missingIds.size(),
+				distinctRepaired(renamedIds, repairedIds, missingIds));
 	}
 
 	private Set<Long> repairStalePaths(List<PathSync> pathSyncs) {
@@ -100,12 +101,30 @@ public class ReconcileApplier {
 		return repaired;
 	}
 
+	/**
+	 * How many catalog entries were actually changed, counted once each.
+	 *
+	 * <p>
+	 * Not the sum of the three. Marking missing already excludes anything renamed
+	 * or repaired, but following a rename and syncing a stale path are decided
+	 * independently and can land on the same entry in one pass - summing would
+	 * report two repairs where one entry changed.
+	 */
+	private long distinctRepaired(Set<Long> renamedIds, Set<Long> repairedIds, List<Long> missingIds) {
+		Set<Long> changed = new HashSet<>(renamedIds);
+
+		changed.addAll(repairedIds);
+		changed.addAll(missingIds);
+
+		return changed.size();
+	}
+
 	private OrganizationReconcileResponse withRepairs(OrganizationReconcileResponse response, long renamed,
-			long repairedPaths, long markedMissing) {
+			long repairedPaths, long markedMissing, long repairedItems) {
 		return new OrganizationReconcileResponse(response.sourcePath(), response.recursive(), response.includeHidden(),
 				response.filesOnDisk(), response.filesInDatabase(), response.missingOnDisk(),
 				response.missingInDatabase(), response.pathMismatches(), response.missingOnDiskSamples(),
 				response.missingInDatabaseSamples(), response.pathMismatchSamples(), renamed, repairedPaths,
-				markedMissing);
+				markedMissing, repairedItems);
 	}
 }

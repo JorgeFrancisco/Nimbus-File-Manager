@@ -7,20 +7,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
+
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoLauncher;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeolocationConstants;
@@ -28,6 +26,9 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebui
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
  * Geographic-dataset admin actions: guards while an inventory, an import or a
@@ -38,66 +39,28 @@ class SettingsGeodataWebControllerTest {
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
 	private final MediaLocationService mediaLocationService = mock(MediaLocationService.class);
-	private final GeoDatasetAsyncRunner geoDatasetAsyncRunner = mock(GeoDatasetAsyncRunner.class);
-	private final LocationRebuildAsyncRunner locationRebuildAsyncRunner = mock(LocationRebuildAsyncRunner.class);
-	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
-	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionQueryService);
+	private final GeoLauncher geoLauncher = mock(GeoLauncher.class);
+	private final GeoRunReader geoRunReader = mock(GeoRunReader.class);
+	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
+	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionRepository);
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 
 	private final SettingsGeodataWebController controller = new SettingsGeodataWebController(preferences,
-			offlineGeoDataset, mediaLocationService, geoDatasetAsyncRunner, locationRebuildAsyncRunner,
-			inventoryRunningState, appSettingService);
+			offlineGeoDataset, mediaLocationService, geoLauncher, geoRunReader, inventoryRunningState,
+			appSettingService);
 
 	private final TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@x", "pw");
 
-	private static ExecutionResponse inventoryExecution() {
-		return new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1, 1,
-				0, 0, 0, 0, null, null, "running", false);
-	}
-
 	@Test
-	void rebuildRejectedWhileDatasetImportRunning() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+	void rebuildIsQueuedWithTheScopeThatWasPicked() {
+		queued();
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		controller.rebuildLocations(LocationRebuildScope.PENDING, auth, redirect);
 
-		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
-
-		verify(locationRebuildAsyncRunner, never()).rebuild(ArgumentMatchers.any());
-		// The scope is remembered even though the rebuild could not start.
-		verify(preferences).save("admin@x", GeolocationConstants.GEO_PAGE_KEY,
-				GeolocationConstants.GEO_REBUILD_SCOPE_KEY, "PENDING");
-	}
-
-	@Test
-	void rebuildRejectedWhenAlreadyRebuilding() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(false);
-		when(locationRebuildAsyncRunner.start(LocationRebuildScope.ALL)).thenReturn(false);
-
-		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
-
-		controller.rebuildLocations(LocationRebuildScope.ALL, auth, redirect);
-
-		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
-
-		verify(locationRebuildAsyncRunner, never()).rebuild(ArgumentMatchers.any());
-		verify(preferences).save("admin@x", GeolocationConstants.GEO_PAGE_KEY,
-				GeolocationConstants.GEO_REBUILD_SCOPE_KEY, "ALL");
-	}
-
-	@Test
-	void rebuildStartsInBackground() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(false);
-		when(locationRebuildAsyncRunner.start(LocationRebuildScope.PENDING)).thenReturn(true);
-
-		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
-
-		controller.rebuildLocations(LocationRebuildScope.PENDING, auth, redirect);
-
-		verify(locationRebuildAsyncRunner).rebuild(LocationRebuildScope.PENDING);
+		verify(geoLauncher).rebuildLocations(LocationRebuildScope.PENDING);
 		verify(preferences).save("admin@x", GeolocationConstants.GEO_PAGE_KEY,
 				GeolocationConstants.GEO_REBUILD_SCOPE_KEY, "PENDING");
 
@@ -105,34 +68,21 @@ class SettingsGeodataWebControllerTest {
 	}
 
 	@Test
-	void downloadRejectedWhenAlreadyRunning() {
-		when(geoDatasetAsyncRunner.start()).thenReturn(false);
+	void downloadIsQueued() {
+		queued();
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		controller.downloadGeoDataset(redirect);
 
-		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
-
-		verify(geoDatasetAsyncRunner, never()).downloadAndImport();
-	}
-
-	@Test
-	void downloadStartsInBackground() {
-		when(geoDatasetAsyncRunner.start()).thenReturn(true);
-
-		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
-
-		controller.downloadGeoDataset(redirect);
-
-		verify(geoDatasetAsyncRunner).downloadAndImport();
+		verify(geoLauncher).updateDataset();
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
 
 	@Test
 	void removeRejectedWhileImportRunning() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+		when(geoRunReader.busy()).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -145,8 +95,6 @@ class SettingsGeodataWebControllerTest {
 
 	@Test
 	void removeDeletesDatasetWhenIdle() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(false);
-
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
 		controller.removeGeoDataset(redirect);
@@ -168,31 +116,9 @@ class SettingsGeodataWebControllerTest {
 	}
 
 	@Test
-	void datasetActionsBlockedWhileRebuildRunning() {
-		// The whole geo section must wait for a running rebuild, not just the
-		// rebuild button: importing, removing or clearing the cache underneath a
-		// running resolution would corrupt it.
-		when(locationRebuildAsyncRunner.isRunning()).thenReturn(true);
-
-		RedirectAttributesModelMap download = new RedirectAttributesModelMap();
-		controller.downloadGeoDataset(download);
-		Assertions.assertThat(download.getFlashAttributes()).containsKey("error");
-		verify(geoDatasetAsyncRunner, never()).downloadAndImport();
-
-		RedirectAttributesModelMap remove = new RedirectAttributesModelMap();
-		controller.removeGeoDataset(remove);
-		Assertions.assertThat(remove.getFlashAttributes()).containsKey("error");
-		verify(offlineGeoDataset, never()).remove();
-
-		RedirectAttributesModelMap clear = new RedirectAttributesModelMap();
-		controller.clearGeoCache(clear);
-		Assertions.assertThat(clear.getFlashAttributes()).containsKey("error");
-		verify(mediaLocationService, never()).clearCache();
-	}
-
-	@Test
 	void clearCacheBlockedWhileInventoryRunning() {
-		when(executionQueryService.active()).thenReturn(Optional.of(inventoryExecution()));
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -205,7 +131,8 @@ class SettingsGeodataWebControllerTest {
 
 	@Test
 	void geoActionsBlockedWhileInventoryRunning() {
-		when(executionQueryService.active()).thenReturn(Optional.of(inventoryExecution()));
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
 
 		RedirectAttributesModelMap download = new RedirectAttributesModelMap();
 
@@ -213,7 +140,7 @@ class SettingsGeodataWebControllerTest {
 
 		Assertions.assertThat(download.getFlashAttributes().get("error").toString()).contains("inventário");
 
-		verify(geoDatasetAsyncRunner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 
 		RedirectAttributesModelMap rebuild = new RedirectAttributesModelMap();
 
@@ -221,7 +148,7 @@ class SettingsGeodataWebControllerTest {
 
 		Assertions.assertThat(rebuild.getFlashAttributes()).containsKey("error");
 
-		verify(locationRebuildAsyncRunner, never()).rebuild(any());
+		verify(geoLauncher, never()).rebuildLocations(any());
 
 		RedirectAttributesModelMap remove = new RedirectAttributesModelMap();
 
@@ -238,7 +165,7 @@ class SettingsGeodataWebControllerTest {
 	 */
 	@Test
 	void clearCacheBlockedWhileTheDatasetImportRuns() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+		when(geoRunReader.busy()).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -261,7 +188,7 @@ class SettingsGeodataWebControllerTest {
 		controller.enableLocation(auth, redirect);
 
 		verify(appSettingService).update(eq(SettingsConstants.LOCATION_ENABLED), eq("true"), any());
-		verify(geoDatasetAsyncRunner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
@@ -298,7 +225,7 @@ class SettingsGeodataWebControllerTest {
 	 */
 	@Test
 	void disablingBlockedWhileTheDatasetImportRuns() {
-		when(geoDatasetAsyncRunner.isRunning()).thenReturn(true);
+		when(geoRunReader.busy()).thenReturn(true);
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 
@@ -310,16 +237,27 @@ class SettingsGeodataWebControllerTest {
 		verify(offlineGeoDataset, never()).remove();
 	}
 
+	private void queued() {
+		when(geoLauncher.rebuildLocations(any())).thenReturn(Optional.of(new Execution()));
+		when(geoLauncher.updateDataset()).thenReturn(Optional.of(new Execution()));
+	}
+
+	/**
+	 * The queue refused to take the request - the application is closing - so the
+	 * screen says so rather than reporting a rebuild that was never written.
+	 */
 	@Test
-	void disablingBlockedWhileARebuildRuns() {
-		when(locationRebuildAsyncRunner.isRunning()).thenReturn(true);
+	void aRequestThatCouldNotBeQueuedIsReportedAsAnError() {
+		RedirectAttributesModelMap rebuild = new RedirectAttributesModelMap();
 
-		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+		controller.rebuildLocations(LocationRebuildScope.PENDING, auth, rebuild);
 
-		controller.disableLocation(false, auth, redirect);
+		Assertions.assertThat(rebuild.getFlashAttributes()).containsKey("error");
 
-		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("error");
+		RedirectAttributesModelMap download = new RedirectAttributesModelMap();
 
-		verify(appSettingService, never()).update(any(), any(), any());
+		controller.downloadGeoDataset(download);
+
+		Assertions.assertThat(download.getFlashAttributes()).containsKey("error");
 	}
 }

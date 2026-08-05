@@ -26,7 +26,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 		"br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.statistics.infrastructure.rest",
 		"br.com.jorgemelo.nimbusfilemanager.thumbnail.infrastructure.rest",
-		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.rest" })
+		"br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.rest",
+		"br.com.jorgemelo.nimbusfilemanager.worker.infrastructure.rest" })
 public class RestExceptionHandler extends LocalizedComponent {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(RestExceptionHandler.class);

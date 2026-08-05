@@ -12,6 +12,13 @@ import java.util.Set;
  */
 public final class ConversionConstants {
 
+	/**
+	 * The shape the queued conversion payload is written in, and the only one a
+	 * worker will run. Read by whoever queues the batch and checked by whoever
+	 * claims it - the pair only means anything if both sides name the same number.
+	 */
+	public static final int EXECUTE_PAYLOAD_SCHEMA_VERSION = 1;
+
 	public static final String PAGE_KEY = "conversion";
 	public static final String QUALITY_KEY = "quality";
 	public static final String AUDIO_KEY = "audio";

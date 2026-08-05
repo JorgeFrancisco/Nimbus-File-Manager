@@ -82,7 +82,7 @@ class AppViewModelAdviceTest {
 
 		Authentication authenticated = new UsernamePasswordAuthenticationToken("admin", null, List.of());
 
-		ExecutionResponse execution = new ExecutionResponse(7L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(),
+		ExecutionResponse execution = new ExecutionResponse(7L, "INVENTORY", "RUNNING", LocalDateTime.now(),
 				null, "C:/midia", null, 25, 20, 5, 0, 0, 0, 100, 25.0, "Processing files.", true);
 
 		when(executionQueryService.active()).thenReturn(Optional.of(execution));

@@ -15,7 +15,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
 
 @ExtendWith(MockitoExtension.class)
 class CatalogFileRetentionServiceTest {
@@ -23,8 +25,13 @@ class CatalogFileRetentionServiceTest {
 	@Mock
 	private CatalogFileRepository catalogFileRepository;
 
+	@Mock
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
 	private CatalogFileRetentionService service() {
-		return new CatalogFileRetentionService(catalogFileRepository, Clock.systemDefaultZone());
+		return new CatalogFileRetentionService(
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository),
+				Clock.systemDefaultZone());
 	}
 
 	@Test

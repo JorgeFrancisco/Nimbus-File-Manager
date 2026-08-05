@@ -22,8 +22,6 @@ import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
@@ -35,9 +33,13 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
@@ -46,14 +48,16 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdi
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -69,7 +73,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 @ExtendWith(MockitoExtension.class)
 class OrganizationExecutorTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 
 	@TempDir
 	Path tempDir;
@@ -92,9 +97,9 @@ class OrganizationExecutorTest {
 	@Mock
 	private ExecutionProgressService executionProgressService;
 
-	private final OperationLockService operationLockService = new OperationLockService();
+	private OperationLockService operationLockService = GrantingOperationLocks.granting();
 
-	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionCancellationService executionCancellationService = NoCancellations.none();
 
 	@Test
 	void executeShouldRejectPlanWithConflictsWhenNotAllowed() {
@@ -107,7 +112,7 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any())).thenReturn(new OrganizationPlan("source", "target",
 				OrganizationLayout.DEFAULT, false, new OrganizationSummary(2, 2, 0, 0, 2, 100, 1, 1, 0), List.of()));
 
-		var response = executor().execute(request(tempDir.resolve("source"), tempDir.resolve("target"), false, false));
+		var response = execute(executor(), request(tempDir.resolve("source"), tempDir.resolve("target"), false, false));
 
 		Assertions.assertThat(response.rejected()).isTrue();
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.REJECTED.name());
@@ -119,35 +124,21 @@ class OrganizationExecutorTest {
 		Path sourceFolder = tempDir.resolve("source");
 		Path targetFolder = tempDir.resolve("target");
 
-		CountDownLatch lockAcquired = new CountDownLatch(1);
-		CountDownLatch releaseLock = new CountDownLatch(1);
-
 		when(executionRepository.save(any())).thenAnswer(invocation -> {
 			Execution execution = invocation.getArgument(0);
 			execution.setId(1L);
 			return execution;
 		});
 
-		Thread lockThread = holdLock(sourceFolder, lockAcquired, releaseLock);
+		operationLockService = GrantingOperationLocks.refusing();
 
-		try {
-			Assertions.assertThat(lockAcquired.await(2, TimeUnit.SECONDS)).isTrue();
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
-			var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.ERROR.name());
+		Assertions.assertThat(response.rejected()).isTrue();
+		Assertions.assertThat(response.message()).contains("Organization rejected");
 
-			Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.ERROR.name());
-			Assertions.assertThat(response.rejected()).isTrue();
-			Assertions.assertThat(response.message()).contains("Organization rejected");
-
-			verify(organizationPlanner, never()).preview(any());
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new AssertionError(e);
-		} finally {
-			releaseLock.countDown();
-		}
-
-		Assertions.assertThatCode(lockThread::join).doesNotThrowAnyException();
+		verify(organizationPlanner, never()).preview(any());
 	}
 
 	@Test
@@ -168,7 +159,7 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 1, 0, 100, 0, 0, 0), List.of(samePath)));
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.plannedMoves()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -206,7 +197,7 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isEqualTo(1);
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED.name());
@@ -248,7 +239,7 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(target)).isTrue();
@@ -287,7 +278,7 @@ class OrganizationExecutorTest {
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -325,7 +316,7 @@ class OrganizationExecutorTest {
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -367,7 +358,7 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.errors()).isEqualTo(1);
@@ -414,7 +405,7 @@ class OrganizationExecutorTest {
 				.thenReturn(Optional.of(location));
 		doThrow(new IllegalStateException("database down")).when(catalogFileRepository).save(catalogFile);
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.errors()).isEqualTo(1);
@@ -462,7 +453,7 @@ class OrganizationExecutorTest {
 			throw new IllegalStateException("database down");
 		}).when(catalogFileRepository).save(catalogFile);
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED_WITH_ERRORS.name());
 		Assertions.assertThat(response.moved()).isZero();
@@ -513,7 +504,7 @@ class OrganizationExecutorTest {
 		doThrow(new MoveIntegrityException("target SHA-256 does not match source SHA-256 (data corruption on move)."))
 				.when(verifier).verify(any(), any(), any());
 
-		var response = executor(verifier).execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(verifier), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.errors()).isEqualTo(1);
@@ -553,7 +544,7 @@ class OrganizationExecutorTest {
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, true, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
 		Assertions.assertThat(response.errors()).isEqualTo(1);
@@ -584,7 +575,7 @@ class OrganizationExecutorTest {
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.of(catalogFile));
 
-		var response = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -626,7 +617,7 @@ class OrganizationExecutorTest {
 				Optional.empty());
 		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, true, false));
+		var response = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(2);
@@ -666,7 +657,7 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.empty());
 
-		var response = executor().execute(request(sourceFolder, targetFolder, true, true));
+		var response = execute(executor(), request(sourceFolder, targetFolder, true, true));
 
 		Assertions.assertThat(response.moved()).isEqualTo(1);
 		Assertions.assertThat(Files.readString(target)).isEqualTo("new");
@@ -692,13 +683,13 @@ class OrganizationExecutorTest {
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
 		doThrow(new IllegalStateException("movement failed")).when(movementRepository).save(any());
 
-		var movementFailure = executor().execute(request(sourceFolder, targetFolder, true, false));
+		var movementFailure = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
 		Assertions.assertThat(movementFailure.errors()).isEqualTo(1);
 
 		when(organizationPlanner.preview(any())).thenThrow(new IllegalStateException("preview failed"));
 
-		var previewFailure = executor().execute(request(sourceFolder, targetFolder, true, false));
+		var previewFailure = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
 		Assertions.assertThat(previewFailure.status()).isEqualTo(ExecutionStatus.ERROR.name());
 		Assertions.assertThat(previewFailure.message()).contains("preview failed");
@@ -721,12 +712,13 @@ class OrganizationExecutorTest {
 		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
 
-		var response = executorWithProgress().execute(request(sourceFolder, targetFolder, true, false), execution);
+		var response = executorWithProgress().execute(request(sourceFolder, targetFolder, true, false), execution,
+				owning());
 
 		Assertions.assertThat(response.executionId()).isEqualTo(UuidV7.fromLegacy(42L));
 
 		verify(executionProgressService).updateTotal(execution, 2);
-		verify(executionProgressService).updateStatus(execution, ExecutionStatus.PROCESSING_FILES,
+		verify(executionProgressService).updatePhase(execution, ExecutionPhase.PROCESSING,
 				ExecutionStepType.PROCESSING_STARTED, ExecutionMessages.processingFiles());
 		verify(executionProgressService, atLeastOnce()).updateProgress(eq(execution), anyInt(), anyInt(), anyInt(),
 				anyInt(), anyString());
@@ -750,7 +742,7 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(500, 500, 0, 500, 0, 0, 0, 0, 0), items));
 
-		executorWithProgress().execute(request(sourceFolder, targetFolder, true, false), execution);
+		executorWithProgress().execute(request(sourceFolder, targetFolder, true, false), execution, owning());
 
 		verify(executionProgressService).updateProgress(eq(execution), eq(1), anyInt(), anyInt(), anyInt(),
 				anyString());
@@ -787,7 +779,7 @@ class OrganizationExecutorTest {
 
 		OrganizationExecutor executor = executor();
 
-		var response = executor.execute(request(sourceFolder, targetFolder, false, false));
+		var response = execute(executor, request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.CANCELLED.name());
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -795,9 +787,10 @@ class OrganizationExecutorTest {
 		verify(catalogFileRepository, never()).findByFileKey(any());
 
 		// execute() unregisters in its finally block once it stops, cancelled or not,
-		// so this
-		// confirms cleanup happened instead of leaving a stale entry behind.
-		Assertions.assertThat(executionCancellationService.isCancelled(1L)).isFalse();
+		// so this confirms cleanup happened instead of leaving a stale entry behind.
+		// The cancellation itself stays on the row - a request that survives the
+		// thread is the whole point of persisting it.
+		Assertions.assertThat(executionCancellationService.isCancelled(1L)).isTrue();
 	}
 
 	@Test
@@ -833,7 +826,7 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
 
-		var response = executor(verifier, persistence).execute(dryRunRequest(sourceFolder, targetFolder, false));
+		var response = execute(executor(verifier, persistence), dryRunRequest(sourceFolder, targetFolder, false));
 
 		// The item WOULD move, and the counters are reported exactly as a real execute.
 		Assertions.assertThat(response.moved()).isEqualTo(1);
@@ -883,11 +876,11 @@ class OrganizationExecutorTest {
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
 
-		var dry = executor().execute(dryRunRequest(sourceFolder, targetFolder, false));
+		var dry = execute(executor(), dryRunRequest(sourceFolder, targetFolder, false));
 
 		Assertions.assertThat(Files.exists(source)).isTrue();
 
-		var real = executor().execute(request(sourceFolder, targetFolder, false, false));
+		var real = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
 		Assertions.assertThat(dry.moved()).isEqualTo(real.moved()).isEqualTo(1);
 		Assertions.assertThat(dry.skipped()).isEqualTo(real.skipped());
@@ -911,8 +904,8 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(2, 2, 0, 0, 2, 100, 1, 1, 0), List.of()));
 
-		var response = executor(new OrganizationMoveVerifier(new FileHashService()), persistence)
-				.execute(dryRunRequest(sourceFolder, targetFolder, false));
+		var response = execute(executor(new OrganizationMoveVerifier(new FileHashService()), persistence),
+				dryRunRequest(sourceFolder, targetFolder, false));
 
 		Assertions.assertThat(response.rejected()).isTrue();
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.REJECTED.name());
@@ -941,8 +934,8 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 1, 0, 1), List.of(duplicate)));
 
-		var response = executor(new OrganizationMoveVerifier(new FileHashService()), persistence)
-				.execute(dryRunRequest(sourceFolder, targetFolder, true));
+		var response = execute(executor(new OrganizationMoveVerifier(new FileHashService()), persistence),
+				dryRunRequest(sourceFolder, targetFolder, true));
 
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
@@ -952,6 +945,160 @@ class OrganizationExecutorTest {
 		Mockito.verifyNoInteractions(persistence);
 	}
 
+	/**
+	 * The checkpoint is what stops a process writing to a library it may already
+	 * have lost the right to write to. It closes the commit, not the computing:
+	 * what has already moved was moved while the locks were held and verified byte
+	 * for byte, so it stays where it is and the run ends interrupted rather than
+	 * failed.
+	 */
+	@Test
+	void stopsBeforeTheNextFileWhenTheLocksUnderItAreGone() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+		Path firstSource = Files.writeString(sourceFolder.resolve("a.jpg"), "a");
+		Path secondSource = Files.writeString(sourceFolder.resolve("b.jpg"), "b");
+		Path firstTarget = targetFolder.resolve("a.jpg");
+		Path secondTarget = targetFolder.resolve("b.jpg");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
+
+		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(firstSource.toString()).build();
+
+		catalogFile.setLocation(location);
+
+		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		when(organizationPlanner.preview(any())).thenReturn(new OrganizationPlan(sourceFolder.toString(),
+				targetFolder.toString(), OrganizationLayout.DEFAULT, false,
+				new OrganizationSummary(2, 2, 0, 0, 2, 100, 0, 0, 0),
+				List.of(item(1L, firstSource, firstTarget, false, false),
+						item(2L, secondSource, secondTarget, false, false))));
+		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
+		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
+				.thenReturn(Optional.of(location));
+
+		ExecutionOwnership ownership = mock(ExecutionOwnership.class);
+
+		Mockito.doNothing().doThrow(new OwnershipLostException("the session that held the locks is gone"))
+				.when(ownership).assertStillOwned();
+
+		var response = executor().execute(request(sourceFolder, targetFolder, false, false),
+				Execution.builder().id(1L).build(), ownership);
+
+		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.INTERRUPTED.name());
+		Assertions.assertThat(response.moved()).isEqualTo(1);
+		Assertions.assertThat(Files.exists(firstTarget)).isTrue();
+		Assertions.assertThat(Files.exists(secondTarget)).isFalse();
+		Assertions.assertThat(Files.exists(secondSource)).isTrue();
+	}
+
+	/**
+	 * A plan naming a file the catalog no longer has is the catalog and the plan
+	 * disagreeing, which is a defect rather than a file to skip: the item is
+	 * counted as an error and the run carries on with the rest.
+	 */
+	@Test
+	void countsAnErrorForAPlannedFileTheCatalogNoLongerHas() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = tempDir.resolve("target");
+		Path source = Files.writeString(sourceFolder.resolve("photo.jpg"), "content");
+		Path target = targetFolder.resolve("202405/09/CAMERA/IMAGENS/photo.jpg");
+
+		when(organizationPlanner.preview(any())).thenReturn(
+				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
+						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0),
+						List.of(item(1L, source, target, false, false))));
+		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileRepository.findById(1L)).thenReturn(Optional.empty());
+
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
+
+		Assertions.assertThat(response.errors()).isEqualTo(1);
+		Assertions.assertThat(response.moved()).isZero();
+		Assertions.assertThat(Files.exists(source)).isTrue();
+		Assertions.assertThat(Files.exists(target)).isFalse();
+	}
+
+	/**
+	 * The preview is the one caller with nothing to own, and it calls the executor
+	 * without an ownership at all. It stayed in the application because it writes
+	 * nothing - so the call has to work, and has to leave the disk exactly as it
+	 * found it.
+	 */
+	@Test
+	void runsAPreviewWithNoOwnershipToCheck() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = tempDir.resolve("target");
+		Path source = Files.writeString(sourceFolder.resolve("photo.jpg"), "content");
+		Path target = targetFolder.resolve("202405/09/CAMERA/IMAGENS/photo.jpg");
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+				.build();
+
+		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(source.toString()).build();
+
+		catalogFile.setLocation(location);
+
+		when(organizationPlanner.preview(any())).thenReturn(
+				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
+						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0),
+						List.of(item(1L, source, target, false, false))));
+		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
+		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
+				.thenReturn(Optional.of(location));
+
+		var response = executor().execute(dryRunRequest(sourceFolder, targetFolder, false),
+				Execution.builder().id(1L).build());
+
+		Assertions.assertThat(response.moved()).isEqualTo(1);
+		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED.name());
+		Assertions.assertThat(Files.exists(source)).isTrue();
+		Assertions.assertThat(Files.exists(target)).isFalse();
+	}
+
+	/**
+	 * A real move with nothing saying the paths are held is refused before a single
+	 * file is touched. There is no caller that could legitimately do it - the dry
+	 * run is the only mode with nothing to own - so it is a defect to say so about,
+	 * not a state to carry on in.
+	 */
+	@Test
+	void refusesToMoveAnythingWithoutAnOwnershipToCheck() {
+		Path sourceFolder = tempDir.resolve("source");
+		Path targetFolder = tempDir.resolve("target");
+
+		OrganizationExecutor executor = executor();
+
+		OrganizationExecuteRequest request = request(sourceFolder, targetFolder, false, false);
+
+		Execution execution = Execution.builder().id(1L).build();
+
+		Assertions.assertThatThrownBy(() -> executor.execute(request, execution, null))
+				.isInstanceOf(IllegalStateException.class).hasMessageContaining("owns its paths");
+
+		Mockito.verifyNoInteractions(organizationPlanner);
+	}
+
+	/**
+	 * The executor no longer opens a row of its own: a worker hands it the
+	 * execution it claimed together with the ownership of the paths it locked, and
+	 * these tests hand it the same two things. The ownership answers that the locks
+	 * are still held, so the checkpoint between files passes and what each test
+	 * asserts is the behaviour it is about rather than an interrupted run.
+	 */
+	private OrganizationExecuteResponse execute(OrganizationExecutor executor, OrganizationExecuteRequest request) {
+		return executor.execute(request, Execution.builder().id(1L).build(), owning());
+	}
+
+	private ExecutionOwnership owning() {
+		return mock(ExecutionOwnership.class);
+	}
+
 	private OrganizationExecutor executor() {
 		return executor(new OrganizationMoveVerifier(new FileHashService()));
 	}
@@ -959,8 +1106,9 @@ class OrganizationExecutorTest {
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier, OrganizationMovePersistence persistence) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
 				catalogFileLocationRepository, movementLog(), operationLockService, executionProgressService,
-				executionCancellationService, new SecureFileMove(verifier, pathRegistry), persistence,
-				new OrganizationPlanStore(), new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
+				executionCancellationService,
+				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry), persistence,
+				new EmptyDirectoryCleaner(libraryFiles()), Clock.systemDefaultZone());
 	}
 
 	/**
@@ -994,29 +1142,15 @@ class OrganizationExecutorTest {
 	private OrganizationExecutor executor(OrganizationMoveVerifier verifier) {
 		return new OrganizationExecutor(organizationPlanner, executionRepository, catalogFileRepository,
 				catalogFileLocationRepository, movementLog(), operationLockService, executionProgressService,
-				executionCancellationService, new SecureFileMove(verifier, pathRegistry),
+				executionCancellationService,
+				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
 				new OrganizationMovePersistence(catalogFileRepository, catalogFileLocationRepository,
 						movementRepository, Clock.systemDefaultZone()),
-				new OrganizationPlanStore(), new EmptyDirectoryCleaner(), Clock.systemDefaultZone());
+				new EmptyDirectoryCleaner(libraryFiles()), Clock.systemDefaultZone());
 	}
 
 	private OrganizationExecutor executorWithProgress() {
 		return executor();
-	}
-
-	private Thread holdLock(Path path, CountDownLatch lockAcquired, CountDownLatch releaseLock) {
-		Thread thread = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, path)) {
-				lockAcquired.countDown();
-				releaseLock.await();
-			} catch (InterruptedException _) {
-				Thread.currentThread().interrupt();
-			}
-		});
-
-		thread.start();
-
-		return thread;
 	}
 
 	private OrganizationExecuteRequest request(Path source, Path target, boolean allowConflicts,
@@ -1029,5 +1163,18 @@ class OrganizationExecutorTest {
 		return new OrganizationItem(id, source.getFileName().toString(), source.toString(), target.toString(), "202405",
 				"09", "MEDIA", "CAMERA", "IMAGENS", "CAMERA", "FILE_NAME", 100L, samePath, false, false,
 				duplicateTarget, duplicateTarget, duplicateTarget ? "DUPLICATE_TARGET" : null);
+	}
+
+	/**
+	 * The real port over a real registry: these assertions are about a file that
+	 * has to actually leave the disk, and about the announcement that keeps the
+	 * watcher from re-inventorying it.
+	 */
+	private static SecureLibraryFiles libraryFiles() {
+		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+				Clock.systemUTC());
+
+		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+				registry), registry);
 	}
 }

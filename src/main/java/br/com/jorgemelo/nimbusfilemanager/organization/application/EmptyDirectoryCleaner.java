@@ -10,6 +10,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -44,13 +45,24 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class EmptyDirectoryCleaner {
 
+	private final LibraryFileMutations libraryFileMutations;
+
+	public EmptyDirectoryCleaner(LibraryFileMutations libraryFileMutations) {
+		this.libraryFileMutations = libraryFileMutations;
+	}
+
 	/**
 	 * Deletes {@code startDir} and its ancestors while they are empty, stopping at
 	 * the first non-empty one or at {@code boundary} (exclusive). Returns the
 	 * directories actually removed, deepest first. Never throws: on any problem it
 	 * stops and returns what it managed to remove.
+	 *
+	 * @param executionId the run this tidying belongs to, so the watcher keeps
+	 * recognising it as this product's own work for as long as that run
+	 * demonstrably holds its paths - an organization of a large tree outlasts any
+	 * fixed window
 	 */
-	List<Path> removeEmptyAncestors(Path startDir, Path boundary) {
+	List<Path> removeEmptyAncestors(Path startDir, Path boundary, Long executionId) {
 		List<Path> removed = new ArrayList<>();
 
 		if (startDir == null || boundary == null) {
@@ -64,7 +76,7 @@ public class EmptyDirectoryCleaner {
 		// Only directories strictly inside the boundary are eligible; equal-to-boundary
 		// or outside stops.
 		while (current != null && !current.equals(boundaryNorm) && current.startsWith(boundaryNorm)) {
-			if (!isRemovableEmptyDirectory(current) || !deleteEmptyDirectory(current)) {
+			if (!isRemovableEmptyDirectory(current) || !deleteEmptyDirectory(current, executionId)) {
 				break;
 			}
 
@@ -83,9 +95,9 @@ public class EmptyDirectoryCleaner {
 	 * {@code false} when it raced (something re-created a file) or hit a
 	 * permission/lock issue, in which case the caller stops ascending.
 	 */
-	private boolean deleteEmptyDirectory(Path dir) {
+	private boolean deleteEmptyDirectory(Path dir, Long executionId) {
 		try {
-			Files.delete(dir);
+			libraryFileMutations.deleteEmptyDirectory(dir, executionId);
 
 			return true;
 		} catch (IOException e) {

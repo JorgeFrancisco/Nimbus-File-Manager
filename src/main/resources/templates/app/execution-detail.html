@@ -43,10 +43,6 @@
 			</form>
 		</div>
 	</div>
-	<div class="panel section" th:if="${undo != null}">
-		<h2 th:text="#{action.undo}">Undo</h2>
-		<p th:text="${undo.message()}">ok</p>
-	</div>
 	<div class="panel section" th:if="${movementSummary != null and !movementSummary.isEmpty()}">
 		<h2 th:text="#{execution.integritySummary}">Resumo de integridade</h2>
 		<div class="table-wrap">

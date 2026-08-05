@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,12 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.Month;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
 import org.assertj.core.api.Assertions;
@@ -30,6 +28,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
@@ -56,6 +55,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
@@ -69,11 +70,12 @@ class VideoConversionServiceTest {
 	private final ConversionExecutionRecorder conversionExecutionRecorder = mock(ConversionExecutionRecorder.class);
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
-	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionCancellationService executionCancellationService = NoCancellations.none();
+	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
 
 	private final VideoConversionService service = new VideoConversionService(catalogFileRepository,
 			conversionCandidateRepository, videoTranscoder, conversionCommitService, conversionExecutionRecorder,
-			operationLockService, executionCancellationService);
+			executionProgressService, operationLockService, executionCancellationService);
 
 	private final Execution execution = mock(Execution.class);
 	private final UUID mediaId = UUID.randomUUID();
@@ -81,17 +83,15 @@ class VideoConversionServiceTest {
 	VideoConversionServiceTest() {
 		when(operationLockService.acquireWithin(eq(ConversionConstants.LOCK_WAIT), eq(ExecutionType.CONVERSION),
 				any(Path[].class))).thenReturn(operationLock);
-		when(conversionExecutionRecorder.start(any(), anyInt())).thenReturn(execution);
+		when(execution.getId()).thenReturn(1L);
 	}
 
 	@Test
 	void reportsNothingSelectedWithoutStartingAnExecution() {
-		ConversionResult result = service.convert(List.of(), ConversionOptions.defaults(), progress(), notCancelled());
+		ConversionResult result = service.convert(List.of(), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.configured()).isTrue();
 		Assertions.assertThat(result.total()).isZero();
-
-		verify(conversionExecutionRecorder, never()).start(any(), anyInt());
 	}
 
 	@Test
@@ -102,7 +102,7 @@ class VideoConversionServiceTest {
 				.convert(List.of(mediaId),
 						new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 								OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX),
-						progress(), notCancelled());
+						execution, owning());
 
 		Assertions.assertThat(result.configured()).isFalse();
 
@@ -120,11 +120,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
-		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 		Assertions.assertThat(result.errors()).isZero();
@@ -148,15 +147,14 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1_000));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(result.converted()).isZero();
 		Assertions.assertThat(source).exists();
 		Assertions.assertThat(result.items().getFirst().message()).contains("O original foi mantido");
 
-		verify(conversionCommitService, never()).commit(any(), any(), any(), any(), any(), any());
+		verify(conversionCommitService, never()).commit(any(), any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -169,11 +167,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.failed(ConversionFailure.PLACEMENT_FAILED));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(result.converted()).isZero();
@@ -186,8 +183,7 @@ class VideoConversionServiceTest {
 		stubFile(source, 4L);
 		stubSource("hevc", 120.0);
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 		Assertions.assertThat(result.items().getFirst().outcome()).isEqualTo(ConversionOutcome.SKIPPED);
@@ -205,11 +201,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 5));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 
@@ -222,8 +217,7 @@ class VideoConversionServiceTest {
 		stubFile(tmp.resolve("gone.mp4"), 10L);
 		stubSource("h264", 120.0);
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 
@@ -246,7 +240,7 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
-				progress(), notCancelled());
+				execution, owning());
 
 		Assertions.assertThat(result.skipped()).isEqualTo(2);
 
@@ -260,8 +254,7 @@ class VideoConversionServiceTest {
 		stubFile(shortcut, 10L);
 		stubSource("h264", 120.0);
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 
@@ -278,11 +271,11 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
-				progress(), notCancelled());
+				execution, owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
 		Assertions.assertThat(result.converted() + result.skipped() + result.errors()).isEqualTo(result.total());
@@ -301,7 +294,7 @@ class VideoConversionServiceTest {
 				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1));
 
 		service.convert(List.of(mediaId), new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
-				OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX), progress(), notCancelled());
+				OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX), execution, owning());
 
 		ArgumentCaptor<Path[]> locked = ArgumentCaptor.forClass(Path[].class);
 
@@ -320,8 +313,7 @@ class VideoConversionServiceTest {
 		when(operationLockService.acquireWithin(eq(ConversionConstants.LOCK_WAIT), eq(ExecutionType.CONVERSION),
 				any(Path[].class))).thenThrow(new OperationLockException("busy"));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.total()).isZero();
 		Assertions.assertThat(result.message()).contains("Outra opera");
@@ -342,16 +334,16 @@ class VideoConversionServiceTest {
 
 			return TranscodeResult.converted(converted, false, false, false, 100);
 		});
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		List<String> reported = new ArrayList<>();
+		service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
-		service.convert(List.of(mediaId), ConversionOptions.defaults(),
-				(processed, total, filePercent, _) -> reported.add(processed + "/" + total + ":" + filePercent),
-				notCancelled());
-
-		Assertions.assertThat(reported).contains("0/1:40", "1/1:100");
+		// Both levels of the bar reach the row: how far into the encode ffmpeg said it
+		// was, and the file having been finished.
+		verify(executionProgressService).updateCurrentItem(execution, 40);
+		verify(executionProgressService, atLeastOnce()).updateLiveProgress(eq(execution), anyInt(), eq(1), anyInt(),
+				anyInt(), any());
 	}
 
 	@Test
@@ -364,11 +356,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, true, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, true));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		ArgumentCaptor<ConversionTotals> totals = ArgumentCaptor.forClass(ConversionTotals.class);
 
@@ -391,14 +382,14 @@ class VideoConversionServiceTest {
 		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.of(tmp.resolve("trash")));
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.partial(converted, false, ConversionFailure.QUARANTINE_FAILED));
 
 		ConversionResult result = service
 				.convert(List.of(mediaId),
 						new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 								OriginalDisposition.QUARANTINE, "", NameAffixPosition.SUFFIX),
-						progress(), notCancelled());
+						execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 		Assertions.assertThat(result.items().getFirst().message()).contains("quarentena");
@@ -414,7 +405,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 1));
 
-		service.convert(List.of(mediaId), null, progress(), notCancelled());
+		service.convert(List.of(mediaId), null, execution, owning());
 
 		verify(videoTranscoder).transcode(argThat(request -> request.options().quality() == ConversionQuality.BALANCED
 				&& request.options().audio() == AudioHandling.AUTO), any(), any());
@@ -431,8 +422,7 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.failed(failure, false, false, false, 1));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.items().getFirst().message()).isNotBlank().doesNotContain("backend.conversion");
 	}
@@ -447,11 +437,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 	}
@@ -466,11 +455,10 @@ class VideoConversionServiceTest {
 		when(conversionCandidateRepository.findSourcesByPublicIdIn(any())).thenReturn(List.of());
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 	}
@@ -485,11 +473,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.converted()).isEqualTo(1);
 		Assertions.assertThat(result.convertedBytes()).isZero();
@@ -509,11 +496,10 @@ class VideoConversionServiceTest {
 
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 100));
-		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), any(), any(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(),
-				notCancelled());
+		ConversionResult result = service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		Assertions.assertThat(result.savedBytes()).isNegative();
 		Assertions.assertThat(result.savedPercent()).isZero();
@@ -529,16 +515,14 @@ class VideoConversionServiceTest {
 		stubSource("h264", 120.0);
 
 		// Cancelled while the first file is being encoded, which is what the user does.
-		AtomicBoolean cancelled = new AtomicBoolean();
-
 		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
-			cancelled.set(true);
+			executionCancellationService.requestCancellation(1L);
 
 			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, 10);
 		});
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
-				progress(), cancelled::get);
+				execution, owning());
 
 		// The file being encoded is reported as cancelled and the next one is never
 		// started, so only one item comes back for two requested ids.
@@ -560,38 +544,11 @@ class VideoConversionServiceTest {
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, 10));
 
-		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), () -> true);
+		executionCancellationService.requestCancellation(1L);
+
+		service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		verify(conversionExecutionRecorder).finish(eq(execution), any(), any(), eq(true));
-	}
-
-	/**
-	 * Declaring the execution alive is what keeps the inventory's orphan sweep from
-	 * treating a running batch as one left behind by a crash. When that happened
-	 * the history showed INTERRUPTED mid-run and, worse, the folder watcher read
-	 * the same status and launched a full inventory over the tree being converted.
-	 */
-	@Test
-	void staysRegisteredAsLiveWhileConvertingAndReleasesTheIdWhenItEnds(@TempDir Path tmp) throws Exception {
-		Path source = Files.writeString(tmp.resolve("clip.mp4"), "0123456789");
-
-		when(execution.getId()).thenReturn(4242L);
-
-		stubFile(source, 10L);
-		stubSource("h264", 120.0);
-
-		AtomicBoolean liveWhileConverting = new AtomicBoolean();
-
-		when(videoTranscoder.transcode(any(), any(), any())).thenAnswer(_ -> {
-			liveWhileConverting.set(executionCancellationService.isLive(4242L));
-
-			return TranscodeResult.failed(ConversionFailure.ENCODER_FAILED, false, false, false, 10);
-		});
-
-		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), notCancelled());
-
-		Assertions.assertThat(liveWhileConverting).isTrue();
-		Assertions.assertThat(executionCancellationService.isLive(4242L)).isFalse();
 	}
 
 	/**
@@ -617,7 +574,7 @@ class VideoConversionServiceTest {
 		});
 
 		ConversionResult result = service.convert(List.of(mediaId, UUID.randomUUID()), ConversionOptions.defaults(),
-				progress(), notCancelled());
+				execution, owning());
 
 		Assertions.assertThat(result.items()).singleElement().extracting(ConversionFileResult::outcome)
 				.isEqualTo(ConversionOutcome.CANCELLED);
@@ -644,23 +601,21 @@ class VideoConversionServiceTest {
 
 		ConversionOptions options = ConversionOptions.defaults();
 
-		ConversionProgressCallback progress = progress();
-		BooleanSupplier notCancelled = notCancelled();
+		ExecutionOwnership ownership = owning();
 
-		Assertions.assertThatThrownBy(() -> service.convert(selection, options, progress, notCancelled))
+		Assertions.assertThatThrownBy(() -> service.convert(selection, options, execution, ownership))
 				.isInstanceOf(IllegalStateException.class);
 
 		verify(conversionExecutionRecorder).fail(eq(execution), any());
 		verify(conversionExecutionRecorder, never()).finish(any(), any(), any(), anyBoolean());
 	}
 
-	private ConversionProgressCallback progress() {
-		return (_, _, _, _) -> {
-		};
-	}
-
-	private BooleanSupplier notCancelled() {
-		return () -> false;
+	/**
+	 * An ownership that says the locks are still held: what happens when they are
+	 * not is the commit service's test, not this one's.
+	 */
+	private ExecutionOwnership owning() {
+		return mock(ExecutionOwnership.class);
 	}
 
 	private void stubFile(Path source, long sizeBytes) {
@@ -697,12 +652,12 @@ class VideoConversionServiceTest {
 				List.of(new ConversionSource(mediaId, "h264", 120.0, captureDate, DateSource.FILE_MODIFIED_AT)));
 		when(videoTranscoder.transcode(any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(converted, false, false, false, 4_000));
-		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any()))
+		when(conversionCommitService.commit(any(), any(), eq(converted), isNull(), any(), any(), any()))
 				.thenReturn(CommitResult.committed(converted, false));
 
-		service.convert(List.of(mediaId), ConversionOptions.defaults(), progress(), notCancelled());
+		service.convert(List.of(mediaId), ConversionOptions.defaults(), execution, owning());
 
 		verify(conversionCommitService).commit(any(), any(), eq(converted), isNull(), any(),
-				eq(new ResolvedMediaDate(captureDate, DateSource.FILE_MODIFIED_AT)));
+				eq(new ResolvedMediaDate(captureDate, DateSource.FILE_MODIFIED_AT)), any());
 	}
 }

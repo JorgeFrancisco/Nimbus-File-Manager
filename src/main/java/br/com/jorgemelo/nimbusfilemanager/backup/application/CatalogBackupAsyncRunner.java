@@ -3,9 +3,11 @@ package br.com.jorgemelo.nimbusfilemanager.backup.application;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +27,13 @@ import lombok.extern.slf4j.Slf4j;
  * replacing the same tables would capture neither the old catalog nor the new.
  */
 @Slf4j
+/**
+ * Application role only. A restore drops and recreates the schema and closes
+ * every connection to it - including the worker's - so it has to be driven by
+ * the process that owns the cluster and can drain the worker first.
+	 */
 @Service
+@Profile(NimbusProfiles.APP)
 public class CatalogBackupAsyncRunner {
 
 	private final CatalogBackupService backupService;

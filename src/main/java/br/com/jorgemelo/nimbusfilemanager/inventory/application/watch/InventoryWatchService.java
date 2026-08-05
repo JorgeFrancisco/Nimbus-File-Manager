@@ -14,25 +14,32 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSourceFactory;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
 import jakarta.annotation.PreDestroy;
@@ -40,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@Profile(NimbusProfiles.APP)
 public class InventoryWatchService extends LocalizedComponent {
 
 	private static final long POLL_MILLIS = 500;
@@ -47,12 +55,12 @@ public class InventoryWatchService extends LocalizedComponent {
 	private static final long SHUTDOWN_DRAIN_MILLIS = 2_000;
 
 	private final AppSettingService appSettingService;
-	private final InventoryBatchLauncherService inventoryBatchLauncherService;
+	private final InventoryLauncherService inventoryLauncherService;
 	private final ExecutionQueryService executionQueryService;
-	private final OrganizationReconcileService organizationReconcileService;
+	private final ExecutionEnqueueService executionEnqueueService;
+	private final ExecutionRepository executionRepository;
 	private final OperationLockService operationLockService;
 	private final FileChangeSourceFactory fileChangeSourceFactory;
-	private final ReconcileExecutionRecorder reconcileExecutionRecorder;
 	private final BackgroundWorkGate backgroundWorkGate;
 	private final Clock clock;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -78,24 +86,22 @@ public class InventoryWatchService extends LocalizedComponent {
 	private volatile String pendingReason = "a reconfiguration of the watched folder";
 
 	private volatile boolean shuttingDown;
-	private volatile LocalDateTime lastReconciliation;
-	private volatile long lastReconciliationRepaired;
 	private final AtomicReference<ScheduledFuture<?>> pollTask = new AtomicReference<>();
 	private final AtomicBoolean stopped = new AtomicBoolean();
 
 	@Autowired
 	public InventoryWatchService(AppSettingService appSettingService,
-			InventoryBatchLauncherService inventoryBatchLauncherService, ExecutionQueryService executionQueryService,
-			OrganizationReconcileService organizationReconcileService, OperationLockService operationLockService,
-			FileChangeSourceFactory fileChangeSourceFactory, ReconcileExecutionRecorder reconcileExecutionRecorder,
-			Clock clock, InventoryWatchProperties watchProperties, BackgroundWorkGate backgroundWorkGate) {
+			InventoryLauncherService inventoryLauncherService, ExecutionQueryService executionQueryService,
+			ExecutionEnqueueService executionEnqueueService, ExecutionRepository executionRepository,
+			OperationLockService operationLockService, FileChangeSourceFactory fileChangeSourceFactory, Clock clock,
+			InventoryWatchProperties watchProperties, BackgroundWorkGate backgroundWorkGate) {
 		this.appSettingService = appSettingService;
-		this.inventoryBatchLauncherService = inventoryBatchLauncherService;
+		this.inventoryLauncherService = inventoryLauncherService;
 		this.executionQueryService = executionQueryService;
-		this.organizationReconcileService = organizationReconcileService;
+		this.executionEnqueueService = executionEnqueueService;
+		this.executionRepository = executionRepository;
 		this.operationLockService = operationLockService;
 		this.fileChangeSourceFactory = fileChangeSourceFactory;
-		this.reconcileExecutionRecorder = reconcileExecutionRecorder;
 		this.backgroundWorkGate = backgroundWorkGate;
 		this.clock = clock;
 
@@ -119,11 +125,20 @@ public class InventoryWatchService extends LocalizedComponent {
 		if (status.get().running()) {
 			log.info("Launching startup inventory for configured folder {}", status.get().folder());
 
-			inventoryBatchLauncherService.launch(watchRequest(), ExecutionTrigger.MANUAL);
+			inventoryLauncherService.launch(watchRequest(), ExecutionTrigger.MANUAL);
 		}
 	}
 
 	public synchronized void reconfigure() {
+		adopt();
+	}
+
+	/**
+	 * The same work, private, because the poll thread reaches it and the
+	 * constructor is what schedules that thread: handing a scheduler a reference a
+	 * subclass could replace is the one thing a constructor must not do.
+	 */
+	private synchronized void adopt() {
 		stopSource();
 
 		String configuredFolder = appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "");
@@ -138,7 +153,7 @@ public class InventoryWatchService extends LocalizedComponent {
 
 		if (!Files.isDirectory(folder)) {
 			status.set(new InventoryWatchStatus(folder.toString(), true, false, null,
-					message("backend.watch.folderMissing"), lastReconciliation, lastReconciliationRepaired));
+					message("backend.watch.folderMissing"), null, 0));
 
 			return;
 		}
@@ -147,20 +162,29 @@ public class InventoryWatchService extends LocalizedComponent {
 			watcher.set(fileChangeSourceFactory.create(folder,
 					appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)));
 
-			status.set(new InventoryWatchStatus(folder.toString(), true, true, null, null, lastReconciliation,
-					lastReconciliationRepaired));
+			status.set(new InventoryWatchStatus(folder.toString(), true, true, null, null, null, 0));
 
 			log.info("Inventory watcher is monitoring {}", folder);
 		} catch (Exception exception) {
 			status.set(new InventoryWatchStatus(folder.toString(), true, false, null, exception.getMessage(),
-					lastReconciliation, lastReconciliationRepaired));
+					null, 0));
 
 			log.error("Could not start inventory watcher for {}", folder, exception);
 		}
 	}
 
 	public void reconfigureAndInventory() {
-		reconfigure();
+		adoptAndInventory();
+	}
+
+	/**
+	 * The same work, reachable from the poll thread without going through a public
+	 * method: the constructor schedules that poll, and handing a scheduler a
+	 * reference that a subclass could replace is the one thing a constructor must
+	 * not do.
+	 */
+	private void adoptAndInventory() {
+		adopt();
 
 		if (status.get().running()) {
 			if (executionQueryService.active().isPresent()) {
@@ -172,13 +196,28 @@ public class InventoryWatchService extends LocalizedComponent {
 			} else {
 				log.info("Launching inventory after monitor reconfiguration for folder {}", status.get().folder());
 
-				inventoryBatchLauncherService.launch(watchRequest(), ExecutionTrigger.MANUAL);
+				inventoryLauncherService.launch(watchRequest(), ExecutionTrigger.MANUAL);
 			}
 		}
 	}
 
+	/**
+	 * Read from the last finished RECONCILE rather than remembered from the last
+	 * one this instance ran. The pass happens in the worker now, so there is
+	 * nothing for this process to remember - and the answer got truer on the way:
+	 * the label says "last reconciliation", and it now means the last one,
+	 * whether a file event or the scheduler asked for it, instead of only the ones
+	 * this watcher happened to trigger.
+	 */
 	public InventoryWatchStatus status() {
-		return status.get();
+		InventoryWatchStatus current = status.get();
+
+		return executionRepository
+				.findFirstByExecutionTypeAndStatusOrderByFinishedAtDesc(ExecutionType.RECONCILE,
+						ExecutionStatus.FINISHED)
+				.map(reconcile -> new InventoryWatchStatus(current.folder(), current.configured(), current.running(),
+						current.lastEvent(), current.error(), reconcile.getFinishedAt(), reconcile.getRepairedItems()))
+				.orElse(current);
 	}
 
 	public synchronized void pause() {
@@ -189,7 +228,7 @@ public class InventoryWatchService extends LocalizedComponent {
 		InventoryWatchStatus current = status.get();
 
 		status.set(new InventoryWatchStatus(current.folder(), current.configured(), false, current.lastEvent(),
-				message("backend.watch.switchingLibrary"), lastReconciliation, lastReconciliationRepaired));
+				message("backend.watch.switchingLibrary"), null, 0));
 	}
 
 	private void pollSafely() {
@@ -217,6 +256,10 @@ public class InventoryWatchService extends LocalizedComponent {
 			// it simply retries next cycle - deferred, never dropped. (Periodic reconcile
 			// now lives in the independent ReconcileScheduler, which defers on the same
 			// lock.)
+			if (adoptConfiguredLibrary()) {
+				return;
+			}
+
 			boolean blocked = executionQueryService.active().isPresent() || isWatchFolderBusy();
 
 			launchPendingInventory(blocked);
@@ -229,6 +272,48 @@ public class InventoryWatchService extends LocalizedComponent {
 				log.error("Inventory watcher polling failed", exception);
 			}
 		}
+	}
+
+	/**
+	 * Follows the library the setting names, whoever changed it.
+	 *
+	 * <p>
+	 * The switch is a worker's job now, and the worker writes the setting in
+	 * another process - so this loop is what makes the watcher of this process
+	 * catch up. It also closes a gap that predates the change: the folder was only
+	 * ever re-read when somebody called {@code reconfigure} from a request thread,
+	 * which meant a setting changed by anything else went unnoticed until restart.
+	 *
+	 * <p>
+	 * Comparing the normalized paths rather than the raw strings, because
+	 * {@code reconfigure} stores the normalized form and a needless reconfigure
+	 * would tear down a working watcher every cycle.
+	 *
+	 * @return whether the library changed, in which case this cycle ends - the
+	 * inventory of the new one has just been asked for and there is nothing left to
+	 * poll for the old
+	 */
+	private boolean adoptConfiguredLibrary() {
+		String configured = appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "");
+		String watched = status.get().folder();
+
+		if (configured.isBlank() || sameFolder(configured, watched)) {
+			return false;
+		}
+
+		log.info("The monitored library became {}; the watcher was following {}", configured, watched);
+
+		adoptAndInventory();
+
+		return true;
+	}
+
+	private boolean sameFolder(String configured, String watched) {
+		if (watched == null || watched.isBlank()) {
+			return false;
+		}
+
+		return PathUtils.normalizePath(configured).equals(PathUtils.normalizePath(watched));
 	}
 
 	private boolean isWatchFolderBusy() {
@@ -273,7 +358,7 @@ public class InventoryWatchService extends LocalizedComponent {
 			inventoryPending = true;
 
 			status.set(new InventoryWatchStatus(status.get().folder(), true, true, LocalDateTime.now(clock), null,
-					lastReconciliation, lastReconciliationRepaired));
+					null, 0));
 
 			log.debug("File-system change detected: {}", changed);
 		}
@@ -301,22 +386,30 @@ public class InventoryWatchService extends LocalizedComponent {
 
 		automaticReconcile(ExecutionTrigger.FILE_EVENT);
 
-		inventoryBatchLauncherService.launch(watchRequest(), ExecutionTrigger.FILE_EVENT);
+		inventoryLauncherService.launch(watchRequest(), ExecutionTrigger.FILE_EVENT);
 	}
 
+	/**
+	 * Queued, never run here - the same pass the scheduler queues, asked for by a
+	 * file event instead of by the clock. Walking the tree and reading every
+	 * catalogued location under it is worker work, and doing it on the watch
+	 * thread was what made a burst of changes hold the poll loop while the catalog
+	 * was read end to end.
+	 *
+	 * <p>
+	 * Repeated events do not pile up: the dedup key is the folder, so at most one
+	 * RECONCILE waits and one runs for it, and every event that arrives while
+	 * those two exist finds the work already asked for. That is the debounce the
+	 * queue provides on top of the one this class already applies in time.
+	 */
 	private void automaticReconcile(ExecutionTrigger trigger) {
 		Path source = Path.of(status.get().folder()).toAbsolutePath().normalize();
 
-		OrganizationReconcileRequest request = new OrganizationReconcileRequest(status.get().folder(),
-				appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true),
-				appSettingService.booleanValue(SettingsConstants.WATCH_INCLUDE_HIDDEN, false), Integer.MAX_VALUE);
-
-		OrganizationReconcileResponse response = organizationReconcileService.reconcileAndApply(request);
-
-		reconcileExecutionRecorder.recordIfRepaired(trigger, source, response);
-
-		lastReconciliation = LocalDateTime.now(clock);
-		lastReconciliationRepaired = response.renamed() + response.repairedPaths() + response.markedMissing();
+		executionEnqueueService.enqueue(Execution.builder().executionType(ExecutionType.RECONCILE)
+				.triggerEvent(trigger).sourcePath(source.toString())
+				.recursive(appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true))
+				.executeFlag(true).dedupKey(OperationPathKey.canonical(source))
+				.statusMessage(StatusMessage.code(ExecutionMessages.RECONCILE_REPAIRED)).build());
 	}
 
 	private InventoryRequest watchRequest() {

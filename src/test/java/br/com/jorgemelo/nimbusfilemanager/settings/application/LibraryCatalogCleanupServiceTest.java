@@ -13,8 +13,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
 
 @ExtendWith(MockitoExtension.class)
 class LibraryCatalogCleanupServiceTest {
@@ -24,6 +26,9 @@ class LibraryCatalogCleanupServiceTest {
 
 	@Mock
 	private CatalogFileRepository catalogFileRepository;
+
+	@Mock
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Mock
 	private WorkspaceManager workspaceManager;
@@ -85,6 +90,7 @@ class LibraryCatalogCleanupServiceTest {
 	}
 
 	private LibraryCatalogCleanupService service() {
-		return new LibraryCatalogCleanupService(catalogFileRepository, workspaceManager);
+		return new LibraryCatalogCleanupService(
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository), workspaceManager);
 	}
 }

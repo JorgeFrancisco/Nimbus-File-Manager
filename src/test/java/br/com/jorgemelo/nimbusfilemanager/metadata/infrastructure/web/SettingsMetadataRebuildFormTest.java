@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -26,10 +29,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildLauncher;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
@@ -64,7 +69,10 @@ class SettingsMetadataRebuildFormTest {
 	private BackgroundWorkGate backgroundWorkGate;
 
 	@MockitoBean
-	private MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
+	private MetadataRebuildLauncher metadataRebuildLauncher;
+
+	@MockitoBean
+	private MetadataRunReader metadataRunReader;
 
 	@MockitoBean
 	private UserPagePreferenceService userPagePreferenceService;
@@ -96,20 +104,15 @@ class SettingsMetadataRebuildFormTest {
 
 	@Test
 	void bindsTheFolderTheTickedFieldsAndTheSimulateBox() throws Exception {
-		when(metadataRebuildAsyncRunner.start(any())).thenReturn(true);
+		when(metadataRebuildLauncher.launch(any(), any(), anyBoolean(), any()))
+				.thenReturn(Optional.of(Execution.builder().id(1L).build()));
 
 		mockMvc.perform(post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos")
 				.param("refresh", "SUBCATEGORY").param("refresh", "DATE").param("dryRun", "true"))
 				.andExpect(status().is3xxRedirection());
 
-		ArgumentCaptor<MetadataRebuildRequest> request = ArgumentCaptor.forClass(MetadataRebuildRequest.class);
-
-		verify(metadataRebuildAsyncRunner).rebuild(request.capture());
-
-		Assertions.assertThat(request.getValue().sourcePath()).isEqualTo("D:\\photos");
-		Assertions.assertThat(request.getValue().refresh()).containsExactly(MetadataRebuildField.SUBCATEGORY,
-				MetadataRebuildField.DATE);
-		Assertions.assertThat(request.getValue().dryRun()).isTrue();
+		verify(metadataRebuildLauncher).launch("D:\\photos",
+				List.of(MetadataRebuildField.SUBCATEGORY, MetadataRebuildField.DATE), true, null);
 	}
 
 	/**
@@ -118,17 +121,18 @@ class SettingsMetadataRebuildFormTest {
 	 */
 	@Test
 	void treatsTheUntickedSimulateBoxAsARealRun() throws Exception {
-		when(metadataRebuildAsyncRunner.start(any())).thenReturn(true);
+		when(metadataRebuildLauncher.launch(any(), any(), anyBoolean(), any()))
+				.thenReturn(Optional.of(Execution.builder().id(1L).build()));
 
 		mockMvc.perform(
 				post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos").param("refresh", "DATE"))
 				.andExpect(status().is3xxRedirection());
 
-		ArgumentCaptor<MetadataRebuildRequest> request = ArgumentCaptor.forClass(MetadataRebuildRequest.class);
+		ArgumentCaptor<Boolean> dryRun = ArgumentCaptor.forClass(Boolean.class);
 
-		verify(metadataRebuildAsyncRunner).rebuild(request.capture());
+		verify(metadataRebuildLauncher).launch(any(), any(), dryRun.capture(), any());
 
-		Assertions.assertThat(request.getValue().dryRun()).isFalse();
+		Assertions.assertThat(dryRun.getValue()).isFalse();
 	}
 
 	/**
@@ -146,13 +150,13 @@ class SettingsMetadataRebuildFormTest {
 		verify(userPagePreferenceService).save("system", MetadataRebuildPreferences.PAGE_KEY,
 				MetadataRebuildPreferences.FIELDS_KEY, "SUBCATEGORY");
 
-		verify(metadataRebuildAsyncRunner, never()).start(any());
-		verify(metadataRebuildAsyncRunner, never()).rebuild(any());
+		verify(metadataRebuildLauncher, never()).launch(any(), any(), anyBoolean(), any());
 	}
 
 	@Test
 	void persistsTheChoicesSoThePanelReopensOnThem() throws Exception {
-		when(metadataRebuildAsyncRunner.start(any())).thenReturn(true);
+		when(metadataRebuildLauncher.launch(any(), any(), anyBoolean(), any()))
+				.thenReturn(Optional.of(Execution.builder().id(1L).build()));
 
 		mockMvc.perform(post("/app/settings/metadata/rebuild").param("sourcePath", "D:\\photos").param("refresh", "GPS")
 				.param("refresh", "CAMERA")).andExpect(status().is3xxRedirection());

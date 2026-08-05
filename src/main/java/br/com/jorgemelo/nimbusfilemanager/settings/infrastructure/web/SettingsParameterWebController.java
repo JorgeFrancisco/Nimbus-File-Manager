@@ -1,15 +1,17 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.web;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.LibrarySwitchService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.LibrarySwitchLauncher;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
@@ -25,20 +27,21 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
  * the page render has no use for.
  */
 @Controller
+@Profile(NimbusProfiles.APP)
 public class SettingsParameterWebController extends LocalizedComponent {
 
 	private final AppSettingService appSettingService;
 	private final InventoryWatchService inventoryWatchService;
-	private final LibrarySwitchService librarySwitchService;
+	private final LibrarySwitchLauncher librarySwitchLauncher;
 	private final InventoryRunningState inventoryRunningState;
 	private final QuarantineFolderPolicy quarantineFolderPolicy;
 
 	public SettingsParameterWebController(AppSettingService appSettingService,
-			InventoryWatchService inventoryWatchService, LibrarySwitchService librarySwitchService,
+			InventoryWatchService inventoryWatchService, LibrarySwitchLauncher librarySwitchLauncher,
 			InventoryRunningState inventoryRunningState, QuarantineFolderPolicy quarantineFolderPolicy) {
 		this.appSettingService = appSettingService;
 		this.inventoryWatchService = inventoryWatchService;
-		this.librarySwitchService = librarySwitchService;
+		this.librarySwitchLauncher = librarySwitchLauncher;
 		this.inventoryRunningState = inventoryRunningState;
 		this.quarantineFolderPolicy = quarantineFolderPolicy;
 	}
@@ -66,11 +69,11 @@ public class SettingsParameterWebController extends LocalizedComponent {
 						throw new IllegalArgumentException(message("backend.settings.confirmLibrarySwitch"));
 					}
 
-					librarySwitchService.validateNewFolder(value);
+					librarySwitchLauncher.validateNewFolder(value);
 
 					quarantineFolderPolicy.validateLibraryFolder(value);
 
-					librarySwitchService.switchLibrary(oldFolder, value.trim(), username(authentication));
+					librarySwitchLauncher.launch(oldFolder, value.trim(), username(authentication));
 
 					redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS,
 							message("backend.settings.librarySwitchStarted"));

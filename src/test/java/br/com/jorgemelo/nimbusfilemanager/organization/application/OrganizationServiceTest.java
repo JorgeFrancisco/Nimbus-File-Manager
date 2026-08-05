@@ -1,84 +1,69 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdivision;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildService;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
-import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteResponse;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPreviewRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationUndoResponse;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
+/**
+ * What is left of this class after the preview stopped running here.
+ *
+ * <p>
+ * It validates folders, queues, and reads. It no longer computes a plan, holds
+ * one, writes an execution row of its own or reaches - through anything - the
+ * class that can move the user's files, which is what took its name off the
+ * mutation-port exception list.
+ */
 @ExtendWith(MockitoExtension.class)
 class OrganizationServiceTest {
 
 	@Mock
-	private OrganizationPlanner organizationPlanner;
+	private OrganizationLauncherService organizationLauncherService;
 
 	@Mock
-	private OrganizationExecutor organizationExecutor;
+	private OrganizationPreviewLauncher organizationPreviewLauncher;
 
 	@Mock
-	private MetadataRebuildService metadataRebuildService;
+	private OrganizationPlanReader organizationPlanReader;
 
 	@Mock
-	private OrganizationUndoService organizationUndoService;
+	private OrganizationUndoLauncherService organizationUndoLauncherService;
 
 	@Mock
 	private OrganizationReconcileService organizationReconcileService;
 
 	@Mock
-	private OrganizationAsyncRunner organizationAsyncRunner;
-
-	@Mock
-	private OrganizationPlanStore organizationPlanStore;
-
-	@Mock
 	private ExecutionRepository executionRepository;
 
-	private final OperationLockService operationLockService = new OperationLockService();
 	private final OrganizationPathValidator organizationPathValidator = pathValidator();
 
 	private OrganizationPathValidator pathValidator() {
@@ -91,215 +76,132 @@ class OrganizationServiceTest {
 	}
 
 	@Test
-	void previewShouldRebuildMetadataWithDateFieldByDefault() {
-		OrganizationPreviewRequest request = previewRequest(true, List.of());
+	void previewIsQueuedAndNothingIsComputedHere() {
+		OrganizationExecuteRequest request = request("C:/input", "C:/target");
 
-		OrganizationPlan plan = plan();
+		ExecutionResponse queued = response("ORGANIZATION_PREVIEW");
 
-		when(organizationPlanner.preview(request)).thenReturn(plan);
+		when(organizationPreviewLauncher.launch(request)).thenReturn(queued);
 
-		Assertions.assertThat(service().preview(request)).isSameAs(plan);
+		Assertions.assertThat(service().previewAsync(request)).isSameAs(queued);
 
-		ArgumentCaptor<MetadataRebuildRequest> captor = ArgumentCaptor.forClass(MetadataRebuildRequest.class);
-
-		verify(metadataRebuildService).rebuild(captor.capture());
-
-		Assertions.assertThat(captor.getValue().refresh()).containsExactly(MetadataRebuildField.DATE);
-		Assertions.assertThat(captor.getValue().dryRun()).isFalse();
-	}
-
-	@Test
-	void executeShouldUseExplicitRebuildFieldsAndDelegateExecution() {
-		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/target", true,
-				OrganizationLayout.DEFAULT, 50, true, List.of(MetadataRebuildField.GPS), null, null, null, null, null,
-				false, false);
-
-		OrganizationExecuteResponse response = new OrganizationExecuteResponse(1L, "FINISHED", LocalDateTime.now(),
-				LocalDateTime.now(), "C:/input", "C:/target", 1, 1, 0, 0, false, "ok");
-
-		when(organizationExecutor.execute(request)).thenReturn(response);
-
-		Assertions.assertThat(service().execute(request)).isSameAs(response);
-
-		ArgumentCaptor<MetadataRebuildRequest> captor = ArgumentCaptor.forClass(MetadataRebuildRequest.class);
-
-		verify(metadataRebuildService).rebuild(captor.capture());
-
-		Assertions.assertThat(captor.getValue().refresh()).containsExactly(MetadataRebuildField.GPS);
-	}
-
-	@Test
-	void executeShouldRejectWhenSourcePathIsAlreadyLocked() {
-		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/target", true,
-				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null, false, false);
-
-		CountDownLatch lockAcquired = new CountDownLatch(1);
-		CountDownLatch releaseLock = new CountDownLatch(1);
-
-		Thread lockThread = holdLock(Path.of("C:/input"), lockAcquired, releaseLock);
-
-		try {
-			Assertions.assertThat(lockAcquired.await(2, TimeUnit.SECONDS)).isTrue();
-
-			var response = service().execute(request);
-
-			Assertions.assertThat(response.rejected()).isTrue();
-			Assertions.assertThat(response.status()).isEqualTo("ERROR");
-			Assertions.assertThat(response.message()).contains("Organization rejected");
-
-			verify(organizationExecutor, never()).execute(any());
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new AssertionError(e);
-		} finally {
-			releaseLock.countDown();
-		}
-
-		Assertions.assertThatCode(lockThread::join).doesNotThrowAnyException();
-	}
-
-	@Test
-	void previewShouldRejectSamePathAndTargetInsideSource() {
-		OrganizationService service = service();
-
-		OrganizationPreviewRequest samePathRequest = new OrganizationPreviewRequest("C:/input", "C:/input", true,
-				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
-		OrganizationPreviewRequest nestedTargetRequest = new OrganizationPreviewRequest("C:/input",
-				"C:/input/organized", true, OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null);
-
-		Assertions.assertThatThrownBy(() -> service.preview(samePathRequest))
-				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("devem ser diferentes");
-
-		Assertions.assertThatThrownBy(() -> service.preview(nestedTargetRequest))
-				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("dentro da pasta de origem");
-
-		verify(organizationPlanner, never()).preview(any());
-	}
-
-	@Test
-	void executeShouldRejectSamePathBeforeDelegatingExecution() {
-		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/input", true,
-				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null, false, false);
-
-		OrganizationService service = service();
-
-		Assertions.assertThatThrownBy(() -> service.execute(request)).isInstanceOf(IllegalArgumentException.class)
-				.hasMessageContaining("devem ser diferentes");
-
-		verify(organizationExecutor, never()).execute(any());
-	}
-
-	@Test
-	void previewShouldSkipRebuildWhenNotRequested() {
-		OrganizationPreviewRequest request = previewRequest(false, null);
-
-		OrganizationPlan plan = plan();
-
-		when(organizationPlanner.preview(request)).thenReturn(plan);
-
-		Assertions.assertThat(service().preview(request)).isSameAs(plan);
-
-		verify(metadataRebuildService, never()).rebuild(any());
-	}
-
-	@Test
-	void reconcileShouldDelegateWithoutPathValidation() {
-		OrganizationReconcileRequest request = new OrganizationReconcileRequest("C:/input", true, false, 10);
-
-		OrganizationReconcileResponse response = new OrganizationReconcileResponse("C:/input", true, false, 1, 1, 0, 0,
-				0, List.of(), List.of(), List.of(), 0, 0, 0);
-
-		when(organizationReconcileService.reconcile(request)).thenReturn(response);
-
-		Assertions.assertThat(service().reconcile(request)).isSameAs(response);
-	}
-
-	@Test
-	void previewAsyncShouldSaveStartedExecutionAndDispatchToRunnerWithoutWaiting() {
-		// Preview is a dry-run execute request now: same type as execute, dryRun=true.
-		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/target", true,
-				OrganizationLayout.DEFAULT, 50, false, null, true, null, null, null, null, false, false,
-				LocationSubdivision.NONE, null, LocationFallbackMode.IGNORE, true);
-
-		when(executionRepository.save(any())).thenAnswer(invocation -> {
-			Execution execution = invocation.getArgument(0);
-			execution.setId(10L);
-			return execution;
-		});
-
-		var response = serviceWithAsync().previewAsync(request);
-
-		Assertions.assertThat(response.executionId()).isEqualTo(UuidV7.fromLegacy(10L));
-		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.STARTED.name());
-		Assertions.assertThat(request.dryRunValue()).isTrue();
-
-		verify(organizationAsyncRunner).runPreview(ArgumentMatchers.eq(request), any());
-		verify(organizationExecutor, never()).execute(any());
-	}
-
-	@Test
-	void executeAsyncShouldSaveStartedExecutionAndDispatchToRunnerWithoutWaiting() {
-		OrganizationExecuteRequest request = new OrganizationExecuteRequest("C:/input", "C:/target", true,
-				OrganizationLayout.DEFAULT, 50, false, null, null, null, null, null, null, false, false);
-
-		when(executionRepository.save(any())).thenAnswer(invocation -> {
-			Execution execution = invocation.getArgument(0);
-			execution.setId(11L);
-			return execution;
-		});
-
-		var response = serviceWithAsync().executeAsync(request);
-
-		Assertions.assertThat(response.executionId()).isEqualTo(UuidV7.fromLegacy(11L));
-		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.STARTED.name());
-
-		verify(organizationAsyncRunner).runExecute(ArgumentMatchers.eq(request), any());
-		verify(organizationExecutor, never()).execute(any());
-	}
-
-	@Test
-	void getPreviewPlanShouldReturnStoredPlan() {
-		OrganizationPlan plan = plan();
-
-		when(organizationPlanStore.get(5L)).thenReturn(plan);
-
-		Assertions.assertThat(service().getPreviewPlan(5L)).isSameAs(plan);
+		// No row written in this process, and nothing read back afterwards: the plan
+		// belongs to the worker that will build it.
+		verify(executionRepository, never()).save(any());
+		verifyNoInteractions(organizationPlanReader);
 	}
 
 	/**
-	 * The REST surface speaks public ids and the store speaks internal ones, so
-	 * every public entry point has to translate before it delegates - getting that
-	 * translation wrong is how a screen ends up looking at another execution.
+	 * The folders are still checked here, before anything is queued. A request that
+	 * cannot be right is refused while somebody is looking at the screen, instead of
+	 * becoming a row that fails in another process minutes later.
 	 */
 	@Test
-	void getPreviewPlanPublicShouldTranslateThePublicIdBeforeReadingTheStore() {
+	void aPreviewOverImpossibleFoldersIsRefusedBeforeItIsQueued() {
+		OrganizationService service = service();
+
+		OrganizationExecuteRequest samePath = request("C:/input", "C:/input");
+		OrganizationExecuteRequest nested = request("C:/input", "C:/input/organized");
+
+		Assertions.assertThatThrownBy(() -> service.previewAsync(samePath))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("devem ser diferentes");
+		Assertions.assertThatThrownBy(() -> service.previewAsync(nested)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("dentro da pasta de origem");
+
+		verify(organizationPreviewLauncher, never()).launch(any());
+	}
+
+	@Test
+	void anExecuteOverImpossibleFoldersIsRefusedBeforeItIsQueued() {
+		OrganizationService service = service();
+
+		OrganizationExecuteRequest samePath = request("C:/input", "C:/input");
+
+		Assertions.assertThatThrownBy(() -> service.executeAsync(samePath))
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("devem ser diferentes");
+
+		verify(organizationLauncherService, never()).launch(any());
+	}
+
+	/**
+	 * The run is queued and nothing is started here - no row written in this
+	 * process, no background thread, no executor. It also does not read the plan:
+	 * the run recalculates, which is the recorded contract rather than an
+	 * oversight.
+	 */
+	@Test
+	void executeIsQueuedAndDoesNotReadThePlan() {
+		OrganizationExecuteRequest request = request("C:/input", "C:/target");
+
+		ExecutionResponse queued = response("ORGANIZATION");
+
+		when(organizationLauncherService.launch(request)).thenReturn(queued);
+
+		Assertions.assertThat(service().executeAsync(request)).isSameAs(queued);
+
+		verify(executionRepository, never()).save(any());
+		verifyNoInteractions(organizationPlanReader);
+	}
+
+	@Test
+	void aPlanIsReadFromTheDatabaseByInternalId() {
+		StoredPlanPage page = page();
+
+		when(organizationPlanReader.page(5L, 0, 50, false)).thenReturn(Optional.of(page));
+
+		Assertions.assertThat(service().planPage(5L, 0, 50, false)).containsSame(page);
+	}
+
+	/**
+	 * The REST surface speaks public ids and the rows speak internal ones, so every
+	 * public entry point translates before it delegates - getting that translation
+	 * wrong is how a screen ends up looking at another execution's plan.
+	 */
+	@Test
+	void aPublicIdIsTranslatedBeforeThePlanIsRead() {
 		UUID publicId = UUID.randomUUID();
 
-		OrganizationPlan plan = plan();
+		StoredPlanPage page = page();
 
 		when(executionRepository.findByPublicId(publicId))
 				.thenReturn(Optional.of(Execution.builder().id(9L).publicId(publicId).build()));
-		when(organizationPlanStore.get(9L)).thenReturn(plan);
+		when(organizationPlanReader.page(9L, 1, 20, true)).thenReturn(Optional.of(page));
 
-		Assertions.assertThat(service().getPreviewPlanPublic(publicId)).isSameAs(plan);
+		Assertions.assertThat(service().planPagePublic(publicId, 1, 20, true)).containsSame(page);
 	}
 
+	/**
+	 * An execution nobody recognises reads as "no plan" rather than throwing. It is
+	 * the same answer the screen already gives for a plan that expired, and the
+	 * user can act on neither difference.
+	 */
 	@Test
-	void undoPublicShouldTranslateThePublicIdBeforeUndoing() {
+	void anUnknownExecutionHasNoPlan() {
 		UUID publicId = UUID.randomUUID();
 
-		OrganizationUndoResponse response = new OrganizationUndoResponse(4L, "FINISHED", 2, 2, 0, 0, "ok", List.of());
+		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
 
-		when(executionRepository.findByPublicId(publicId))
-				.thenReturn(Optional.of(Execution.builder().id(4L).publicId(publicId).build()));
-		when(organizationUndoService.undo(4L)).thenReturn(response);
+		Assertions.assertThat(service().planPagePublic(publicId, 0, 50, false)).isEmpty();
 
-		Assertions.assertThat(service().undoPublic(publicId)).isSameAs(response);
+		verify(organizationPlanReader, never()).page(anyLong(), anyInt(), anyInt(), anyBoolean());
 	}
 
-	/** An id nobody recognises fails saying which one, not with a null later on. */
 	@Test
-	void publicEntryPointsRefuseAnUnknownExecutionId() {
+	void undoTranslatesThePublicIdBeforeQueueingTheReversal() {
+		UUID publicId = UUID.randomUUID();
+
+		Execution undone = Execution.builder().id(4L).publicId(publicId).build();
+
+		ExecutionResponse queued = response("UNDO");
+
+		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(undone));
+		when(organizationUndoLauncherService.launch(undone)).thenReturn(queued);
+
+		Assertions.assertThat(service().undoPublic(publicId)).isSameAs(queued);
+	}
+
+	@Test
+	void undoRefusesAnUnknownExecutionIdSayingWhichOne() {
 		UUID publicId = UUID.randomUUID();
 
 		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
@@ -310,40 +212,36 @@ class OrganizationServiceTest {
 				.hasMessageContaining(publicId.toString());
 	}
 
+	@Test
+	void reconcileDelegatesWithoutPathValidation() {
+		OrganizationReconcileRequest request = new OrganizationReconcileRequest("C:/input", true, false, 10);
+
+		OrganizationReconcileResponse response = new OrganizationReconcileResponse("C:/input", true, false, 1, 1, 0, 0,
+				0, List.of(), List.of(), List.of(), 0, 0, 0, 0);
+
+		when(organizationReconcileService.reconcile(request)).thenReturn(response);
+
+		Assertions.assertThat(service().reconcile(request)).isSameAs(response);
+	}
+
 	private OrganizationService service() {
-		return new OrganizationService(organizationPlanner, organizationExecutor, metadataRebuildService,
-				operationLockService, organizationPathValidator, organizationUndoService, organizationReconcileService,
-				organizationAsyncRunner, organizationPlanStore, executionRepository,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()),
-				Clock.systemDefaultZone());
+		return new OrganizationService(organizationPathValidator, organizationUndoLauncherService,
+				organizationReconcileService, organizationLauncherService, organizationPreviewLauncher,
+				organizationPlanReader, executionRepository);
 	}
 
-	private OrganizationService serviceWithAsync() {
-		return service();
+	private OrganizationExecuteRequest request(String source, String target) {
+		return new OrganizationExecuteRequest(source, target, true, OrganizationLayout.DEFAULT, 50, false, null, null,
+				null, null, null, null, false, false);
 	}
 
-	private Thread holdLock(Path path, CountDownLatch lockAcquired, CountDownLatch releaseLock) {
-		Thread thread = new Thread(() -> {
-			try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, path)) {
-				lockAcquired.countDown();
-				releaseLock.await();
-			} catch (InterruptedException _) {
-				Thread.currentThread().interrupt();
-			}
-		});
-
-		thread.start();
-
-		return thread;
+	private ExecutionResponse response(String type) {
+		return new ExecutionResponse(UUID.randomUUID(), type, ExecutionStatus.PENDING.name(), null, null, "C:/input",
+				"C:/target", 0, 0, 0, 0, 0, 0, null, null, null, true);
 	}
 
-	private OrganizationPreviewRequest previewRequest(boolean rebuildMetadata, List<MetadataRebuildField> rebuild) {
-		return new OrganizationPreviewRequest("C:/input", "C:/target", true, OrganizationLayout.DEFAULT, 50,
-				rebuildMetadata, rebuild, null, null, null, null, null);
-	}
-
-	private OrganizationPlan plan() {
-		return new OrganizationPlan("C:/input", "C:/target", OrganizationLayout.DEFAULT, false,
-				new OrganizationSummary(0, 0, 0, 0, 0, 0, 0, 0, 0), List.of());
+	private StoredPlanPage page() {
+		return new StoredPlanPage("C:/input", "C:/target", OrganizationLayout.DEFAULT,
+				new OrganizationSummary(0, 0, 0, 0, 0, 0, 0, 0, 0), false, List.of(), 0, 50, 0);
 	}
 }

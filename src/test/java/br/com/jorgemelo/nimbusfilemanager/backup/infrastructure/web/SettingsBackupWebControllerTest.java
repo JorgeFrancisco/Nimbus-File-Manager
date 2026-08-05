@@ -6,6 +6,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -13,7 +15,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 
 /**
@@ -26,12 +29,17 @@ class SettingsBackupWebControllerTest {
 	private static final String NAME = "nimbus-catalog-20260801-060000.zip";
 
 	private final CatalogBackupService catalogBackupService = mock(CatalogBackupService.class);
-	private final InventoryRunningState inventoryRunningState = mock(InventoryRunningState.class);
+	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 
 	private final CatalogBackupAsyncRunner asyncRunner = mock(CatalogBackupAsyncRunner.class);
 
 	private final SettingsBackupWebController controller = new SettingsBackupWebController(
-			catalogBackupService, asyncRunner, inventoryRunningState);
+			catalogBackupService, asyncRunner, executionQueryService);
+
+	private static ExecutionResponse execution(String type) {
+		return new ExecutionResponse(1L, type, "RUNNING", LocalDateTime.now(), null, "src", null, 1, 1, 0, 0, 0, 0,
+				null, null, "running", false);
+	}
 
 	/**
 	 * The work runs in the background, so the answer says it started rather than
@@ -125,12 +133,31 @@ class SettingsBackupWebControllerTest {
 	}
 
 	/**
-	 * An inventory writes rows while it runs; emptying the catalog under it would
-	 * end with neither the old catalog nor the restored one.
+	 * Any execution, and not only an inventory. The restore recreates every table
+	 * the backup carries - the execution table included - so whatever is running
+	 * would be reporting progress into a row being replaced underneath it. The
+	 * type of work does not enter into it.
+	 */
+	@Test
+	void restoringIsBlockedWhileAnyExecutionIsActive() {
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+
+		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
+
+		controller.restoreBackup(NAME, redirect);
+
+		verify(catalogBackupService, never()).restore(NAME);
+
+		Assertions.assertThat(redirect.getFlashAttributes()).containsKey(SharedConstants.ATTR_ERROR);
+	}
+
+	/**
+	 * The rule it replaced only knew about inventories, which let a restore start
+	 * beside a conversion, a reconcile or an organization run.
 	 */
 	@Test
 	void restoringIsBlockedWhileAnInventoryRuns() {
-		when(inventoryRunningState.isRunning()).thenReturn(true);
+		when(executionQueryService.active()).thenReturn(Optional.of(execution("INVENTORY")));
 
 		RedirectAttributesModelMap redirect = new RedirectAttributesModelMap();
 

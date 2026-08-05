@@ -23,7 +23,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
@@ -55,13 +55,13 @@ public class VideoFingerprintBacklogService
 
 	public VideoFingerprintBacklogService(MediaFingerprintRepository mediaFingerprintRepository,
 			FingerprintFailureRepository fingerprintFailureRepository, VideoSimilarityAlgorithm algorithm,
-			ProcessingCoordinator processingCoordinator, ExecutionQueryService executionQueryService,
+			ProcessingCoordinator processingCoordinator, ExecutionRepository executionRepository,
 			PlatformTransactionManager transactionManager, Clock clock) {
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
 		this.algorithm = algorithm;
 		this.engine = new FingerprintBacklogEngine(mediaFingerprintRepository, fingerprintFailureRepository,
-				processingCoordinator, executionQueryService, transactionManager, clock);
+				processingCoordinator, executionRepository, transactionManager, clock);
 		this.clock = clock;
 	}
 

@@ -13,13 +13,11 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
@@ -29,14 +27,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityBounds;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityLauncher;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityViewService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateGroupResponse;
@@ -49,16 +49,21 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFil
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicatesViewRequest;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogLauncher;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintRunReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.MediaTypeFilter;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
@@ -94,34 +99,42 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private static final Set<String> TABS = Set.of(DEFAULT_TAB, TAB_SIMILAR, TAB_VIDEOS);
 	private static final String PHOTO_ACTION_BASE = "/app/duplicates/phash";
 	private static final String VIDEO_ACTION_BASE = "/app/duplicates/phash-video";
+	private static final String PHOTOS_TAB = "redirect:/app/duplicates?tab=similar";
+	private static final String VIDEOS_TAB = "redirect:/app/duplicates?tab=videos";
 	private static final String SYSTEM_USERNAME = "system";
 	private static final String ATTR_SIMILARITY_COMPUTING = "similarityComputing";
 
 	private final DuplicateService duplicateService;
-	private final PhotoSimilarityService photoSimilarityService;
 	private final PhashBacklogService phashBacklogService;
-	private final PhashBacklogAsyncRunner phashBacklogAsyncRunner;
+	private final FingerprintBacklogLauncher fingerprintBacklogLauncher;
+	private final FingerprintRunReader fingerprintRunReader;
 	private final UserPagePreferenceService userPagePreferenceService;
-	private final PhotoSimilarityAsyncRunner photoSimilarityAsyncRunner;
-	private final DuplicateDeletionAsyncRunner duplicateDeletionAsyncRunner;
+	private final SimilarityViewService similarityViewService;
+	private final SimilarityLauncher similarityLauncher;
+	private final DuplicateDeletionLauncherService duplicateDeletionLauncherService;
+	private final DuplicateDeletionProgressService duplicateDeletionProgressService;
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final VideoSimilarityWeb videoSimilarityWeb;
 	private final DateSourceLabels dateSourceLabels;
 
 	@Autowired
-	public DuplicatesWebController(DuplicateService duplicateService, PhotoSimilarityService photoSimilarityService,
-			PhashBacklogService phashBacklogService, PhashBacklogAsyncRunner phashBacklogAsyncRunner,
-			UserPagePreferenceService userPagePreferenceService, PhotoSimilarityAsyncRunner photoSimilarityAsyncRunner,
-			DuplicateDeletionAsyncRunner duplicateDeletionAsyncRunner,
+	public DuplicatesWebController(DuplicateService duplicateService, PhashBacklogService phashBacklogService,
+			FingerprintBacklogLauncher fingerprintBacklogLauncher, FingerprintRunReader fingerprintRunReader,
+			UserPagePreferenceService userPagePreferenceService,
+			SimilarityViewService similarityViewService, SimilarityLauncher similarityLauncher,
+			DuplicateDeletionLauncherService duplicateDeletionLauncherService,
+			DuplicateDeletionProgressService duplicateDeletionProgressService,
 			DuplicateExclusionService duplicateExclusionService, VideoSimilarityWeb videoSimilarityWeb,
 			DateSourceLabels dateSourceLabels) {
 		this.duplicateService = duplicateService;
-		this.photoSimilarityService = photoSimilarityService;
 		this.phashBacklogService = phashBacklogService;
-		this.phashBacklogAsyncRunner = phashBacklogAsyncRunner;
+		this.fingerprintBacklogLauncher = fingerprintBacklogLauncher;
+		this.fingerprintRunReader = fingerprintRunReader;
 		this.userPagePreferenceService = userPagePreferenceService;
-		this.photoSimilarityAsyncRunner = photoSimilarityAsyncRunner;
-		this.duplicateDeletionAsyncRunner = duplicateDeletionAsyncRunner;
+		this.similarityViewService = similarityViewService;
+		this.similarityLauncher = similarityLauncher;
+		this.duplicateDeletionLauncherService = duplicateDeletionLauncherService;
+		this.duplicateDeletionProgressService = duplicateDeletionProgressService;
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.videoSimilarityWeb = videoSimilarityWeb;
 		this.dateSourceLabels = dateSourceLabels;
@@ -164,15 +177,13 @@ public class DuplicatesWebController extends LocalizedComponent {
 		model.addAttribute("selectedTypeFilters",
 				typeFilter.stream().map(Enum::name).collect(Collectors.toCollection(LinkedHashSet::new)));
 
-		// A running inventory makes BOTH tabs' results partial (a file's duplicate may
-		// not
-		// be cataloged yet). Since this screen previews - and soon executes -
-		// deletions,
-		// that could delete the wrong file, so the whole screen is blocked until it
-		// ends.
-		boolean inventoryActive = phashBacklogService.inventoryActive();
-
-		model.addAttribute("inventoryActive", inventoryActive);
+		// A running inventory means a file arriving right now may not be catalogued
+		// yet, so a group it belongs to can be missing from the results. That is the
+		// normal state of a library that keeps receiving photos, not a reason to take
+		// the screen away: what is already analysed is analysed, and the user still
+		// chooses which files to delete. The screen says an inventory is running so
+		// the incompleteness is visible rather than silent.
+		model.addAttribute("inventoryActive", phashBacklogService.inventoryActive());
 
 		// A conversion does not make the analysis wrong - it only holds the quarantine
 		// a deletion writes to. So the results stay on screen and only the deletion is
@@ -182,20 +193,19 @@ public class DuplicatesWebController extends LocalizedComponent {
 				phashBacklogService.conversionActive() ? message("backend.duplicates.deletionBlockedByConversion")
 						: null);
 
-		if (inventoryActive) {
-			addPageAttributes(model, Page.empty(), List.of());
-
-			return "app/duplicates";
-		}
-
 		if (videosTab) {
 			renderVideoTab(model, safeMinSimilarity, page, pageSize);
 		} else if (similarTab) {
 			renderPhotoTab(model, safeMinSimilarity, page, pageSize);
 		} else {
-			setBacklogAttributes(model, phashBacklogService.status(), phashBacklogAsyncRunner.etaSeconds(),
-					phashBacklogAsyncRunner.isRunning(), PHOTO_ACTION_BASE, false);
-			model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
+			setBacklogAttributes(model, phashBacklogService.status(),
+					fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_PHOTO),
+					fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_PHOTO), PHOTO_ACTION_BASE, false);
+
+			// The exact tab has no analysis of its own, but the template is one page: the
+			// similarity attributes get their neutral values so no expression on it is ever
+			// evaluated against a missing one.
+			renderSimilarity(model, SimilarityView.none(), false, false);
 
 			Page<DuplicateCandidateGroupResponse> exactPage = duplicateService
 					.candidates(PageRequest.of(page, pageSize), MediaTypeFilter.fileTypesOf(typeFilter));
@@ -215,21 +225,17 @@ public class DuplicatesWebController extends LocalizedComponent {
 	public String retryFingerprints() {
 		phashBacklogService.resetFailures();
 
-		if (phashBacklogAsyncRunner.start()) {
-			phashBacklogAsyncRunner.run();
-		}
+		fingerprintBacklogLauncher.launch(ExecutionType.FINGERPRINT_PHOTO, false);
 
-		return "redirect:/app/duplicates?tab=similar";
+		return PHOTOS_TAB;
 	}
 
 	/** Rebuilds only visual fingerprints and SSIM samples; no inventory runs. */
 	@PostMapping("/app/duplicates/phash/rebuild")
 	public String rebuildFingerprints() {
-		if (phashBacklogAsyncRunner.prepareRebuild()) {
-			phashBacklogAsyncRunner.run();
-		}
+		fingerprintBacklogLauncher.launch(ExecutionType.FINGERPRINT_PHOTO, true);
 
-		return "redirect:/app/duplicates?tab=similar";
+		return PHOTOS_TAB;
 	}
 
 	/** Video counterpart of {@link #retryFingerprints()}. */
@@ -237,28 +243,50 @@ public class DuplicatesWebController extends LocalizedComponent {
 	public String retryVideoFingerprints() {
 		videoSimilarityWeb.backlogService().resetFailures();
 
-		if (videoSimilarityWeb.backlogRunner().start()) {
-			videoSimilarityWeb.backlogRunner().run();
-		}
+		fingerprintBacklogLauncher.launch(ExecutionType.FINGERPRINT_VIDEO, false);
 
-		return "redirect:/app/duplicates?tab=videos";
+		return VIDEOS_TAB;
+	}
+
+	/**
+	 * Asks for a new similarity analysis of the photos.
+	 *
+	 * <p>
+	 * Queued and never awaited: grouping a library takes minutes, the previous
+	 * answer stays on screen while it runs, and an equivalent request already in
+	 * the queue is reused rather than duplicated. The published result is replaced
+	 * only when the new one is published, atomically.
+	 */
+	@PostMapping("/app/duplicates/phash/analyze")
+	public String analyzePhotos(@RequestParam(required = false) Integer minSimilarity,
+			Authentication authentication) {
+		similarityLauncher.launchPhotos(resolveMinSimilarity(minSimilarity, authentication, false));
+
+		return PHOTOS_TAB;
+	}
+
+	/** Video counterpart of {@link #analyzePhotos}. */
+	@PostMapping("/app/duplicates/phash-video/analyze")
+	public String analyzeVideos(@RequestParam(required = false) Integer minSimilarity,
+			Authentication authentication) {
+		similarityLauncher.launchVideos(resolveMinSimilarity(minSimilarity, authentication, true));
+
+		return VIDEOS_TAB;
 	}
 
 	/** Video counterpart of {@link #rebuildFingerprints()}. */
 	@PostMapping("/app/duplicates/phash-video/rebuild")
 	public String rebuildVideoFingerprints() {
-		if (videoSimilarityWeb.backlogRunner().prepareRebuild()) {
-			videoSimilarityWeb.backlogRunner().run();
-		}
+		fingerprintBacklogLauncher.launch(ExecutionType.FINGERPRINT_VIDEO, true);
 
-		return "redirect:/app/duplicates?tab=videos";
+		return VIDEOS_TAB;
 	}
 
 	/**
 	 * Soft-deletes the selected duplicate files: moves each to the configured
 	 * quarantine folder as an undoable {@code DEDUP_DELETE} execution (see
-	 * {@link DuplicateDeletionAsyncRunner}). The move runs in the background so the
-	 * screen is never blocked; this only kicks it off and returns the initial
+	 * the worker). The move runs in the background so the
+	 * screen is never blocked; this only queues it and returns the initial
 	 * progress snapshot, then the screen polls {@link #deleteProgress()} for
 	 * "Movendo X de N" until it finishes and the final
 	 * {@link DuplicateDeletionResult} arrives.
@@ -268,15 +296,10 @@ public class DuplicatesWebController extends LocalizedComponent {
 	public DuplicateDeletionProgress delete(@RequestBody DuplicateDeleteRequest request) {
 		List<UUID> ids = request == null || request.ids() == null ? List.of() : request.ids();
 
-		if (duplicateDeletionAsyncRunner.start(ids.size())) {
-			try {
-				duplicateDeletionAsyncRunner.run(ids);
-			} catch (TaskRejectedException _) {
-				// The @Async task was never submitted (shared executor saturated or shutting
-				// down), so run()'s finally never releases the claim - release it here so the
-				// screen isn't stuck "in progress" and future deletions can still start.
-				duplicateDeletionAsyncRunner.releaseRejectedSubmission();
-			}
+		// Queued, never started here: the moving happens in the worker, and what comes
+		// back is the first snapshot of a request that is now waiting.
+		if (!ids.isEmpty()) {
+			duplicateDeletionLauncherService.launch(ids);
 		}
 
 		return deleteProgress();
@@ -292,12 +315,8 @@ public class DuplicatesWebController extends LocalizedComponent {
 	@PostMapping("/app/duplicates/exclude/file")
 	@ResponseBody
 	public DuplicateExclusionResponse excludeFile(@RequestBody DuplicateExcludeRequest request) {
-		boolean created = duplicateExclusionService.excludeFile(request == null ? null : request.publicId());
-
-		photoSimilarityService.invalidateCache();
-		videoSimilarityWeb.similarityService().invalidateCache();
-
-		return new DuplicateExclusionResponse(created);
+		return new DuplicateExclusionResponse(
+				duplicateExclusionService.excludeFile(request == null ? null : request.publicId()));
 	}
 
 	/**
@@ -308,12 +327,8 @@ public class DuplicatesWebController extends LocalizedComponent {
 	@PostMapping("/app/duplicates/exclude/folder")
 	@ResponseBody
 	public DuplicateExclusionResponse excludeFolder(@RequestBody DuplicateExcludeRequest request) {
-		boolean created = duplicateExclusionService.excludeFolder(request == null ? null : request.folder());
-
-		photoSimilarityService.invalidateCache();
-		videoSimilarityWeb.similarityService().invalidateCache();
-
-		return new DuplicateExclusionResponse(created);
+		return new DuplicateExclusionResponse(
+				duplicateExclusionService.excludeFolder(request == null ? null : request.folder()));
 	}
 
 	/**
@@ -323,11 +338,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 	@GetMapping("/app/duplicates/delete/progress")
 	@ResponseBody
 	public DuplicateDeletionProgress deleteProgress() {
-		boolean running = duplicateDeletionAsyncRunner.isRunning();
-
-		return new DuplicateDeletionProgress(running, duplicateDeletionAsyncRunner.processed(),
-				duplicateDeletionAsyncRunner.total(), duplicateDeletionAsyncRunner.percent(),
-				running ? null : duplicateDeletionAsyncRunner.lastResult());
+		return duplicateDeletionProgressService.snapshot();
 	}
 
 	/**
@@ -341,38 +352,11 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		boolean block = status.blocking();
 
-		setBacklogAttributes(model, status, phashBacklogAsyncRunner.etaSeconds(), phashBacklogAsyncRunner.isRunning(),
-				PHOTO_ACTION_BASE, block);
-		model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
+		setBacklogAttributes(model, status, fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_PHOTO),
+				fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_PHOTO), PHOTO_ACTION_BASE, block);
 
-		if (block) {
-			// Do not load partial similarity groups while fingerprints are still computing.
-			addPageAttributes(model, Page.empty(), List.of());
-
-			return;
-		}
-
-		Optional<Page<SimilarPhotoGroupResponse>> cached = photoSimilarityService.cachedPage(safeMinSimilarity,
-				PageRequest.of(page, pageSize));
-
-		if (cached.isPresent()) {
-			Page<SimilarPhotoGroupResponse> similarPage = cached.get();
-
-			addPageAttributes(model, similarPage, similarPage.getContent().stream().map(this::toView).toList());
-
-			return;
-		}
-
-		if (photoSimilarityAsyncRunner.start(safeMinSimilarity)) {
-			photoSimilarityAsyncRunner.run(safeMinSimilarity);
-		}
-
-		addPageAttributes(model, Page.empty(), List.of());
-
-		model.addAttribute(ATTR_SIMILARITY_COMPUTING, true);
-		model.addAttribute("similarityPercent", photoSimilarityAsyncRunner.percent());
-		model.addAttribute("similarityProcessed", photoSimilarityAsyncRunner.processed());
-		model.addAttribute("similarityTotal", photoSimilarityAsyncRunner.total());
+		renderSimilarity(model, similarityViewService.photos(safeMinSimilarity, PageRequest.of(page, pageSize)), block,
+				false);
 	}
 
 	private void renderVideoTab(Model model, int safeMinSimilarity, int page, int pageSize) {
@@ -380,38 +364,43 @@ public class DuplicatesWebController extends LocalizedComponent {
 
 		boolean block = status.blocking();
 
-		setBacklogAttributes(model, status, videoSimilarityWeb.backlogRunner().etaSeconds(),
-				videoSimilarityWeb.backlogRunner().isRunning(), VIDEO_ACTION_BASE, block);
+		setBacklogAttributes(model, status, fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_VIDEO),
+				fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_VIDEO), VIDEO_ACTION_BASE, block);
 
-		model.addAttribute(ATTR_SIMILARITY_COMPUTING, false);
+		renderSimilarity(model, similarityViewService.videos(safeMinSimilarity, PageRequest.of(page, pageSize)), block,
+				true);
+	}
+
+	/**
+	 * The published analysis, and what is true about it now.
+	 *
+	 * <p>
+	 * Nothing is computed here and nothing is started: the screen reads what a
+	 * worker published. A result stays on screen while a newer analysis is being
+	 * computed, while the library moves underneath it, and after a failed
+	 * recalculation - the only thing that replaces it is a successful publication.
+	 */
+	private void renderSimilarity(Model model, SimilarityView view, boolean block, boolean videos) {
+		model.addAttribute(ATTR_SIMILARITY_COMPUTING, view.analyzing());
+		model.addAttribute("similarityPublished", view.published());
+		model.addAttribute("similarityOutdated", view.outdated());
+		model.addAttribute("similarityEligible", view.eligibleCount());
+		model.addAttribute("similarityAnalyzed", view.analyzedCount());
+		model.addAttribute("similarityCandidateLimit", view.candidateLimit());
+		model.addAttribute("similarityCoverageComplete", view.coverageComplete());
+		model.addAttribute("similarityAnalyzeAction",
+				videos ? VIDEO_ACTION_BASE + "/analyze" : PHOTO_ACTION_BASE + "/analyze");
 
 		if (block) {
+			// Fingerprints are still being computed: what exists to group is not yet what
+			// the user is waiting for, so no partial answer is offered.
 			addPageAttributes(model, Page.empty(), List.of());
 
 			return;
 		}
 
-		Optional<Page<SimilarVideoGroupResponse>> cached = videoSimilarityWeb.similarityService()
-				.cachedPage(safeMinSimilarity, PageRequest.of(page, pageSize));
-
-		if (cached.isPresent()) {
-			Page<SimilarVideoGroupResponse> similarPage = cached.get();
-
-			addPageAttributes(model, similarPage, similarPage.getContent().stream().map(this::toView).toList());
-
-			return;
-		}
-
-		if (videoSimilarityWeb.similarityRunner().start(safeMinSimilarity)) {
-			videoSimilarityWeb.similarityRunner().run(safeMinSimilarity);
-		}
-
-		addPageAttributes(model, Page.empty(), List.of());
-
-		model.addAttribute(ATTR_SIMILARITY_COMPUTING, true);
-		model.addAttribute("similarityPercent", videoSimilarityWeb.similarityRunner().percent());
-		model.addAttribute("similarityProcessed", videoSimilarityWeb.similarityRunner().processed());
-		model.addAttribute("similarityTotal", videoSimilarityWeb.similarityRunner().total());
+		addPageAttributes(model, view.groups(),
+				view.groups().getContent().stream().map(group -> toView(group, videos)).toList());
 	}
 
 	private void setBacklogAttributes(Model model, FingerprintBacklogStatus status, long etaSeconds, boolean running,
@@ -448,26 +437,57 @@ public class DuplicatesWebController extends LocalizedComponent {
 				toFileViews(group.keep(), group.deleteCandidates(), group.reviewCandidates()));
 	}
 
-	private DuplicateGroupView toView(SimilarPhotoGroupResponse group) {
-		String header = group.files() == 1 ? message("backend.duplicates.similarGroup.one", group.files())
-				: message("backend.duplicates.similarGroup.many", group.files());
+	/**
+	 * A published group, rendered from the durable result.
+	 *
+	 * <p>
+	 * The header counts what the analysis found; the cards render the members whose
+	 * catalog row still exists. A member deleted or quarantined since keeps its
+	 * place in the count - the analysis was not wrong - and one whose row is gone
+	 * for good has nothing left to draw, so it is counted and not drawn. Neither
+	 * case rewrites the published result.
+	 */
+	private DuplicateGroupView toView(PublishedGroup group, boolean videos) {
+		int files = group.members().size();
 
-		String badge = message("backend.duplicates.similarBadge", group.similarityPercent(),
-				group.wastedSize().formatted());
+		String header = headerOf(files, videos);
 
-		return new DuplicateGroupView(group.groupId(), header, badge,
-				toFileViews(group.keep(), group.deleteCandidates(), group.reviewCandidates()));
+		String badge = message(videos ? "backend.duplicates.similarVideoBadge" : "backend.duplicates.similarBadge",
+				group.similarityPercent(), SizeResponse.of(group.wastedBytes()).formatted());
+
+		List<DuplicateFileView> cards = group.members().stream().filter(member -> member.file() != null)
+				.map(this::toFileView).toList();
+
+		return new DuplicateGroupView(group.groupId(), header, badge, cards);
 	}
 
-	private DuplicateGroupView toView(SimilarVideoGroupResponse group) {
-		String header = group.files() == 1 ? message("backend.duplicates.similarVideoGroup.one", group.files())
-				: message("backend.duplicates.similarVideoGroup.many", group.files());
+	private String headerOf(int files, boolean videos) {
+		if (videos) {
+			return files == 1 ? message("backend.duplicates.similarVideoGroup.one", files)
+					: message("backend.duplicates.similarVideoGroup.many", files);
+		}
 
-		String badge = message("backend.duplicates.similarVideoBadge", group.similarityPercent(),
-				group.wastedSize().formatted());
+		return files == 1 ? message("backend.duplicates.similarGroup.one", files)
+				: message("backend.duplicates.similarGroup.many", files);
+	}
 
-		return new DuplicateGroupView(group.groupId(), header, badge,
-				toFileViews(group.keep(), group.deleteCandidates(), group.reviewCandidates()));
+	/**
+	 * The verdict decides the two flags, as it did when the groups were assembled
+	 * in memory: the kept file is the recommendation, a review candidate is kept
+	 * without being recommended, and a deletion candidate is neither.
+	 */
+	private DuplicateFileView toFileView(PublishedMember member) {
+		SimilarityMemberFile file = member.file();
+
+		Verdict verdict = member.decision().verdict();
+
+		DuplicateCandidateFileResponse response = new DuplicateCandidateFileResponse(file.publicId(), file.fileName(),
+				file.extension(), file.fileType(), SizeResponse.of(file.sizeBytes()), file.currentPath(),
+				file.currentFolder(), file.modifiedAt(), verdict, member.decision().reason(), file.width(),
+				file.height(), file.captureDate(), file.dateSource());
+
+		return toFileView(response, verdict != Verdict.DELETE_CANDIDATE, verdict == Verdict.KEEP,
+				member.actionable());
 	}
 
 	/**
@@ -640,6 +660,11 @@ public class DuplicatesWebController extends LocalizedComponent {
 	}
 
 	private DuplicateFileView toFileView(DuplicateCandidateFileResponse file, boolean keep, boolean recommendedKeep) {
+		return toFileView(file, keep, recommendedKeep, true);
+	}
+
+	private DuplicateFileView toFileView(DuplicateCandidateFileResponse file, boolean keep, boolean recommendedKeep,
+			boolean actionable) {
 		Kind previewKind = FilePreviewSupport.kind(file.fileType(), file.extension());
 
 		boolean image = previewKind == Kind.IMAGE;
@@ -663,7 +688,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 				highlight, highlightLabel, reason, resolution, previewable, lightboxClass(pdf, text, audio),
 				openTitle(pdf, text, audio), dateSourceLabels.label(file.dateSource()),
 				dateSourceBadgeClass(file.dateSource()), DateTimeFormatUtils.human(file.captureDate()),
-				DateTimeFormatUtils.human(file.modifiedAt()));
+				DateTimeFormatUtils.human(file.modifiedAt()), actionable);
 	}
 
 	/**

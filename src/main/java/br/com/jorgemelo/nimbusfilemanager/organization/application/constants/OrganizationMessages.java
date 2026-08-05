@@ -1,5 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application.constants;
 
+import java.util.List;
+
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
+
 /**
  * The organization message codes resolved from the bundles, kept apart from
  * {@link OrganizationConstants} because these are keys of user-facing text
@@ -12,6 +16,34 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application.constants;
  * in the template.
  */
 public final class OrganizationMessages {
+
+	/**
+	 * The undo statuses, as codes rather than text. The reversal happens in the
+	 * worker now, which has no request behind it and therefore no language.
+	 */
+	public static ExecutionMessage undoQueued() {
+		return of("backend.undo.queued");
+	}
+
+	public static ExecutionMessage undoCompleted(long undone, long skipped, long errors) {
+		return of("backend.undo.completed", undone, skipped, errors);
+	}
+
+	public static ExecutionMessage undoCancelled(long undone, long skipped, long errors) {
+		return of("backend.undo.cancelled", undone, skipped, errors);
+	}
+
+	public static ExecutionMessage undoInterrupted(long undone, long skipped, long errors) {
+		return of("backend.undo.interrupted", undone, skipped, errors);
+	}
+
+	public static ExecutionMessage undoFailed(String detail) {
+		return of("backend.execution.operationFailed", detail);
+	}
+
+	private static ExecutionMessage of(String code, Object... args) {
+		return new ExecutionMessage(code, List.of(args));
+	}
 
 	/** Asked before a preview, when nobody knows yet how much would move. */
 	public static final String EXECUTE_CONFIRM = "backend.organization.executeConfirm";

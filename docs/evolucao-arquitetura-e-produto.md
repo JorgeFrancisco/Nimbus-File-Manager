@@ -8,7 +8,9 @@ e histórico é assunto do git. Os identificadores (`A6`, `P8`, …) **não são
 sai, para que uma conversa antiga que cite `P4` continue apontando para o mesmo item — e o que ele era
 se acha em `git log -S"P4." -- docs/evolucao-arquitetura-e-produto.md`, que é onde vive o histórico.
 
-Escrito a partir de uma varredura do código em 2026-07-31, com o produto na versão 5.26. O critério
+Escrito a partir de uma varredura do código em 2026-07-31, com o produto na versão 5.26, e
+reconciliado com o código a cada entrega que remove um item — a última em 2026-08-07, versão
+8.1.1.198. O critério
 que orienta todas as recomendações é a intenção declarada: **o produto está amadurecendo para ser
 distribuído**. Isso muda o peso das coisas — o que hoje é "detalhe de ambiente do Jorge" vira
 "primeira impressão de um estranho", e o que hoje é "eu sei que precisa reiniciar" vira suporte.
@@ -27,18 +29,13 @@ navegador — inclusive um app de celular, se o produto for por aí.
 ### Complexidade alta — meses
 
 **A7. Uma instalação, uma biblioteca.** `WATCH_FOLDER` é um `AppSetting` global único. Trocar de
-biblioteca já é uma operação suportada e segura (`LibrarySwitchService` cancela o que está rodando,
-valida a pasta nova e limpa o catálogo), mas continua sendo *troca*: as duas coleções nunca coexistem,
-e todos os usuários veem a mesma. Para uso pessoal isso é suficiente. Para distribuição, é a primeira
-pergunta de quem tem fotos em dois HDs — ou de uma família com duas pessoas.
+biblioteca já é uma operação suportada e segura — o pedido é validado, o que está rodando é
+cancelado e o catálogo da coleção antiga é limpo —, mas continua sendo *troca*: as duas coleções
+nunca coexistem, e todos os usuários veem a mesma. Para uso pessoal isso é suficiente. Para
+distribuição, é a primeira pergunta de quem tem fotos em dois HDs — ou de uma família com duas
+pessoas.
 *Entrega:* multi-biblioteca destrava tanto o caso "meus discos" quanto o caso "minha família", e é
 uma decisão estrutural: mexe em catálogo, inventário, quarentena e telas.
-
-**A8. Processamento no mesmo processo da aplicação.** Inventário, hashing, thumbnails, conversão de
-vídeo e geocodificação disputam a mesma JVM que serve as telas. Já há locks para não se atropelarem,
-mas uma conversão pesada compete com a navegação do usuário.
-*Entrega:* responsividade previsível sob carga. É a diferença entre "travou" e "está processando em
-segundo plano" — e essa percepção define review de produto.
 
 ---
 
@@ -105,8 +102,9 @@ Dizer não também é sugestão:
 - **Reescrever o front-end em SPA.** Thymeleaf + JS incremental está sustentando 18 telas com custo
   baixo. Trocar por React resolveria problemas que o projeto ainda não tem e criaria os que ele não
   quer.
-- **Microsserviços.** O monólito modular está bem separado; o gargalo é processamento, e isso se
-  resolve com fila e worker (A8), não com rede entre serviços.
+- **Microsserviços.** O monólito modular está bem separado, e o gargalo que se costumava invocar
+  para justificá-los — processamento disputando a JVM das telas — já foi resolvido por fila durável e
+  processo worker, sem rede entre serviços.
 - **Trocar o PostgreSQL.** Ele sustenta o modelo com folga, e o motivo histórico para cogitar a
   troca — obrigar quem instala a instalar um servidor antes — deixou de existir: a aplicação
   baixa o servidor, cria o cluster e o desliga no fechamento, sem ninguém saber que ele está ali.

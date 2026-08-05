@@ -7,10 +7,10 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintB
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 
 /**
- * A drainable fingerprint backlog (photo or video), as seen by the neutral
- * {@link FingerprintJobRunner}. It is the small surface the async runner needs
- * - identify the job, read its status, yield to inventory, drain it and rebuild
- * it - so the runner never knows which media it is driving.
+ * A drainable fingerprint backlog, photo or video, as the handler that drains it
+ * sees one. The surface is small on purpose - identify the job, read its status,
+ * yield to an inventory, drain it, rebuild it - so the handler never knows which
+ * media it is driving.
  */
 interface FingerprintBacklog {
 

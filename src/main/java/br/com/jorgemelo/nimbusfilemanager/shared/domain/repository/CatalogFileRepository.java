@@ -16,7 +16,9 @@ import org.springframework.data.repository.query.Param;
 import br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.CatalogSignatureProjection;
 
 public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> {
 
@@ -98,6 +100,42 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			)
 			""", nativeQuery = true)
 	int deleteWithinLibrary(@Param("root") String root, @Param("prefix") String prefix);
+
+	/**
+	 * Rewrites the leading folder of every catalogued file under it, which is what
+	 * a folder rename does to the collection in one operating-system call.
+	 *
+	 * <p>
+	 * Prefix-matched with {@code left(...)} against the prefix's own length rather
+	 * than with {@code LIKE}: a Windows path is full of backslashes, which is the
+	 * escape character of {@code LIKE}, and file names are full of {@code _} and
+	 * {@code %}, which are its wildcards. Comparing a fixed-length head is the
+	 * same question without any of that.
+	 *
+	 * <p>
+	 * The version is bumped by hand because a bulk statement bypasses the
+	 * optimistic locking Hibernate would have applied row by row - the same reason
+	 * {@code markMissingByIds} does it.
+	 *
+	 * @return how many catalogued files now live somewhere else
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query(value = """
+			UPDATE catalog_file
+			   SET file_key = :newPrefix || substr(file_key, length(:oldPrefix) + 1),
+			       version = version + 1
+			 WHERE lower(left(file_key, length(:oldPrefix))) = lower(:oldPrefix)
+			""", nativeQuery = true)
+	int repointFileKeys(@Param("oldPrefix") String oldPrefix, @Param("newPrefix") String newPrefix);
+
+	/**
+	 * Whether anything at all is past the retention window - the cheap question the
+	 * daily purge asks before queueing itself, so a quiet day leaves no execution
+	 * behind. It decides whether to ask, never what to remove: that is settled when
+	 * the purge runs.
+	 */
+	boolean existsByLifecycleStatusAndLifecycleChangedAtBefore(LifecycleStatus lifecycleStatus,
+			LocalDateTime lifecycleChangedAt);
 
 	Optional<CatalogFile> findByFileKey(String fileKey);
 
@@ -236,5 +274,32 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			  )
 			""")
 	FolderInventorySummary summarizeFolder(@Param("folder") String folder,
+			@Param("descendantPattern") String descendantPattern);
+
+	/**
+	 * The catalog under a folder, reduced to a pair that moves whenever it moves.
+	 *
+	 * <p>
+	 * The timestamp is the location's, not the file's: a file being moved is
+	 * exactly what changes where a plan would send it, and moving one rewrites its
+	 * location row. The count catches what a move does not - a file arriving, being
+	 * quarantined or leaving.
+	 *
+	 * <p>
+	 * Read when an organization plan is published, and compared when one is shown,
+	 * so the screen can tell the user the library changed since - which is what
+	 * keeps a preview and a later run from disagreeing silently.
+	 */
+	@Query("""
+			select count(mf) as fileCount, max(l.updatedAt) as latestUpdate
+			from CatalogFile mf
+			join mf.location l
+			where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
+			  and (
+			       lower(l.currentFolder) = lower(:folder)
+			       or lower(l.currentPath) like lower(:descendantPattern) escape '\\'
+			  )
+			""")
+	CatalogSignatureProjection signatureUnder(@Param("folder") String folder,
 			@Param("descendantPattern") String descendantPattern);
 }

@@ -1,8 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.backup.application;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,11 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupFile;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.persistence.CatalogSchemaRepository;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
  * What the backup accepts and what it refuses. Restoring is the one action that
@@ -60,19 +58,23 @@ class CatalogBackupServiceTest {
 	private final CatalogDump catalogDump = mock(CatalogDump.class);
 	private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
-	// The real move: it is what puts the file where the assertions look for it.
-	private final SecureFileMove secureFileMove = new SecureFileMove(
-			new OrganizationMoveVerifier(new FileHashService()),
-			new SelfWrittenPathRegistry(Clock.systemDefaultZone()));
+	// The real check and the real delivery: between them they are what puts the
+	// file where the assertions look for it, and what refuses to.
+	private final BackupArchive backupArchive = new BackupArchive();
+	private final BackupDelivery backupDelivery = new BackupDelivery(new BackupDigest());
 
 	private CatalogBackupService service(Path folder) {
+		return service(folder, backupArchive, backupDelivery);
+	}
+
+	private CatalogBackupService service(Path folder, BackupArchive archive, BackupDelivery delivery) {
 		when(backupFolderResolver.folder()).thenReturn(folder);
 		lenient().when(backupFolderResolver.staging()).thenReturn(folder);
 
 		// The injected mapper carries the JSR-310 module; a bare one cannot write the
 		// timestamp of the manifest, which is what production actually uses.
 		return new CatalogBackupService(catalogSchemaRepository, catalogDump, backupFolderResolver,
-				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), secureFileMove,
+				new ObjectMapper().findAndRegisterModules(), CLOCK, new BackupProgress(), archive, delivery,
 				eventPublisher, new BackgroundWorkGate());
 	}
 
@@ -344,6 +346,82 @@ class CatalogBackupServiceTest {
 				.withMessageContaining("could not be read back");
 
 		Assertions.assertThat(service.list()).isEmpty();
+	}
+
+	/**
+	 * The archive is read back between the packing and the keeping, and an archive
+	 * that fails there is never delivered: what is in the backup folder stays
+	 * whatever was there, because the only alternative to a broken backup is the
+	 * last good one.
+	 */
+	@Test
+	void neverDeliversAnArchiveThatFailedItsOwnCheck(@TempDir Path workspace, @TempDir Path folder) throws IOException {
+		BackupArchive refusing = mock(BackupArchive.class);
+
+		BackupDelivery delivery = mock(BackupDelivery.class);
+
+		Path previous = Files.writeString(folder.resolve("nimbus-catalog-20260101-000000.zip"), "the last good one");
+
+		CatalogBackupService service = service(folder, refusing, delivery);
+
+		when(backupFolderResolver.staging()).thenReturn(workspace);
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.dump(any())).thenAnswer(call -> {
+			Files.writeString(call.getArgument(0), "a dump");
+
+			return true;
+		});
+		when(catalogDump.readable(any())).thenReturn(true);
+		doThrow(new IllegalStateException("was discarded because it could not be read back in full")).when(refusing)
+				.verify(any());
+
+		Assertions.assertThatIllegalStateException().isThrownBy(service::create)
+				.withMessageContaining("could not be read back in full");
+
+		verify(delivery, never()).deliver(any(), any());
+
+		Assertions.assertThat(Files.readString(previous)).isEqualTo("the last good one");
+		Assertions.assertThat(service.list()).hasSize(1);
+
+		// The staging is cleaned by the same policy as every other failure here.
+		try (var left = Files.list(workspace)) {
+			Assertions.assertThat(left).isEmpty();
+		}
+	}
+
+	/**
+	 * The order the guarantees are built in: the archive is proven intact before
+	 * anything is moved, and only then is the delivery asked to prove that what
+	 * arrives is that same archive.
+	 */
+	@Test
+	void checksTheArchiveBeforeHandingItToTheDelivery(@TempDir Path workspace, @TempDir Path folder)
+			throws IOException {
+		BackupArchive checking = mock(BackupArchive.class);
+
+		BackupDelivery delivery = mock(BackupDelivery.class);
+
+		CatalogBackupService service = service(folder, checking, delivery);
+
+		when(backupFolderResolver.staging()).thenReturn(workspace);
+		when(catalogSchemaRepository.tables()).thenReturn(List.of());
+		when(catalogSchemaRepository.schemaVersion()).thenReturn("13");
+		when(catalogDump.dump(any())).thenAnswer(call -> {
+			Files.writeString(call.getArgument(0), "a dump");
+
+			return true;
+		});
+		when(catalogDump.readable(any())).thenReturn(true);
+		doAnswer(call -> Files.writeString(call.getArgument(1), "delivered")).when(delivery).deliver(any(), any());
+
+		service.create();
+
+		InOrder order = inOrder(catalogDump, checking, delivery);
+
+		order.verify(catalogDump).readable(any());
+		order.verify(checking).verify(any());
+		order.verify(delivery).deliver(any(), any());
 	}
 
 	/**

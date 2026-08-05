@@ -1,18 +1,21 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,21 +26,26 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -48,30 +56,40 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 class DuplicateDeletionServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
+	private final QuarantineFolderPolicy quarantineFolderPolicy = mock(QuarantineFolderPolicy.class);
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
-	private final SimilarityCaches similarityCaches = mock(SimilarityCaches.class);
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
 	private final QuarantineIntakeService quarantineIntakeService = new QuarantineIntakeService(persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), appSettingService);
+			new SecureLibraryFiles(
+					new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+					pathRegistry), quarantineFolderPolicy);
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
+	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
+
+	/** The row a worker claimed, handed over rather than opened here. */
+	private final Execution execution = mock(Execution.class);
+	private final ExecutionCancellationService executionCancellationService = NoCancellations.none();
 	private final DuplicateDeletionService service = new DuplicateDeletionService(catalogFileRepository,
-			executionRepository, quarantineIntakeService, similarityCaches, operationLockService, executionErrorService,
-			Clock.systemDefaultZone());
+			executionRepository, quarantineIntakeService, operationLockService,
+			executionProgressService, executionCancellationService, executionErrorService, Clock.systemDefaultZone());
 
 	DuplicateDeletionServiceTest() {
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class))).thenReturn(operationLock);
+		when(execution.getId()).thenReturn(1L);
+
+		lenient().when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
 	}
 
 	@Test
 	void refusesWhenQuarantineFolderIsNotConfigured() {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn("");
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.empty());
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Assertions.assertThat(result.configured()).isFalse();
 
@@ -93,7 +111,7 @@ class DuplicateDeletionServiceTest {
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Path quarantined = trash.resolve("exec-1").resolve("10__a.jpg");
 
@@ -116,9 +134,9 @@ class DuplicateDeletionServiceTest {
 
 	@Test
 	void reportsNothingSelectedWhenNoIdsAreGiven() {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn("/tmp/trash");
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.of(Path.of("/tmp/trash").toAbsolutePath().normalize()));
 
-		DuplicateDeletionResult result = service.delete(List.of());
+		DuplicateDeletionResult result = delete(service, List.of());
 
 		Assertions.assertThat(result.configured()).isTrue();
 		Assertions.assertThat(result.moved()).isZero();
@@ -142,7 +160,7 @@ class DuplicateDeletionServiceTest {
 		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any(),
 				any());
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -170,8 +188,11 @@ class DuplicateDeletionServiceTest {
 
 		DuplicateDeletionService integrityFailingService = new DuplicateDeletionService(catalogFileRepository,
 				executionRepository,
-				new QuarantineIntakeService(persistence, new SecureFileMove(verifier, pathRegistry), appSettingService),
-				similarityCaches, operationLockService, executionErrorService, Clock.systemDefaultZone());
+				new QuarantineIntakeService(persistence,
+						new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
+						quarantineFolderPolicy),
+				operationLockService, executionProgressService, executionCancellationService,
+				executionErrorService, Clock.systemDefaultZone());
 
 		configureTrash(trash);
 
@@ -181,7 +202,7 @@ class DuplicateDeletionServiceTest {
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = integrityFailingService.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(integrityFailingService, List.of(UUID.randomUUID()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -213,7 +234,7 @@ class DuplicateDeletionServiceTest {
 			throw new IllegalStateException("db down");
 		}).when(persistence).persistQuarantine(any(), any(), any(), any(), any());
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Path quarantined = trash.resolve("exec-1").resolve("14__d.jpg");
 
@@ -240,7 +261,7 @@ class DuplicateDeletionServiceTest {
 		// Two ids requested, but only one resolves to an active catalog entry.
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID(), UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID(), UUID.randomUUID()));
 
 		Assertions.assertThat(result.requested()).isEqualTo(2);
 		Assertions.assertThat(result.moved()).isEqualTo(1);
@@ -263,7 +284,7 @@ class DuplicateDeletionServiceTest {
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = service.delete(List.of(UUID.randomUUID()));
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
@@ -288,7 +309,7 @@ class DuplicateDeletionServiceTest {
 		when(file.getLifecycleStatus()).thenReturn(LifecycleStatus.DELETED);
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = service.delete(List.of(file.getPublicId()));
+		DuplicateDeletionResult result = delete(service, List.of(file.getPublicId()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
@@ -313,7 +334,7 @@ class DuplicateDeletionServiceTest {
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = service.delete(List.of(file.getPublicId()));
+		DuplicateDeletionResult result = delete(service, List.of(file.getPublicId()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
@@ -338,15 +359,13 @@ class DuplicateDeletionServiceTest {
 
 		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(firstFile, secondFile));
 
-		List<int[]> updates = new ArrayList<>();
+		delete(service, List.of(UUID.randomUUID(), UUID.randomUUID()));
 
-		service.delete(List.of(UUID.randomUUID(), UUID.randomUUID()),
-				(processed, total) -> updates.add(new int[] { processed, total }));
-
-		Assertions.assertThat(updates).hasSize(3);
-		Assertions.assertThat(updates.get(0)).containsExactly(0, 2);
-		Assertions.assertThat(updates.get(1)).containsExactly(1, 2);
-		Assertions.assertThat(updates.get(2)).containsExactly(2, 2);
+		// The bar reads the row now, so the total is declared once and each file
+		// finished moves the counter the screen polls.
+		verify(executionProgressService).updateTotal(execution, 2);
+		verify(executionProgressService, times(2)).updateLiveProgress(eq(execution), eq(2), anyInt(), anyInt(),
+				anyInt(), any());
 	}
 
 	@Test
@@ -366,7 +385,7 @@ class DuplicateDeletionServiceTest {
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class)))
 				.thenThrow(new OperationLockException("busy"));
 
-		DuplicateDeletionResult result = service.delete(List.of(publicId));
+		DuplicateDeletionResult result = delete(service, List.of(publicId));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -375,48 +394,15 @@ class DuplicateDeletionServiceTest {
 		verify(executionRepository, never()).save(any());
 		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
 	}
-
-	/**
-	 * A crash mid-loop must not leave the row open: an execution still holding a
-	 * null {@code finishedAt} is read everywhere as the operation currently
-	 * running, so it would show a phantom deletion on every screen.
-	 */
-	@Test
-	void aCrashMidDeletionStillClosesTheExecution(@TempDir Path tmp) throws Exception {
-		Path library = Files.createDirectories(tmp.resolve("library"));
-		Path trash = tmp.resolve("trash");
-		Path original = Files.writeString(library.resolve("a.jpg"), "content");
-
-		configureTrash(trash);
-
-		Execution execution = stubExecution();
-
-		CatalogFile file = stubFile(10L, original, "a.jpg");
-
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
-		doThrow(new IllegalStateException("cache blew up")).when(similarityCaches).evictAll(any());
-
-		List<UUID> selection = List.of(UUID.randomUUID());
-
-		Assertions.assertThatThrownBy(() -> service.delete(selection)).isInstanceOf(IllegalStateException.class);
-
-		verify(execution).setStatus(ExecutionStatus.ERROR);
-		verify(execution).setFinishedAt(any());
-	}
-
 	private void configureTrash(Path trash) {
-		when(appSettingService.stringValue(SettingsConstants.TRASH_FOLDER, "")).thenReturn(trash.toString());
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.of(trash.toAbsolutePath().normalize()));
 	}
 
 	private Execution stubExecution() {
-		Execution saved = mock(Execution.class);
+		lenient().when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+		lenient().when(executionRepository.save(any())).thenReturn(execution);
 
-		when(saved.getId()).thenReturn(1L);
-		when(saved.getPublicId()).thenReturn(UUID.randomUUID());
-		when(executionRepository.save(any())).thenReturn(saved);
-		when(executionRepository.findById(1L)).thenReturn(Optional.of(saved));
-
-		return saved;
+		return execution;
 	}
 
 	private CatalogFile stubFile(long id, Path currentPath, String name) {
@@ -429,5 +415,68 @@ class DuplicateDeletionServiceTest {
 		when(file.isActive()).thenReturn(true);
 
 		return file;
+	}
+	/**
+	 * A deletion can run for minutes in another process, so it has to be stoppable.
+	 * It stops between files: everything already in quarantine got there under the
+	 * locks and verified, and the rest simply does not start.
+	 */
+	@Test
+	void stopsBetweenFilesWhenTheDeletionIsCancelled(@TempDir Path tmp) throws Exception {
+		Path quarantine = tmp.resolve("quarantine");
+
+		Path first = Files.writeString(tmp.resolve("first.jpg"), "first");
+
+		stubExecution();
+		configureTrash(quarantine);
+
+		CatalogFile file = stubFile(1L, first, "first.jpg");
+
+		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+
+		executionCancellationService.requestCancellation(1L);
+
+		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
+
+		Assertions.assertThat(result.moved()).isZero();
+		Assertions.assertThat(Files.exists(first)).isTrue();
+	}
+
+	/**
+	 * Losing the locks closes the commit: the file that has not moved yet stays
+	 * where it is, and the run stops rather than taking it out of a library this
+	 * process may no longer be entitled to write to.
+	 */
+	@Test
+	void stopsBeforeTheNextFileWhenTheLocksUnderItAreGone(@TempDir Path tmp) throws Exception {
+		Path quarantine = tmp.resolve("quarantine");
+
+		Path first = Files.writeString(tmp.resolve("first.jpg"), "first");
+
+		stubExecution();
+		configureTrash(quarantine);
+
+		CatalogFile file = stubFile(1L, first, "first.jpg");
+
+		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+
+		ExecutionOwnership lost = mock(ExecutionOwnership.class);
+
+		doThrow(new OwnershipLostException("the session that held the locks is gone")).when(lost).assertStillOwned();
+
+		List<UUID> selected = List.of(UUID.randomUUID());
+
+		Assertions.assertThatThrownBy(() -> service.delete(selected, execution, lost))
+				.isInstanceOf(OwnershipLostException.class);
+
+		Assertions.assertThat(Files.exists(first)).isTrue();
+	}
+
+	/**
+	 * The deletion runs under an execution a worker claimed and the ownership of
+	 * the paths it locked, so these tests hand it the same two things.
+	 */
+	private DuplicateDeletionResult delete(DuplicateDeletionService deletion, Collection<UUID> publicIds) {
+		return deletion.delete(publicIds, execution, mock(ExecutionOwnership.class));
 	}
 }

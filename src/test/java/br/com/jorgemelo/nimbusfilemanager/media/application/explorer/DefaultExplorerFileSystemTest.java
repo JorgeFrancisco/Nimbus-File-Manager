@@ -12,6 +12,11 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -22,14 +27,13 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegi
  */
 class DefaultExplorerFileSystemTest {
 
-	private final DefaultExplorerFileSystem fileSystem = new DefaultExplorerFileSystem(
-			new SelfWrittenPathRegistry(Clock.systemUTC()));
+	private final DefaultExplorerFileSystem fileSystem = new DefaultExplorerFileSystem(libraryFiles());
 
 	@Test
 	void deletesAFileAndReportsIt(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		Assertions.assertThat(fileSystem.deleteRecursively(file)).isEqualTo(1);
+		Assertions.assertThat(fileSystem.deleteRecursively(file, 9L)).isEqualTo(1);
 		Assertions.assertThat(file).doesNotExist();
 	}
 
@@ -41,7 +45,7 @@ class DefaultExplorerFileSystemTest {
 		Files.createFile(album.resolve("a.jpg"));
 		Files.createFile(nested.resolve("b.jpg"));
 
-		Assertions.assertThat(fileSystem.deleteRecursively(album)).isEqualTo(2);
+		Assertions.assertThat(fileSystem.deleteRecursively(album, 9L)).isEqualTo(2);
 		Assertions.assertThat(album).doesNotExist();
 	}
 
@@ -52,7 +56,7 @@ class DefaultExplorerFileSystemTest {
 		Files.createDirectory(album.resolve("Sent"));
 		Files.createDirectory(album.resolve("Private"));
 
-		fileSystem.deleteEmptyTree(album);
+		fileSystem.deleteEmptyTree(album, 9L);
 
 		Assertions.assertThat(album).doesNotExist();
 	}
@@ -63,7 +67,7 @@ class DefaultExplorerFileSystemTest {
 
 		Files.createFile(album.resolve("a.jpg"));
 
-		fileSystem.deleteEmptyTree(album);
+		fileSystem.deleteEmptyTree(album, 9L);
 
 		Assertions.assertThat(album).exists();
 	}
@@ -81,12 +85,25 @@ class DefaultExplorerFileSystemTest {
 		readOnly(sent);
 		readOnly(album);
 
-		fileSystem.deleteEmptyTree(album);
+		fileSystem.deleteEmptyTree(album, 9L);
 
 		Assertions.assertThat(album).doesNotExist();
 	}
 
 	private void readOnly(Path path) throws IOException {
 		Files.getFileAttributeView(path, DosFileAttributeView.class).setReadOnly(true);
+	}
+
+	/**
+	 * The real port over a real registry: what is being tested is a deletion that
+	 * actually happens on disk and is actually announced, so a mock here would
+	 * assert that a method was called rather than that a file went away.
+	 */
+	private static SecureLibraryFiles libraryFiles() {
+		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+				Clock.systemUTC());
+
+		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+				registry), registry);
 	}
 }

@@ -8,6 +8,14 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application.constants;
  */
 public final class SettingsConstants {
 
+	/**
+	 * The shape a queued library switch is written in, and the only one a worker
+	 * will run. Read by whoever queues it and checked by whoever claims it, which
+	 * is why it is not a private field of either: a switch queued by one version
+	 * can be claimed by another.
+	 */
+	public static final int LIBRARY_SWITCH_PAYLOAD_SCHEMA_VERSION = 1;
+
 	public static final String DEFAULT_TIMEZONE = "America/Sao_Paulo";
 	public static final String TIMEZONE = "nimbus-file-manager.timezone";
 	public static final String API_MAX_PAGE_SIZE = "nimbus-file-manager.api.max-page-size";

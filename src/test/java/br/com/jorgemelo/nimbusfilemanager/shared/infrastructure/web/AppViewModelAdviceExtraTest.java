@@ -82,7 +82,7 @@ class AppViewModelAdviceExtraTest {
 
 	@Test
 	void activeExecutionOnlyForAuthenticatedNonAnonymousUsers() {
-		ExecutionResponse execution = new ExecutionResponse(1L, "INVENTORY", "STARTED", LocalDateTime.now(),
+		ExecutionResponse execution = new ExecutionResponse(1L, "INVENTORY", "RUNNING", LocalDateTime.now(),
 				LocalDateTime.now(), "src", null, 1, 1, 0, 0, 0, 0, null, null, "ok", false);
 
 		when(executionQueryService.active()).thenReturn(Optional.of(execution));

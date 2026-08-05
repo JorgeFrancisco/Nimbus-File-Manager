@@ -1,154 +1,105 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
-import java.nio.file.Path;
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildService;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
-import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteResponse;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPreviewRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationUndoResponse;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 @Service
 public class OrganizationService {
 
-	private final OrganizationPlanner organizationPlanner;
-	private final OrganizationExecutor organizationExecutor;
-	private final MetadataRebuildService metadataRebuildService;
-	private final OperationLockService operationLockService;
 	private final OrganizationPathValidator organizationPathValidator;
-	private final OrganizationUndoService organizationUndoService;
+	private final OrganizationUndoLauncherService organizationUndoLauncherService;
 	private final OrganizationReconcileService organizationReconcileService;
-	private final OrganizationAsyncRunner organizationAsyncRunner;
-	private final OrganizationPlanStore organizationPlanStore;
+	private final OrganizationLauncherService organizationLauncherService;
+	private final OrganizationPreviewLauncher organizationPreviewLauncher;
+	private final OrganizationPlanReader organizationPlanReader;
 	private final ExecutionRepository executionRepository;
-	private final ExecutionMapper executionMapper;
-	private final Clock clock;
 
 	@Autowired
-	public OrganizationService(OrganizationPlanner organizationPlanner, OrganizationExecutor organizationExecutor,
-			MetadataRebuildService metadataRebuildService, OperationLockService operationLockService,
-			OrganizationPathValidator organizationPathValidator, OrganizationUndoService organizationUndoService,
-			OrganizationReconcileService organizationReconcileService, OrganizationAsyncRunner organizationAsyncRunner,
-			OrganizationPlanStore organizationPlanStore, ExecutionRepository executionRepository,
-			ExecutionMapper executionMapper, Clock clock) {
-		this.organizationPlanner = organizationPlanner;
-		this.organizationExecutor = organizationExecutor;
-		this.metadataRebuildService = metadataRebuildService;
-		this.operationLockService = operationLockService;
+	public OrganizationService(OrganizationPathValidator organizationPathValidator,
+			OrganizationUndoLauncherService organizationUndoLauncherService,
+			OrganizationReconcileService organizationReconcileService,
+			OrganizationLauncherService organizationLauncherService,
+			OrganizationPreviewLauncher organizationPreviewLauncher, OrganizationPlanReader organizationPlanReader,
+			ExecutionRepository executionRepository) {
 		this.organizationPathValidator = organizationPathValidator;
-		this.organizationUndoService = organizationUndoService;
+		this.organizationUndoLauncherService = organizationUndoLauncherService;
 		this.organizationReconcileService = organizationReconcileService;
-		this.organizationAsyncRunner = organizationAsyncRunner;
-		this.organizationPlanStore = organizationPlanStore;
+		this.organizationLauncherService = organizationLauncherService;
+		this.organizationPreviewLauncher = organizationPreviewLauncher;
+		this.organizationPlanReader = organizationPlanReader;
 		this.executionRepository = executionRepository;
-		this.executionMapper = executionMapper;
-		this.clock = clock;
-	}
-
-	public OrganizationPlan preview(OrganizationPreviewRequest request) {
-		organizationPathValidator.validate(request.source(), request.target());
-
-		rebuildMetadataIfRequested(request);
-
-		return organizationPlanner.preview(request);
-	}
-
-	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request) {
-		organizationPathValidator.validate(request.source(), request.target());
-
-		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(), request.target())) {
-			rebuildMetadataIfRequested(request.toPreviewRequest());
-
-			return organizationExecutor.execute(request);
-		} catch (OperationLockException e) {
-			return new OrganizationExecuteResponse((UUID) null, ExecutionStatus.ERROR.name(), null, null,
-					request.source().toString(), request.target().toString(), 0, 0, 0, 1, true,
-					"Organization rejected: " + e.getMessage());
-		}
 	}
 
 	/**
-	 * Creates the execution record and hands the actual preview off to a background
-	 * thread, returning immediately so the web layer can redirect to a progress
-	 * screen. The resulting OrganizationPlan (which can hold hundreds of thousands
-	 * of items) is kept in OrganizationPlanStore, retrievable via getPreviewPlan
-	 * once the execution finishes.
+	 * Asks for a preview and returns at once.
+	 *
+	 * <p>
+	 * Nothing is computed here any more, and that is the point of the change: this
+	 * class used to hand the request to a background thread of its own, which
+	 * composed the executor - the one class that can move the user's files - just
+	 * to find out what moving them would do. The row goes in PENDING now and a
+	 * worker builds the plan, so the process serving the screen never holds that
+	 * capability and never holds the plan either.
 	 */
 	public ExecutionResponse previewAsync(OrganizationExecuteRequest request) {
 		organizationPathValidator.validate(request.source(), request.target());
 
-		rebuildMetadataIfRequested(request.toPreviewRequest());
-
-		Execution execution = startExecution(request.source(), request.target(), request.recursiveValue(), false,
-				ExecutionMessages.PREVIEW_STARTED);
-
-		// Preview runs the same executor as execute, in dry-run: the request already
-		// carries dryRun=true, so no file is moved and no row is written.
-		organizationAsyncRunner.runPreview(request, execution);
-
-		return executionMapper.toResponse(execution);
+		return organizationPreviewLauncher.launch(request);
 	}
 
 	/**
-	 * Creates the execution record and hands the actual move off to a background
-	 * thread, returning immediately so the web layer can redirect to a progress
-	 * screen.
+	 * Queues the move and returns at once.
+	 *
+	 * <p>
+	 * Nothing is run here any more. The row goes in PENDING and a worker claims
+	 * it, which is what took hours of moving files out of the process serving the
+	 * screen - and what lets the run carry on when that process is closed.
+	 *
+	 * <p>
+	 * It deliberately does not read the plan. The run recalculates under the state
+	 * it finds, which is a decision this codebase records rather than an oversight:
+	 * a plan is a description of a moment, and acting on a stale one would be worse
+	 * than recalculating. What the screen does with that is warn - see
+	 * {@code catalogChanged} on the stored plan.
 	 */
 	public ExecutionResponse executeAsync(OrganizationExecuteRequest request) {
 		organizationPathValidator.validate(request.source(), request.target());
 
-		Execution execution = startExecution(request.source(), request.target(), request.recursiveValue(), true,
-				ExecutionMessages.ORGANIZATION_STARTED);
-
-		organizationAsyncRunner.runExecute(request, execution);
-
-		return executionMapper.toResponse(execution);
+		return organizationLauncherService.launch(request);
 	}
 
-	public OrganizationPlan getPreviewPlan(Long executionId) {
-		return organizationPlanStore.get(executionId);
+	/**
+	 * One page of a published plan, or empty when there is nothing to show - which
+	 * covers a plan that was never built, one still building, one that failed and
+	 * one past its expiry alike, because they are the same answer to a screen.
+	 */
+	public Optional<StoredPlanPage> planPage(Long executionId, int page, int size, boolean onlyConflicts) {
+		return organizationPlanReader.page(executionId, page, size, onlyConflicts);
 	}
 
-	public OrganizationPlan getPreviewPlanPublic(UUID executionId) {
-		return organizationPlanStore.get(findExecution(executionId).getId());
+	public Optional<StoredPlanPage> planPagePublic(UUID executionId, int page, int size, boolean onlyConflicts) {
+		return executionRepository.findByPublicId(executionId)
+				.flatMap(execution -> organizationPlanReader.page(execution.getId(), page, size, onlyConflicts));
 	}
 
-	private Execution startExecution(Path source, Path target, boolean recursive, boolean executeFlag,
-			String messageCode) {
-		Execution execution = Execution.builder().executionType(ExecutionType.ORGANIZATION)
-				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
-				.sourcePath(PathUtils.normalize(source)).targetPath(PathUtils.normalize(target)).recursive(recursive)
-				.executeFlag(executeFlag).statusMessage(StatusMessage.code(messageCode)).filesFound(0).filesAnalyzed(0)
-				.cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
-
-		return executionRepository.save(execution);
-	}
-
-	public OrganizationUndoResponse undoPublic(UUID executionId) {
-		return organizationUndoService.undo(findExecution(executionId).getId());
+	/**
+	 * Queues the reversal and returns at once, like the move it reverses. Undoing
+	 * hundreds of files is the same kind of work as making the moves in the first
+	 * place, and it stopped being something a request thread waits for.
+	 */
+	public ExecutionResponse undoPublic(UUID executionId) {
+		return organizationUndoLauncherService.launch(findExecution(executionId));
 	}
 
 	private Execution findExecution(UUID publicId) {
@@ -158,14 +109,5 @@ public class OrganizationService {
 
 	public OrganizationReconcileResponse reconcile(OrganizationReconcileRequest request) {
 		return organizationReconcileService.reconcile(request);
-	}
-
-	private void rebuildMetadataIfRequested(OrganizationPreviewRequest request) {
-		if (request.rebuildMetadataValue()) {
-			metadataRebuildService.rebuild(new MetadataRebuildRequest(request.sourcePath(),
-					request.rebuild() == null || request.rebuild().isEmpty() ? List.of(MetadataRebuildField.DATE)
-							: request.rebuild(),
-					null, null, request.limit(), false, null));
-		}
 	}
 }

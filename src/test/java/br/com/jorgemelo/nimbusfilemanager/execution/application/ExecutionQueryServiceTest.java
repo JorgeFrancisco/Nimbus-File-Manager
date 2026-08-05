@@ -76,7 +76,7 @@ class ExecutionQueryServiceTest {
 		// still has a next one.
 		Page<Execution> executionPage = new PageImpl<>(List.of(execution), PageRequest.of(1, 20), 45);
 
-		when(executionRepository.findAllByOrderByStartedAtDesc(PageRequest.of(1, 20))).thenReturn(executionPage);
+		when(executionRepository.findFunctionalHistory(PageRequest.of(1, 20))).thenReturn(executionPage);
 
 		Page<ExecutionResponse> result = service().page(1, 20);
 
@@ -90,10 +90,10 @@ class ExecutionQueryServiceTest {
 	void activeShouldReturnLatestRunningExecution() {
 		Execution execution = execution(1L);
 
-		execution.setStatus(ExecutionStatus.PROCESSING_FILES);
+		execution.setStatus(ExecutionStatus.RUNNING);
 
 		when(executionRepository
-				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.IN_PROGRESS))
+				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.ACTIVE))
 						.thenReturn(Optional.of(execution));
 
 		Assertions.assertThat(service().active()).get().extracting(ExecutionResponse::executionId)
@@ -108,15 +108,15 @@ class ExecutionQueryServiceTest {
 	@Test
 	void mapperShouldComputeClampedPercentCompleteOrNullWhenTotalOrProcessedAreMissing() {
 		Execution overHundredPercent = Execution.builder().id(1L).executionType(ExecutionType.INVENTORY)
-				.status(ExecutionStatus.PROCESSING_FILES).startedAt(LocalDateTime.now()).totalExpected(10)
+				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(10)
 				.filesFound(15).build();
 
 		Execution zeroTotal = Execution.builder().id(2L).executionType(ExecutionType.INVENTORY)
-				.status(ExecutionStatus.PROCESSING_FILES).startedAt(LocalDateTime.now()).totalExpected(0).filesFound(5)
+				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(0).filesFound(5)
 				.build();
 
 		Execution missingProcessed = Execution.builder().id(3L).executionType(ExecutionType.INVENTORY)
-				.status(ExecutionStatus.PROCESSING_FILES).startedAt(LocalDateTime.now()).totalExpected(10)
+				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(10)
 				.filesFound(null).build();
 
 		Assertions.assertThat(executionMapper.toResponse(overHundredPercent).percentComplete()).isEqualTo(100.0);

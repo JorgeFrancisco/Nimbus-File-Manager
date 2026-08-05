@@ -24,15 +24,24 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrity
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 
 class ConversionFilePlacementTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	/** Any execution: what it names is the announcement, not the placement. */
+	private static final Long EXECUTION_ID = 1L;
+
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final ConversionFileNaming conversionFileNaming = new ConversionFileNaming(mock(WorkspaceManager.class));
 	private final ConversionFilePlacement placement = new ConversionFilePlacement(
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+			new SecureLibraryFiles(
+					new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
+					pathRegistry),
 			conversionFileNaming);
 
 	private final ConversionOptions noAffix = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
@@ -44,7 +53,7 @@ class ConversionFilePlacementTest {
 		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
 		Path converted = convertedFile(tmp, "clip.mp4");
 
-		Path placed = placement.place(converted, source, noAffix);
+		Path placed = placement.place(converted, source, noAffix, EXECUTION_ID);
 
 		Assertions.assertThat(placed).isEqualTo(library.resolve("clip (H.265).mp4")).hasContent("converted");
 		Assertions.assertThat(source).hasContent("original");
@@ -57,7 +66,7 @@ class ConversionFilePlacementTest {
 		Path source = Files.writeString(library.resolve("clip.avi"), "original");
 		Path converted = convertedFile(tmp, "clip_temp.tmp");
 
-		Path placed = placement.place(converted, source, noAffix);
+		Path placed = placement.place(converted, source, noAffix, EXECUTION_ID);
 
 		// The MKV became an MP4, so the name it wants is free and no suffix is needed.
 		Assertions.assertThat(placed).isEqualTo(library.resolve("clip.mp4")).hasContent("converted");
@@ -73,8 +82,8 @@ class ConversionFilePlacementTest {
 		ConversionOptions suffixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 				OriginalDisposition.KEEP, "_H265", NameAffixPosition.SUFFIX);
 
-		Assertions.assertThat(placement.place(converted, source, suffixed)).isEqualTo(library.resolve("clip_H265.mp4"))
-				.hasContent("converted");
+		Assertions.assertThat(placement.place(converted, source, suffixed, EXECUTION_ID))
+				.isEqualTo(library.resolve("clip_H265.mp4")).hasContent("converted");
 		Assertions.assertThat(source).hasContent("original");
 	}
 
@@ -87,7 +96,8 @@ class ConversionFilePlacementTest {
 		ConversionOptions prefixed = new ConversionOptions(ConversionQuality.BALANCED, AudioHandling.AUTO,
 				OriginalDisposition.KEEP, "H265_", NameAffixPosition.PREFIX);
 
-		Assertions.assertThat(placement.place(converted, source, prefixed)).isEqualTo(library.resolve("H265_clip.mp4"));
+		Assertions.assertThat(placement.place(converted, source, prefixed, EXECUTION_ID))
+				.isEqualTo(library.resolve("H265_clip.mp4"));
 	}
 
 	@Test
@@ -97,7 +107,7 @@ class ConversionFilePlacementTest {
 
 		Files.writeString(library.resolve("clip (H.265).mp4"), "previous");
 
-		Path placed = placement.place(convertedFile(tmp, "clip.mp4"), source, noAffix);
+		Path placed = placement.place(convertedFile(tmp, "clip.mp4"), source, noAffix, EXECUTION_ID);
 
 		Assertions.assertThat(placed).isEqualTo(library.resolve("clip (H.265) (1).mp4"));
 		Assertions.assertThat(library.resolve("clip (H.265).mp4")).hasContent("previous");
@@ -109,7 +119,7 @@ class ConversionFilePlacementTest {
 		Path source = library.resolve("clip.mp4");
 		Path placed = Files.writeString(library.resolve("clip (H.265).mp4"), "converted");
 
-		Path renamed = placement.renameToOriginalName(placed, source);
+		Path renamed = placement.renameToOriginalName(placed, source, EXECUTION_ID);
 
 		Assertions.assertThat(renamed).isEqualTo(source).hasContent("converted");
 		Assertions.assertThat(placed).doesNotExist();
@@ -121,7 +131,7 @@ class ConversionFilePlacementTest {
 		Path source = library.resolve("clip.avi");
 		Path placed = Files.writeString(library.resolve("clip.mkv"), "converted");
 
-		Assertions.assertThat(placement.renameToOriginalName(placed, source)).isEqualTo(placed);
+		Assertions.assertThat(placement.renameToOriginalName(placed, source, EXECUTION_ID)).isEqualTo(placed);
 	}
 
 	@Test
@@ -130,7 +140,7 @@ class ConversionFilePlacementTest {
 		Path source = Files.writeString(library.resolve("clip.mp4"), "still here");
 		Path placed = Files.writeString(library.resolve("clip (H.265).mp4"), "converted");
 
-		Assertions.assertThat(placement.renameToOriginalName(placed, source)).isEqualTo(placed);
+		Assertions.assertThat(placement.renameToOriginalName(placed, source, EXECUTION_ID)).isEqualTo(placed);
 		Assertions.assertThat(source).hasContent("still here");
 	}
 
@@ -148,10 +158,11 @@ class ConversionFilePlacementTest {
 		when(verifier.capture(any())).thenReturn(new MoveBaseline(9L, "sha"));
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
-		ConversionFilePlacement failing = new ConversionFilePlacement(new SecureFileMove(verifier, pathRegistry),
+		ConversionFilePlacement failing = new ConversionFilePlacement(
+				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
 				conversionFileNaming);
 
-		Assertions.assertThat(failing.renameToOriginalName(placed, source)).isEqualTo(placed);
+		Assertions.assertThat(failing.renameToOriginalName(placed, source, EXECUTION_ID)).isEqualTo(placed);
 	}
 
 	@Test
@@ -160,7 +171,7 @@ class ConversionFilePlacementTest {
 		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
 
 		// Nothing was ever encoded, so the move has no file to work with.
-		Assertions.assertThatThrownBy(() -> placement.place(tmp.resolve("missing.mp4"), source, noAffix))
+		Assertions.assertThatThrownBy(() -> placement.place(tmp.resolve("missing.mp4"), source, noAffix, EXECUTION_ID))
 				.isInstanceOf(IOException.class);
 	}
 
@@ -176,11 +187,12 @@ class ConversionFilePlacementTest {
 		Path source = Files.writeString(library.resolve("clip.mp4"), "original");
 		Path converted = convertedFile(tmp, "clip.mp4");
 
-		SecureFileMove silentlyLosingTheFile = mock(SecureFileMove.class);
+		LibraryFileMutations silentlyLosingTheFile = mock(LibraryFileMutations.class);
 
 		ConversionFilePlacement losing = new ConversionFilePlacement(silentlyLosingTheFile, conversionFileNaming);
 
-		Assertions.assertThatThrownBy(() -> losing.place(converted, source, noAffix)).isInstanceOf(IOException.class);
+		Assertions.assertThatThrownBy(() -> losing.place(converted, source, noAffix,
+				EXECUTION_ID)).isInstanceOf(IOException.class);
 	}
 
 	private Path convertedFile(Path tmp, String fileName) throws IOException {

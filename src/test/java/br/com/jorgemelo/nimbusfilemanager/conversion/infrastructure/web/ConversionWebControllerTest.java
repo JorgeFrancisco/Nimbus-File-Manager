@@ -1,9 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +17,6 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -27,33 +24,38 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCommitService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.VideoConversionAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCandidateView;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionProgress;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionRequest;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineRetentionPolicy;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 
 class ConversionWebControllerTest {
 
 	private final ConversionCandidateService conversionCandidateService = mock(ConversionCandidateService.class);
-	private final VideoConversionAsyncRunner runner = mock(VideoConversionAsyncRunner.class);
-	private final ConversionCommitService conversionCommitService = mock(ConversionCommitService.class);
-	private final QuarantinePurgeService quarantinePurgeService = mock(QuarantinePurgeService.class);
+	private final ConversionLauncherService launcher = mock(ConversionLauncherService.class);
+	private final ConversionProgressService conversionProgressService = mock(ConversionProgressService.class);
+	private final ExecutionCancellationService executionCancellationService = mock(ExecutionCancellationService.class);
+	private final QuarantineFolderPolicy quarantineFolderPolicy = mock(QuarantineFolderPolicy.class);
+	private final QuarantineRetentionPolicy quarantineRetentionPolicy = mock(QuarantineRetentionPolicy.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
 	private final HardwareEncoderProbe hardwareEncoderProbe = mock(HardwareEncoderProbe.class);
-	private final ConversionWebController controller = new ConversionWebController(conversionCandidateService, runner,
-			conversionCommitService, quarantinePurgeService, preferences, hardwareEncoderProbe);
+	private final ConversionWebController controller = new ConversionWebController(conversionCandidateService, launcher,
+			conversionProgressService, executionCancellationService, quarantineFolderPolicy, quarantineRetentionPolicy,
+			preferences, hardwareEncoderProbe);
 
 	private final Authentication authentication = mock(Authentication.class);
 
@@ -90,7 +92,7 @@ class ConversionWebControllerTest {
 	void rendersTheScreenWithTheRecommendedOptionsOnAFirstVisit() {
 		Model model = new ExtendedModelMap();
 
-		when(conversionCommitService.quarantineRoot()).thenReturn(Optional.of(Path.of("D:", "trash")));
+		when(quarantineFolderPolicy.root()).thenReturn(Optional.of(Path.of("D:", "trash")));
 
 		Assertions.assertThat(controller.conversion(null, null, authentication, model)).isEqualTo("app/conversion");
 
@@ -104,7 +106,7 @@ class ConversionWebControllerTest {
 	void tellsHowLongAQuarantinedOriginalSurvivesBeforeThePurgeTakesIt() {
 		Model model = new ExtendedModelMap();
 
-		when(quarantinePurgeService.retentionDays()).thenReturn(90);
+		when(quarantineRetentionPolicy.retentionDays()).thenReturn(90);
 
 		controller.conversion(null, null, authentication, model);
 
@@ -115,7 +117,7 @@ class ConversionWebControllerTest {
 	void promisesNoDeadlineWhenNoPurgeIsScheduled() {
 		Model model = new ExtendedModelMap();
 
-		when(quarantinePurgeService.retentionDays()).thenReturn(0);
+		when(quarantineRetentionPolicy.retentionDays()).thenReturn(0);
 
 		controller.conversion(null, null, authentication, model);
 
@@ -196,15 +198,13 @@ class ConversionWebControllerTest {
 	}
 
 	@Test
-	void startsTheBatchInTheBackgroundAndRemembersTheChosenOptions() {
+	void queuesTheBatchAndRemembersTheChosenOptions() {
 		List<UUID> ids = List.of(UUID.randomUUID());
-
-		when(runner.start(1)).thenReturn(true);
 
 		controller.convert(new ConversionRequest(ids, ConversionQuality.HIGH_QUALITY, AudioHandling.AAC,
 				OriginalDisposition.QUARANTINE, "_X265", NameAffixPosition.PREFIX), authentication);
 
-		verify(runner).run(ids, new ConversionOptions(ConversionQuality.HIGH_QUALITY, AudioHandling.AAC,
+		verify(launcher).launch(ids, new ConversionOptions(ConversionQuality.HIGH_QUALITY, AudioHandling.AAC,
 				OriginalDisposition.QUARANTINE, "_X265", NameAffixPosition.PREFIX));
 
 		verify(preferences).save("jorge", ConversionConstants.PAGE_KEY, ConversionConstants.QUALITY_KEY,
@@ -217,40 +217,29 @@ class ConversionWebControllerTest {
 
 	@Test
 	void fallsBackToTheRecommendedOptionsWhenTheRequestOmitsThem() {
-		when(runner.start(anyInt())).thenReturn(true);
-
 		controller.convert(new ConversionRequest(List.of(UUID.randomUUID()), null, null, null, null, null),
 				authentication);
 
-		verify(runner).run(any(), eq(ConversionOptions.defaults()));
+		verify(launcher).launch(any(), eq(ConversionOptions.defaults()));
 	}
 
+	/**
+	 * Whether a second batch may run at once stopped being this screen's question:
+	 * the worker answers it, by running one conversion at a time whatever is asked.
+	 * What is refused here is only a request naming no files at all.
+	 */
 	@Test
-	void doesNotStartASecondBatchWhileOneIsRunning() {
-		when(runner.start(anyInt())).thenReturn(false);
+	void queuesNothingForARequestThatNamesNoFiles() {
+		controller.convert(new ConversionRequest(List.of(), null, null, null, null, null), authentication);
 
-		controller.convert(new ConversionRequest(List.of(UUID.randomUUID()), null, null, null, null, null),
-				authentication);
-
-		verify(runner, never()).run(any(), any());
-	}
-
-	@Test
-	void releasesTheClaimWhenTheBackgroundTaskCannotBeSubmitted() {
-		when(runner.start(anyInt())).thenReturn(true);
-		doThrow(new TaskRejectedException("saturated")).when(runner).run(any(), any());
-
-		controller.convert(new ConversionRequest(List.of(UUID.randomUUID()), null, null, null, null, null),
-				authentication);
-
-		verify(runner).releaseRejectedSubmission();
+		verify(launcher, never()).launch(any(), any());
 	}
 
 	@Test
 	void treatsAnEmptyRequestAsNothingToConvert() {
 		controller.convert(new ConversionRequest(null, null, null, null, null, null), authentication);
 
-		verify(runner).start(0);
+		verify(launcher, never()).launch(any(), any());
 	}
 
 	@Test
@@ -268,7 +257,7 @@ class ConversionWebControllerTest {
 		verify(preferences).save("jorge", ConversionConstants.PAGE_KEY, ConversionConstants.DISPOSITION_KEY,
 				OriginalDisposition.QUARANTINE.name());
 
-		verify(runner, never()).run(any(), any());
+		verify(launcher, never()).launch(any(), any());
 	}
 
 	@Test
@@ -279,56 +268,41 @@ class ConversionWebControllerTest {
 				ConversionOptions.defaults().quality().name());
 	}
 
+	/**
+	 * The snapshot is whatever the persisted progress says; this endpoint only
+	 * hands it over, because the batch it describes is happening somewhere else.
+	 */
 	@Test
-	void hidesTheResultWhileTheBatchIsStillRunning() {
-		when(runner.isRunning()).thenReturn(true);
-		when(runner.processed()).thenReturn(1);
-		when(runner.total()).thenReturn(3);
-		when(runner.percent()).thenReturn(45d);
-		when(runner.filePercent()).thenReturn(20);
-		when(runner.currentFile()).thenReturn("clip.mp4");
+	void answersWithTheProgressThatWasPersisted() {
+		ConversionProgress snapshot = new ConversionProgress(true, 1, 3, 45, 20, 320, "clip.mp4", null);
 
-		ConversionProgress progress = controller.progress();
+		when(conversionProgressService.snapshot()).thenReturn(snapshot);
 
-		Assertions.assertThat(progress.running()).isTrue();
-		Assertions.assertThat(progress.processed()).isEqualTo(1);
-		Assertions.assertThat(progress.total()).isEqualTo(3);
-		Assertions.assertThat(progress.percent()).isEqualTo(45);
-		Assertions.assertThat(progress.filePercent()).isEqualTo(20);
-		Assertions.assertThat(progress.currentFile()).isEqualTo("clip.mp4");
-		Assertions.assertThat(progress.result()).isNull();
+		Assertions.assertThat(controller.progress()).isSameAs(snapshot);
+	}
+
+	/**
+	 * The cancel reaches the row, which is the only thing the process doing the
+	 * encoding shares with this one.
+	 */
+	@Test
+	void asksTheRunningBatchToStopByItsExecution() {
+		Execution running = Execution.builder().id(7L).build();
+
+		when(conversionProgressService.active()).thenReturn(Optional.of(running));
+
+		controller.cancel();
+
+		verify(executionCancellationService).requestCancellation(7L);
 	}
 
 	@Test
-	void deliversTheReportOnceTheBatchHasFinished() {
-		ConversionResult result = ConversionResult.empty("done");
+	void asksNothingToStopWhenNoBatchIsRunning() {
+		when(conversionProgressService.active()).thenReturn(Optional.empty());
 
-		when(runner.isRunning()).thenReturn(false);
-		when(runner.lastResult()).thenReturn(result);
+		controller.cancel();
 
-		Assertions.assertThat(controller.progress().result()).isSameAs(result);
-	}
-
-	@Test
-	void stopsTheRunningBatchAndAnswersWithTheFreshSnapshot() {
-		when(runner.isRunning()).thenReturn(true);
-		when(runner.processed()).thenReturn(1);
-		when(runner.total()).thenReturn(3);
-
-		ConversionProgress progress = controller.cancel();
-
-		verify(runner).cancel();
-
-		Assertions.assertThat(progress.running()).isTrue();
-		Assertions.assertThat(progress.processed()).isEqualTo(1);
-	}
-
-	@Test
-	void carriesTheEstimateIntoTheProgressSnapshot() {
-		when(runner.isRunning()).thenReturn(true);
-		when(runner.etaSeconds()).thenReturn(320L);
-
-		Assertions.assertThat(controller.progress().etaSeconds()).isEqualTo(320);
+		verify(executionCancellationService, never()).requestCancellation(any());
 	}
 
 	@Test

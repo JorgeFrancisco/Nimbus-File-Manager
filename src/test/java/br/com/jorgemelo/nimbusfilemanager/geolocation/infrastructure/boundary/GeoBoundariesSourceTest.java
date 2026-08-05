@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetProgress;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
@@ -98,7 +99,7 @@ class GeoBoundariesSourceTest {
 		when(appSettingService.stringValue(eq(SettingsConstants.BOUNDARY_ADM2_URL), anyString())).thenReturn("");
 
 		return new GeoBoundariesSource(new BoundaryDatasetProperties(), appSettingService, new ObjectMapper(),
-				new GeoDatasetProgress(), Clock.systemDefaultZone());
+				new GeoDatasetProgress(mock(ExecutionProgressService.class)), Clock.systemDefaultZone());
 	}
 
 	@Test
@@ -240,7 +241,8 @@ class GeoBoundariesSourceTest {
 				.thenReturn(baseUrl() + "/api/");
 
 		GeoBoundariesSource source = new GeoBoundariesSource(new BoundaryDatasetProperties(), appSettingService,
-				new ObjectMapper(), new GeoDatasetProgress(), Clock.systemDefaultZone());
+				new ObjectMapper(), new GeoDatasetProgress(mock(ExecutionProgressService.class)),
+				Clock.systemDefaultZone());
 
 		List<LeveledBoundaryFile> files = source.fetchMissingCountries(List.of("ABW", "AAA"), workspace);
 
@@ -261,7 +263,8 @@ class GeoBoundariesSourceTest {
 		when(appSettingService.stringValue(eq(SettingsConstants.BOUNDARY_GBOPEN_API_URL), anyString())).thenReturn("");
 
 		GeoBoundariesSource source = new GeoBoundariesSource(new BoundaryDatasetProperties(), appSettingService,
-				new ObjectMapper(), new GeoDatasetProgress(), Clock.systemDefaultZone());
+				new ObjectMapper(), new GeoDatasetProgress(mock(ExecutionProgressService.class)),
+				Clock.systemDefaultZone());
 
 		Assertions.assertThat(source.fetchMissingCountries(List.of("ABW"), workspace)).isEmpty();
 	}

@@ -53,5 +53,30 @@ public record DuplicateFileView(
 		String dateSourceBadgeClass,
 
 		// Human-friendly renderings of the dates above, so the template only displays.
-		String captureDateLabel, String modifiedAtLabel) {
+		String captureDateLabel, String modifiedAtLabel,
+
+		// Whether the screen may offer actions over this file. A published similarity
+		// result is a photograph of an analysis, and a file deleted or quarantined
+		// since then stays in the group it was found in - what must not happen is the
+		// screen offering to delete something that is already gone. The backend
+		// decides it; the template only reads the flag, as the front-end rules
+		// require.
+		boolean actionable) {
+
+	/**
+	 * The shape the exact-duplicates tab builds, where every listed file is by
+	 * definition current: those groups are computed from the catalog at request
+	 * time, so there is no gap between what was found and what exists.
+	 */
+	public DuplicateFileView(UUID id, String fileName, String currentFolder, String currentPath, SizeResponse size,
+			LocalDateTime modifiedAt, LocalDateTime captureDate, boolean keep, boolean recommendedKeep, boolean image,
+			boolean video, boolean pdf, boolean text, boolean audio, String previewUrl, String contentUrl,
+			String iconClass, String iconLabel, String highlight, String highlightLabel, String reason,
+			String resolution, boolean previewable, String lightboxClass, String openTitle, String dateSourceLabel,
+			String dateSourceBadgeClass, String captureDateLabel, String modifiedAtLabel) {
+		this(id, fileName, currentFolder, currentPath, size, modifiedAt, captureDate, keep, recommendedKeep, image,
+				video, pdf, text, audio, previewUrl, contentUrl, iconClass, iconLabel, highlight, highlightLabel,
+				reason, resolution, previewable, lightboxClass, openTitle, dateSourceLabel, dateSourceBadgeClass,
+				captureDateLabel, modifiedAtLabel, true);
+	}
 }

@@ -24,6 +24,7 @@ public class ExecutionLabels extends LocalizedComponent {
 		return switch (type) {
 		case INVENTORY -> message("backend.execution.type.INVENTORY");
 		case ORGANIZATION -> message("backend.execution.type.ORGANIZATION");
+		case ORGANIZATION_PREVIEW -> message("backend.execution.type.ORGANIZATION_PREVIEW");
 		case UNDO -> message("backend.execution.type.UNDO");
 		case QUARANTINE_RESTORE -> message("backend.execution.type.QUARANTINE_RESTORE");
 		case QUARANTINE_PURGE -> message("backend.execution.type.QUARANTINE_PURGE");
@@ -31,14 +32,25 @@ public class ExecutionLabels extends LocalizedComponent {
 		case DEDUP_DELETE -> message("backend.execution.type.DEDUP_DELETE");
 		case RECONCILE -> message("backend.execution.type.RECONCILE");
 		case CONVERSION -> message("backend.execution.type.CONVERSION");
+		case EXPLORER_RENAME -> message("backend.execution.type.EXPLORER_RENAME");
+		case EXPLORER_QUARANTINE -> message("backend.execution.type.EXPLORER_QUARANTINE");
+		case EXPLORER_DELETE -> message("backend.execution.type.EXPLORER_DELETE");
+		case CATALOG_PURGE -> message("backend.execution.type.CATALOG_PURGE");
+		case LIBRARY_SWITCH -> message("backend.execution.type.LIBRARY_SWITCH");
+		case SIMILARITY_PHOTO -> message("backend.execution.type.SIMILARITY_PHOTO");
+		case SIMILARITY_VIDEO -> message("backend.execution.type.SIMILARITY_VIDEO");
+		case FINGERPRINT_PHOTO -> message("backend.execution.type.FINGERPRINT_PHOTO");
+		case FINGERPRINT_VIDEO -> message("backend.execution.type.FINGERPRINT_VIDEO");
+		case METADATA_REBUILD -> message("backend.execution.type.METADATA_REBUILD");
+		case LOCATION_REBUILD -> message("backend.execution.type.LOCATION_REBUILD");
+		case GEO_DATASET_UPDATE -> message("backend.execution.type.GEO_DATASET_UPDATE");
 		};
 	}
 
 	public String status(ExecutionStatus status) {
 		return switch (status) {
-		case STARTED -> message("backend.execution.status.started");
-		case SCANNING_FILES -> message("backend.execution.status.scanning");
-		case PROCESSING_FILES -> message("backend.execution.status.processing");
+		case PENDING -> message("backend.execution.status.pending");
+		case RUNNING -> message("backend.execution.status.running");
 		case FINISHED -> message("backend.execution.status.finished");
 		case FINISHED_WITH_ERRORS -> message("backend.execution.status.finishedWithErrors");
 		case INTERRUPTED -> message("backend.execution.status.interrupted");

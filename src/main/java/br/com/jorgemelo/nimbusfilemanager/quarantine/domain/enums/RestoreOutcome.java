@@ -17,9 +17,11 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums;
  * <li>{@code LOCKED} - another operation holds the path; try again later.</li>
  * <li>{@code ERROR} - an IO or integrity failure; the file was left safely in
  * quarantine.</li>
+ * <li>{@code PENDING} - the restore was queued and is being carried out; the
+ * screen follows the execution rather than the request.</li>
  * </ul>
  */
 public enum RestoreOutcome {
 
-	RESTORED, SKIPPED, CONFLICT, ORIGIN_MISSING, MISSING_IN_QUARANTINE, LOCKED, ERROR
+	RESTORED, SKIPPED, CONFLICT, ORIGIN_MISSING, MISSING_IN_QUARANTINE, LOCKED, ERROR, PENDING
 }

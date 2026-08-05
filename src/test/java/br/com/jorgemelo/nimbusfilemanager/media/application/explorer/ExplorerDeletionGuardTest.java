@@ -7,16 +7,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.context.support.ResourceBundleMessageSource;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -28,9 +27,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * rest of the machine.
  *
  * <p>
- * Messages resolve against the real bundle rather than a stub, so a refusal
- * whose key was never translated fails here instead of reaching a user as a raw
- * key.
+ * The refusal is a code now, because the same question is asked by the worker,
+ * where there is no request and no language. Every assertion still resolves it
+ * against the real bundle: a refusal whose key was never translated fails here
+ * instead of reaching a user as a raw key.
  */
 class ExplorerDeletionGuardTest {
 
@@ -42,31 +42,17 @@ class ExplorerDeletionGuardTest {
 	private ExplorerDeletionGuard guard(String library) {
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(library);
 
-		ExplorerDeletionGuard guard = new ExplorerDeletionGuard(appSettingService);
-
-		guard.setMessageSource(messages);
-
-		return guard;
+		return new ExplorerDeletionGuard(appSettingService);
 	}
 
 	private String expected(String key, Object... arguments) {
 		return messages.getMessage(key, arguments, PT_BR);
 	}
 
-	/**
-	 * The component under test resolves through LocaleContextHolder, so without
-	 * pinning the language these assertions would compare pt-BR text against
-	 * whatever the machine defaults to - green here and red on an English CI
-	 * runner, which is exactly what happened.
-	 */
-	@BeforeEach
-	void useThePortugueseBundle() {
-		LocaleContextHolder.setLocale(PT_BR);
-	}
-
-	@AfterEach
-	void releaseTheLocale() {
-		LocaleContextHolder.resetLocaleContext();
+	/** The refusal as the sentence a screen would show, or null when allowed. */
+	private String sentence(Optional<ExecutionMessage> refusal) {
+		return refusal.map(message -> messages.getMessage(message.code(), message.args().toArray(), PT_BR))
+				.orElse(null);
 	}
 
 	@Test
@@ -80,8 +66,8 @@ class ExplorerDeletionGuardTest {
 	void refusesAPathOutsideTheLibrary(@TempDir Path library, @TempDir Path elsewhere) throws IOException {
 		Path outside = Files.createFile(elsewhere.resolve("payroll.xlsx"));
 
-		Assertions.assertThat(guard(library.toString()).refusal(outside))
-				.contains(expected("backend.files.outsideLibrary", PathUtils.normalize(library)));
+		Assertions.assertThat(sentence(guard(library.toString()).refusal(outside)))
+				.isEqualTo(expected("backend.files.outsideLibrary", PathUtils.normalize(library)));
 	}
 
 	/**
@@ -90,14 +76,26 @@ class ExplorerDeletionGuardTest {
 	 */
 	@Test
 	void refusesTheLibraryRootItself(@TempDir Path library) {
-		Assertions.assertThat(guard(library.toString()).refusal(library))
-				.contains(expected("backend.files.outsideLibrary", PathUtils.normalize(library)));
+		Assertions.assertThat(sentence(guard(library.toString()).refusal(library)))
+				.isEqualTo(expected("backend.files.outsideLibrary", PathUtils.normalize(library)));
 	}
 
 	@Test
 	void refusesAPathThatIsNoLongerOnDisk(@TempDir Path library) {
-		Assertions.assertThat(guard(library.toString()).refusal(library.resolve("gone.jpg")))
-				.contains(expected("backend.files.pathGone"));
+		Assertions.assertThat(sentence(guard(library.toString()).refusal(library.resolve("gone.jpg"))))
+				.isEqualTo(expected("backend.files.pathGone"));
+	}
+
+	/**
+	 * A shortcut is not the file it points at, and acting on one would act on
+	 * something the user never selected - possibly outside the library entirely.
+	 */
+	@Test
+	void refusesAShortcutBecauseItIsNotAPhysicalFile(@TempDir Path library) throws IOException {
+		Path shortcut = Files.createFile(library.resolve("photo.lnk"));
+
+		Assertions.assertThat(sentence(guard(library.toString()).refusal(shortcut)))
+				.isEqualTo(expected("backend.files.notPhysical"));
 	}
 
 	/**
@@ -108,7 +106,8 @@ class ExplorerDeletionGuardTest {
 	void refusesEverythingWhileTheLibraryIsUnconfigured(@TempDir Path library) throws IOException {
 		Path file = Files.createFile(library.resolve("photo.jpg"));
 
-		Assertions.assertThat(guard("").refusal(file)).contains(expected("backend.files.libraryNotConfigured"));
+		Assertions.assertThat(sentence(guard("").refusal(file)))
+				.isEqualTo(expected("backend.files.libraryNotConfigured"));
 	}
 
 	private MessageSource messageSource() {

@@ -25,7 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.catalog.application.CatalogExportServi
 import br.com.jorgemelo.nimbusfilemanager.catalog.domain.enums.CatalogExportFormat;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryBatchTestSeeder;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationJobTestRunner;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.LibraryCatalogCleanupService;
@@ -37,7 +37,7 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.Ti
 
 @SpringBootTest
 @Testcontainers
-@Import(InventoryBatchTestSeeder.class)
+@Import({ InventoryBatchTestSeeder.class, OrganizationJobTestRunner.class })
 // Drives the real Spring Batch inventory job, which enforces a single active
 // inventory at a time (global operation lock + shared JobRepository). Serialize
 // against the other inventory-driving integration tests so the concurrent
@@ -55,7 +55,7 @@ class InventoryOrganizationReinventoryTest {
 	private InventoryBatchTestSeeder inventorySeeder;
 
 	@Autowired
-	private OrganizationService organizationService;
+	private OrganizationJobTestRunner organizationJobTestRunner;
 
 	@Autowired
 	private TimelineQueryRepository timelineQueryRepository;
@@ -95,13 +95,15 @@ class InventoryOrganizationReinventoryTest {
 		Assertions.assertThat(inventory.filesAnalyzed()).isEqualTo(3);
 		Assertions.assertThat(inventory.errors()).isZero();
 
-		var organization = organizationService
-				.execute(new OrganizationExecuteRequest(source.toString(), target.toString(), true,
+		var organization = organizationJobTestRunner
+				.organize(new OrganizationExecuteRequest(source.toString(), target.toString(), true,
 						OrganizationLayout.DEFAULT, 10000, false, null, true, null, null, null, null, true, false));
 
-		Assertions.assertThat(organization.moved()).isEqualTo(1);
-		Assertions.assertThat(organization.skipped()).isEqualTo(2);
-		Assertions.assertThat(organization.errors()).isZero();
+		// Read from the row rather than from a return value: the move happens in the
+		// worker now, and the row is what the screen and every later question see.
+		Assertions.assertThat(organization.getFilesMoved()).isEqualTo(1);
+		Assertions.assertThat(organization.getCacheHits()).isEqualTo(2);
+		Assertions.assertThat(organization.getErrors()).isZero();
 
 		Path remainingFile = Files.exists(firstFile) ? firstFile : secondFile;
 
@@ -128,11 +130,12 @@ class InventoryOrganizationReinventoryTest {
 
 		inventorySeeder.seed(new InventoryRequest(source.toString(), true, false, true, true));
 
-		var first = organizationService.execute(new OrganizationExecuteRequest(source.toString(), target.toString(),
-				true, OrganizationLayout.DEFAULT, 10000, false, null, true, null, null, null, null, true, false));
+		var first = organizationJobTestRunner.organize(new OrganizationExecuteRequest(source.toString(),
+				target.toString(), true, OrganizationLayout.DEFAULT, 10000, false, null, true, null, null, null, null,
+				true, false));
 
-		Assertions.assertThat(first.moved()).isEqualTo(2);
-		Assertions.assertThat(first.errors()).isZero();
+		Assertions.assertThat(first.getFilesMoved()).isEqualTo(2);
+		Assertions.assertThat(first.getErrors()).isZero();
 
 		long filesAfterFirst = countFiles(target);
 
@@ -142,12 +145,13 @@ class InventoryOrganizationReinventoryTest {
 		// must be a clean, idempotent no-op - no moves, no errors, no rejection, and
 		// the
 		// target is never duplicated.
-		var second = organizationService.execute(new OrganizationExecuteRequest(source.toString(), target.toString(),
-				true, OrganizationLayout.DEFAULT, 10000, false, null, true, null, null, null, null, true, false));
+		var second = organizationJobTestRunner.organize(new OrganizationExecuteRequest(source.toString(),
+				target.toString(), true, OrganizationLayout.DEFAULT, 10000, false, null, true, null, null, null, null,
+				true, false));
 
-		Assertions.assertThat(second.moved()).isZero();
-		Assertions.assertThat(second.errors()).isZero();
-		Assertions.assertThat(second.status()).isEqualTo(ExecutionStatus.FINISHED.name());
+		Assertions.assertThat(second.getFilesMoved()).isZero();
+		Assertions.assertThat(second.getErrors()).isZero();
+		Assertions.assertThat(second.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
 		Assertions.assertThat(countFiles(target)).isEqualTo(filesAfterFirst);
 	}
 

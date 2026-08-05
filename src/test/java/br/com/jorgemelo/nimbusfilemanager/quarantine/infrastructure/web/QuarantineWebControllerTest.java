@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -25,13 +26,15 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineCleanupLauncher;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineListing;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineProgressService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineRestoreLauncher;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineDeleteResponse;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineCleanupResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineProgress;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreRequest;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreResult;
@@ -41,24 +44,28 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedCon
 
 class QuarantineWebControllerTest {
 
-	private final QuarantineService quarantineService = mock(QuarantineService.class);
-	private final QuarantinePurgeService quarantinePurgeService = mock(QuarantinePurgeService.class);
+	private final QuarantineListing quarantineListing = mock(QuarantineListing.class);
+	private final QuarantineRestoreLauncher quarantineRestoreLauncher = mock(QuarantineRestoreLauncher.class);
+	private final QuarantineCleanupLauncher quarantineCleanupLauncher = mock(QuarantineCleanupLauncher.class);
+	private final QuarantineLauncherService quarantineLauncherService = mock(QuarantineLauncherService.class);
+	private final QuarantineProgressService quarantineProgressService = mock(QuarantineProgressService.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-	private final QuarantineWebController controller = new QuarantineWebController(quarantineService,
-			quarantinePurgeService, preferences);
+	private final QuarantineWebController controller = new QuarantineWebController(quarantineListing,
+			quarantineRestoreLauncher, quarantineCleanupLauncher, quarantineLauncherService, quarantineProgressService,
+			preferences);
 
 	@Test
 	void mapsConflictStringAndDestinationFolderToRestoreOptions() {
 		UUID movementId = UUID.randomUUID();
 
-		when(quarantineService.restore(eq(movementId), any()))
+		when(quarantineRestoreLauncher.restore(eq(movementId), any()))
 				.thenReturn(new QuarantineRestoreResult(true, "RESTORED", "ok", movementId, "C:\\dest\\a.jpg"));
 
 		controller.restore(new QuarantineRestoreRequest(movementId, "rename", "C:\\dest"));
 
 		ArgumentCaptor<QuarantineRestoreOptions> captor = ArgumentCaptor.forClass(QuarantineRestoreOptions.class);
 
-		verify(quarantineService).restore(eq(movementId), captor.capture());
+		verify(quarantineRestoreLauncher).restore(eq(movementId), captor.capture());
 
 		Assertions.assertThat(captor.getValue().conflictResolution()).isEqualTo(ConflictResolution.RENAME);
 		Assertions.assertThat(captor.getValue().destinationFolder()).isNotNull();
@@ -78,13 +85,15 @@ class QuarantineWebControllerTest {
 	 */
 	@Test
 	void rejectsEveryWriteEndpointWhenTheRequestBodyIsMissing() {
-		Assertions.assertThat(controller.restore(null).success()).isFalse();
-		Assertions.assertThat(controller.restoreSelected(null).total()).isZero();
-		Assertions.assertThat(controller.deleteSelected(null).purged()).isZero();
+		when(quarantineProgressService.snapshot()).thenReturn(idle());
 
-		verify(quarantineService, never()).restore(any(), any());
-		verify(quarantineService, never()).restoreMany(any());
-		verify(quarantinePurgeService, never()).purgeSelected(any());
+		Assertions.assertThat(controller.restore(null).success()).isFalse();
+		Assertions.assertThat(controller.restoreSelected(null).running()).isFalse();
+		Assertions.assertThat(controller.deleteSelected(null).running()).isFalse();
+
+		verify(quarantineRestoreLauncher, never()).restore(any(), any());
+		verify(quarantineLauncherService, never()).launchRestore(any());
+		verify(quarantineLauncherService, never()).launchPurge(any());
 	}
 
 	/**
@@ -102,7 +111,7 @@ class QuarantineWebControllerTest {
 
 		ArgumentCaptor<QuarantineRestoreOptions> captor = ArgumentCaptor.forClass(QuarantineRestoreOptions.class);
 
-		verify(quarantineService, times(3)).restore(eq(movementId), captor.capture());
+		verify(quarantineRestoreLauncher, times(3)).restore(eq(movementId), captor.capture());
 
 		Assertions.assertThat(captor.getAllValues()).allSatisfy(options -> {
 			Assertions.assertThat(options.conflictResolution()).isEqualTo(ConflictResolution.BLOCK);
@@ -110,112 +119,108 @@ class QuarantineWebControllerTest {
 		});
 	}
 
+	/**
+	 * The screen no longer waits on the answer: the request queues the batch and
+	 * comes back with what the poller will keep asking for.
+	 */
 	@Test
-	void restoreSelectedForwardsIdsToService() {
+	void restoreSelectedQueuesTheSelectionAndAnswersWithTheCurrentBatch() {
 		UUID a = UUID.randomUUID();
 		UUID b = UUID.randomUUID();
 
-		when(quarantineService.restoreMany(List.of(a, b)))
-				.thenReturn(new QuarantineRestoreBatchResult(true, 2, 2, 0, 0, 0, 0, "ok", List.of()));
+		when(quarantineProgressService.snapshot()).thenReturn(running("QUARANTINE_RESTORE", 2));
 
-		controller.restoreSelected(new QuarantineRestoreSelectedRequest(List.of(a, b)));
+		QuarantineProgress progress = controller.restoreSelected(new QuarantineRestoreSelectedRequest(List.of(a, b)));
 
-		verify(quarantineService).restoreMany(List.of(a, b));
-	}
+		verify(quarantineLauncherService).launchRestore(List.of(a, b));
 
-	@Test
-	void deleteSelectedForwardsIdsToPurgeService() {
-		UUID a = UUID.randomUUID();
-
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
-
-		controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
-
-		verify(quarantinePurgeService).purgeSelected(List.of(a));
+		Assertions.assertThat(progress.running()).isTrue();
+		Assertions.assertThat(progress.total()).isEqualTo(2);
 	}
 
 	/**
-	 * A delete that deleted nothing has to say why: the screen shows the sentence
-	 * in a dialog, and a status line of bare counters used to read as success while
-	 * a running conversion held every file.
+	 * The request could not be made - no quarantine folder is configured - and what
+	 * the person gets is the sentence saying so, in the snapshot the screen already
+	 * polls.
+	 *
+	 * <p>
+	 * It has to arrive as data rather than as an exception because this controller
+	 * serves the screen, and the advice that turns a refusal into a message covers
+	 * the REST packages. Left to escape, a quarantine folder somebody never set
+	 * would reach them as a bare 500.
 	 */
 	@Test
-	void deleteSelectedExplainsWhenAnotherOperationIsHoldingTheFiles() {
-		UUID a = UUID.randomUUID();
+	void answersWithTheReasonWhenTheBatchCouldNotBeQueuedAtAll() {
+		UUID picked = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 1, 0));
+		doThrow(new IllegalArgumentException("the quarantine folder is not configured"))
+				.when(quarantineLauncherService).launchPurge(List.of(picked));
+		when(quarantineProgressService.refused("the quarantine folder is not configured"))
+				.thenReturn(new QuarantineProgress(false, null, 0, 0, 0, 0, "the quarantine folder is not configured"));
 
-		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+		QuarantineProgress progress = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(picked)));
 
-		Assertions.assertThat(response.purged()).isZero();
-		Assertions.assertThat(response.busy()).isEqualTo(1);
-		Assertions.assertThat(response.message()).contains("em uso por outra operação");
+		Assertions.assertThat(progress.running()).isFalse();
+		Assertions.assertThat(progress.message()).isEqualTo("the quarantine folder is not configured");
+
+		verify(quarantineProgressService, never()).snapshot();
 	}
 
-	/** A file the disk refused to delete is reported, not swallowed. */
 	@Test
-	void deleteSelectedExplainsWhenTheDiskRefusedTheDelete() {
+	void deleteSelectedQueuesThePurge() {
 		UUID a = UUID.randomUUID();
 
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 0, 0, 1));
+		when(quarantineProgressService.snapshot()).thenReturn(running("QUARANTINE_PURGE", 1));
 
-		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+		QuarantineProgress progress = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
 
-		Assertions.assertThat(response.errors()).isEqualTo(1);
-		Assertions.assertThat(response.message()).contains("Não foi possível apagar");
+		verify(quarantineLauncherService).launchPurge(List.of(a));
+
+		Assertions.assertThat(progress.executionType()).isEqualTo("QUARANTINE_PURGE");
 	}
 
 	/**
-	 * An item that left quarantine between the listing and the click is not an
-	 * error, but the user still has to learn why nothing happened.
+	 * The endpoint hands back whatever the launcher answered, sentence included:
+	 * the screen has three different things to say and none of them is assembled
+	 * here.
 	 */
 	@Test
-	void deleteSelectedExplainsWhenTheItemLeftQuarantineMeanwhile() {
-		UUID a = UUID.randomUUID();
+	void cleanupAbsentAnswersWithWhatTheLauncherDecided() {
+		when(quarantineCleanupLauncher.clearAbsent())
+				.thenReturn(QuarantineCleanupResult.cleared(3, "3 removidos"));
 
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 0, 0, 1, 0, 0));
+		QuarantineCleanupResult result = controller.cleanupAbsent();
 
-		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
+		Assertions.assertThat(result.removed()).isEqualTo(3);
+		Assertions.assertThat(result.pending()).isFalse();
+		Assertions.assertThat(result.message()).isEqualTo("3 removidos");
 
-		Assertions.assertThat(response.skipped()).isEqualTo(1);
-		Assertions.assertThat(response.message()).contains("deixaram a quarentena");
+		verify(quarantineCleanupLauncher).clearAbsent();
 	}
 
-	/** Nothing to interrupt the user with when the delete did what was asked. */
+	/** An empty selection queues nothing - there is no work to ask for. */
 	@Test
-	void deleteSelectedCarriesNoMessageWhenEverythingWasDeleted() {
-		UUID a = UUID.randomUUID();
+	void queuesNothingWhenNoItemWasSelected() {
+		when(quarantineProgressService.snapshot()).thenReturn(idle());
 
-		when(quarantinePurgeService.purgeSelected(List.of(a))).thenReturn(new QuarantinePurgeResult(1, 1, 1, 0, 0, 0));
+		Assertions.assertThat(controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of())).running())
+				.isFalse();
+		Assertions.assertThat(controller.restoreSelected(new QuarantineRestoreSelectedRequest(List.of())).running())
+				.isFalse();
 
-		QuarantineDeleteResponse response = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of(a)));
-
-		Assertions.assertThat(response.purged()).isEqualTo(1);
-		Assertions.assertThat(response.message()).isNull();
+		verify(quarantineLauncherService, never()).launchRestore(any());
+		verify(quarantineLauncherService, never()).launchPurge(any());
 	}
 
+	/**
+	 * What the page polls while the worker works, and what it reads once the row
+	 * is closed - the same snapshot either way.
+	 */
 	@Test
-	void cleanupAbsentDelegatesAndReturnsCount() {
-		when(quarantinePurgeService.cleanupAbsent()).thenReturn(3);
+	void progressAnswersWithTheLatestBatch() {
+		when(quarantineProgressService.snapshot()).thenReturn(running("QUARANTINE_PURGE", 4));
 
-		Assertions.assertThat(controller.cleanupAbsent().removed()).isEqualTo(3);
-
-		verify(quarantinePurgeService).cleanupAbsent();
-	}
-
-	@Test
-	void rejectsDeleteSelectedWithoutIds() {
-		QuarantineDeleteResponse result = controller.deleteSelected(new QuarantineRestoreSelectedRequest(List.of()));
-
-		Assertions.assertThat(result.purged()).isZero();
-	}
-
-	@Test
-	void rejectsRestoreSelectedWithoutIds() {
-		QuarantineRestoreBatchResult result = controller
-				.restoreSelected(new QuarantineRestoreSelectedRequest(List.of()));
-
-		Assertions.assertThat(result.success()).isFalse();
+		Assertions.assertThat(controller.progress().total()).isEqualTo(4);
 	}
 
 	@Test
@@ -224,7 +229,7 @@ class QuarantineWebControllerTest {
 
 		when(authentication.getName()).thenReturn("tester");
 		when(preferences.find("tester", QuarantineConstants.PAGE_KEY)).thenReturn(Map.of());
-		when(quarantineService.list(any())).thenReturn(new PageImpl<>(List.of(item("a.jpg"), item("b.jpg"))));
+		when(quarantineListing.list(any())).thenReturn(new PageImpl<>(List.of(item("a.jpg"), item("b.jpg"))));
 
 		Model model = new ExtendedModelMap();
 
@@ -248,7 +253,7 @@ class QuarantineWebControllerTest {
 		when(authentication.getName()).thenReturn("tester");
 		when(preferences.find("tester", QuarantineConstants.PAGE_KEY))
 				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
-		when(quarantineService.list(any())).thenReturn(Page.empty());
+		when(quarantineListing.list(any())).thenReturn(Page.empty());
 
 		Model savedModel = new ExtendedModelMap();
 
@@ -256,7 +261,7 @@ class QuarantineWebControllerTest {
 
 		ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
 
-		verify(quarantineService).list(pageable.capture());
+		verify(quarantineListing).list(pageable.capture());
 
 		Assertions.assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
 		Assertions.assertThat(pageable.getValue().getPageSize()).isEqualTo(200);
@@ -273,7 +278,7 @@ class QuarantineWebControllerTest {
 	@Test
 	void fallsBackForInvalidRequestAndNullPreferences() {
 		when(preferences.find(null, QuarantineConstants.PAGE_KEY)).thenReturn(null);
-		when(quarantineService.list(any()))
+		when(quarantineListing.list(any()))
 				.thenReturn(new PageImpl<>(List.of(item("missing.jpg", false)), PageRequest.of(0, 50), 101));
 
 		Model model = new ExtendedModelMap();
@@ -282,7 +287,7 @@ class QuarantineWebControllerTest {
 
 		ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
 
-		verify(quarantineService).list(pageable.capture());
+		verify(quarantineListing).list(pageable.capture());
 
 		Assertions.assertThat(pageable.getValue().getPageNumber()).isZero();
 		Assertions.assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
@@ -299,7 +304,7 @@ class QuarantineWebControllerTest {
 		when(authentication.getName()).thenReturn("tester");
 		when(preferences.find("tester", QuarantineConstants.PAGE_KEY))
 				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "not-a-number"));
-		when(quarantineService.list(any())).thenReturn(Page.empty());
+		when(quarantineListing.list(any())).thenReturn(Page.empty());
 
 		Model model = new ExtendedModelMap();
 
@@ -315,13 +320,21 @@ class QuarantineWebControllerTest {
 	void ignoresBlankSavedPageSize() {
 		when(preferences.find(null, QuarantineConstants.PAGE_KEY))
 				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, " "));
-		when(quarantineService.list(any())).thenReturn(Page.empty());
+		when(quarantineListing.list(any())).thenReturn(Page.empty());
 
 		Model model = new ExtendedModelMap();
 
 		controller.quarantine(0, null, null, null, model);
 
 		Assertions.assertThat(model.getAttribute("pageSize")).isEqualTo(50);
+	}
+
+	private QuarantineProgress idle() {
+		return new QuarantineProgress(false, null, 0, 0, 0, 0, null);
+	}
+
+	private QuarantineProgress running(String executionType, int total) {
+		return new QuarantineProgress(true, executionType, total, 0, 0, 0, null);
 	}
 
 	private QuarantineItemResponse item(String name) {

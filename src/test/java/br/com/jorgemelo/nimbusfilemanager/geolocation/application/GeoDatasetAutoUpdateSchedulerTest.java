@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunning
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
 
 /**
@@ -40,7 +42,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
-	private final GeoDatasetAsyncRunner runner = mock(GeoDatasetAsyncRunner.class);
+	private final GeoLauncher geoLauncher = mock(GeoLauncher.class);
 	private final InventoryRunningState inventoryRunningState = mock(InventoryRunningState.class);
 
 	private static Clock at(String localDateTime) {
@@ -61,7 +63,8 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		properties.setAutoUpdate(autoUpdate);
 
-		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, runner, inventoryRunningState,
+		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, geoLauncher,
+				inventoryRunningState,
 				clock, properties);
 	}
 
@@ -130,11 +133,9 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	void acquiresTheDatasetWhenTheFeatureIsOnAndNothingIsInstalled() {
 		locationEnabled(true);
 		installed(false);
-		when(runner.start()).thenReturn(true);
-
 		scheduler(at("2026-08-01T09:15:00")).runOnce();
 
-		verify(runner).downloadAndImport();
+		verify(geoLauncher).updateDataset();
 	}
 
 	@Test
@@ -143,8 +144,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		scheduler(at("2026-08-01T09:15:00")).runOnce();
 
-		verify(runner, never()).start();
-		verify(runner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 	}
 
 	/**
@@ -159,7 +159,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		scheduler(at("2026-08-01T09:15:00")).runOnce();
 
-		verify(runner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 	}
 
 	/**
@@ -173,11 +173,10 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		locationEnabled(true);
 		installed(true);
 		autoUpdate(true, "04:00");
-		lenient().when(runner.start()).thenReturn(true);
 
 		scheduler(at(now)).runOnce();
 
-		verify(runner, times(expected ? 1 : 0)).downloadAndImport();
+		verify(geoLauncher, times(expected ? 1 : 0)).updateDataset();
 	}
 
 	@Test
@@ -185,14 +184,14 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		locationEnabled(true);
 		installed(true);
 		autoUpdate(true, "04:00");
-		when(runner.start()).thenReturn(true);
+		when(geoLauncher.updateDataset()).thenReturn(Optional.of(new Execution()));
 
 		GeoDatasetAutoUpdateScheduler scheduler = scheduler(at("2026-08-01T04:10:00"));
 
 		scheduler.runOnce();
 		scheduler.runOnce();
 
-		verify(runner, times(1)).downloadAndImport();
+		verify(geoLauncher, times(1)).updateDataset();
 	}
 
 	@Test
@@ -203,7 +202,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		scheduler(at("2026-08-01T23:00:00")).runOnce();
 
-		verify(runner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 	}
 
 	/**
@@ -215,23 +214,29 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		locationEnabled(true);
 		installed(true);
 		autoUpdate(true, "whenever");
-		when(runner.start()).thenReturn(true);
-
 		scheduler(at("2026-08-01T05:00:00")).runOnce();
 
-		verify(runner).downloadAndImport();
+		verify(geoLauncher).updateDataset();
 	}
 
-	/** A manual update already in flight owns the dataset; do not race it. */
+	/**
+	 * The mark of "already checked today" only moves when a request was really
+	 * written. A pass that reached a closing application must not consume the day,
+	 * or the restart would find nothing to do until tomorrow.
+	 */
 	@Test
-	void staysQuietWhenAnUpdateIsAlreadyRunning() {
+	void doesNotConsumeTheDayWhenNothingWasQueued() {
 		locationEnabled(true);
-		installed(false);
-		when(runner.start()).thenReturn(false);
+		installed(true);
+		autoUpdate(true, "04:00");
+		when(geoLauncher.updateDataset()).thenReturn(Optional.empty()).thenReturn(Optional.of(new Execution()));
 
-		scheduler(at("2026-08-01T09:15:00")).runOnce();
+		GeoDatasetAutoUpdateScheduler scheduler = scheduler(at("2026-08-01T04:10:00"));
 
-		verify(runner, never()).downloadAndImport();
+		scheduler.runOnce();
+		scheduler.runOnce();
+
+		verify(geoLauncher, times(2)).updateDataset();
 	}
 
 	/** The timer must survive a failing pass and try again on the next tick. */
@@ -245,6 +250,6 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		scheduler.runOnce();
 
-		verify(runner, never()).downloadAndImport();
+		verify(geoLauncher, never()).updateDataset();
 	}
 }

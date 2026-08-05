@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -30,7 +31,15 @@ public class SecurityConfig {
 
 	private static final String LOGIN_PATH = "/login";
 
+	/**
+	 * The filter chain needs an {@code HttpSecurity}, which only exists where
+	 * there is a web application - a headless worker has no requests to secure.
+	 * Stated as the condition it actually is rather than as a role: password
+	 * hashing and the role hierarchy below stay unguarded, because a worker
+	 * authenticates nobody but shares the domain services that need an encoder.
+	 */
 	@Bean
+	@ConditionalOnWebApplication
 	SecurityFilterChain securityFilterChain(HttpSecurity http, TwoFactorAuthenticationSuccessHandler successHandler,
 			LoginFailureHandler loginFailureHandler, OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler,
 			AppLogoutSuccessHandler appLogoutSuccessHandler,
