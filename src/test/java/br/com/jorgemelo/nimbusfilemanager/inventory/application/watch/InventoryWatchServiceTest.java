@@ -1,11 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,14 +17,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.assertj.core.api.Assertions;
@@ -31,37 +34,45 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSourceFactory;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 
-// Manipulates the process-global logback logger of InventoryWatchService and is
-// timing-sensitive (see the accepted Thread.sleep uses); runs alone so it is
+// Manipulates the process-global logback logger of InventoryWatchService and
+// watches a real poll thread against wall-clock windows; runs alone so it is
 // immune to interference from concurrently-scheduled test classes.
 @Isolated
 class InventoryWatchServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final ScanExclusionService exclusions = mock(ScanExclusionService.class);
+	private final ExecutionEnqueueService enqueueService = mock(ExecutionEnqueueService.class);
+	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 
 	@TempDir
 	Path tempDir;
@@ -79,11 +90,9 @@ class InventoryWatchServiceTest {
 	void createdFileShouldTriggerDebouncedBatchForConfiguredFolder() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(true);
@@ -91,11 +100,10 @@ class InventoryWatchServiceTest {
 		when(settings.booleanValue(SettingsConstants.WATCH_CALCULATE_HASHES, true)).thenReturn(true);
 		when(settings.booleanValue(SettingsConstants.WATCH_FORCE_ANALYSIS, false)).thenReturn(false);
 		when(queries.active()).thenReturn(Optional.empty());
-		when(reconcileService.reconcileAndApply(any())).thenReturn(reconcile(0));
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 		service.reconfigure();
 
 		Files.writeString(tempDir.resolve("new-photo.jpg"), "test");
@@ -109,11 +117,9 @@ class InventoryWatchServiceTest {
 
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(true);
@@ -121,9 +127,9 @@ class InventoryWatchServiceTest {
 		when(settings.booleanValue(SettingsConstants.WATCH_CALCULATE_HASHES, true)).thenReturn(true);
 		when(settings.booleanValue(SettingsConstants.WATCH_FORCE_ANALYSIS, false)).thenReturn(false);
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 
 		service.startConfiguredMonitor();
 
@@ -134,18 +140,16 @@ class InventoryWatchServiceTest {
 	void monitorReconfigurationShouldImmediatelyInventoryTheNewFolder() {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(queries.active()).thenReturn(Optional.empty());
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 		service.reconfigureAndInventory();
 
 		verify(launcher).launch(any(), any());
@@ -157,17 +161,15 @@ class InventoryWatchServiceTest {
 	void applicationStartupShouldNotLaunchInventoryWithoutConfiguredFolder() {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
 
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("");
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 
 		service.startConfiguredMonitor();
 
@@ -180,11 +182,9 @@ class InventoryWatchServiceTest {
 
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(true);
@@ -193,18 +193,15 @@ class InventoryWatchServiceTest {
 		when(settings.booleanValue(SettingsConstants.WATCH_FORCE_ANALYSIS, false)).thenReturn(false);
 		when(queries.active()).thenReturn(Optional.empty());
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
-
-		when(reconcileService.reconcileAndApply(any())).thenReturn(new OrganizationReconcileResponse(tempDir.toString(),
-				true, false, 0, 1, 1, 0, 0, List.of(), List.of(), List.of(), 0, 0, 0));
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 
 		service.reconfigure();
 
 		Files.delete(existing);
 
-		verify(reconcileService, timeout(6_000)).reconcileAndApply(any());
+		verify(enqueueService, timeout(6_000)).enqueue(any());
 		verify(launcher, timeout(6_000)).launch(any(), any());
 	}
 
@@ -224,17 +221,15 @@ class InventoryWatchServiceTest {
 	void pollEventsShouldBeMutuallyExclusiveWithReconfigure() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
 
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("");
 
-		service = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 
 		Method pollEvents = InventoryWatchService.class.getDeclaredMethod("pollEvents");
 
@@ -273,12 +268,11 @@ class InventoryWatchServiceTest {
 		pollThread.start();
 
 		// While the monitor is held elsewhere, pollEvents() must be blocked trying to
-		// acquire it -
-		// proving it now shares the lock with reconfigure()/stopSource() instead of
-		// running free.
-		Thread.sleep(300);
-
-		assertThat(pollThread.getState()).isEqualTo(Thread.State.BLOCKED);
+		// acquire it - proving it shares the lock with reconfigure()/stopSource()
+		// instead of running free. Waited for rather than sampled after a fixed pause:
+		// the state is what is being asserted, so the test should watch for it.
+		await().atMost(Duration.ofSeconds(5))
+				.untilAsserted(() -> assertThat(pollThread.getState()).isEqualTo(Thread.State.BLOCKED));
 
 		releaseMonitor.countDown();
 
@@ -293,15 +287,13 @@ class InventoryWatchServiceTest {
 	void reconfigureWithBlankFolderLeavesMonitorUnconfigured() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
 
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn("");
 
-		service = frozenService(settings, launcher, queries, reconcileService);
+		service = frozenService(settings, launcher, queries);
 		service.reconfigure();
 
 		assertThat(service.status().running()).isFalse();
@@ -312,16 +304,14 @@ class InventoryWatchServiceTest {
 	void reconfigureWithMissingFolderReportsError() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, ""))
 				.thenReturn(tempDir.resolve("does-not-exist").toString());
 
-		service = frozenService(settings, launcher, queries, reconcileService);
+		service = frozenService(settings, launcher, queries);
 
 		service.reconfigure();
 
@@ -334,16 +324,14 @@ class InventoryWatchServiceTest {
 	void reconfigureAndInventoryQueuesInventoryWhenExecutionActive() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
 
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(queries.active()).thenReturn(Optional.of(activeExecution()));
 
-		service = frozenService(settings, launcher, queries, reconcileService);
+		service = frozenService(settings, launcher, queries);
 		service.reconfigureAndInventory();
 
 		// An inventory is already running, so the reconfiguration must queue the work
@@ -356,8 +344,8 @@ class InventoryWatchServiceTest {
 
 	@Test
 	void pauseStopsMonitoringAndClearsPending() throws Exception {
-		service = frozenService(configuredSettings(), mock(InventoryBatchLauncherService.class),
-				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class));
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
 
 		service.reconfigure();
 
@@ -372,10 +360,9 @@ class InventoryWatchServiceTest {
 
 	@Test
 	void launchPendingInventorySkipsWhileWithinDebounceWindow() throws Exception {
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
-		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class),
-				mock(OrganizationReconcileService.class));
+		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class));
 
 		service.reconfigure();
 
@@ -389,13 +376,9 @@ class InventoryWatchServiceTest {
 
 	@Test
 	void launchPendingInventoryLaunchesAfterDebounceElapses() throws Exception {
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
-		when(reconcileService.reconcileAndApply(any())).thenReturn(reconcile(0));
-
-		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class), reconcileService);
+		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class));
 		service.reconfigure();
 
 		setField("inventoryPending", true);
@@ -403,7 +386,7 @@ class InventoryWatchServiceTest {
 
 		invokeBoolean("launchPendingInventory", false);
 
-		verify(reconcileService).reconcileAndApply(any());
+		verify(enqueueService).enqueue(any());
 		verify(launcher).launch(any(), any());
 
 		assertThat(booleanField("inventoryPending")).isFalse();
@@ -411,10 +394,9 @@ class InventoryWatchServiceTest {
 
 	@Test
 	void launchPendingInventorySkipsWhenExecutionActive() throws Exception {
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
-		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class),
-				mock(OrganizationReconcileService.class));
+		service = frozenService(configuredSettings(), launcher, mock(ExecutionQueryService.class));
 
 		service.reconfigure();
 
@@ -426,15 +408,16 @@ class InventoryWatchServiceTest {
 		verify(launcher, never()).launch(any(), any());
 	}
 
+	/**
+	 * The reconcile a file event asks for is queued like any other execution, and
+	 * carries what the worker needs to run it: the watched folder, the file-event
+	 * trigger, and the folder as dedup key - which is what keeps a burst of
+	 * changes from queueing a pass per change.
+	 */
 	@Test
-	void debouncedFileChangeReconcileUsesFileEventTriggerAndUpdatesHeartbeat() throws Exception {
-		ReconcileExecutionRecorder recorder = recorder();
-
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
-		when(reconcileService.reconcileAndApply(any())).thenReturn(repaired(1, 0, 0));
-
-		service = frozenServiceWith(recorder, reconcileService);
+	void debouncedFileChangeQueuesAReconcileForTheWatchedFolder() throws Exception {
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
 		service.reconfigure();
 
 		setField("inventoryPending", true);
@@ -442,16 +425,84 @@ class InventoryWatchServiceTest {
 
 		invokeBoolean("launchPendingInventory", false);
 
-		verify(recorder).recordIfRepaired(eq(ExecutionTrigger.FILE_EVENT), any(), any());
+		ArgumentCaptor<Execution> queued = ArgumentCaptor.forClass(Execution.class);
 
-		assertThat(objectField("lastReconciliation")).isNotNull();
-		assertThat(longField("lastReconciliationRepaired")).isEqualTo(1L);
+		verify(enqueueService).enqueue(queued.capture());
+
+		assertThat(queued.getValue().getExecutionType()).isEqualTo(ExecutionType.RECONCILE);
+		assertThat(queued.getValue().getTriggerEvent()).isEqualTo(ExecutionTrigger.FILE_EVENT);
+		assertThat(queued.getValue().getSourcePath()).isEqualTo(tempDir.toAbsolutePath().normalize().toString());
+		assertThat(queued.getValue().getDedupKey())
+				.isEqualTo(OperationPathKey.canonical(tempDir.toAbsolutePath().normalize()));
+	}
+
+	/**
+	 * The footer's "last reconciliation" comes from the catalog, so a pass the
+	 * worker ran - in another process, after this one started - is what the screen
+	 * shows. Everything else about the watcher's state is still the watcher's own.
+	 */
+	@Test
+	void statusReportsTheLastFinishedReconcile() throws Exception {
+		LocalDateTime finishedAt = LocalDateTime.of(2026, Month.AUGUST, 5, 14, 30);
+
+		Execution reconcile = Execution.builder().executionType(ExecutionType.RECONCILE)
+				.status(ExecutionStatus.FINISHED).sourcePath(tempDir.toString()).finishedAt(finishedAt)
+				.repairedItems(7).build();
+
+		when(executionRepository.findFirstByExecutionTypeAndStatusOrderByFinishedAtDesc(ExecutionType.RECONCILE,
+				ExecutionStatus.FINISHED)).thenReturn(Optional.of(reconcile));
+
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
+		service.reconfigure();
+
+		assertThat(service.status().lastReconciliation()).isEqualTo(finishedAt);
+		assertThat(service.status().lastReconciliationRepaired()).isEqualTo(7);
+		assertThat(service.status().running()).isTrue();
+		assertThat(service.status().folder()).isEqualTo(tempDir.toString());
+	}
+
+	/** Before the first pass finishes there is nothing to date. */
+	@Test
+	void statusHasNoReconciliationUntilOneFinishes() throws Exception {
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
+		service.reconfigure();
+
+		assertThat(service.status().lastReconciliation()).isNull();
+		assertThat(service.status().lastReconciliationRepaired()).isZero();
+	}
+
+	/**
+	 * Every burst asks, and the queue is what refuses the repeat - it rejects a
+	 * second RECONCILE for the same dedup key, which
+	 * {@code ExecutionQueueIntegrationTest} asserts against a real database. The
+	 * watcher deliberately does not try to remember what it queued: that answer
+	 * lives where a restart cannot lose it, and a second process asking for the
+	 * same folder has to be refused too.
+	 */
+	@Test
+	void keepsAskingAndLeavesTheDuplicateForTheQueueToRefuse() throws Exception {
+		when(enqueueService.enqueue(any())).thenReturn(Optional.empty());
+
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
+		service.reconfigure();
+
+		for (int burst = 0; burst < 3; burst++) {
+			setField("inventoryPending", true);
+			setField("lastEventMillis", System.currentTimeMillis() - 5_000L);
+
+			invokeBoolean("launchPendingInventory", false);
+		}
+
+		verify(enqueueService, times(3)).enqueue(any());
 	}
 
 	@Test
 	void overflowEventForcesAnEarlyReInventory() throws Exception {
-		service = frozenService(configuredSettings(), mock(InventoryBatchLauncherService.class),
-				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class));
+		service = frozenService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class));
 
 		service.reconfigure();
 
@@ -476,15 +527,13 @@ class InventoryWatchServiceTest {
 	void pollSafelySkipsAllWorkWhileShuttingDown() throws Exception {
 		AppSettingService settings = mock(AppSettingService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
 
-		OrganizationReconcileService reconcileService = mock(OrganizationReconcileService.class);
-
 		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 
-		service = frozenService(settings, launcher, queries, reconcileService);
+		service = frozenService(settings, launcher, queries);
 
 		setField("shuttingDown", true);
 
@@ -502,10 +551,9 @@ class InventoryWatchServiceTest {
 	 */
 	@Test
 	void stopDrainsThePollExecutorGracefully() throws Exception {
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
-				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class),
+				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
 
 		service.stop();
 
@@ -524,9 +572,9 @@ class InventoryWatchServiceTest {
 
 		when(queries.active()).thenReturn(Optional.empty());
 
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
+				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
+				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
 
 		service.stop();
 
@@ -542,10 +590,9 @@ class InventoryWatchServiceTest {
 
 	@Test
 	void stopIsIdempotentAndSafeToCallTwice() throws Exception {
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
-				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(false), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class),
+				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		service.stop();
 		service.stop();
@@ -557,11 +604,11 @@ class InventoryWatchServiceTest {
 	void pollSafelyDoesNothingAfterStop() throws Exception {
 		ExecutionQueryService queries = mock(ExecutionQueryService.class);
 
-		InventoryBatchLauncherService launcher = mock(InventoryBatchLauncherService.class);
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 
-		service = new InventoryWatchService(configuredSettings(), launcher, queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
+				new BackgroundWorkGate());
 
 		service.stop();
 
@@ -580,9 +627,9 @@ class InventoryWatchServiceTest {
 		// No reconfigure(): a null watcher makes pollEvents() a no-op, so the current
 		// thread's interrupt flag survives to the active() call - the same way a
 		// cancel(true)'d poll thread carries its interrupt into a shutdown-time query.
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
+				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
+				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -616,9 +663,9 @@ class InventoryWatchServiceTest {
 
 		when(queries.active()).thenThrow(new IllegalStateException("unexpected failure"));
 
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class), queries,
-				mock(OrganizationReconcileService.class), mock(OperationLockService.class), watchOnlyFactory(),
-				recorder(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
+				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
+				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -642,6 +689,145 @@ class InventoryWatchServiceTest {
 		}
 
 		assertThat(appender.list).anyMatch(event -> event.getLevel() == Level.ERROR);
+	}
+
+	/**
+	 * <b>The startup race, in the order production actually runs it.</b>
+	 *
+	 * <p>
+	 * The poll thread starts half a second after the bean is built and the context
+	 * takes tens of seconds more to be ready, so the poll is what adopts the
+	 * configured folder; {@code ApplicationReadyEvent} then arrives and used to
+	 * adopt it a second time - closing a working handle, reopening it, and running
+	 * a second USN catch-up. One folder, one source.
+	 */
+	@Test
+	void thePollAdoptingFirstLeavesNothingForApplicationReadyToAdopt() {
+		AppSettingService settings = configuredSettings();
+
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		when(launcher.launch(any(), any())).thenReturn(mock(ExecutionResponse.class));
+
+		AtomicInteger created = new AtomicInteger();
+
+		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
+				watchProps(true), new BackgroundWorkGate());
+
+		await().atMost(Duration.ofSeconds(6)).until(() -> created.get() == 1);
+
+		service.startConfiguredMonitor();
+
+		// Held rather than sampled: the second adoption would show up as a second
+		// source at some point in the next poll cycles, so the assertion has to be
+		// that it never does.
+		await().during(Duration.ofMillis(1_200)).atMost(Duration.ofSeconds(4))
+				.untilAsserted(() -> assertThat(created)
+						.as("a second adoption would open a second handle and run a second catch-up").hasValue(1));
+
+		verify(launcher, times(1)).launch(any(), any());
+	}
+
+	/**
+	 * And the other way round, which is what a slow first poll or a fast context
+	 * produces: the event adopts, and every poll after it has to find the work
+	 * already done.
+	 */
+	@Test
+	void applicationReadyAdoptingFirstLeavesNothingForThePollToAdopt() {
+		AppSettingService settings = configuredSettings();
+
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		when(launcher.launch(any(), any())).thenReturn(mock(ExecutionResponse.class));
+
+		AtomicInteger created = new AtomicInteger();
+
+		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
+				watchProps(true), new BackgroundWorkGate());
+
+		service.startConfiguredMonitor();
+
+		assertThat(created).hasValue(1);
+
+		await().during(Duration.ofMillis(1_500)).atMost(Duration.ofSeconds(5))
+				.untilAsserted(() -> assertThat(created)
+						.as("several poll cycles have run by now and none of them re-adopted").hasValue(1));
+
+		verify(launcher, times(1)).launch(any(), any());
+	}
+
+	/**
+	 * Idempotence is about the folder being the same, not about never adopting
+	 * again: pointing the library somewhere else still tears the old watch down
+	 * and builds a new one.
+	 */
+	@Test
+	void aRealFolderChangeStillReplacesTheSource(@TempDir Path other) {
+		AppSettingService settings = configuredSettings();
+
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		when(launcher.launch(any(), any())).thenReturn(mock(ExecutionResponse.class));
+
+		AtomicInteger created = new AtomicInteger();
+
+		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
+				watchProps(false), new BackgroundWorkGate());
+
+		assertThat(service.reconfigure()).isTrue();
+		assertThat(service.reconfigure()).as("the same folder is already being watched").isFalse();
+
+		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(other.toString());
+
+		assertThat(service.reconfigure()).as("a different folder is a different watch").isTrue();
+		assertThat(created).hasValue(2);
+		assertThat(service.status().folder()).isEqualTo(other.toAbsolutePath().normalize().toString());
+	}
+
+	/** The recursion flag is part of what the source was built with. */
+	@Test
+	void changingOnlyTheRecursionSettingRebuildsTheSource() {
+		AppSettingService settings = configuredSettings();
+
+		AtomicInteger created = new AtomicInteger();
+
+		service = new InventoryWatchService(settings, mock(InventoryLauncherService.class), idleQueries(), enqueue(),
+				executions(), mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
+				watchProps(false), new BackgroundWorkGate());
+
+		assertThat(service.reconfigure()).isTrue();
+
+		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(false);
+
+		assertThat(service.reconfigure()).isTrue();
+		assertThat(created).hasValue(2);
+	}
+
+	/**
+	 * Counts how many sources were really built. The provider declines, as in the
+	 * portable case, so what is counted is one {@code PhysicalTreeWatcher} per
+	 * adoption - which is exactly the handle the duplicated startup was opening
+	 * twice.
+	 */
+	private FileChangeSourceFactory countingFactory(AtomicInteger created) {
+		return new FileChangeSourceFactory(_ -> {
+			created.incrementAndGet();
+
+			return Optional.empty();
+		}, pathRegistry, exclusions);
+	}
+
+	/** Nothing running and nothing locked, so the poll reaches its decisions. */
+	private ExecutionQueryService idleQueries() {
+		ExecutionQueryService queries = mock(ExecutionQueryService.class);
+
+		when(queries.active()).thenReturn(Optional.empty());
+
+		return queries;
 	}
 
 	private InventoryWatchProperties watchProps(boolean enabled) {
@@ -668,9 +854,9 @@ class InventoryWatchServiceTest {
 			throw new IllegalStateException("no watcher available on this volume");
 		}, pathRegistry, exclusions);
 
-		service = new InventoryWatchService(configuredSettings(), mock(InventoryBatchLauncherService.class),
-				mock(ExecutionQueryService.class), mock(OrganizationReconcileService.class),
-				mock(OperationLockService.class), failing, recorder(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
+				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class), failing,
+				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
 
 		service.reconfigure();
 
@@ -702,11 +888,11 @@ class InventoryWatchServiceTest {
 	 * background cycle can't race the reflection-driven private-method assertions
 	 * below.
 	 */
-	private InventoryWatchService frozenService(AppSettingService settings, InventoryBatchLauncherService launcher,
-			ExecutionQueryService queries, OrganizationReconcileService reconcileService) throws Exception {
-		InventoryWatchService built = new InventoryWatchService(settings, launcher, queries, reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder(), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+	private InventoryWatchService frozenService(AppSettingService settings, InventoryLauncherService launcher,
+			ExecutionQueryService queries) throws Exception {
+		InventoryWatchService built = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
+				new BackgroundWorkGate());
 
 		Field executorField = InventoryWatchService.class.getDeclaredField("executor");
 
@@ -715,40 +901,10 @@ class InventoryWatchServiceTest {
 		((ExecutorService) executorField.get(built)).shutdownNow();
 
 		return built;
-	}
-
-	private InventoryWatchService frozenServiceWith(ReconcileExecutionRecorder recorder,
-			OrganizationReconcileService reconcileService) throws Exception {
-		InventoryWatchService built = new InventoryWatchService(configuredSettings(),
-				mock(InventoryBatchLauncherService.class), mock(ExecutionQueryService.class), reconcileService,
-				mock(OperationLockService.class), watchOnlyFactory(), recorder, Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
-
-		Field executorField = InventoryWatchService.class.getDeclaredField("executor");
-
-		executorField.setAccessible(true);
-
-		((ExecutorService) executorField.get(built)).shutdownNow();
-
-		return built;
-	}
-
-	private OrganizationReconcileResponse reconcile(long missingOnDisk) {
-		return new OrganizationReconcileResponse(tempDir.toString(), true, false, 0, 0, missingOnDisk, 0, 0, List.of(),
-				List.of(), List.of(), 0, 0, 0);
-	}
-
-	private OrganizationReconcileResponse repaired(long renamed, long repairedPaths, long markedMissing) {
-		return new OrganizationReconcileResponse(tempDir.toString(), true, false, 0, 0, 0, 0, 0, List.of(), List.of(),
-				List.of(), renamed, repairedPaths, markedMissing);
-	}
-
-	private ReconcileExecutionRecorder recorder() {
-		return mock(ReconcileExecutionRecorder.class);
 	}
 
 	private ExecutionResponse activeExecution() {
-		return new ExecutionResponse(1L, "INVENTORY", "PROCESSING_FILES", LocalDateTime.now(), null, tempDir.toString(),
+		return new ExecutionResponse(1L, "INVENTORY", "RUNNING", LocalDateTime.now(), null, tempDir.toString(),
 				null, 0, 0, 0, 0, 0, 0, null, null, null, false);
 	}
 
@@ -804,22 +960,6 @@ class InventoryWatchServiceTest {
 		return field.getBoolean(service);
 	}
 
-	private long longField(String name) throws Exception {
-		Field field = InventoryWatchService.class.getDeclaredField(name);
-
-		field.setAccessible(true);
-
-		return field.getLong(service);
-	}
-
-	private Object objectField(String name) throws Exception {
-		Field field = InventoryWatchService.class.getDeclaredField(name);
-
-		field.setAccessible(true);
-
-		return field.get(service);
-	}
-
 	private void invokeBoolean(String name, boolean argument) throws Exception {
 		Method method = InventoryWatchService.class.getDeclaredMethod(name, boolean.class);
 
@@ -832,5 +972,17 @@ class InventoryWatchServiceTest {
 
 		method.setAccessible(true);
 		method.invoke(service);
+	}
+
+	/**
+	 * The same mock every time, so a test can verify what was queued without
+	 * having to thread it through the constructor call it does not care about.
+	 */
+	private ExecutionEnqueueService enqueue() {
+		return enqueueService;
+	}
+
+	private ExecutionRepository executions() {
+		return executionRepository;
 	}
 }

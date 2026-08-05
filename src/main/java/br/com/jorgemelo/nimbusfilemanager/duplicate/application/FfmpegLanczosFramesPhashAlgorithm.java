@@ -50,13 +50,13 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 	private static final double MIN_DURATION_BUCKET_WIDTH = 0.001;
 
 	private final VideoPerceptualHashService videoPerceptualHashService;
-	private final PhotoSsimService photoSsimService;
+	private final LuminanceSsimService luminanceSsimService;
 	private final VideoSimilarityProperties properties;
 
 	public FfmpegLanczosFramesPhashAlgorithm(VideoPerceptualHashService videoPerceptualHashService,
-			PhotoSsimService photoSsimService, VideoSimilarityProperties properties) {
+			LuminanceSsimService luminanceSsimService, VideoSimilarityProperties properties) {
 		this.videoPerceptualHashService = videoPerceptualHashService;
-		this.photoSsimService = photoSsimService;
+		this.luminanceSsimService = luminanceSsimService;
 		this.properties = properties;
 	}
 
@@ -94,8 +94,13 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 	}
 
 	@Override
+	public boolean gatesAllow(VideoSignature first, VideoSignature second) {
+		return durationCompatible(first, second) && aspectRatioCompatible(first, second);
+	}
+
+	@Override
 	public int similarityPercent(VideoSignature first, VideoSignature second, int minSimilarityPercent) {
-		if (!durationCompatible(first, second) || !aspectRatioCompatible(first, second)) {
+		if (!gatesAllow(first, second)) {
 			return -1;
 		}
 
@@ -146,7 +151,7 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 			if (PerceptualHashCodec.distance(frame.phash(), other.phash()) > maxDistance) {
 				scores.add(0);
 			} else {
-				scores.add(photoSsimService.similarityPercent(frame.luminance(), other.luminance()));
+				scores.add(luminanceSsimService.similarityPercent(frame.luminance(), other.luminance()));
 			}
 		}
 

@@ -293,7 +293,8 @@ class OrganizationRenameDetectionServiceTest {
 		CatalogFile matched = catalogFile(1L, "C:/media/original.jpg", Files.size(renamed), "sha-a");
 		CatalogFile unmatched = catalogFile(2L, "C:/media/other.jpg", Files.size(renamed), "sha-b");
 
-		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L))).thenReturn(List.of(matched, unmatched));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L))).thenReturn(List.of(matched,
+				unmatched));
 		when(fileHashService.hashes(renamed)).thenReturn(new FileHashes("sha-a", "md5-a"));
 		when(dateSourceService.resolveFileSystemDates(renamed)).thenReturn(new FileSystemDates(CREATED, CREATED));
 
@@ -330,7 +331,7 @@ class OrganizationRenameDetectionServiceTest {
 	private OrganizationReconcileResponse response(List<OrganizationReconcileIssueResponse> missingOnDisk,
 			List<OrganizationReconcileIssueResponse> missingInDatabase) {
 		return new OrganizationReconcileResponse("C:/media", true, false, 0, 0, missingOnDisk.size(),
-				missingInDatabase.size(), 0, missingOnDisk, missingInDatabase, List.of(), 0, 0, 0);
+				missingInDatabase.size(), 0, missingOnDisk, missingInDatabase, List.of(), 0, 0, 0, 0);
 	}
 
 	private OrganizationReconcileIssueResponse issue(Long catalogFileId, String path) {

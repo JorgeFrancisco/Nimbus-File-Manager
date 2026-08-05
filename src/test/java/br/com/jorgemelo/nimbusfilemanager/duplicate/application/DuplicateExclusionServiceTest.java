@@ -16,12 +16,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFileExclusion;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFolderExclusion;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFileExclusionRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFolderExclusionRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileExclusionView;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.EligibilityChanged;
 
 @ExtendWith(MockitoExtension.class)
 class DuplicateExclusionServiceTest {
@@ -32,8 +34,11 @@ class DuplicateExclusionServiceTest {
 	@Mock
 	private DuplicateFolderExclusionRepository folderRepository;
 
+	@Mock
+	private ApplicationEventPublisher eventPublisher;
+
 	private DuplicateExclusionService service() {
-		return new DuplicateExclusionService(fileRepository, folderRepository);
+		return new DuplicateExclusionService(fileRepository, folderRepository, eventPublisher);
 	}
 
 	@Test
@@ -48,6 +53,7 @@ class DuplicateExclusionServiceTest {
 		ArgumentCaptor<DuplicateFileExclusion> saved = ArgumentCaptor.forClass(DuplicateFileExclusion.class);
 		verify(fileRepository).save(saved.capture());
 		Assertions.assertThat(saved.getValue().getPublicId()).isEqualTo(publicId);
+		verify(eventPublisher).publishEvent(any(EligibilityChanged.class));
 	}
 
 	@Test
@@ -57,6 +63,7 @@ class DuplicateExclusionServiceTest {
 
 		Assertions.assertThat(service().excludeFile(publicId)).isFalse();
 		verify(fileRepository, never()).save(any());
+		verify(eventPublisher, never()).publishEvent(any(EligibilityChanged.class));
 	}
 
 	@Test
@@ -95,6 +102,8 @@ class DuplicateExclusionServiceTest {
 		UUID id = UUID.randomUUID();
 		when(fileRepository.findAllPublicIds()).thenReturn(List.of(id));
 		when(folderRepository.findAllFolderPaths()).thenReturn(List.of("C:/Fotos"));
+		when(fileRepository.existsById(7L)).thenReturn(true);
+		when(folderRepository.existsById(9L)).thenReturn(true);
 
 		DuplicateExclusionService service = service();
 
@@ -106,6 +115,34 @@ class DuplicateExclusionServiceTest {
 
 		verify(fileRepository).deleteById(7L);
 		verify(folderRepository).deleteById(9L);
+	}
+
+	/**
+	 * Lifting an exclusion returns files to the analysed set, which is the whole
+	 * reason the relations about them were kept rather than deleted.
+	 */
+	@Test
+	void liftingAnExclusionAnnouncesThatEligibilityChanged() {
+		when(fileRepository.existsById(7L)).thenReturn(true);
+
+		service().removeFileExclusion(7L);
+
+		verify(fileRepository).deleteById(7L);
+		verify(eventPublisher).publishEvent(any(EligibilityChanged.class));
+	}
+
+	/**
+	 * Removing an id that is not there changed nothing, and an announcement of a
+	 * change that did not happen would put a regroup on the queue for nothing.
+	 */
+	@Test
+	void removingAnExclusionThatIsNotThereAnnouncesNothing() {
+		when(fileRepository.existsById(7L)).thenReturn(false);
+
+		service().removeFileExclusion(7L);
+
+		verify(fileRepository, never()).deleteById(any());
+		verify(eventPublisher, never()).publishEvent(any(EligibilityChanged.class));
 	}
 
 	@Test

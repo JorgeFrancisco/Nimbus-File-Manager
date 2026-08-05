@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
@@ -34,6 +35,15 @@ interface FingerprintProducer<P, R> {
 	/** Next batch of items still needing a fingerprint (already de-duplicated). */
 	List<P> fetchPendingBatch(int batchSize);
 
+	/**
+	 * Writes one task for every file this kind could fingerprint, leaving the ones
+	 * already owed alone. Media-specific because what counts as a candidate is: a
+	 * photo needs a place on disk, a video needs a duration to sample by.
+	 *
+	 * @return how many were added by this call
+	 */
+	long seedRebuildTasks(LocalDateTime seededAt);
+
 	/** How many items still need a fingerprint. */
 	long countPending();
 
@@ -50,6 +60,27 @@ interface FingerprintProducer<P, R> {
 
 	/** Persists the fingerprint row(s); runs inside the batch transaction. */
 	void store(P pending, R result);
+
+	/**
+	 * Forgets what was concluded from this file's previous fingerprint.
+	 *
+	 * <p>
+	 * Media-specific because the scope is the algorithm: a video whose frames were
+	 * re-sampled must lose its video relations, and a photo sharing that catalog
+	 * row must keep the ones nothing touched. Called in the same transaction that
+	 * replaced the fingerprint, because a relation drawn from a hash that has just
+	 * been replaced is one nobody can check - and nothing in the published result
+	 * can tell the two apart.
+	 */
+	void forgetWhatWasDerivedFrom(long catalogFileId);
+
+	/**
+	 * Drops the debts of files this rebuild can no longer pay, by the same
+	 * definition of candidate the seed used.
+	 *
+	 * @return how many debts were dropped
+	 */
+	int discardIneligibleRebuildTasks();
 
 	/**
 	 * Why this item has no fingerprint. The producer knows where its file is, so it

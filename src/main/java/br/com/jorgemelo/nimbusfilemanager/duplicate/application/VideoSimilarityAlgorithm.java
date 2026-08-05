@@ -57,6 +57,26 @@ public interface VideoSimilarityAlgorithm {
 	Set<Long> candidateBuckets(VideoSignature signature);
 
 	/**
+	 * Whether the signals that need no frames leave the pair any chance at all.
+	 *
+	 * <p>
+	 * Exposed because an incremental run has to decide which frames are worth
+	 * reading. Frames are kilobytes per video and these signals are a handful of
+	 * bytes, so an arrival asks this of every pair first and then fetches the
+	 * frames of the videos a surviving pair actually named - on measured data that
+	 * is a twentieth of the pairs, and therefore a small fraction of the payload.
+	 *
+	 * <p>
+	 * It is the same conjunction {@link #similarityPercent} applies before it looks
+	 * at a frame, and it is here rather than copied into the caller so that the two
+	 * cannot drift: a caller that re-derived "close enough in duration" would be a
+	 * second definition of the rule, and the day the tolerance changed only one of
+	 * them would follow. A signature with no frames is a valid argument, which is
+	 * exactly what the two-phase load passes it.
+	 */
+	boolean gatesAllow(VideoSignature first, VideoSignature second);
+
+	/**
 	 * Similarity percentage (0-100) of two videos at the given threshold, or
 	 * {@code -1} when they are not a match (incompatible coarse signals, or fewer
 	 * than the required number of concordant frames). A returned value {@code >=}

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -26,6 +27,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
@@ -34,6 +36,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FileHashes;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.FileSystemDates;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileIssueResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.MediaLocationReconcileProjection;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
@@ -43,6 +46,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationReconcileServiceTest {
@@ -57,6 +61,9 @@ class OrganizationReconcileServiceTest {
 	private ScanExclusionService scanExclusionService;
 
 	@Mock
+	private EligibilityAnnouncer eligibilityAnnouncer;
+
+	@Mock
 	private CatalogFileRepository catalogFileRepository;
 
 	@Mock
@@ -65,7 +72,7 @@ class OrganizationReconcileServiceTest {
 	@Mock
 	private DateSourceService dateSourceService;
 
-	private final OperationLockService operationLockService = new OperationLockService();
+	private final OperationLockService operationLockService = GrantingOperationLocks.granting();
 
 	@Test
 	void reconcileAndApplyShouldDetectAndMergeUnambiguousRename() throws Exception {
@@ -81,7 +88,7 @@ class OrganizationReconcileServiceTest {
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(fileHashService.hashes(newPath.toAbsolutePath().normalize())).thenReturn(new FileHashes("sha-a", "md5-a"));
 
-		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(catalogFile.getFileKey()).isEqualTo(newPath.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(catalogFile.isActive()).isTrue();
@@ -105,11 +112,55 @@ class OrganizationReconcileServiceTest {
 				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldPath, oldPath)));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 
-		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(catalogFile.getFileKey()).isEqualTo(oldPath.toAbsolutePath().normalize().toString());
 
 		verify(catalogFileRepository).markMissingByIds(eq(List.of(1L)), any());
+	}
+
+	/**
+	 * Marking a file missing takes it out of the set a duplicate analysis looks at,
+	 * which is the one thing about a reconcile pass that is an eligibility change
+	 * outright - no folder and no exclusion enters into it. Announced once for the
+	 * pass, however many files it marked.
+	 */
+	@Test
+	void aPassThatMarkedFilesMissingAsksForOneRegroup() throws Exception {
+		Path source = Files.createDirectory(tempDir.resolve("source"));
+		Path oldPath = source.resolve("old-name.jpg");
+
+		Files.writeString(source.resolve("unrelated.jpg"), "a much longer content than the original");
+
+		when(catalogFileRepository.markMissingByIds(any(), any())).thenReturn(1);
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of(row(1L, oldPath, oldPath)));
+		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L)))
+				.thenReturn(List.of(catalogFileWithLocation(1L, oldPath, 5L, "sha-a",
+						LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0))));
+
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+
+		verify(eligibilityAnnouncer).announce("reconcile");
+	}
+
+	/**
+	 * The pass that agreed with the disk, which is nearly every one of them:
+	 * nothing was renamed, repaired or marked, so there is nothing to bring up to
+	 * date.
+	 */
+	@Test
+	void aPassThatFoundNothingToCorrectAsksForNothing() throws Exception {
+		Path source = Files.createDirectory(tempDir.resolve("source"));
+
+		Files.writeString(source.resolve("photo.jpg"), "content");
+
+		when(catalogFileLocationRepository.findForReconcile(eq(source.toAbsolutePath().normalize().toString()), any(),
+				eq(0L), any(Limit.class))).thenReturn(List.of());
+
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+
+		verifyNoInteractions(eligibilityAnnouncer);
 	}
 
 	@Test
@@ -130,7 +181,7 @@ class OrganizationReconcileServiceTest {
 				.thenReturn(List.of(catalogFileA, catalogFileB));
 		when(fileHashService.hashes(any())).thenReturn(new FileHashes("sha-empty", "md5-empty"));
 
-		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(catalogFileA.getFileKey()).isEqualTo(oldA.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(catalogFileB.getFileKey()).isEqualTo(oldB.toAbsolutePath().normalize().toString());
@@ -162,7 +213,7 @@ class OrganizationReconcileServiceTest {
 		when(dateSourceService.resolveFileSystemDates(newB.toAbsolutePath().normalize()))
 				.thenReturn(new FileSystemDates(createdAtB, createdAtB));
 
-		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(catalogFileA.getFileKey()).isEqualTo(newA.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(catalogFileB.getFileKey()).isEqualTo(newB.toAbsolutePath().normalize().toString());
@@ -191,7 +242,7 @@ class OrganizationReconcileServiceTest {
 
 		when(catalogFileLocationRepository.findById(3L)).thenReturn(Optional.of(location));
 
-		serviceWithRename().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(location.getCurrentPath()).isEqualTo(organized.toAbsolutePath().normalize().toString());
 
@@ -241,7 +292,7 @@ class OrganizationReconcileServiceTest {
 				eq(0L), any(Limit.class))).thenReturn(List.of(row(8L, moved, stale)));
 		when(catalogFileLocationRepository.findById(8L)).thenReturn(Optional.of(catalogFile.getLocation()));
 
-		service().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
+		applyingPass().reconcileAndApply(new OrganizationReconcileRequest(source.toString(), true, false, 10));
 
 		Assertions.assertThat(catalogFile.getLocation().getCurrentPath())
 				.isEqualTo(moved.toAbsolutePath().normalize().toString());
@@ -383,9 +434,12 @@ class OrganizationReconcileServiceTest {
 
 		String normalized = source.toAbsolutePath().normalize().toString();
 
-		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(), eq(0L), any(Limit.class)))
+		// Shallow, so the pages come from the shallow query: the paging is the same
+		// walk either way, and asking the recursive one here would be asking a
+		// question this request never asks.
+		when(catalogFileLocationRepository.findForShallowReconcile(eq(normalized), eq(0L), any(Limit.class)))
 				.thenReturn(List.of(row(1L, missing, missing)));
-		when(catalogFileLocationRepository.findForReconcile(eq(normalized), any(), eq(1L), any(Limit.class)))
+		when(catalogFileLocationRepository.findForShallowReconcile(eq(normalized), eq(1L), any(Limit.class)))
 				.thenReturn(List.of(row(2L, missing, missing)));
 
 		var response = service().reconcile(new OrganizationReconcileRequest(source.toString(), false, false, 10));
@@ -403,8 +457,7 @@ class OrganizationReconcileServiceTest {
 
 		when(lockService.acquire(any(), any())).thenThrow(new OperationLockException("busy"));
 
-		OrganizationReconcileService locked = new OrganizationReconcileService(catalogFileLocationRepository,
-				scanExclusionService, lockService, applier());
+		OrganizationReconcileApply locked = new OrganizationReconcileApply(service(), lockService, applier());
 
 		OrganizationReconcileResponse response = locked
 				.reconcileAndApply(new OrganizationReconcileRequest(source.toString(), false, false, 10));
@@ -431,19 +484,21 @@ class OrganizationReconcileServiceTest {
 	}
 
 	private OrganizationReconcileService service() {
-		return new OrganizationReconcileService(catalogFileLocationRepository, scanExclusionService,
-				operationLockService, applier());
+		return new OrganizationReconcileService(catalogFileLocationRepository, scanExclusionService);
 	}
 
-	private OrganizationReconcileService serviceWithRename() {
-		return service();
+	/** The applying pass, which is worker-side and holds the applier. */
+	private OrganizationReconcileApply applyingPass() {
+		return new OrganizationReconcileApply(service(), operationLockService, applier());
 	}
 
 	private ReconcileApplier applier() {
 		return new ReconcileApplier(
 				new OrganizationRenameDetectionService(catalogFileRepository, fileHashService, dateSourceService,
 						Clock.systemDefaultZone()),
-				catalogFileLocationRepository, catalogFileRepository, Clock.systemDefaultZone());
+				catalogFileLocationRepository,
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository),
+				eligibilityAnnouncer, Clock.systemDefaultZone());
 	}
 
 	private CatalogFile catalogFileWithLocation(Long id, Path currentPath, long sizeBytes, String sha256,

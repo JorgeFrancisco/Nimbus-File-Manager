@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.batch.support.transaction.ResourcelessTransactionManager;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
@@ -78,7 +77,8 @@ class InventoryPersistenceServiceTest {
 		var result = service().save(file, Path.of("C:/input"), MetadataResult.builder().build(),
 				new MetadataOptions(false, false));
 
-		Assertions.assertThat(result).isEqualTo(ProcessResult.CACHE);
+		Assertions.assertThat(result.result()).isEqualTo(ProcessResult.CACHE);
+		Assertions.assertThat(result.action()).isEqualTo(InventoryPersistenceAction.CACHED);
 
 		verify(catalogFileMapper, never()).updateEntity(any(), any(), any(), any());
 	}
@@ -118,7 +118,9 @@ class InventoryPersistenceServiceTest {
 
 		var result = service().save(file, Path.of("C:/input"), metadata, new MetadataOptions(false, true));
 
-		Assertions.assertThat(result).isEqualTo(ProcessResult.ANALYZED);
+		Assertions.assertThat(result.result()).isEqualTo(ProcessResult.ANALYZED);
+		Assertions.assertThat(result.action()).as("the entry was active already").isEqualTo(
+				InventoryPersistenceAction.UPDATED);
 
 		verify(catalogFileRepository, never()).findByFileKey(fileKey(file));
 		verify(catalogFileMapper).updateEntity(existing, file, Path.of("C:/input"), metadata);
@@ -138,7 +140,8 @@ class InventoryPersistenceServiceTest {
 
 		var result = service().save(file, Path.of("C:/input"), metadata, new MetadataOptions(false, false));
 
-		Assertions.assertThat(result).isEqualTo(ProcessResult.ANALYZED);
+		Assertions.assertThat(result.result()).isEqualTo(ProcessResult.ANALYZED);
+		Assertions.assertThat(result.action()).isEqualTo(InventoryPersistenceAction.CREATED);
 
 		verify(catalogFileRepository).save(entity);
 	}
@@ -393,7 +396,7 @@ class InventoryPersistenceServiceTest {
 		InventoryPersistenceService service = service();
 
 		Assertions.assertThat(service.save(file, Path.of("C:/input"), MetadataResult.builder().build(),
-				new MetadataOptions(false, true))).isEqualTo(ProcessResult.ANALYZED);
+				new MetadataOptions(false, true)).result()).isEqualTo(ProcessResult.ANALYZED);
 
 		verify(catalogFileRepository).save(existing);
 	}
@@ -410,7 +413,7 @@ class InventoryPersistenceServiceTest {
 		InventoryPersistenceService service = service();
 
 		Assertions.assertThat(service.save(file, Path.of("C:/input"), MetadataResult.builder().build(),
-				new MetadataOptions(false, true))).isEqualTo(ProcessResult.ANALYZED);
+				new MetadataOptions(false, true)).result()).isEqualTo(ProcessResult.ANALYZED);
 
 		verify(mediaLocationService, never()).resolveIfAbsent(any(), any());
 	}

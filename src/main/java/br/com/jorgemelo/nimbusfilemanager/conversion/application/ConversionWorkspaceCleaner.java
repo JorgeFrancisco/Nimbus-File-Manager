@@ -9,8 +9,10 @@ import java.util.stream.Stream;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -23,9 +25,23 @@ import lombok.extern.slf4j.Slf4j;
  * Sweeping it at startup matters more now that the folder lives outside the
  * library: nobody browses it, so a leftover would sit there forever and the
  * disk would fill with encodes of files that were converted again later.
+ *
+ * <p>
+ * It sweeps where the encoding happens, and that is now the worker. It used to
+ * be the application, and had to be kept out of the worker for the mirror image
+ * of today's reason: a worker starting up would have emptied the folder an
+ * application was encoding into.
+ *
+ * <p>
+ * A start is still the one moment at which nothing can be in use here, and that
+ * is what makes a blanket sweep safe rather than a guess. Runners run before the
+ * ready event that starts the worker loop, so no execution has been claimed yet
+ * and no encode of this process can exist - and the other process no longer
+ * encodes at all.
  */
 @Slf4j
 @Component
+@Profile(NimbusProfiles.WORKER)
 public class ConversionWorkspaceCleaner implements ApplicationRunner {
 
 	private final ConversionFileNaming conversionFileNaming;

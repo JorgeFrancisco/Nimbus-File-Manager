@@ -1,0 +1,31 @@
+-- A progress bar that only counts finished items says nothing during a long one.
+-- Converting a single two-hour video is one item: the bar sat at zero for the
+-- whole encode and then jumped to done, and the screen answered "how long?" with
+-- an estimate built from no observations at all.
+--
+-- It worked until now because the counter lived in memory, in the process doing
+-- the encoding, and that process was also the one serving the screen. With the
+-- work moving to the worker, memory answers only for itself: the encode reports
+-- to one process and the bar is drawn by another, so the number has to be on the
+-- row like every other thing the screen reads.
+--
+-- Deliberately its own column rather than finer counting in files_analyzed. That
+-- counter means "items finished" everywhere - organization, undo, inventory,
+-- deduplication - and measuring this one type in hundredths would make the
+-- history screen say "1200 of 2500 files" for a batch of twenty-five videos.
+-- The two questions are different: how many items are done, and how far into the
+-- one still running.
+--
+-- Nullable on purpose, and null is the ordinary state: nothing is mid-item
+-- before the first one starts, and nothing is mid-item once the execution has
+-- ended. Whoever writes a terminal status clears it, and whoever reads it
+-- ignores it unless the row is still RUNNING - so a crashed worker cannot leave
+-- a stale percentage looking like live progress.
+--
+-- Named for an item rather than for a file or a frame: nothing here is specific
+-- to video, and the next long-item workload should be able to fill it without
+-- the column having to be renamed.
+--
+-- No index. It is read only alongside the row it belongs to, always by id.
+
+ALTER TABLE execution ADD COLUMN current_item_percent INTEGER;

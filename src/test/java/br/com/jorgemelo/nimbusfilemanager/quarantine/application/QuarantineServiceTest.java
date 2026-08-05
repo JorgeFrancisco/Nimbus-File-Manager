@@ -23,27 +23,30 @@ import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionStopReason;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineItemResponse;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreResult;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.ConflictResolution;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.RestoreOutcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -52,223 +55,82 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
+/**
+ * The moving half of a restore, which is all this class is now: it runs under a
+ * row a worker claimed, and every question a person could have been asked was
+ * already answered before the request was queued.
+ *
+ * <p>
+ * What it can still find is that the world moved in between - the destination
+ * taken, the quarantine copy gone, the path held by another operation - and
+ * those are outcomes, not questions. The conversation that produces the
+ * destination is {@link QuarantineRestorePlanner}, tested apart.
+ */
 class QuarantineServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
 	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
+	private final ExecutionCancellationService executionCancellationService = mock(ExecutionCancellationService.class);
+	private final ExecutionStopReason executionStopReason = new ExecutionStopReason(executionCancellationService);
 	private final QuarantineOperationLog restoreLog = mock(QuarantineOperationLog.class);
+	/** Inert on purpose: what it is told is asserted where it is consumed. */
+	private final EligibilityAnnouncer eligibilityAnnouncer = mock(EligibilityAnnouncer.class);
+
 	private final QuarantineService service = new QuarantineService(movementRepository, persistence,
-			new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
-			new OperationLockService(), restoreLog);
+			new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+					pathRegistry), pathRegistry),
+			GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
 
 	@Test
-	void listsQuarantinedFilesWithLiveOriginAndConflictFlags(@TempDir Path tmp) throws Exception {
+	void restoresEachSelectedFileBackToItsOwnOrigin(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
-
-		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
-
-		Assertions.assertThat(items).hasSize(1);
-
-		QuarantineItemResponse item = items.get(0);
-
-		Assertions.assertThat(item.fileName()).isEqualTo("a.jpg");
-		Assertions.assertThat(item.presentInQuarantine()).isTrue();
-		Assertions.assertThat(item.originFolderExists()).isTrue();
-		Assertions.assertThat(item.conflict()).isFalse();
-	}
-
-	/**
-	 * The lightbox is offered from the extension, so a name without one has to fall
-	 * through to "nothing to open" - the id that would serve the content exists
-	 * either way, and an offer that opens an empty viewer is worse than no offer.
-	 */
-	@Test
-	void offersNoPreviewForAFileWhoseNameCarriesNoExtension(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path photoQuarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-		Path plainQuarantine = writeQuarantineCopy(tmp, "11__README", "content");
-
-		Movement photo = quarantineMovement(origin.resolve("a.jpg"), photoQuarantine);
-		Movement plain = quarantineMovement(origin.resolve("README"), plainQuarantine);
-
-		when(photo.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
-		when(plain.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
-				.thenReturn(new PageImpl<>(List.of(photo, plain)));
-
-		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
-
-		Assertions.assertThat(items.get(0).image()).isTrue();
-		Assertions.assertThat(items.get(0).previewUrl()).isNotNull();
-
-		Assertions.assertThat(items.get(1).image()).isFalse();
-		Assertions.assertThat(items.get(1).video()).isFalse();
-		Assertions.assertThat(items.get(1).previewUrl()).isNull();
-	}
-
-	@Test
-	void restoresFileBackToOriginalPath(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path original = origin.resolve("a.jpg");
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(original, quarantine);
-
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
-		Assertions.assertThat(result.success()).isTrue();
-		Assertions.assertThat(Files.exists(original)).isTrue();
+		Assertions.assertThat(result.total()).isEqualTo(1);
+		Assertions.assertThat(result.restored()).isEqualTo(1);
+		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isTrue();
 		Assertions.assertThat(Files.exists(quarantine)).isFalse();
 
 		verify(persistence).applyRestore(eq(movement), any(), any());
 	}
 
-	@Test
-	void blocksWhenDestinationAlreadyHasAFile(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path original = Files.writeString(origin.resolve("a.jpg"), "existing");
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(original, quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.CONFLICT.name());
-		Assertions.assertThat(Files.exists(quarantine)).isTrue();
-		Assertions.assertThat(Files.readString(original)).isEqualTo("existing");
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
-	@Test
-	void restoresUnderNumberedNameWhenAskedToRename(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path original = Files.writeString(origin.resolve("a.jpg"), "existing");
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(original, quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				new QuarantineRestoreOptions(null, ConflictResolution.RENAME));
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
-		Assertions.assertThat(Files.exists(original)).isTrue();
-		Assertions.assertThat(Files.exists(origin.resolve("a (1).jpg"))).isTrue();
-		Assertions.assertThat(Files.exists(quarantine)).isFalse();
-	}
-
-	@Test
-	void reportsOriginMissingWhenOriginalFolderIsGone(@TempDir Path tmp) throws Exception {
-		Path original = tmp.resolve("gone").resolve("a.jpg");
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(original, quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ORIGIN_MISSING.name());
-		Assertions.assertThat(Files.exists(quarantine)).isTrue();
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
 	/**
-	 * A recorded original path with no folder above it - a row that lost its
-	 * directory somewhere between two versions - would restore into nowhere. The
-	 * screen gets a reason instead of a crash, which is what it shows in the dialog.
+	 * The single restore arrives with its destination already settled - including
+	 * the new name somebody chose for a collision - and the worker writes exactly
+	 * that, without deciding anything on their behalf.
 	 */
 	@Test
-	void refusesToRestoreWhenTheRecordedOriginalPathHasNoFolder(@TempDir Path tmp) throws Exception {
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(tmp.getRoot(), quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-		Assertions.assertThat(result.message()).isNotBlank();
-		Assertions.assertThat(Files.exists(quarantine)).isTrue();
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
-	@Test
-	void restoresIntoChosenAlternateFolder(@TempDir Path tmp) throws Exception {
-		Path original = tmp.resolve("gone").resolve("a.jpg");
-		Path alternate = Files.createDirectories(tmp.resolve("elsewhere"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(original, quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				new QuarantineRestoreOptions(alternate, ConflictResolution.BLOCK));
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
-		Assertions.assertThat(Files.exists(alternate.resolve("a.jpg"))).isTrue();
-		Assertions.assertThat(Files.exists(quarantine)).isFalse();
-	}
-
-	@Test
-	void reportsMissingWhenQuarantineCopyIsGone(@TempDir Path tmp) throws Exception {
+	void restoresToTheDestinationThatWasDecided(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
+		Path elsewhere = Files.createDirectories(tmp.resolve("elsewhere"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
-	@Test
-	void refusesToRestoreWhenTheQuarantineCopyIsNotAPhysicalFile(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		// A .lnk shortcut in quarantine (rejected by PhysicalFilePolicy): the restore
-		// must be
-		// refused, exactly like the forward path refuses to quarantine a link/shortcut.
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.lnk", "shortcut-bytes");
-
-		Movement movement = quarantineMovement(origin.resolve("a.lnk"), quarantine);
+		Path decided = elsewhere.resolve("a (1).jpg");
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), decided,
+				claimedRow(), owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-		// The item stays in quarantine; it is never "restored" as a link into the
-		// library.
-		Assertions.assertThat(Files.exists(quarantine)).isTrue();
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		Assertions.assertThat(result.restored()).isEqualTo(1);
+		Assertions.assertThat(result.items().get(0).restoredPath()).isEqualTo(PathUtils.normalize(decided));
+		Assertions.assertThat(Files.exists(decided)).isTrue();
+		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isFalse();
 	}
 
 	@Test
-	void batchRestoreCountsRestoredAndConflicts(@TempDir Path tmp) throws Exception {
+	void countsRestoredAndConflictsApart(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path freeOriginal = origin.resolve("free.jpg");
 		Path takenOriginal = Files.writeString(origin.resolve("taken.jpg"), "existing");
@@ -282,64 +144,181 @@ class QuarantineServiceTest {
 		when(movementRepository.findByPublicId(free.getPublicId())).thenReturn(Optional.of(free));
 		when(movementRepository.findByPublicId(taken.getPublicId())).thenReturn(Optional.of(taken));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(free.getPublicId(), taken.getPublicId()));
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(free.getPublicId(), taken.getPublicId()),
+				null, claimedRow(), owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
 		Assertions.assertThat(result.restored()).isEqualTo(1);
 		Assertions.assertThat(result.conflicts()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(freeOriginal)).isTrue();
+		Assertions.assertThat(Files.readString(takenOriginal)).isEqualTo("existing");
 		Assertions.assertThat(Files.exists(takenQuarantine)).isTrue();
 	}
 
+	/**
+	 * A destination that was free when the conversation happened and is taken by
+	 * the time the worker gets there: the file stays in quarantine and the person
+	 * is told, which starts the same conversation again rather than overwriting.
+	 */
 	@Test
-	void returnsErrorWhenMovementNotFound() {
-		UUID id = UUID.randomUUID();
-
-		when(movementRepository.findByPublicId(id)).thenReturn(Optional.empty());
-
-		QuarantineRestoreResult result = service.restore(id, QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-		Assertions.assertThat(result.success()).isFalse();
-	}
-
-	@Test
-	void returnsErrorWhenItemIsNoLongerQuarantined(@TempDir Path tmp) throws Exception {
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(tmp.resolve("library").resolve("a.jpg"), quarantine);
-
-		movement.setStatus(MovementStatus.UNDONE);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
-	@Test
-	void keepsFileInQuarantineWhenResolutionIsSkip(@TempDir Path tmp) throws Exception {
+	void keepsTheFileWhenTheDecidedDestinationWasTakenInTheMeantime(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path taken = Files.writeString(origin.resolve("a.jpg"), "somebody else's");
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				new QuarantineRestoreOptions(null, ConflictResolution.SKIP));
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), taken, claimedRow(),
+				owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.SKIPPED.name());
+		Assertions.assertThat(result.conflicts()).isEqualTo(1);
+		Assertions.assertThat(Files.readString(taken)).isEqualTo("somebody else's");
+		Assertions.assertThat(Files.exists(quarantine)).isTrue();
+	}
+
+	@Test
+	void reportsOriginMissingWhenTheOriginalFolderIsGone(@TempDir Path tmp) throws Exception {
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(tmp.resolve("gone").resolve("a.jpg"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.originMissing()).isEqualTo(1);
+		Assertions.assertThat(Files.exists(quarantine)).isTrue();
+
+		verify(persistence, never()).applyRestore(any(), any(), any());
+	}
+
+	/**
+	 * A recorded original path with no folder above it - a row that lost its
+	 * directory somewhere between two versions - would restore into nowhere.
+	 */
+	@Test
+	void refusesToRestoreWhenTheRecordedOriginalPathHasNoFolder(@TempDir Path tmp) throws Exception {
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(tmp.getRoot(), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+		Assertions.assertThat(result.items().get(0).message()).isNotBlank();
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
 		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	@Test
-	void rollsFileBackToQuarantineWhenCatalogUpdateFails(@TempDir Path tmp) throws Exception {
+	void reportsMissingWhenTheQuarantineCopyIsGone(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		Execution row = claimedRow();
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, row, owning());
+
+		Assertions.assertThat(result.items().get(0).outcome())
+				.isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
+
+		// The failure names the file, which is what the executions screen lists.
+		verify(restoreLog).recordFailure(eq(row), eq(quarantine), eq(ExecutionErrorType.FILE_NOT_FOUND), any());
+		verify(persistence, never()).applyRestore(any(), any(), any());
+	}
+
+	@Test
+	void refusesToRestoreWhenTheQuarantineCopyIsNotAPhysicalFile(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+
+		// A .lnk shortcut in quarantine (rejected by PhysicalFilePolicy): the restore
+		// must be refused, exactly like the forward path refuses to quarantine a
+		// link/shortcut.
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.lnk", "shortcut-bytes");
+
+		Movement movement = quarantineMovement(origin.resolve("a.lnk"), quarantine);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+		Assertions.assertThat(Files.exists(quarantine)).isTrue();
+
+		verify(persistence, never()).applyRestore(any(), any(), any());
+	}
+
+	@Test
+	void reportsAnErrorForAnIdThatNamesNoMovement() {
+		UUID unknown = UUID.randomUUID();
+
+		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(unknown), null, claimedRow(), owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+		Assertions.assertThat(result.success()).isFalse();
+	}
+
+	/**
+	 * A movement that was already undone is no longer MOVED, so it is not a
+	 * quarantine item any more even though its reason still says so.
+	 */
+	@Test
+	void refusesAMovementThatIsNoLongerInTheMovedStatus(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		movement.setStatus(MovementStatus.UNDONE);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+
+		verify(persistence, never()).applyRestore(any(), any(), any());
+	}
+
+	/**
+	 * Status alone is not enough: a movement can be MOVED and still not be a
+	 * quarantine - a plain organization move, for instance - and restoring one of
+	 * those would put a file back where nobody asked.
+	 */
+	@Test
+	void refusesAMovementWhoseReasonIsNotQuarantine(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		movement.setReason(MovementReason.NONE);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+	}
+
+	@Test
+	void rollsTheFileBackToQuarantineWhenTheCatalogUpdateFails(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path original = origin.resolve("a.jpg");
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
@@ -349,15 +328,16 @@ class QuarantineServiceTest {
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 		doThrow(new IllegalStateException("db down")).when(persistence).applyRestore(any(), any(), any());
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 		Assertions.assertThat(Files.exists(original)).isFalse();
 	}
 
 	@Test
-	void leavesFileOrphanedAtDestinationWhenCatalogAndRollbackBothFail(@TempDir Path tmp) throws Exception {
+	void leavesTheFileOrphanedAtTheDestinationWhenCatalogAndRollbackBothFail(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path original = origin.resolve("a.jpg");
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
@@ -369,181 +349,19 @@ class QuarantineServiceTest {
 		// roll-back (which never overwrites) cannot move the file back to quarantine.
 		doAnswer(_ -> {
 			Files.writeString(quarantine, "blocker");
+
 			throw new IllegalStateException("db down");
 		}).when(persistence).applyRestore(any(), any(), any());
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+
 		// Roll-back could not put it back, so the restored file stays orphaned at the
 		// origin.
 		Assertions.assertThat(Files.exists(original)).isTrue();
 		Assertions.assertThat(Files.readString(quarantine)).isEqualTo("blocker");
-	}
-
-	@Test
-	void reportsLockedWhenAnotherOperationHoldsThePath(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		OperationLockService lockService = mock(OperationLockService.class);
-
-		when(lockService.acquire(any(ExecutionType.class), any(Path.class), any(Path.class)))
-				.thenThrow(new OperationLockException("busy"));
-
-		QuarantineService locked = new QuarantineService(movementRepository, persistence,
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService,
-				restoreLog);
-
-		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.LOCKED.name());
-		Assertions.assertThat(Files.exists(quarantine)).isTrue();
-	}
-
-	@Test
-	void reportsErrorWhenTheSecureMoveFails(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		SecureFileMove failingMove = mock(SecureFileMove.class);
-
-		doThrow(new IOException("disk full")).when(failingMove).move(any(), any(), anyBoolean());
-
-		QuarantineService failing = new QuarantineService(movementRepository, persistence, failingMove,
-				new OperationLockService(), restoreLog);
-
-		QuarantineRestoreResult result = failing.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-
-		verify(persistence, never()).applyRestore(any(), any(), any());
-	}
-
-	@Test
-	void listFlagsMissingOriginAndFallsBackToDiskSize(@TempDir Path tmp) throws Exception {
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "abcd");
-
-		Movement movement = quarantineMovement(tmp.resolve("gone").resolve("a.jpg"), quarantine);
-
-		when(movement.getCatalogFile().getSizeBytes()).thenReturn(null);
-
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
-
-		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
-
-		Assertions.assertThat(item.originFolderExists()).isFalse();
-		Assertions.assertThat(item.presentInQuarantine()).isTrue();
-		Assertions.assertThat(item.sizeBytes()).isEqualTo(4L);
-		Assertions.assertThat(item.sizeLabel()).isEqualTo("4 B");
-	}
-
-	@Test
-	void listBuildsMediaUrlsForImages(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "img");
-
-		UUID publicId = UUID.randomUUID();
-
-		Movement movement = imageMovement(origin.resolve("a.jpg"), quarantine, publicId);
-
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
-
-		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
-
-		Assertions.assertThat(item.image()).isTrue();
-		Assertions.assertThat(item.mediaPublicId()).isEqualTo(publicId);
-		Assertions.assertThat(item.previewUrl()).isEqualTo("/api/media/" + publicId + "/content");
-	}
-
-	@Test
-	void restoreManyRestoresEachSelectedFile(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()));
-
-		Assertions.assertThat(result.total()).isEqualTo(1);
-		Assertions.assertThat(result.restored()).isEqualTo(1);
-		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isTrue();
-	}
-
-	@Test
-	void restoreManyWithNoSelectionIsNoOp() {
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of());
-
-		Assertions.assertThat(result.total()).isZero();
-		Assertions.assertThat(result.restored()).isZero();
-	}
-
-	@Test
-	void nullOptionsShouldFallBackToTheSafeDefaults(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), null);
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
-		Assertions.assertThat(origin.resolve("a.jpg")).exists();
-	}
-
-	/**
-	 * A movement that was already undone is no longer MOVED, so it is not a
-	 * quarantine item any more even though its reason still says so.
-	 */
-	@Test
-	void shouldRefuseAMovementThatIsNoLongerInTheMovedStatus(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		movement.setStatus(MovementStatus.UNDONE);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
-	}
-
-	/**
-	 * Status alone is not enough: a movement can be MOVED and still not be a
-	 * quarantine - a plain organization move, for instance - and restoring one of
-	 * those would put a file back where nobody asked.
-	 */
-	@Test
-	void shouldRefuseAMovementWhoseReasonIsNotQuarantine(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		movement.setReason(MovementReason.NONE);
-
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 	}
 
 	/**
@@ -552,26 +370,51 @@ class QuarantineServiceTest {
 	 * else is using.
 	 */
 	@Test
-	void shouldReportLockedWhenAnotherOperationHoldsThePath(@TempDir Path tmp) throws Exception {
+	void reportsLockedWhenAnotherOperationHoldsThePath(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
 		OperationLockService lockService = mock(OperationLockService.class);
 
-		when(lockService.acquire(any(), any(Path[].class))).thenThrow(new OperationLockException("busy"));
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(lockService.acquire(any(ExecutionType.class), any(Path.class), any(Path.class)))
+				.thenThrow(new OperationLockException("busy"));
 
 		QuarantineService locked = new QuarantineService(movementRepository, persistence,
-				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry), lockService,
-				restoreLog);
+				new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
+						pathRegistry), pathRegistry),
+				lockService, executionStopReason, restoreLog, eligibilityAnnouncer);
 
-		QuarantineRestoreResult result = locked.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = locked.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.LOCKED.name());
-		Assertions.assertThat(quarantine).exists();
+		Assertions.assertThat(result.items().get(0).outcome()).isEqualTo(RestoreOutcome.LOCKED.name());
+		Assertions.assertThat(Files.exists(quarantine)).isTrue();
+	}
+
+	@Test
+	void reportsAnErrorWhenTheSecureMoveFails(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		LibraryFileMutations failingMove = mock(LibraryFileMutations.class);
+
+		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		doThrow(new IOException("disk full")).when(failingMove).move(any(), any(), anyBoolean(), any());
+
+		QuarantineService failing = new QuarantineService(movementRepository, persistence, failingMove,
+				GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
+
+		QuarantineRestoreBatchResult result = failing.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+				owning());
+
+		Assertions.assertThat(result.errors()).isEqualTo(1);
+
+		verify(persistence, never()).applyRestore(any(), any(), any());
 	}
 
 	/**
@@ -580,41 +423,44 @@ class QuarantineServiceTest {
 	 * reported as an error and the log names the file to recover.
 	 */
 	@Test
-	void shouldReportAnErrorWhenNeitherTheMoveNorTheRollbackSucceeded(@TempDir Path tmp) throws Exception {
+	void reportsAnErrorWhenNeitherTheMoveNorTheRollbackSucceeded(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
+		LibraryFileMutations failing = mock(LibraryFileMutations.class);
+
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		SecureFileMove failing = mock(SecureFileMove.class);
-
 		doAnswer(_ -> {
 			// The move physically happened and then failed its verify.
 			Files.move(quarantine, origin.resolve("a.jpg"));
 
 			throw new MoveIntegrityException("sha mismatch");
-		}).when(failing).move(any(), any(), anyBoolean());
-
+		}).when(failing).move(any(), any(), anyBoolean(), any());
 		when(failing.rollback(any(), any())).thenReturn(false);
 
 		QuarantineService orphaning = new QuarantineService(movementRepository, persistence, failing,
-				new OperationLockService(), restoreLog);
+				GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
 
-		QuarantineRestoreResult result = orphaning.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestoreBatchResult result = orphaning.restoreMany(List.of(movement.getPublicId()), null,
+				claimedRow(), owning());
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+		Assertions.assertThat(result.errors()).isEqualTo(1);
 
 		verify(failing).rollback(any(), any());
 	}
 
 	@Test
-	void restoreManyShouldTreatANullSelectionAsEmpty() {
-		QuarantineRestoreBatchResult result = service.restoreMany(null);
+	void aSelectionOfNothingIsANoOp() {
+		QuarantineRestoreBatchResult empty = service.restoreMany(List.of(), null, claimedRow(), owning());
 
-		Assertions.assertThat(result.total()).isZero();
-		Assertions.assertThat(result.success()).isTrue();
+		QuarantineRestoreBatchResult nullSelection = service.restoreMany(null, null, claimedRow(), owning());
+
+		Assertions.assertThat(empty.total()).isZero();
+		Assertions.assertThat(empty.restored()).isZero();
+		Assertions.assertThat(nullSelection.total()).isZero();
+		Assertions.assertThat(nullSelection.success()).isTrue();
 	}
 
 	/**
@@ -622,7 +468,7 @@ class QuarantineServiceTest {
 	 * ones - an unknown id lands in errors and flips the batch to unsuccessful.
 	 */
 	@Test
-	void batchRestoreShouldCountOriginMissingAndErrorsSeparately(@TempDir Path tmp) throws Exception {
+	void countsOriginMissingAndErrorsSeparately(@TempDir Path tmp) throws Exception {
 		Path quarantine = writeQuarantineCopy(tmp, "10__gone.jpg", "content");
 
 		Movement originGone = quarantineMovement(tmp.resolve("vanished").resolve("gone.jpg"), quarantine);
@@ -632,7 +478,8 @@ class QuarantineServiceTest {
 		when(movementRepository.findByPublicId(originGone.getPublicId())).thenReturn(Optional.of(originGone));
 		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(originGone.getPublicId(), unknown));
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(originGone.getPublicId(), unknown), null,
+				claimedRow(), owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
 		Assertions.assertThat(result.originMissing()).isEqualTo(1);
@@ -641,201 +488,83 @@ class QuarantineServiceTest {
 	}
 
 	/**
-	 * An extension-less name must not lose its whole filename to the "(1)" suffix
-	 * logic, which splits on the last dot.
+	 * A cancel is a person asking the batch to stop. What it already put back stays
+	 * put back - those files were moved under the locks and verified byte for byte
+	 * - and the row says so rather than claiming the whole selection was seen.
 	 */
 	@Test
-	void renamingOnConflictShouldHandleANameWithoutAnExtension(@TempDir Path tmp) throws Exception {
+	void stopsWhereItIsWhenSomebodyCancelsTheBatch(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 
-		Files.writeString(origin.resolve("README"), "existing");
+		Movement first = quarantineMovement(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg", "one"));
+		Movement second = quarantineMovement(origin.resolve("b.jpg"), writeQuarantineCopy(tmp, "11__b.jpg", "two"));
 
-		Path quarantine = writeQuarantineCopy(tmp, "10__README", "content");
+		Execution row = claimedRow();
 
-		Movement movement = quarantineMovement(origin.resolve("README"), quarantine);
+		when(movementRepository.findByPublicId(first.getPublicId())).thenReturn(Optional.of(first));
+		when(executionCancellationService.isCancelled(77L)).thenReturn(false, true);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(first.getPublicId(), second.getPublicId()),
+				null, row, owning());
 
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(),
-				new QuarantineRestoreOptions(null, ConflictResolution.RENAME));
+		Assertions.assertThat(result.restored()).isEqualTo(1);
+		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isTrue();
+		Assertions.assertThat(Files.exists(origin.resolve("b.jpg"))).isFalse();
 
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
-		Assertions.assertThat(origin.resolve("README (1)")).exists();
+		verify(restoreLog).stop(eq(ownership), eq(ExecutionStatus.CANCELLED), eq(2), eq(1), eq(0), eq(0), any());
+		verify(restoreLog, never()).finish(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
 	}
 
 	/**
-	 * Without a catalog record the listing still has to render: the type falls back
-	 * to OTHER, there is no media id to build a preview URL from, and the size is
-	 * read off the quarantine copy.
+	 * Losing the locks is not a failure of the work: the batch stops where it is
+	 * and the row says interrupted, so nobody reads an error for the moment it was
+	 * standing in.
 	 */
 	@Test
-	void listShouldRenderAnItemWhoseCatalogRecordIsGone(@TempDir Path tmp) throws Exception {
+	void stopsAsInterruptedWhenItNoLongerOwnsThePaths(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = writeQuarantineCopy(tmp, "10__orphan.jpg", "1234567");
 
-		Execution execution = mock(Execution.class);
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg", "one"));
 
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+		ExecutionOwnership lost = mock(ExecutionOwnership.class);
 
-		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution)
-				.sourcePath(PathUtils.normalize(origin.resolve("orphan.jpg")))
-				.targetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
-				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
+		Execution row = claimedRow();
 
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
+		doThrow(new OwnershipLostException("the lease went away")).when(lost).assertMayGoOnWorking();
 
-		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, row, lost);
 
-		Assertions.assertThat(item.mediaPublicId()).isNull();
-		Assertions.assertThat(item.previewUrl()).isNull();
-		Assertions.assertThat(item.fileType()).isEqualTo("OTHER");
-		Assertions.assertThat(item.sizeBytes()).isEqualTo(7L);
+		Assertions.assertThat(result.restored()).isZero();
+		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isFalse();
+
+		verify(restoreLog).stop(eq(lost), eq(ExecutionStatus.INTERRUPTED), eq(1), eq(0), eq(0), eq(0), any());
 	}
 
 	/**
-	 * A quarantine copy that vanished leaves nothing to measure, so the screen gets
-	 * a null size and the em-dash placeholder instead of a bogus zero.
+	 * A restore moves user files back into the library, so it closes the row it was
+	 * handed with what actually happened - which is what the executions screen
+	 * shows once the worker is done.
 	 */
 	@Test
-	void listShouldReportNoSizeWhenNeitherTheCatalogNorTheDiskCanProvideIt(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-
-		Execution execution = mock(Execution.class);
-
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
-
-		CatalogFile catalogFile = mock(CatalogFile.class);
-
-		when(catalogFile.getFileType()).thenReturn(FileType.PHOTO);
-		when(catalogFile.getSizeBytes()).thenReturn(null);
-
-		Movement movement = Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(origin.resolve("missing.jpg")))
-				.targetPath(PathUtils.normalize(tmp.resolve("trash").resolve("nowhere.jpg")))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
-				.build();
-
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(movement)));
-
-		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
-
-		Assertions.assertThat(item.sizeBytes()).isNull();
-		Assertions.assertThat(item.sizeLabel()).isEqualTo("—");
-		Assertions.assertThat(item.presentInQuarantine()).isFalse();
-	}
-
-	/**
-	 * The card decides which viewer to open from these flags, so each previewable
-	 * kind has to come back set on its own and nothing else.
-	 */
-	@Test
-	void listShouldFlagEachPreviewableKindOnItsOwn(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-
-		Movement video = typedMovement(tmp, origin, "clip.mp4", FileType.VIDEO);
-		Movement pdf = typedMovement(tmp, origin, "manual.pdf", FileType.PDF);
-		Movement text = typedMovement(tmp, origin, "notes.txt", FileType.TEXT);
-		Movement audio = typedMovement(tmp, origin, "song.mp3", FileType.AUDIO);
-
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
-						.thenReturn(new PageImpl<>(List.of(video, pdf, text, audio)));
-
-		List<QuarantineItemResponse> items = service.list(PageRequest.of(0, 50)).getContent();
-
-		Assertions.assertThat(items.get(0).video()).isTrue();
-		Assertions.assertThat(items.get(0).image()).isFalse();
-		Assertions.assertThat(items.get(1).pdf()).isTrue();
-		Assertions.assertThat(items.get(2).text()).isTrue();
-		Assertions.assertThat(items.get(3).audio()).isTrue();
-		Assertions.assertThat(items).allSatisfy(item -> Assertions.assertThat(item.previewUrl()).isNotNull());
-	}
-
-	/**
-	 * A kind with no viewer gets no preview URL even though the media is perfectly
-	 * cataloged - the card then falls back to the generic icon.
-	 */
-	@Test
-	void listShouldNotOfferAPreviewForAKindWithNoViewer(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-
-		Movement archive = typedMovement(tmp, origin, "backup.zip", FileType.ZIP);
-
-		when(movementRepository.findByStatusAndReasonInOrderByIdDesc(eq(MovementStatus.MOVED),
-				eq(QuarantineConstants.QUARANTINED_REASONS), any())).thenReturn(new PageImpl<>(List.of(archive)));
-
-		QuarantineItemResponse item = service.list(PageRequest.of(0, 50)).getContent().get(0);
-
-		Assertions.assertThat(item.previewUrl()).isNull();
-		Assertions.assertThat(item.image()).isFalse();
-		Assertions.assertThat(item.video()).isFalse();
-	}
-
-	private Movement typedMovement(Path tmp, Path origin, String fileName, FileType fileType) throws Exception {
-		Path quarantine = writeQuarantineCopy(tmp, "10__" + fileName, "content");
-
-		Execution execution = mock(Execution.class);
-
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
-
-		CatalogFile catalogFile = mock(CatalogFile.class);
-
-		when(catalogFile.getFileType()).thenReturn(fileType);
-		when(catalogFile.getSizeBytes()).thenReturn(7L);
-		when(catalogFile.getPublicId()).thenReturn(UUID.randomUUID());
-
-		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(origin.resolve(fileName))).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
-				.build();
-	}
-
-	private Movement imageMovement(Path original, Path quarantine, UUID publicId) {
-		Execution execution = mock(Execution.class);
-
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
-
-		CatalogFile catalogFile = mock(CatalogFile.class);
-
-		when(catalogFile.getFileType()).thenReturn(FileType.PHOTO);
-		when(catalogFile.getSizeBytes()).thenReturn(10L);
-		when(catalogFile.getPublicId()).thenReturn(publicId);
-
-		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
-				.build();
-	}
-
-	/**
-	 * A restore moves user files back into the library, so it is an operation and
-	 * has to leave a row on the executions screen - opened before the first file
-	 * and closed with what happened.
-	 */
-	@Test
-	void aRestoreOpensAndClosesAnExecutionOfItsOwn(@TempDir Path tmp) throws Exception {
+	void closesTheExecutionItWasHandedWithWhatHappened(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		Execution restoreExecution = mock(Execution.class);
+		Execution row = claimedRow();
 
-		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		service.restoreMany(List.of(movement.getPublicId()), null, row, owning());
 
-		verify(restoreLog).startRestore(1);
-		verify(restoreLog).finish(eq(restoreExecution), eq(1), eq(1), eq(0), eq(0), any());
-		verify(persistence).applyRestore(eq(movement), any(), eq(restoreExecution));
+		verify(restoreLog).finish(eq(ownership), eq(1), eq(1), eq(0), eq(0), any());
+		verify(persistence).applyRestore(eq(movement), any(), eq(row));
 	}
 
-	/** An item waiting for a decision is not a failure, nor counted as one. */
+	/** An item left waiting for a decision is not a failure, nor counted as one. */
 	@Test
-	void anItemWaitingForADecisionIsClosedAsSkippedNotAsAnError(@TempDir Path tmp) throws Exception {
+	void anItemWaitingForADecisionIsClosedAsUnrestoredNotAsAnError(@TempDir Path tmp) throws Exception {
 		Path origin = Files.createDirectories(tmp.resolve("library"));
 		Path original = Files.writeString(origin.resolve("a.jpg"), "existing");
 		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
@@ -844,31 +573,9 @@ class QuarantineServiceTest {
 
 		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
 
-		service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(), owning());
 
 		verify(restoreLog).finish(any(), eq(1), eq(0), eq(1), eq(0), any());
-	}
-
-	/** The failure names the file, which is what the execution screen lists. */
-	@Test
-	void aFileMissingFromQuarantineIsRecordedAgainstTheRestore(@TempDir Path tmp) throws Exception {
-		Path origin = Files.createDirectories(tmp.resolve("library"));
-		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
-
-		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
-
-		Execution restoreExecution = mock(Execution.class);
-
-		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-
-		QuarantineRestoreResult result = service.restore(movement.getPublicId(), QuarantineRestoreOptions.defaults());
-
-		Assertions.assertThat(result.outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
-
-		verify(restoreLog).recordFailure(eq(restoreExecution), eq(quarantine), eq(ExecutionErrorType.FILE_NOT_FOUND),
-				any());
-		verify(restoreLog).finish(eq(restoreExecution), eq(1), eq(0), eq(0), eq(1), any());
 	}
 
 	/**
@@ -879,18 +586,37 @@ class QuarantineServiceTest {
 	void aCrashMidLoopStillClosesTheExecution() {
 		UUID movementId = UUID.randomUUID();
 
-		Execution restoreExecution = mock(Execution.class);
+		Execution row = claimedRow();
 
-		when(restoreLog.startRestore(1)).thenReturn(restoreExecution);
+		List<UUID> selection = List.of(movementId);
+
 		when(movementRepository.findByPublicId(movementId)).thenThrow(new IllegalStateException("db down"));
 
-		QuarantineRestoreOptions options = QuarantineRestoreOptions.defaults();
-
-		Assertions.assertThatThrownBy(() -> service.restore(movementId, options))
+		Assertions.assertThatThrownBy(() -> service.restoreMany(selection, null, row, ownership))
 				.isInstanceOf(IllegalStateException.class);
 
-		verify(restoreLog).fail(eq(restoreExecution), any());
+		verify(restoreLog).fail(eq(ownership), any());
 		verify(restoreLog, never()).finish(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
+	}
+
+	/**
+	 * The row a worker claimed and the ownership of the paths it locked: the
+	 * restore is handed both rather than opening the first and doing without the
+	 * second.
+	 */
+	private Execution claimedRow() {
+		return Execution.builder().id(77L).executionType(ExecutionType.QUARANTINE_RESTORE)
+				.status(ExecutionStatus.RUNNING).build();
+	}
+
+	/**
+	 * The taking every write about the row is made under. A real one rather than a
+	 * stub, so a write refused for having lost its turn is refused here too.
+	 */
+	private final ExecutionOwnership ownership = Takings.owning(1L);
+
+	private ExecutionOwnership owning() {
+		return ownership;
 	}
 
 	private Path writeQuarantineCopy(Path tmp, String name, String content) throws Exception {
@@ -900,16 +626,9 @@ class QuarantineServiceTest {
 	}
 
 	private Movement quarantineMovement(Path original, Path quarantine) {
-		Execution execution = mock(Execution.class);
-
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
-
 		CatalogFile catalogFile = mock(CatalogFile.class);
 
-		when(catalogFile.getFileType()).thenReturn(null);
-		when(catalogFile.getSizeBytes()).thenReturn(123L);
-
-		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
+		return Movement.builder().publicId(UUID.randomUUID()).catalogFile(catalogFile)
 				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
 				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
 				.build();

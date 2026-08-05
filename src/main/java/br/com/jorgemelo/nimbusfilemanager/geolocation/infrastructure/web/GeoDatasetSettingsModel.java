@@ -8,8 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.ReverseGeocodingStrategyRegistry;
@@ -32,21 +31,19 @@ public class GeoDatasetSettingsModel implements SettingsSectionModel {
 
 	private final OfflineGeoDataset offlineGeoDataset;
 	private final MediaLocationService mediaLocationService;
-	private final GeoDatasetAsyncRunner geoDatasetAsyncRunner;
-	private final LocationRebuildAsyncRunner locationRebuildAsyncRunner;
+	private final GeoRunReader geoRunReader;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final InventoryRunningState inventoryRunningState;
 	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry;
 
 	@Autowired
 	public GeoDatasetSettingsModel(OfflineGeoDataset offlineGeoDataset, MediaLocationService mediaLocationService,
-			GeoDatasetAsyncRunner geoDatasetAsyncRunner, LocationRebuildAsyncRunner locationRebuildAsyncRunner,
-			UserPagePreferenceService userPagePreferenceService, InventoryRunningState inventoryRunningState,
+			GeoRunReader geoRunReader, UserPagePreferenceService userPagePreferenceService,
+			InventoryRunningState inventoryRunningState,
 			ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry) {
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.mediaLocationService = mediaLocationService;
-		this.geoDatasetAsyncRunner = geoDatasetAsyncRunner;
-		this.locationRebuildAsyncRunner = locationRebuildAsyncRunner;
+		this.geoRunReader = geoRunReader;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.inventoryRunningState = inventoryRunningState;
 		this.reverseGeocodingStrategyRegistry = reverseGeocodingStrategyRegistry;
@@ -56,20 +53,19 @@ public class GeoDatasetSettingsModel implements SettingsSectionModel {
 		model.addAttribute("inventoryRunning", inventoryRunningState.isRunning());
 		model.addAttribute("geoStatus", offlineGeoDataset.status());
 		model.addAttribute("geoEnabled", mediaLocationService.enabled());
-		model.addAttribute("geoImportRunning", geoDatasetAsyncRunner.isRunning());
-		model.addAttribute("geoImportError", geoDatasetAsyncRunner.lastError());
-		model.addAttribute("geoImportResult", geoDatasetAsyncRunner.lastResult());
-		model.addAttribute("geoProgress", geoDatasetAsyncRunner.progress());
+		model.addAttribute("geoImportRunning", geoRunReader.importRunning());
+		model.addAttribute("geoImportError", geoRunReader.importError());
+		model.addAttribute("geoProgress", geoRunReader.progress());
 		model.addAttribute("geoCacheSize", mediaLocationService.cacheSize());
 		model.addAttribute("geoResolvedCount", mediaLocationService.resolvedCount());
 		model.addAttribute("geoPendingCount", mediaLocationService.pendingCount());
-		model.addAttribute("geoRebuildRunning", locationRebuildAsyncRunner.isRunning());
-		model.addAttribute("geoRebuildProcessed", locationRebuildAsyncRunner.processed());
-		model.addAttribute("geoRebuildTotal", locationRebuildAsyncRunner.total());
-		model.addAttribute("geoRebuildPercent", locationRebuildAsyncRunner.percent());
-		model.addAttribute("geoRebuildEta", locationRebuildAsyncRunner.etaSeconds());
-		model.addAttribute("geoRebuildError", locationRebuildAsyncRunner.lastError());
-		model.addAttribute("geoRebuildResult", locationRebuildAsyncRunner.lastResult());
+		model.addAttribute("geoRebuildRunning", geoRunReader.rebuildRunning());
+		model.addAttribute("geoRebuildProcessed", geoRunReader.rebuildProcessed());
+		model.addAttribute("geoRebuildTotal", geoRunReader.rebuildTotal());
+		model.addAttribute("geoRebuildPercent", geoRunReader.rebuildPercent());
+		model.addAttribute("geoRebuildEta", geoRunReader.rebuildEtaSeconds());
+		model.addAttribute("geoRebuildError", geoRunReader.rebuildError());
+		model.addAttribute("geoRebuildResult", geoRunReader.lastRebuildResult());
 		model.addAttribute("geoRebuildScopes", LocationRebuildScope.values());
 
 		// Feeds the provider dropdown of the location settings row: an implemented

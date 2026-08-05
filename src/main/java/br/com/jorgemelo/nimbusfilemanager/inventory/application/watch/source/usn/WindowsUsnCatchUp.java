@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
 
 /**
@@ -40,12 +41,13 @@ public final class WindowsUsnCatchUp {
 
 		List<Path> offlineChanges = List.of();
 
-		boolean reconcileNeeded = !canReplay;
+		WatchRecoveryReason recoveryReason = canReplay ? null : WatchRecoveryReason.JOURNAL_UNREPLAYABLE;
 
 		try {
 			if (canReplay) {
 				offlineChanges = reader.poll();
-				reconcileNeeded = reader.consumeOverflow();
+
+				recoveryReason = reader.consumeOverflow() ? WatchRecoveryReason.JOURNAL_REPLAY_INCOMPLETE : null;
 			}
 		} catch (UsnGapException _) {
 			// The gap aged out mid-read: cannot replay, so reconcile and pin the cursor at
@@ -53,11 +55,11 @@ public final class WindowsUsnCatchUp {
 			reader.resetTo(volume.nextUsn());
 
 			offlineChanges = List.of();
-			reconcileNeeded = true;
+			recoveryReason = WatchRecoveryReason.JOURNAL_UNREPLAYABLE;
 		}
 
 		cursorStore.save(volumeKey, volume.journalId(), reader.nextUsn());
 
-		return new UsnCatchUpResult(offlineChanges, reconcileNeeded);
+		return new UsnCatchUpResult(offlineChanges, recoveryReason);
 	}
 }

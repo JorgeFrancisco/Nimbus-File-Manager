@@ -25,6 +25,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
@@ -33,7 +35,6 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.Metadat
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
@@ -58,6 +59,14 @@ class MetadataRebuildServiceTest {
 	@Mock
 	private PlatformTransactionManager transactionManager;
 
+	/**
+	 * Real invalidator over a mocked writer: whether a rebuild forgets a video's
+	 * relations is decided by comparing the values it read before and after, and a
+	 * stub would let that decision disappear without a failure.
+	 */
+	@Mock
+	private SimilarityRelationWriter similarityRelationWriter;
+
 	@Test
 	void dryRunShouldOnlyCountCandidateIds() {
 		MetadataRebuildRequest request = request(true, List.of(MetadataRebuildField.ALL));
@@ -65,11 +74,10 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L));
 
-		var response = service().rebuild(request);
+		var response = service().simulate(request);
 
-		Assertions.assertThat(response.dryRun()).isTrue();
 		Assertions.assertThat(response.candidates()).isEqualTo(3);
-		Assertions.assertThat(response.rebuilt()).isZero();
+		Assertions.assertThat(response.examined()).isZero();
 	}
 
 	@Test
@@ -273,7 +281,8 @@ class MetadataRebuildServiceTest {
 				new CaptureDateValidator(Clock.systemDefaultZone()));
 
 		return new MetadataRebuildService(catalogFileRepository, metadataExtractor, mediaDateResolver,
-				transactionManager, Clock.systemDefaultZone(), new DateSourceLabels());
+				new VideoRelationInvalidator(similarityRelationWriter), transactionManager,
+				Clock.systemDefaultZone());
 	}
 
 	/**
@@ -350,7 +359,7 @@ class MetadataRebuildServiceTest {
 
 		List<Long> reported = new ArrayList<>();
 
-		service().rebuild(request(false, List.of(MetadataRebuildField.DATE)), reported::add);
+		service().rebuild(request(false, List.of(MetadataRebuildField.DATE)), reported::add, () -> false);
 
 		Assertions.assertThat(reported).containsExactly(1L);
 	}
@@ -406,10 +415,10 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
 				eq(MetadataRebuildRequest.NO_CUTOFF), eq(0L), any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L));
 
-		var response = service().rebuild(request);
+		var response = service().simulate(request);
 
 		Assertions.assertThat(response.candidates()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().skippedByCutoff()).isEqualTo(2);
+		Assertions.assertThat(response.skippedByCutoff()).isEqualTo(2);
 	}
 
 	/**
@@ -432,14 +441,14 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
 
-		var response = service().rebuild(request);
+		var response = service().simulate(request);
 
-		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().wouldChange()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().preview()).singleElement().satisfies(row -> {
+		Assertions.assertThat(response.examined()).isEqualTo(1);
+		Assertions.assertThat(response.wouldChange()).isEqualTo(1);
+		Assertions.assertThat(response.differences()).singleElement().satisfies(row -> {
 			Assertions.assertThat(row.currentDate()).isEqualTo(LocalDateTime.of(2026, Month.JULY, 28, 15, 48));
 			Assertions.assertThat(row.newDate()).isEqualTo(LocalDateTime.of(2024, Month.MAY, 9, 10, 30));
-			Assertions.assertThat(row.newSourceLabel()).isNotBlank();
+			Assertions.assertThat(row.newSource()).isNotNull();
 		});
 		Assertions.assertThat(catalogFile.getMetadata().getCaptureDate())
 				.isEqualTo(LocalDateTime.of(2026, Month.JULY, 28, 15, 48));
@@ -453,11 +462,11 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of());
 
-		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+		var response = service().simulate(request(true, List.of(MetadataRebuildField.DATE)));
 
 		Assertions.assertThat(response.candidates()).isZero();
-		Assertions.assertThat(response.simulation().examined()).isZero();
-		Assertions.assertThat(response.simulation().preview()).isEmpty();
+		Assertions.assertThat(response.examined()).isZero();
+		Assertions.assertThat(response.differences()).isEmpty();
 	}
 
 	/** A file no longer on disk cannot be examined, nor counted as if it were. */
@@ -469,10 +478,10 @@ class MetadataRebuildServiceTest {
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 
-		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+		var response = service().simulate(request(true, List.of(MetadataRebuildField.DATE)));
 
 		Assertions.assertThat(response.candidates()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().examined()).isZero();
+		Assertions.assertThat(response.examined()).isZero();
 	}
 
 	/**
@@ -492,10 +501,10 @@ class MetadataRebuildServiceTest {
 		MetadataRebuildRequest request = new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.GPS), null, null, 10, true, null);
 
-		var response = service().rebuild(request);
+		var response = service().simulate(request);
 
-		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().wouldChange()).isZero();
+		Assertions.assertThat(response.examined()).isEqualTo(1);
+		Assertions.assertThat(response.wouldChange()).isZero();
 	}
 
 	/** A file the extractor cannot read leaves the sample, never fails it. */
@@ -511,11 +520,11 @@ class MetadataRebuildServiceTest {
 		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any()))
 				.thenThrow(new IllegalStateException("bad metadata"));
 
-		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
 
-		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().wouldChange()).isZero();
+		Assertions.assertThat(response.examined()).isEqualTo(1);
+		Assertions.assertThat(response.wouldChange()).isZero();
 	}
 
 	/** A file whose date would not move is examined and reported as unchanged. */
@@ -532,12 +541,12 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
 
-		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
 
-		Assertions.assertThat(response.simulation().examined()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().wouldChange()).isZero();
-		Assertions.assertThat(response.simulation().preview()).isEmpty();
+		Assertions.assertThat(response.examined()).isEqualTo(1);
+		Assertions.assertThat(response.wouldChange()).isZero();
+		Assertions.assertThat(response.differences()).isEmpty();
 	}
 
 	/**
@@ -558,11 +567,11 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
 
-		var response = service().rebuild(new MetadataRebuildRequest(folder.toString(),
+		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
 
-		Assertions.assertThat(response.simulation().wouldChange()).isEqualTo(1);
-		Assertions.assertThat(response.simulation().preview()).singleElement()
+		Assertions.assertThat(response.wouldChange()).isEqualTo(1);
+		Assertions.assertThat(response.differences()).singleElement()
 				.satisfies(row -> Assertions.assertThat(row.currentDate()).isNull());
 	}
 
@@ -575,8 +584,8 @@ class MetadataRebuildServiceTest {
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
 
-		var response = service().rebuild(request(true, List.of(MetadataRebuildField.DATE)));
+		var response = service().simulate(request(true, List.of(MetadataRebuildField.DATE)));
 
-		Assertions.assertThat(response.simulation().examined()).isZero();
+		Assertions.assertThat(response.examined()).isZero();
 	}
 }

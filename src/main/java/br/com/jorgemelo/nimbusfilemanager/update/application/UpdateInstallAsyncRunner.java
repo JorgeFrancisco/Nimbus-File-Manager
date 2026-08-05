@@ -3,9 +3,11 @@ package br.com.jorgemelo.nimbusfilemanager.update.application;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.AsyncConfig;
 import br.com.jorgemelo.nimbusfilemanager.update.application.constants.UpdateMessages;
@@ -29,7 +31,14 @@ import lombok.extern.slf4j.Slf4j;
  * would be verifying bytes the winner was still writing.
  */
 @Slf4j
+/**
+ * Application role only, and deliberately so: this downloads the installer and
+ * then ends this very process. A worker is subordinate to the application - it
+ * would have to kill its own supervisor and survive its own jar being
+ * replaced, which is not a thing to ask of it.
+	 */
 @Service
+@Profile(NimbusProfiles.APP)
 public class UpdateInstallAsyncRunner extends LocalizedComponent {
 
 	private static final Map<UpdateOutcome, String> MESSAGES = Map.of(UpdateOutcome.NOTHING_TO_INSTALL,

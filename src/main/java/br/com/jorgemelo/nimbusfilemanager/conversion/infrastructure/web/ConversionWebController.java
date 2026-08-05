@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
@@ -20,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCommitService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.HardwareEncoderProbe;
-import br.com.jorgemelo.nimbusfilemanager.conversion.application.VideoConversionAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCandidateView;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
@@ -32,8 +31,10 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.AudioHandling;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionQuality;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
-import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePurgeService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineRetentionPolicy;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
@@ -59,21 +60,26 @@ public class ConversionWebController extends LocalizedComponent {
 	private static final String SYSTEM_USERNAME = "system";
 
 	private final ConversionCandidateService conversionCandidateService;
-	private final VideoConversionAsyncRunner videoConversionAsyncRunner;
-	private final ConversionCommitService conversionCommitService;
-	private final QuarantinePurgeService quarantinePurgeService;
+	private final ConversionLauncherService conversionLauncherService;
+	private final ConversionProgressService conversionProgressService;
+	private final ExecutionCancellationService executionCancellationService;
+	private final QuarantineFolderPolicy quarantineFolderPolicy;
+	private final QuarantineRetentionPolicy quarantineRetentionPolicy;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final HardwareEncoderProbe hardwareEncoderProbe;
 
 	@Autowired
 	public ConversionWebController(ConversionCandidateService conversionCandidateService,
-			VideoConversionAsyncRunner videoConversionAsyncRunner, ConversionCommitService conversionCommitService,
-			QuarantinePurgeService quarantinePurgeService, UserPagePreferenceService userPagePreferenceService,
+			ConversionLauncherService conversionLauncherService, ConversionProgressService conversionProgressService,
+			ExecutionCancellationService executionCancellationService, QuarantineFolderPolicy quarantineFolderPolicy,
+			QuarantineRetentionPolicy quarantineRetentionPolicy, UserPagePreferenceService userPagePreferenceService,
 			HardwareEncoderProbe hardwareEncoderProbe) {
 		this.conversionCandidateService = conversionCandidateService;
-		this.videoConversionAsyncRunner = videoConversionAsyncRunner;
-		this.conversionCommitService = conversionCommitService;
-		this.quarantinePurgeService = quarantinePurgeService;
+		this.conversionLauncherService = conversionLauncherService;
+		this.conversionProgressService = conversionProgressService;
+		this.executionCancellationService = executionCancellationService;
+		this.quarantineFolderPolicy = quarantineFolderPolicy;
+		this.quarantineRetentionPolicy = quarantineRetentionPolicy;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.hardwareEncoderProbe = hardwareEncoderProbe;
 	}
@@ -108,12 +114,12 @@ public class ConversionWebController extends LocalizedComponent {
 		model.addAttribute("disposition", storedDisposition(preferences).name());
 		model.addAttribute("nameAffix", storedAffix(preferences));
 		model.addAttribute("affixPosition", storedAffixPosition(preferences).name());
-		model.addAttribute("quarantineConfigured", conversionCommitService.quarantineRoot().isPresent());
+		model.addAttribute("quarantineConfigured", quarantineFolderPolicy.root().isPresent());
 		// The quarantine is not forever: the screen has to say when the original is
 		// expunged for good. Zero means no purge is scheduled, and then no deadline is
 		// shown - promising one nobody enforces would be worse than saying nothing.
-		model.addAttribute("quarantineRetentionDays", quarantinePurgeService.retentionDays());
-		model.addAttribute("conversionRunning", videoConversionAsyncRunner.isRunning());
+		model.addAttribute("quarantineRetentionDays", quarantineRetentionPolicy.retentionDays());
+		model.addAttribute("conversionRunning", conversionProgressService.running());
 
 		return "app/conversion";
 	}
@@ -135,15 +141,11 @@ public class ConversionWebController extends LocalizedComponent {
 
 		remember(authentication, options);
 
-		if (videoConversionAsyncRunner.start(ids.size())) {
-			try {
-				videoConversionAsyncRunner.run(ids, options);
-			} catch (TaskRejectedException _) {
-				// The @Async task was never submitted (shared executor saturated or shutting
-				// down), so run()'s finally never releases the claim - release it here so the
-				// screen isn't stuck "in progress" and future conversions can still start.
-				videoConversionAsyncRunner.releaseRejectedSubmission();
-			}
+		// Queued, never started here. The encoding happens in the worker, so what this
+		// answers is the first snapshot of a batch that is now waiting - the screen
+		// polls from there exactly as it did when the batch ran in this process.
+		if (!ids.isEmpty()) {
+			conversionLauncherService.launch(ids, options);
 		}
 
 		return progress();
@@ -189,7 +191,8 @@ public class ConversionWebController extends LocalizedComponent {
 	@PostMapping("/app/conversion/cancel")
 	@ResponseBody
 	public ConversionProgress cancel() {
-		videoConversionAsyncRunner.cancel();
+		conversionProgressService.active()
+				.ifPresent(execution -> executionCancellationService.requestCancellation(execution.getId()));
 
 		return progress();
 	}
@@ -197,12 +200,7 @@ public class ConversionWebController extends LocalizedComponent {
 	@GetMapping("/app/conversion/progress")
 	@ResponseBody
 	public ConversionProgress progress() {
-		boolean running = videoConversionAsyncRunner.isRunning();
-
-		return new ConversionProgress(running, videoConversionAsyncRunner.processed(),
-				videoConversionAsyncRunner.total(), videoConversionAsyncRunner.percent(),
-				videoConversionAsyncRunner.filePercent(), videoConversionAsyncRunner.etaSeconds(),
-				videoConversionAsyncRunner.currentFile(), running ? null : videoConversionAsyncRunner.lastResult());
+		return conversionProgressService.snapshot();
 	}
 
 	private void remember(Authentication authentication, ConversionOptions options) {

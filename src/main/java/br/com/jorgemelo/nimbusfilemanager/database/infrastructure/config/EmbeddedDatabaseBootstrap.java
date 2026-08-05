@@ -14,6 +14,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.Profiles;
 
 import br.com.jorgemelo.nimbusfilemanager.database.application.BootstrapProgress;
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterLayout;
@@ -27,6 +28,7 @@ import br.com.jorgemelo.nimbusfilemanager.database.domain.enums.EmbeddedDatabase
 import br.com.jorgemelo.nimbusfilemanager.database.infrastructure.PostgresBuildSource;
 import br.com.jorgemelo.nimbusfilemanager.database.infrastructure.PostgresProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -60,6 +62,12 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 
 	@Override
 	public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+		if (isStandaloneWorker(environment)) {
+			attachToTheApplicationsCluster(environment);
+
+			return;
+		}
+
 		ClusterLayout layout = new ClusterLayout(workspace(environment));
 
 		EmbeddedDatabaseDecision decision = decide(environment, layout);
@@ -115,6 +123,64 @@ public class EmbeddedDatabaseBootstrap implements EnvironmentPostProcessor {
 	/** Whether the embedded cluster is the one serving this run. */
 	public static boolean serving() {
 		return running != null;
+	}
+
+	/**
+	 * Whether this process is a worker on its own, and therefore not the one that
+	 * runs the database.
+	 *
+	 * <p>
+	 * A worker connects to the cluster the application already supervises - two
+	 * processes starting the same data directory would be a second postmaster on
+	 * the same files. The check lives here, alone, because this runs before the
+	 * context exists and no bean can guard it; every other role difference is a
+	 * profile on a component.
+	 *
+	 * <p>
+	 * Asked as "am I a worker?" rather than "am I the application?" on purpose.
+	 * This runs more than once and, early on, runs before profiles are resolved -
+	 * so the application's absence is not evidence of anything, while the worker
+	 * profile's presence is. Getting that backwards made an ordinary start
+	 * announce, repeatedly, that it was not starting the database.
+	 */
+	private boolean isStandaloneWorker(ConfigurableEnvironment environment) {
+		return environment.acceptsProfiles(Profiles.of(NimbusProfiles.WORKER + " & !" + NimbusProfiles.APP));
+	}
+
+	/**
+	 * The worker connects to the cluster the application started; it never starts
+	 * one.
+	 *
+	 * <p>
+	 * A second cluster would be a second database - empty, on a port of its own -
+	 * and the work this process claimed would be invisible to the screens. So the
+	 * connection is read from where the application wrote it: the workspace both
+	 * processes resolve to, which the worker inherits because the launcher passes
+	 * the environment on. One source of truth, and no URL rebuilt by convention
+	 * from something the application already decided.
+	 *
+	 * <p>
+	 * A database configured from outside is left alone - it is the deployment that
+	 * has no embedded cluster to attach to. Anything else is a demand: the file
+	 * must be there, because the alternative is the configured default, and
+	 * {@code localhost:5432} on a developer's machine is usually a real PostgreSQL
+	 * holding something else.
+	 */
+	private void attachToTheApplicationsCluster(ConfigurableEnvironment environment) {
+		if (isPresent(externalDatabase(environment))) {
+			return;
+		}
+
+		ClusterLayout layout = new ClusterLayout(workspace(environment));
+
+		ClusterConnection connection = new ClusterPropertiesStore(layout.clusterProperties()).require();
+
+		environment.getPropertySources()
+				.addFirst(new MapPropertySource(SOURCE_NAME, EmbeddedDatasourceProperties.from(connection)));
+	}
+
+	private boolean isPresent(String value) {
+		return value != null && !value.isBlank();
 	}
 
 	private EmbeddedDatabaseDecision decide(ConfigurableEnvironment environment, ClusterLayout layout) {

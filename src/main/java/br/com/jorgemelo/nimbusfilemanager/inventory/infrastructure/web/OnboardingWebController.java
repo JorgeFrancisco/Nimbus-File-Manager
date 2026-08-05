@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.web;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -12,10 +13,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.BackupFolderResolver;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupService;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.batch.InventoryBatchLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -32,10 +34,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
  * every fresh install goes through this before seeing the dashboard.
  */
 @Controller
+@Profile(NimbusProfiles.APP)
 public class OnboardingWebController extends LocalizedComponent {
 
 	private final AppSettingService appSettingService;
-	private final InventoryBatchLauncherService inventoryBatchLauncherService;
+	private final InventoryLauncherService inventoryLauncherService;
 	private final InventoryWatchService inventoryWatchService;
 	private final CatalogBackupService catalogBackupService;
 	private final CatalogBackupAsyncRunner backupRunner;
@@ -43,11 +46,11 @@ public class OnboardingWebController extends LocalizedComponent {
 
 	@Autowired
 	public OnboardingWebController(AppSettingService appSettingService,
-			InventoryBatchLauncherService inventoryBatchLauncherService, InventoryWatchService inventoryWatchService,
+			InventoryLauncherService inventoryLauncherService, InventoryWatchService inventoryWatchService,
 			CatalogBackupService catalogBackupService, CatalogBackupAsyncRunner backupRunner,
 			BackupFolderResolver backupFolderResolver) {
 		this.appSettingService = appSettingService;
-		this.inventoryBatchLauncherService = inventoryBatchLauncherService;
+		this.inventoryLauncherService = inventoryLauncherService;
 		this.inventoryWatchService = inventoryWatchService;
 		this.catalogBackupService = catalogBackupService;
 		this.backupRunner = backupRunner;
@@ -134,7 +137,7 @@ public class OnboardingWebController extends LocalizedComponent {
 		inventoryWatchService.reconfigure();
 
 		var request = new InventoryRequest(sourcePath, recursive, includeHidden, calculateHashes, forceAnalysis);
-		var started = inventoryBatchLauncherService.launch(request, ExecutionTrigger.MANUAL);
+		var started = inventoryLauncherService.launch(request, ExecutionTrigger.MANUAL);
 
 		return "redirect:/app/progress/" + started.executionId() + "?kind=inventory";
 	}

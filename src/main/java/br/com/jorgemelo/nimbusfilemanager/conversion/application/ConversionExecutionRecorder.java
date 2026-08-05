@@ -1,19 +1,22 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionMessages;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionTotals;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.model.ConversionItemResult;
+import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.ConversionItemResultRepository;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
@@ -27,27 +30,35 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 @Component
 public class ConversionExecutionRecorder extends LocalizedComponent {
 
-	private final ExecutionRepository executionRepository;
 	private final ExecutionErrorService executionErrorService;
-	private final Clock clock;
+	private final ConversionItemResultRepository conversionItemResultRepository;
+	private final ExecutionProgressService executionProgressService;
 
-	public ConversionExecutionRecorder(ExecutionRepository executionRepository,
-			ExecutionErrorService executionErrorService, Clock clock) {
-		this.executionRepository = executionRepository;
+	public ConversionExecutionRecorder(ExecutionErrorService executionErrorService,
+			ConversionItemResultRepository conversionItemResultRepository,
+			ExecutionProgressService executionProgressService) {
 		this.executionErrorService = executionErrorService;
-		this.clock = clock;
+		this.conversionItemResultRepository = conversionItemResultRepository;
+		this.executionProgressService = executionProgressService;
 	}
 
-	public Execution start(Path folder, int total) {
-		String path = folder == null ? null : folder.toString();
-
-		Execution execution = Execution.builder().executionType(ExecutionType.CONVERSION)
-				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock)).sourcePath(path).targetPath(path)
-				.recursive(false).executeFlag(true)
-				.statusMessage(StatusMessage.raw(message("backend.conversion.started", total))).filesFound(total)
-				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
-
-		return executionRepository.save(execution);
+	/**
+	 * Keeps one line of the report the screen shows when the batch ends.
+	 *
+	 * <p>
+	 * Written as each file is decided rather than collected and saved at the end,
+	 * for the reason the whole migration exists: a batch that runs for hours in
+	 * another process has to be readable while it runs, and a crash halfway must
+	 * leave behind what it did rather than nothing at all.
+	 */
+	public void recordItem(Execution execution, ConversionFileResult item) {
+		conversionItemResultRepository.save(ConversionItemResult.builder().execution(execution)
+				.mediaPublicId(item.mediaId()).fileName(item.fileName()).outcome(item.outcome())
+				.originalBytes(item.originalBytes()).convertedBytes(item.convertedBytes()).message(item.message())
+				.audioFallback(item.adjustments().audioFallback())
+				.subtitlesDropped(item.adjustments().subtitlesDropped())
+				.dataDropped(item.adjustments().dataDropped()).originalQuarantined(item.originalQuarantined())
+				.build());
 	}
 
 	/**
@@ -65,35 +76,16 @@ public class ConversionExecutionRecorder extends LocalizedComponent {
 	 * a conversion is the longest of them: the phantom would sit on every screen
 	 * until the next restart swept it.
 	 */
-	public void fail(Execution execution, String detail) {
-		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
-
-		managed.setStatus(ExecutionStatus.ERROR);
-		managed.setFinishedAt(LocalDateTime.now(clock));
-		managed.setStatusMessage(StatusMessage.raw(message("backend.execution.operationFailed", detail)));
-
-		executionRepository.save(managed);
-
-		execution.setStatus(managed.getStatus());
-		execution.setFinishedAt(managed.getFinishedAt());
+	public void fail(ExecutionOwnership ownership, String detail) {
+		executionProgressService.fail(ownership, ConversionMessages.failed(detail));
 	}
 
-	public void finish(Execution execution, ConversionTotals totals, String message, boolean cancelled) {
-		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
+	public void finish(ExecutionOwnership ownership, ConversionTotals totals, ExecutionMessage message,
+			boolean cancelled) {
+		ExecutionCounts counts = new ExecutionCounts(totals.total(), totals.converted(), totals.skipped(),
+				totals.errors());
 
-		managed.setStatus(status(totals, cancelled));
-		managed.setFinishedAt(LocalDateTime.now(clock));
-		managed.setFilesFound(totals.total());
-		managed.setFilesAnalyzed(totals.total());
-		managed.setFilesMoved(totals.converted());
-		managed.setCacheHits(totals.skipped());
-		managed.setErrors(totals.errors());
-		managed.setStatusMessage(StatusMessage.raw(message));
-
-		executionRepository.save(managed);
-
-		execution.setStatus(managed.getStatus());
-		execution.setFinishedAt(managed.getFinishedAt());
+		executionProgressService.finishCommand(ownership, status(totals, cancelled), counts, message);
 	}
 
 	/**

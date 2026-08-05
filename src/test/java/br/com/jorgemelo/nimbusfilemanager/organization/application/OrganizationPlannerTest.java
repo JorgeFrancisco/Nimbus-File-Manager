@@ -26,7 +26,14 @@ import org.springframework.data.domain.PageImpl;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnershipGuard;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionPossession;
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.LocationOrganizationPolicy;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationFallbackMode;
@@ -50,7 +57,6 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -74,7 +80,7 @@ class OrganizationPlannerTest {
 	@Mock
 	private ExecutionProgressService executionProgressService;
 
-	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionCancellationService executionCancellationService = NoCancellations.none();
 
 	@Test
 	void previewShouldBuildPlanAndDetectConflicts() {
@@ -93,7 +99,7 @@ class OrganizationPlannerTest {
 				candidate)).thenReturn(destination);
 		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		var plan = planner().preview(request(source, target, true));
+		var plan = planner().preview(request(source, target, true), Takings.owning(1L));
 
 		Assertions.assertThat(plan.sourcePath()).isEqualTo(PathUtils.normalize(source));
 		Assertions.assertThat(plan.targetPath()).isEqualTo(PathUtils.normalize(target));
@@ -122,7 +128,7 @@ class OrganizationPlannerTest {
 				.thenReturn(destination);
 		when(conflictDetector.detect(List.of())).thenReturn(List.of());
 
-		var plan = planner().preview(request(source, target, true));
+		var plan = planner().preview(request(source, target, true), Takings.owning(1L));
 
 		Assertions.assertThat(plan.items()).isEmpty();
 		Assertions.assertThat(plan.summary().totalFiles()).isEqualTo(1);
@@ -135,7 +141,7 @@ class OrganizationPlannerTest {
 		Path source = Path.of("C:/input");
 		Path target = Path.of("C:/organized");
 
-		Execution execution = Execution.builder().id(77L).build();
+		ExecutionOwnership ownership = Takings.owning(77L);
 
 		OrganizationCandidate candidate = candidate(1L, "photo.jpg", source.resolve("photo.jpg"), 100L);
 
@@ -149,12 +155,12 @@ class OrganizationPlannerTest {
 				candidate)).thenReturn(destination);
 		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		var plan = plannerWithProgress().preview(request(source, target, true), execution);
+		var plan = planner().preview(request(source, target, true), ownership);
 
 		Assertions.assertThat(plan.items()).hasSize(1);
 
-		verify(executionProgressService).updateTotal(execution, 1);
-		verify(executionProgressService).updateProgress(eq(execution), anyInt(), anyInt(), anyInt(), eq(0),
+		verify(executionProgressService, never()).updateTotal(any(), anyInt());
+		verify(executionProgressService).updateProgress(eq(ownership), anyInt(), anyInt(), anyInt(), eq(0),
 				anyString());
 	}
 
@@ -175,7 +181,7 @@ class OrganizationPlannerTest {
 				.thenReturn(destination);
 		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		var plan = planner().preview(request(source, target, false));
+		var plan = planner().preview(request(source, target, false), Takings.owning(1L));
 
 		Assertions.assertThat(plan.items()).hasSize(1);
 		Assertions.assertThat(plan.items().get(0).samePath()).isTrue();
@@ -186,7 +192,7 @@ class OrganizationPlannerTest {
 		Path source = Path.of("C:/input");
 		Path target = Path.of("C:/organized");
 
-		Execution execution = Execution.builder().id(88L).build();
+		ExecutionOwnership ownership = Takings.owning(88L);
 
 		List<OrganizationCandidate> candidates = new ArrayList<>();
 
@@ -203,10 +209,10 @@ class OrganizationPlannerTest {
 		when(destinationResolver.resolve(any(), eq("layout"), any())).thenReturn(destination);
 		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-		plannerWithProgress().preview(request(source, target, false), execution);
+		planner().preview(request(source, target, false), ownership);
 
-		verify(executionProgressService).updateProgress(eq(execution), eq(1), anyInt(), anyInt(), eq(0), anyString());
-		verify(executionProgressService).updateProgress(eq(execution), eq(1000), anyInt(), anyInt(), eq(0),
+		verify(executionProgressService).updateProgress(eq(ownership), eq(1), anyInt(), anyInt(), eq(0), anyString());
+		verify(executionProgressService).updateProgress(eq(ownership), eq(1000), anyInt(), anyInt(), eq(0),
 				anyString());
 	}
 
@@ -215,7 +221,7 @@ class OrganizationPlannerTest {
 		Path source = Path.of("C:/input");
 		Path target = Path.of("C:/organized");
 
-		Execution execution = Execution.builder().id(55L).build();
+		ExecutionOwnership ownership = Takings.owning(55L);
 
 		OrganizationCandidate first = candidate(1L, "first.jpg", source.resolve("first.jpg"), 100L);
 		OrganizationCandidate second = candidate(2L, "second.jpg", source.resolve("second.jpg"), 100L);
@@ -226,7 +232,7 @@ class OrganizationPlannerTest {
 		when(organizationCandidateRepository.findCandidates(eq(PathUtils.normalize(source)), any(), any()))
 				.thenReturn(new PageImpl<>(List.of(first, second)));
 		when(candidateFilter.matches(eq(first), any(), eq(PathUtils.normalize(source)))).thenAnswer(_ -> {
-			executionCancellationService.requestCancellation(execution.getId());
+			executionCancellationService.requestCancellation(ownership.executionId());
 
 			return true;
 		});
@@ -238,15 +244,14 @@ class OrganizationPlannerTest {
 
 		var request = request(source, target, true);
 
-		Assertions.assertThatThrownBy(() -> planner.preview(request, execution))
+		Assertions.assertThatThrownBy(() -> planner.preview(request, ownership))
 				.isInstanceOf(ExecutionCancelledException.class);
 
 		verify(candidateFilter, never()).matches(eq(second), any(), any());
 
-		// preview() unregisters in its finally block once it stops, cancelled or not,
-		// so this
-		// confirms cleanup happened instead of leaving a stale entry behind.
-		Assertions.assertThat(executionCancellationService.isCancelled(execution.getId())).isFalse();
+		// The cancellation stays on the row - a request that survives the thread is
+		// the whole point of persisting it.
+		Assertions.assertThat(executionCancellationService.isCancelled(ownership.executionId())).isTrue();
 	}
 
 	/**
@@ -285,7 +290,8 @@ class OrganizationPlannerTest {
 
 		var plan = planner.preview(new OrganizationPreviewRequest(source.toString(), target.toString(), true,
 				OrganizationLayout.DEFAULT, 100, null, null, true, null, null, null, null,
-				LocationSubdivision.COUNTRY_STATE_CITY, LocationConfidence.LOW, LocationFallbackMode.IGNORE));
+				LocationSubdivision.COUNTRY_STATE_CITY, LocationConfidence.LOW, LocationFallbackMode.IGNORE),
+				Takings.owning(1L));
 
 		Assertions.assertThat(plan.items()).singleElement().satisfies(item -> {
 			Assertions.assertThat(item.targetPath()).contains("Brasil");
@@ -297,14 +303,66 @@ class OrganizationPlannerTest {
 				anyList());
 	}
 
+	/**
+	 * The same worker, one attempt later. A plan being built by a taking the row
+	 * has moved on from stops at the next candidate - the answer would be refused
+	 * anyway, and the minutes spent reaching it are the point of stopping.
+	 */
+	@Test
+	void aPlanWhoseRowWasTakenOverStopsAtTheNextCandidate() {
+		Path source = Path.of("C:/input");
+		Path target = Path.of("C:/organized");
+
+		ExecutionOwnershipGuard guard = new ExecutionOwnershipGuard(mock(ExecutionQueue.class));
+
+		ExecutionOwnership replaced = Takings.taking(99L, 1, guard);
+
+		guard.takes(new ExecutionPossession(99L, "worker-that-came-back", 2));
+
+		when(organizationCandidateRepository.findCandidates(eq(PathUtils.normalize(source)), any(), any()))
+			.thenReturn(new PageImpl<>(List.of(candidate(1L, "photo.jpg", source.resolve("photo.jpg"), 100L))));
+
+		OrganizationPlanner planner = planner();
+
+		OrganizationPreviewRequest request = request(source, target, true);
+
+		Assertions.assertThatThrownBy(() -> planner.preview(request, replaced))
+			.isInstanceOf(OwnershipLostException.class).hasMessageContaining("taken over");
+
+		verify(executionProgressService, never()).updateProgress(any(), anyInt(), anyInt(), anyInt(), anyInt(),
+			anyString());
+		verify(conflictDetector, never()).detect(any());
+	}
+
+	/** And the taking that holds the row plans exactly as before. */
+	@Test
+	void theTakingThatHoldsTheRowPlansNormally() {
+		Path source = Path.of("C:/input");
+		Path target = Path.of("C:/organized");
+
+		ExecutionOwnershipGuard guard = new ExecutionOwnershipGuard(mock(ExecutionQueue.class));
+
+		ExecutionOwnership current = Takings.taking(99L, 2, guard);
+
+		guard.takes(new ExecutionPossession(99L, "worker-that-came-back", 2));
+
+		OrganizationCandidate candidate = candidate(1L, "photo.jpg", source.resolve("photo.jpg"), 100L);
+
+		when(layoutResolver.normalize(OrganizationLayout.DEFAULT)).thenReturn("layout");
+		when(organizationCandidateRepository.findCandidates(eq(PathUtils.normalize(source)), any(), any()))
+			.thenReturn(new PageImpl<>(List.of(candidate)));
+		when(candidateFilter.matches(eq(candidate), any(), eq(PathUtils.normalize(source)))).thenReturn(true);
+		when(destinationResolver.resolve(target.toAbsolutePath().normalize(), "layout", candidate))
+			.thenReturn(destination(target.resolve("202405/photo.jpg"), false));
+		when(conflictDetector.detect(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Assertions.assertThat(planner().preview(request(source, target, true), current).items()).hasSize(1);
+	}
+
 	private OrganizationPlanner planner() {
 		return new OrganizationPlanner(organizationCandidateRepository, destinationResolver, layoutResolver,
 				conflictDetector, candidateFilter, executionProgressService, executionCancellationService,
 				mock(MediaLocationService.class), new LocationOrganizationPolicy());
-	}
-
-	private OrganizationPlanner plannerWithProgress() {
-		return planner();
 	}
 
 	private OrganizationPreviewRequest request(Path source, Path target, boolean skipAlreadyOrganized) {

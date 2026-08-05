@@ -15,6 +15,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,8 +26,13 @@ class CatalogFileRetentionServiceTest {
 	@Mock
 	private CatalogFileRepository catalogFileRepository;
 
+	@Mock
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
 	private CatalogFileRetentionService service() {
-		return new CatalogFileRetentionService(catalogFileRepository, Clock.systemDefaultZone());
+		return new CatalogFileRetentionService(
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository),
+				Clock.systemDefaultZone());
 	}
 
 	@Test
@@ -33,7 +41,7 @@ class CatalogFileRetentionServiceTest {
 
 		LocalDateTime before = LocalDateTime.now();
 
-		int removed = service().purgeMissingOlderThan(30);
+		int removed = service().purgeMissingOlderThan(30, Takings.unfenced(1L)).orElseThrow();
 
 		ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
 
@@ -45,14 +53,14 @@ class CatalogFileRetentionServiceTest {
 
 	@Test
 	void purgeIsNoOpWhenRetentionIsZero() {
-		Assertions.assertThat(service().purgeMissingOlderThan(0)).isZero();
+		Assertions.assertThat(service().purgeMissingOlderThan(0, Takings.unfenced(1L)).orElseThrow()).isZero();
 
 		verify(catalogFileRepository, never()).deleteMissingBefore(any());
 	}
 
 	@Test
 	void purgeIsNoOpWhenRetentionIsNegative() {
-		Assertions.assertThat(service().purgeMissingOlderThan(-1)).isZero();
+		Assertions.assertThat(service().purgeMissingOlderThan(-1, Takings.unfenced(1L)).orElseThrow()).isZero();
 
 		verify(catalogFileRepository, never()).deleteMissingBefore(any());
 	}

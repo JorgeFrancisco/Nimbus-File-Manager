@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -32,17 +31,22 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,15 +62,25 @@ class PhashBacklogServiceTest {
 	private PhotoPerceptualHashService photoPerceptualHashService;
 
 	@Mock
-	private ExecutionQueryService executionQueryService;
+	private ExecutionRepository executionRepository;
+
+	@Mock
+	private FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
+
+	@Mock
+	private SimilarityRelationWriter similarityRelationWriter;
 
 	private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 
 	private PhashBacklogService service() {
-		return new PhashBacklogService(mediaFingerprintRepository, fingerprintFailureRepository,
-				photoPerceptualHashService,
+		FingerprintBacklogEngine engine = new FingerprintBacklogEngine(mediaFingerprintRepository,
+				fingerprintFailureRepository, fingerprintRebuildTaskRepository,
 				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
-				executionQueryService, transactionManager, Clock.systemDefaultZone());
+				executionRepository, transactionManager, Clock.systemDefaultZone());
+
+		return new PhashBacklogService(engine, mediaFingerprintRepository, fingerprintFailureRepository,
+				fingerprintRebuildTaskRepository, photoPerceptualHashService, similarityRelationWriter,
+				Clock.systemDefaultZone());
 	}
 
 	/**
@@ -87,10 +101,9 @@ class PhashBacklogServiceTest {
 						List.of());
 		when(photoPerceptualHashService.compute(any()))
 				.thenReturn(new PhotoPerceptualFingerprint(new byte[32], new byte[1024]));
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		// 60 items in units of 25: three writes, never one of sixty.
 		verify(transactionManager, times(3)).getTransaction(any());
@@ -115,10 +128,9 @@ class PhashBacklogServiceTest {
 		when(photoPerceptualHashService.compute(Path.of("/tmp/b.jpg"))).thenThrow(new IllegalStateException("boom"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(2L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		Assertions.assertThat(result.processed()).isEqualTo(1);
 		Assertions.assertThat(result.failed()).isEqualTo(1);
@@ -143,10 +155,10 @@ class PhashBacklogServiceTest {
 
 	@Test
 	void drainYieldsToAnActiveInventory() {
-		when(executionQueryService.active()).thenReturn(Optional.of(inventoryExecution()));
+		active(ExecutionType.INVENTORY, true);
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		Assertions.assertThat(result.processed()).isZero();
 
@@ -160,25 +172,63 @@ class PhashBacklogServiceTest {
 	 */
 	@Test
 	void drainYieldsToAnActiveConversion() {
-		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+		active(ExecutionType.INVENTORY, false);
+		active(ExecutionType.CONVERSION, true);
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		Assertions.assertThat(result.processed()).isZero();
 
 		verify(mediaFingerprintRepository, never()).findPendingPhotos(any(), any(), anyInt(), any());
 	}
 
-	/** Anything else running is none of the backlog's business. */
+	/**
+	 * Being told to stop is answered before anything else is asked. It is the
+	 * cheapest of the three reasons and the only one the caller already knows, so a
+	 * drain that is cancelled on arrival costs neither a query nor a batch.
+	 */
+	@Test
+	void drainStopsWhenItArrivesAlreadyCancelled() {
+		DrainResult result = service().drainPending(() -> true, (_, _) -> {
+		}, Takings.unfenced(1L));
+
+		Assertions.assertThat(result.processed()).isZero();
+
+		verify(mediaFingerprintRepository, never()).findPendingPhotos(any(), any(), anyInt(), any());
+		verify(executionRepository, never()).existsByExecutionTypeAndStatusIn(any(), any());
+	}
+
+	/**
+	 * A row that has been taken again stops the drain before it fetches anything.
+	 *
+	 * <p>
+	 * Asked per item alongside the other two reasons to stop, and for the same
+	 * reason they are: what it saves is minutes of hashing whose results the pin
+	 * would refuse to write anyway.
+	 */
+	@Test
+	void drainStopsWhenTheRowHasBeenTakenOver() {
+		DrainResult result = service().drainPending(() -> false, (_, _) -> {
+		}, Takings.replaced(1L));
+
+		Assertions.assertThat(result.processed()).isZero();
+
+		verify(mediaFingerprintRepository, never()).findPendingPhotos(any(), any(), anyInt(), any());
+	}
+
+	/**
+	 * Anything else running is none of the backlog's business - and is not even
+	 * asked about: the two types it steps aside for are named, so a third one
+	 * running is indistinguishable from nothing running.
+	 */
 	@Test
 	void drainKeepsGoingWhileAnUnrelatedExecutionRuns() {
-		when(executionQueryService.active()).thenReturn(Optional.of(execution("ORGANIZATION")));
-
 		service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		verify(mediaFingerprintRepository).findPendingPhotos(any(), any(), anyInt(), any());
+		verify(executionRepository, never()).existsByExecutionTypeAndStatusIn(eq(ExecutionType.ORGANIZATION), any());
 	}
 
 	/**
@@ -187,7 +237,8 @@ class PhashBacklogServiceTest {
 	 */
 	@Test
 	void inventoryActiveStaysAboutTheInventoryAlone() {
-		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+		active(ExecutionType.INVENTORY, false);
+		active(ExecutionType.CONVERSION, true);
 
 		Assertions.assertThat(service().inventoryActive()).isFalse();
 		Assertions.assertThat(service().pausedByActiveExecution()).isTrue();
@@ -200,7 +251,8 @@ class PhashBacklogServiceTest {
 	 */
 	@Test
 	void conversionActiveStaysAboutTheConversionAlone() {
-		when(executionQueryService.active()).thenReturn(Optional.of(execution("CONVERSION")));
+		active(ExecutionType.INVENTORY, false);
+		active(ExecutionType.CONVERSION, true);
 
 		Assertions.assertThat(service().conversionActive()).isTrue();
 		Assertions.assertThat(service().inventoryActive()).isFalse();
@@ -208,8 +260,10 @@ class PhashBacklogServiceTest {
 
 	@Test
 	void noConversionRunningLeavesDeletionAlone() {
-		when(executionQueryService.active()).thenReturn(Optional.of(execution("INVENTORY")));
+		active(ExecutionType.INVENTORY, true);
+		active(ExecutionType.CONVERSION, false);
 
+		Assertions.assertThat(service().inventoryActive()).isTrue();
 		Assertions.assertThat(service().conversionActive()).isFalse();
 	}
 
@@ -272,10 +326,9 @@ class PhashBacklogServiceTest {
 				.thenThrow(new UnsupportedPhotoFingerprintException("ZIP/Lottie"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 
@@ -296,25 +349,38 @@ class PhashBacklogServiceTest {
 		Assertions.assertThat(service().failures()).isSameAs(expected);
 	}
 
+	/**
+	 * The debts dropped are its own. A rebuild of photos asking about videos would
+	 * settle debts the video rebuild is still counting on.
+	 */
 	@Test
-	void rebuildDeletesOnlyCurrentDerivedFingerprintsAndFailures() {
-		when(mediaFingerprintRepository.deleteByKindAndAlgorithm(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM)).thenReturn(12L);
+	void discardingWhatIsNoLongerACandidateAsksOnlyAboutItsOwnPhotos() {
+		when(fingerprintRebuildTaskRepository.discardIneligiblePhotos(PhashBacklogService.KIND.name(),
+				DuplicateConstants.ALGORITHM, FileType.PHOTO.name())).thenReturn(3);
 
-		Assertions.assertThat(service().rebuild()).isEqualTo(12L);
-
-		verify(fingerprintFailureRepository).deleteByKindAndAlgorithm(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM);
-		verify(mediaFingerprintRepository).deleteByKindAndAlgorithm(PhashBacklogService.KIND,
-				DuplicateConstants.ALGORITHM);
+		Assertions.assertThat(service().discardIneligibleRebuildTasks()).isEqualTo(3);
 	}
 
-	private ExecutionResponse inventoryExecution() {
-		return execution("INVENTORY");
+	/**
+	 * A rebuild writes down what it owes and gives the failures their attempts
+	 * back. It discards nothing: the fingerprints it is going to replace are what
+	 * the library answers with until each one is replaced.
+	 */
+	@Test
+	void seedingARebuildOwesEveryPhotoAndDiscardsNothing() {
+		when(fingerprintRebuildTaskRepository.seedPhotos(eq(PhashBacklogService.KIND.name()),
+				eq(DuplicateConstants.ALGORITHM), any())).thenReturn(12);
+
+		Assertions.assertThat(service().seedRebuild(Takings.unfenced(1L)).orElseThrow()).isEqualTo(12L);
+
+		verify(fingerprintFailureRepository).restoreAttemptBudget(PhashBacklogService.KIND,
+				DuplicateConstants.ALGORITHM);
+		verify(mediaFingerprintRepository, never()).deleteByCatalogFileIdAndKindAndAlgorithm(any(), any(), any());
 	}
 
-	private ExecutionResponse execution(String executionType) {
-		return new ExecutionResponse(1L, executionType, "PROCESSING_FILES", LocalDateTime.now(), null, "src", null, 1,
-				1, 0, 0, 0, 0, null, null, "running", false);
+
+	private void active(ExecutionType executionType, boolean active) {
+		when(executionRepository.existsByExecutionTypeAndStatusIn(executionType, ExecutionStatusNames.ACTIVE))
+				.thenReturn(active);
 	}
 }

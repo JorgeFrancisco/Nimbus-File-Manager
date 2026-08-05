@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.web;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.util.Map;
 import java.util.UUID;
 
@@ -11,11 +12,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ui.ExtendedModelMap;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 
 class ProgressWebControllerTest {
 
-	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService();
+	private final ExecutionQueue executionQueue = mock(ExecutionQueue.class);
+
+	private final ExecutionCancellationService executionCancellationService = new ExecutionCancellationService(
+			executionQueue, Clock.systemUTC());
 	private final ExecutionQueryService executionQueryService = mock(ExecutionQueryService.class);
 	private final ProgressWebController controller = new ProgressWebController(executionCancellationService,
 			executionQueryService);
@@ -37,7 +42,8 @@ class ProgressWebControllerTest {
 		UUID publicId = UUID.randomUUID();
 
 		when(executionQueryService.internalId(publicId)).thenReturn(5L);
-		executionCancellationService.register(5L);
+		when(executionQueue.requestCancel(5L)).thenReturn(true);
+		when(executionQueue.isCancelRequested(5L)).thenReturn(true);
 
 		Map<String, Boolean> requested = controller.cancel(publicId);
 
@@ -54,6 +60,7 @@ class ProgressWebControllerTest {
 		UUID publicId = UUID.randomUUID();
 
 		when(executionQueryService.internalId(publicId)).thenReturn(99L);
+		when(executionQueue.requestCancel(99L)).thenReturn(false);
 
 		Assertions.assertThat(controller.cancel(publicId)).isEqualTo(Map.of("requested", false));
 	}

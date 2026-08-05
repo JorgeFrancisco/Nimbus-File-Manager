@@ -19,13 +19,20 @@ interface ExplorerFileSystem {
 	/** Every regular file under {@code folder}, links never followed. */
 	List<Path> listFiles(Path folder) throws IOException;
 
-	/** Deletes depth-first, returning how many regular files went. */
-	int deleteRecursively(Path path) throws IOException;
+	/**
+	 * Deletes depth-first, returning how many regular files went.
+	 *
+	 * @param executionId the execution responsible, so the watcher recognises every
+	 * removal as this product's own work for as long as the execution holds its
+	 * paths - a tree of thousands of files takes longer to remove than the fixed
+	 * ceiling an unnamed announcement gets
+	 */
+	int deleteRecursively(Path path, Long executionId) throws IOException;
 
 	/**
 	 * Removes {@code folder} and the folders under it once no file is left anywhere
 	 * inside - the state a quarantined folder ends in. Does nothing while any file
 	 * remains, so a folder that only gave up part of its contents stays put.
 	 */
-	void deleteEmptyTree(Path folder) throws IOException;
+	void deleteEmptyTree(Path folder, Long executionId) throws IOException;
 }

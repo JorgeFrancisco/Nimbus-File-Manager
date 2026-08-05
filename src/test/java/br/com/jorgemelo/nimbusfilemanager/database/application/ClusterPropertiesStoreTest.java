@@ -29,6 +29,60 @@ class ClusterPropertiesStoreTest {
 		Assertions.assertThat(store.load()).isEqualTo(connection);
 	}
 
+	/**
+	 * What a process that does not own the cluster is entitled to demand.
+	 *
+	 * <p>
+	 * The worker runs in a JVM of its own and never starts a cluster, so the file
+	 * the application wrote is the only place its connection can come from.
+	 */
+	@Test
+	void handsOverTheConnectionTheApplicationWroteDown(@TempDir Path workspace) throws IOException {
+		ClusterPropertiesStore store = new ClusterPropertiesStore(workspace.resolve("cluster.properties"));
+
+		ClusterConnection connection = new ClusterConnection(6432, "generated-password");
+
+		store.save(connection);
+
+		Assertions.assertThat(store.require()).isEqualTo(connection);
+	}
+
+	/**
+	 * No file is an ordinary answer to the application and an impossible one to a
+	 * worker: there is nothing for it to work against, and the configured default
+	 * points at whatever PostgreSQL happens to be on 5432.
+	 */
+	@Test
+	void refusesToGuessWhenTheApplicationWroteNothing(@TempDir Path workspace) {
+		Path file = workspace.resolve("cluster.properties");
+
+		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+			.isInstanceOf(IllegalStateException.class).hasMessageContaining("no embedded database connection")
+			.hasMessageContaining(file.toString());
+	}
+
+	/** Half a connection is no connection, and saying so beats guessing. */
+	@Test
+	void refusesToGuessWhenOnlyHalfWasWrittenDown(@TempDir Path workspace) throws IOException {
+		Path file = workspace.resolve("cluster.properties");
+
+		Files.writeString(file, "port=6432");
+
+		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+			.isInstanceOf(IllegalStateException.class);
+	}
+
+	/** And a port that is not a number is a broken file, not an absent one. */
+	@Test
+	void refusesAPortThatIsNotAPort(@TempDir Path workspace) throws IOException {
+		Path file = workspace.resolve("cluster.properties");
+
+		Files.writeString(file, "port=not-a-port" + System.lineSeparator() + "password=secret");
+
+		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+			.isInstanceOf(IllegalStateException.class).hasMessageContaining("usable port");
+	}
+
 	/** Nothing stored yet is not an error - it is a cluster about to be created. */
 	@Test
 	void answersNothingBeforeTheFirstRun(@TempDir Path workspace) throws IOException {

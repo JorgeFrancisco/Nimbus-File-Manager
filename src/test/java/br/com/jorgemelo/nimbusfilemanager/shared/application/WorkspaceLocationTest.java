@@ -50,4 +50,54 @@ class WorkspaceLocationTest {
 	void treatsBlankValuesAsUnset() {
 		Assertions.assertThat(WorkspaceLocation.resolve("   ", "  ", HOME)).isEqualTo(EXPECTED);
 	}
+
+	/**
+	 * What crosses an elevated restart. Windows builds that process a fresh
+	 * environment, so the variable that chose the workspace is gone by then and the
+	 * answer has to be written down.
+	 */
+	@Test
+	void readsTheWorkspaceARestartWasGiven() {
+		String[] arguments = { "--usn-elevation-attempted",
+				WorkspaceLocation.argumentFor("D:\\Nimbus Files\\workspace (main)") };
+
+		Assertions.assertThat(WorkspaceLocation.argumentIn(arguments)).contains("D:\\Nimbus Files\\workspace (main)");
+	}
+
+	/** Spaces, parentheses and accents are ordinary in a Windows path. */
+	@Test
+	void carriesAPathWithSpacesAndAccentsUnchanged() {
+		String workspace = "C:\\Users\\José Antônio\\Nimbus File Manager\\workspace";
+
+		Assertions.assertThat(WorkspaceLocation.argumentIn(new String[] { WorkspaceLocation.argumentFor(workspace) }))
+			.contains(workspace);
+	}
+
+	/**
+	 * An ordinary start carries no such argument, and must be left to resolve the
+	 * way it always did.
+	 */
+	@Test
+	void findsNothingWhenNoRestartWroteAnything() {
+		Assertions.assertThat(WorkspaceLocation.argumentIn(new String[] { "--spring.profiles.active=worker" }))
+			.isEmpty();
+		Assertions.assertThat(WorkspaceLocation.argumentIn(new String[0])).isEmpty();
+	}
+
+	/** A blank value is unset here too, rather than a request to write at the root. */
+	@Test
+	void ignoresAnArgumentWithNothingInIt() {
+		Assertions.assertThat(WorkspaceLocation.argumentIn(new String[] { WorkspaceLocation.argumentFor("  ") }))
+			.isEmpty();
+	}
+
+	/**
+	 * The restart drops what it was given before writing its own, so exactly one
+	 * value is ever passed on. Recognising it is what makes that possible.
+	 */
+	@Test
+	void recognisesItsOwnArgumentAndNoOther() {
+		Assertions.assertThat(WorkspaceLocation.isWorkspaceArgument(WorkspaceLocation.argumentFor("D:/w"))).isTrue();
+		Assertions.assertThat(WorkspaceLocation.isWorkspaceArgument("--usn-elevation-attempted")).isFalse();
+	}
 }

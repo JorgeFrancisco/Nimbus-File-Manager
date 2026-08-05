@@ -5,16 +5,11 @@ import java.time.LocalDateTime;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoResolutionCache;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 
 /**
@@ -27,14 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence
  * The SpEL binding of the embedded {@link ResolvedPlace} (enums by name) is
  * also exercised end to end here.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class GeoResolutionCacheRepositoryIntegrationTest {
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+class GeoResolutionCacheRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
 	private GeoResolutionCacheRepository repository;

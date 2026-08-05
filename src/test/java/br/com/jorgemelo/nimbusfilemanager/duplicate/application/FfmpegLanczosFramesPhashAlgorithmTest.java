@@ -31,12 +31,12 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 	private static final byte[] HASH_B = filled((byte) 0xFF, 32);
 
 	private FfmpegLanczosFramesPhashAlgorithm algorithm(VideoSimilarityProperties properties) {
-		return new FfmpegLanczosFramesPhashAlgorithm(mock(VideoPerceptualHashService.class), new PhotoSsimService(),
+		return new FfmpegLanczosFramesPhashAlgorithm(mock(VideoPerceptualHashService.class), new LuminanceSsimService(),
 				properties);
 	}
 
 	private VideoSimilarityProperties properties(int minConcordant, int trimmedLowest) {
-		return new VideoSimilarityProperties(minConcordant, trimmedLowest, 96, 3.0, 0.12, 8000);
+		return new VideoSimilarityProperties(minConcordant, trimmedLowest, 96, 3.0, 0.12);
 	}
 
 	@Test

@@ -51,16 +51,16 @@ public class FileExplorerService {
 	private final WorkspaceManager workspaceManager;
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
 	private final ScanExclusionService scanExclusionService;
-	private final FileExplorerReconcileService reconcileService;
+	private final ExplorerReconcileLauncher reconcileLauncher;
 
 	@Autowired
 	public FileExplorerService(WorkspaceManager workspaceManager,
 			CatalogFileLocationRepository catalogFileLocationRepository, ScanExclusionService scanExclusionService,
-			FileExplorerReconcileService reconcileService) {
+			ExplorerReconcileLauncher reconcileLauncher) {
 		this.workspaceManager = workspaceManager;
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
 		this.scanExclusionService = scanExclusionService;
-		this.reconcileService = reconcileService;
+		this.reconcileLauncher = reconcileLauncher;
 	}
 
 	public List<String> availableDrives() {
@@ -272,11 +272,14 @@ public class FileExplorerService {
 	 * Splits the database records for this folder into paths that are already
 	 * inventoried and present on disk (used to flag matching disk entries as
 	 * registered) and entries that are registered but no longer exist on disk
-	 * (shown as "missing"). Missing records are also reconciled: they are marked as
-	 * MISSING in the database (lifecycle_status), so they render once with the
-	 * missing indicator and disappear on the next refresh. This is the only
-	 * reconciliation that reaches records outside the monitored library, which the
-	 * watcher never sees.
+	 * (shown as "missing").
+	 *
+	 * <p>
+	 * Finding one of those is worth reporting: browsing is the only thing here
+	 * that looks outside the monitored library, which the watcher and the
+	 * scheduled pass never see. Reporting is all this does - a reconcile of the
+	 * folder is queued and the worker decides what to correct, so the same rules
+	 * apply to what a screen noticed as to what any other pass did.
 	 */
 	private FolderDatabaseState databaseState(Path folder) {
 		String currentFolder = PathUtils.normalize(folder);
@@ -290,7 +293,7 @@ public class FileExplorerService {
 
 		List<FileExplorerEntry> missingEntries = new ArrayList<>();
 
-		Set<Long> missingIds = new HashSet<>();
+		boolean anyMissing = false;
 
 		for (FileExplorerLocationProjection location : locations) {
 			Path currentPath = PathUtils.normalizePath(location.getCurrentPath());
@@ -304,9 +307,7 @@ public class FileExplorerService {
 			if (Files.exists(currentPath)) {
 				registeredFiles.put(normalizedPath, catalogedFile(location));
 			} else {
-				if (location.getCatalogFileId() != null) {
-					missingIds.add(location.getCatalogFileId());
-				}
+				anyMissing = true;
 
 				if (added.add(normalizedPath)) {
 					missingEntries.add(new FileExplorerEntry(fileName(currentPath), normalizedPath, false, true, true,
@@ -317,7 +318,9 @@ public class FileExplorerService {
 			}
 		}
 
-		reconcileService.markMissing(List.copyOf(missingIds));
+		if (anyMissing) {
+			reconcileLauncher.repairFolder(folder);
+		}
 
 		return new FolderDatabaseState(registeredFiles, missingEntries);
 	}

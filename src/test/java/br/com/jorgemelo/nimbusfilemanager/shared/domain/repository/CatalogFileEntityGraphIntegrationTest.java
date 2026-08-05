@@ -7,13 +7,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
@@ -27,16 +22,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocatio
  * never had, failing the cataloguing of every converted video while the rest of
  * the application went on working.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class CatalogFileEntityGraphIntegrationTest {
+class CatalogFileEntityGraphIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final String FILE_KEY = "D:\\Media\\graph.jpg";
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

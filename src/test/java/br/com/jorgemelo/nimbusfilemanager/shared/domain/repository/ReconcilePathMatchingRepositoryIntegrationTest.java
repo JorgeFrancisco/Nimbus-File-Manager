@@ -8,20 +8,15 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.OrganizationCandidateRepository;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.MediaLocationReconcileProjection;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
@@ -37,18 +32,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * silently matched zero rows because backslash is PostgreSQL's default LIKE
  * escape char and '_' is a LIKE wildcard.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class ReconcilePathMatchingRepositoryIntegrationTest {
+class ReconcilePathMatchingRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final Pageable PAGE = PageRequest.of(0, 50);
 	private static final Limit LIMIT = Limit.of(50);
 	private static final String SEPARATOR = "\\";
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

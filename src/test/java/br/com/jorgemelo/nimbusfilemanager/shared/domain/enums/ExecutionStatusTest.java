@@ -17,9 +17,8 @@ class ExecutionStatusTest {
 	}
 
 	@Test
-	void activeStatusesAreNotTerminal() {
-		assertThat(ExecutionStatus.STARTED.isTerminal()).isFalse();
-		assertThat(ExecutionStatus.SCANNING_FILES.isTerminal()).isFalse();
-		assertThat(ExecutionStatus.PROCESSING_FILES.isTerminal()).isFalse();
+	void queuedAndRunningAreNotTerminal() {
+		assertThat(ExecutionStatus.PENDING.isTerminal()).isFalse();
+		assertThat(ExecutionStatus.RUNNING.isTerminal()).isFalse();
 	}
 }

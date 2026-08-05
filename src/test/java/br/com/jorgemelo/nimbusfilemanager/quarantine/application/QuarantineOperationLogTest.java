@@ -1,95 +1,75 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
-import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Optional;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineMessages;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
+/**
+ * What a quarantine operation says about itself when it ends.
+ *
+ * <p>
+ * The row is written by the shared progress service, under the taking the
+ * caller carries; what this class decides is the shape - which counter each
+ * number lands in, and which status a run that stopped short deserves.
+ */
 class QuarantineOperationLogTest {
 
-	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
 	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
-	private final QuarantineOperationLog log = new QuarantineOperationLog(executionRepository, executionErrorService,
-			executionProgressService, Clock.fixed(Instant.parse("2026-07-28T10:15:30Z"), ZoneOffset.UTC));
+	private final QuarantineOperationLog log = new QuarantineOperationLog(executionErrorService,
+			executionProgressService);
 
-	@Test
-	void startOpensAnExecutionOfItsOwnType() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+	private final ExecutionOwnership ownership = Takings.owning(5L);
 
-		Execution execution = log.startRestore(3);
-
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_RESTORE);
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(3);
-		Assertions.assertThat(execution.getFinishedAt()).isNull();
-	}
-
+	/**
+	 * Items that stayed in quarantine waiting for a decision - a name collision, a
+	 * missing origin folder - are not failures, so counting them as errors would
+	 * make a restore that needs one click look broken.
+	 */
 	@Test
 	void finishCountsPendingDecisionsApartFromFailures() {
-		Execution execution = managedExecution();
+		log.finish(ownership, 5, 3, 2, 0, QuarantineMessages.batchCompleted(0, 0, 0, 0));
 
-		log.finish(execution, 5, 3, 2, 0, "done");
-
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
-		Assertions.assertThat(execution.getFilesMoved()).isEqualTo(3);
-		Assertions.assertThat(execution.getCacheHits()).isEqualTo(2);
-		Assertions.assertThat(execution.getErrors()).isZero();
-		Assertions.assertThat(execution.getFinishedAt()).isNotNull();
+		verify(executionProgressService).finishSelection(ownership, ExecutionStatus.FINISHED, 5,
+				new ExecutionCounts(5, 3, 2, 0), QuarantineMessages.batchCompleted(0, 0, 0, 0));
 	}
 
 	@Test
 	void finishFlagsTheExecutionWhenAFileFailed() {
-		Execution execution = managedExecution();
+		log.finish(ownership, 2, 1, 0, 1, QuarantineMessages.batchCompleted(0, 0, 0, 0));
 
-		log.finish(execution, 2, 1, 0, 1, "one failed");
-
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.FINISHED_WITH_ERRORS);
-		Assertions.assertThat(execution.getErrors()).isEqualTo(1);
+		verify(executionProgressService).finishSelection(ownership, ExecutionStatus.FINISHED_WITH_ERRORS, 2,
+				new ExecutionCounts(2, 1, 0, 1), QuarantineMessages.batchCompleted(0, 0, 0, 0));
 	}
 
 	/**
-	 * Clearing missing records deletes nothing from disk, so it must not read on
-	 * the executions screen as the purge that erases files.
+	 * A run that stopped before its last item reports how far it got, not the whole
+	 * selection: the counters are what really happened, and the status says why it
+	 * ended - which is the difference between "cancelei e parou" and "deu erro".
 	 */
 	@Test
-	void startAbsentCleanupIsToldApartFromThePurgeThatErasesFiles() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+	void stopClosesTheRowWithHowFarItGotAndWhyItEnded() {
+		log.stop(ownership, ExecutionStatus.CANCELLED, 10, 3, 1, 0, QuarantineMessages.batchCancelled(3, 1, 0, 0));
 
-		Execution execution = log.startAbsentCleanup(4);
-
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_CLEANUP);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(4);
-	}
-
-	@Test
-	void startPurgeOpensAnExecutionOfItsOwnType() {
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-		Execution execution = log.startPurge(9);
-
-		Assertions.assertThat(execution.getExecutionType()).isEqualTo(ExecutionType.QUARANTINE_PURGE);
-		Assertions.assertThat(execution.getStatus()).isEqualTo(ExecutionStatus.STARTED);
-		Assertions.assertThat(execution.getFilesFound()).isEqualTo(9);
+		// Four of the ten were seen; claiming the whole selection was analysed would
+		// make the history say it ran to the end.
+		verify(executionProgressService).finishSelection(ownership, ExecutionStatus.CANCELLED, 10,
+				new ExecutionCounts(4, 3, 1, 0), QuarantineMessages.batchCancelled(3, 1, 0, 0));
 	}
 
 	/**
@@ -100,44 +80,32 @@ class QuarantineOperationLogTest {
 	 */
 	@Test
 	void failClosesTheRowSoNoPhantomOperationIsLeftRunning() {
-		Execution execution = mock(Execution.class);
+		log.fail(ownership, "disk gone");
 
-		log.fail(execution, "disk gone");
-
-		verify(executionProgressService).fail(execution, ExecutionMessages.operationFailed("disk gone"));
+		verify(executionProgressService).fail(ownership, ExecutionMessages.operationFailed("disk gone"));
 	}
 
 	@Test
-	void recordFailureNamesTheFileThatFailed() {
+	void recordFailureNamesTheFileThatFailed(@TempDir Path tmp) {
 		Execution execution = mock(Execution.class);
 
-		Path file = Path.of("D:", "trash", "10__a.jpg");
+		Path file = tmp.resolve("gone.jpg");
 
-		log.recordFailure(execution, file, ExecutionErrorType.FILE_NOT_FOUND, "gone");
+		log.recordFailure(execution, file, ExecutionErrorType.FILE_NOT_FOUND, "missing");
 
-		verify(executionErrorService).save(file, ExecutionErrorType.FILE_NOT_FOUND, "gone", execution);
+		verify(executionErrorService).save(file, ExecutionErrorType.FILE_NOT_FOUND, "missing", execution);
 	}
 
 	@Test
-	void recordFailureHandsTheExceptionToTheSharedClassifier() {
+	void recordFailureLetsTheSharedClassifierNameAnException(@TempDir Path tmp) {
 		Execution execution = mock(Execution.class);
 
-		Path file = Path.of("D:", "trash", "10__a.jpg");
+		Path file = tmp.resolve("gone.jpg");
 
-		IOException failure = new IOException("disk gone");
+		RuntimeException failure = new IllegalStateException("boom");
 
 		log.recordFailure(execution, file, failure);
 
 		verify(executionErrorService).save(file, failure, execution);
-	}
-
-	private Execution managedExecution() {
-		Execution execution = Execution.builder().id(7L).filesMoved(0).build();
-
-		when(executionRepository.findById(7L)).thenReturn(Optional.of(execution));
-
-		when(executionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-		return execution;
 	}
 }

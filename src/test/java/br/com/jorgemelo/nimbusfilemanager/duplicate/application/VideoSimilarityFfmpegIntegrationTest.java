@@ -86,8 +86,8 @@ class VideoSimilarityFfmpegIntegrationTest {
 	}
 
 	private VideoSimilarityAlgorithm algorithm() {
-		return new FfmpegLanczosFramesPhashAlgorithm(hashService(), new PhotoSsimService(),
-				new VideoSimilarityProperties(null, null, null, null, null, null));
+		return new FfmpegLanczosFramesPhashAlgorithm(hashService(), new LuminanceSsimService(),
+				new VideoSimilarityProperties(null, null, null, null, null));
 	}
 
 	@Test

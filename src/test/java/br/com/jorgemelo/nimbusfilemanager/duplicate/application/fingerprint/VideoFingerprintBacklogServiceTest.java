@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,16 +32,21 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,7 +64,13 @@ class VideoFingerprintBacklogServiceTest {
 	private VideoSimilarityAlgorithm algorithm;
 
 	@Mock
-	private ExecutionQueryService executionQueryService;
+	private ExecutionRepository executionRepository;
+
+	@Mock
+	private FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
+
+	@Mock
+	private SimilarityRelationWriter similarityRelationWriter;
 
 	/**
 	 * The Duplicados screen offers retry, listing and rebuild for videos exactly as
@@ -93,15 +105,60 @@ class VideoFingerprintBacklogServiceTest {
 		assertThat(service().failures()).isSameAs(expected);
 	}
 
+	/** And the video half asks only about videos, for the same reason. */
 	@Test
-	void rebuildDeletesOnlyThisAlgorithmsVideoFingerprintsAndFailures() {
-		when(mediaFingerprintRepository.deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM))
-				.thenReturn(12L);
+	void discardingWhatIsNoLongerACandidateAsksOnlyAboutItsOwnVideos() {
+		when(fingerprintRebuildTaskRepository.discardIneligibleVideos(FingerprintKind.VIDEO_PHASH.name(),
+				ALGORITHM)).thenReturn(2);
 
-		assertThat(service().rebuild()).isEqualTo(12L);
+		assertThat(service().discardIneligibleRebuildTasks()).isEqualTo(2);
+	}
 
-		verify(fingerprintFailureRepository).deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM);
-		verify(mediaFingerprintRepository).deleteByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM);
+	/**
+	 * With a rebuild open the owed list is the authority for videos too. Asking the
+	 * ordinary question would answer nothing: every video the rebuild owes already
+	 * has the fingerprint it is about to replace.
+	 */
+	@Test
+	void aRebuildOpenForVideosReadsWhatIsOwedRatherThanWhatIsMissing() {
+		PendingVideo owed = new PendingVideo(7L, "/tmp/clip.mp4", 10.0);
+
+		when(fingerprintRebuildTaskRepository.existsByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM))
+				.thenReturn(true);
+		when(fingerprintRebuildTaskRepository.findOwedVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM),
+				eq(VideoFingerprintBacklogService.MAX_ATTEMPTS), any())).thenReturn(List.of(owed));
+
+		assertThat(service().fetchPendingBatch(50)).containsExactly(owed);
+
+		verify(mediaFingerprintRepository, never()).findPendingVideos(any(), any(), anyInt(), any());
+	}
+
+	/** The video half owes its videos the same way, and discards nothing either. */
+	@Test
+	void seedingARebuildOwesEveryVideoAndDiscardsNothing() {
+		when(fingerprintRebuildTaskRepository.seedVideos(eq(FingerprintKind.VIDEO_PHASH.name()), eq(ALGORITHM),
+				any())).thenReturn(12);
+
+		assertThat(service().seedRebuild(Takings.unfenced(1L)).orElseThrow()).isEqualTo(12L);
+
+		verify(fingerprintFailureRepository).restoreAttemptBudget(FingerprintKind.VIDEO_PHASH, ALGORITHM);
+		verify(mediaFingerprintRepository, never()).deleteByCatalogFileIdAndKindAndAlgorithm(any(), any(), any());
+	}
+
+	/**
+	 * What the handler asks before it starts and again while it drains. A
+	 * conversion holds the ffmpeg this needs, and an inventory is adding the very
+	 * videos it would hash - either one is a reason to step aside, and the video
+	 * side has to answer it for itself because the run is its own.
+	 */
+	@Test
+	void aConversionOrAnInventoryIsReasonEnoughToStepAside() {
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.INVENTORY, ExecutionStatusNames.ACTIVE))
+				.thenReturn(false);
+		when(executionRepository.existsByExecutionTypeAndStatusIn(ExecutionType.CONVERSION,
+				ExecutionStatusNames.ACTIVE)).thenReturn(true);
+
+		assertThat(build().pausedByActiveExecution()).isTrue();
 	}
 
 	private VideoFingerprintBacklogService service() {
@@ -116,9 +173,14 @@ class VideoFingerprintBacklogServiceTest {
 	 * kind or algorithm it speaks for.
 	 */
 	private VideoFingerprintBacklogService build() {
-		return new VideoFingerprintBacklogService(mediaFingerprintRepository, fingerprintFailureRepository, algorithm,
+		FingerprintBacklogEngine engine = new FingerprintBacklogEngine(mediaFingerprintRepository,
+				fingerprintFailureRepository, fingerprintRebuildTaskRepository,
 				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
-				executionQueryService, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
+				executionRepository, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
+
+		return new VideoFingerprintBacklogService(engine, mediaFingerprintRepository, fingerprintFailureRepository,
+				fingerprintRebuildTaskRepository, algorithm, similarityRelationWriter,
+				Clock.systemDefaultZone());
 	}
 
 	private VideoPerceptualFingerprint fingerprint(int frames) {
@@ -138,10 +200,9 @@ class VideoFingerprintBacklogServiceTest {
 		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
 				any())).thenReturn(List.of(video), List.of());
 		when(algorithm.fingerprint(Path.of("/tmp/clip.mp4"), 10.0)).thenReturn(fingerprint(3));
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		assertThat(result.processed()).isEqualTo(1);
 
@@ -187,10 +248,9 @@ class VideoFingerprintBacklogServiceTest {
 				.thenThrow(new UnsupportedVideoFingerprintException("no frames"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(2L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 
@@ -216,10 +276,9 @@ class VideoFingerprintBacklogServiceTest {
 				.thenThrow(new IllegalStateException("ffmpeg vanished"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
 				.thenReturn(Optional.empty());
-		when(executionQueryService.active()).thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		});
+		}, Takings.unfenced(1L));
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 

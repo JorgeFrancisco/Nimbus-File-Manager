@@ -16,9 +16,11 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import lombok.extern.slf4j.Slf4j;
@@ -220,15 +222,26 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 	}
 
 	/**
+	 * Always empty: a {@code WatchService} starts watching from the moment it is
+	 * registered and knows nothing about the time before that. The window this
+	 * source cannot account for is reported as a recovery reason instead, which is
+	 * what makes the watcher reconcile rather than trust a list it never got.
+	 */
+	@Override
+	public List<Path> takeOfflineBacklog() {
+		return List.of();
+	}
+
+	/**
 	 * Returns whether an overflow happened since the last call and clears the flag.
 	 */
 	@Override
-	public boolean consumeOverflow() {
+	public Optional<WatchRecoveryReason> consumeRecoveryReason() {
 		boolean happened = overflow;
 
 		overflow = false;
 
-		return happened;
+		return happened ? Optional.of(WatchRecoveryReason.EVENTS_LOST) : Optional.empty();
 	}
 
 	@Override

@@ -12,7 +12,26 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
  */
 public final class QuarantineConstants {
 
+	/**
+	 * The shape the queued restore and purge payloads are written in, and the only
+	 * one a worker will run. Read by whoever queues and checked by whoever claims -
+	 * the pair only means anything if both sides name the same number.
+	 */
+	public static final int PAYLOAD_SCHEMA_VERSION = 2;
+
 	public static final String PAGE_KEY = "quarantine";
+
+	/**
+	 * How many items a single pass of the purge or of the absent-record cleanup
+	 * will attempt, bounding memory and IO per run. Leftovers are simply taken by
+	 * the next pass.
+	 *
+	 * <p>
+	 * Read by both the pass that does the work and the check that decides whether
+	 * there is work to queue, which is why it is here rather than inside one of
+	 * them: the two would silently disagree about how much a run is.
+	 */
+	public static final int MAX_PER_RUN = 5_000;
 
 	/**
 	 * Every reason that puts a file into the quarantine folder. There is a single

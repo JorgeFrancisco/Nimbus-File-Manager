@@ -10,8 +10,13 @@
 -->
 <configuration>
 
+	<!--
+		Only the defaults: they bring the conversion rules and CONSOLE_LOG_PATTERN,
+		which the console appender below reuses. Boot's own console-appender.xml is
+		deliberately not included - the root would then have to choose between the
+		two, and referencing both would print every line twice.
+	-->
 	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
 	<!-- The property is published before Logback reads it, by the same class the rest of
 	     the application asks. The default only covers a run that somehow bypassed that,
@@ -21,8 +26,56 @@
 
 	<property name="LOG_DIR" value="${WORKSPACE}/logs"/>
 
+	<!--
+		One file per process, and the reason is not tidiness. App and Worker are two
+		JVMs; a RollingFileAppender is only safe across processes in prudent mode,
+		and prudent mode cannot roll by size - which this one does. Two processes
+		sharing one file rename it out from under each other when it rolls, each
+		re-runs cleanHistoryOnStart, and their lines can interleave mid-write. So the
+		role goes in the name, and each process owns its own file.
+
+		The combined profile is one JVM holding both roles, so it gets one file of
+		its own rather than pretending to be either. The three expressions are
+		mutually exclusive: the group activates app and worker alongside itself, so
+		"worker" alone would also match a combined run.
+
+		LOG_ROLE_TOKEN is what a line falls back to when nothing marked it, and it
+		names the runtime rather than the nature of the component. For a process
+		that has one role it is that role, and it is always true. For the combined
+		JVM it is COMBINED: the line came out of a JVM holding both roles and its
+		particular one was not proven. Not APP - a worker line the marker did not
+		reach would then read as the application's. Not SHARED either, which would
+		answer a different question: whether a component is shared infrastructure is
+		about the code, and this is about which runtime produced the line.
+	-->
+	<!--
+		The file carries the role only where its name cannot. In a process that has
+		one role every line in the file has the same role, and printing it on each of
+		them would be a constant column of noise - the name already said it. The
+		combined run is the exception the marker exists for: one file, both roles
+		inside it, and a name that says "combined" tells you nothing about any
+		individual line.
+	-->
+	<property name="FILE_PATTERN" value="${FILE_LOG_PATTERN}"/>
+
+	<springProfile name="app-worker-combined">
+		<property name="LOG_ROLE" value="combined"/>
+		<property name="LOG_ROLE_TOKEN" value="COMBINED"/>
+		<property name="FILE_PATTERN" value="[%-8X{nimbusRole:-COMBINED}] ${FILE_LOG_PATTERN}"/>
+	</springProfile>
+
+	<springProfile name="worker &amp; !app-worker-combined">
+		<property name="LOG_ROLE" value="worker"/>
+		<property name="LOG_ROLE_TOKEN" value="WORKER"/>
+	</springProfile>
+
+	<springProfile name="!worker">
+		<property name="LOG_ROLE" value="app"/>
+		<property name="LOG_ROLE_TOKEN" value="APP"/>
+	</springProfile>
+
 	<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-		<file>${LOG_DIR}/nimbus-file-manager.log</file>
+		<file>${LOG_DIR}/nimbus-file-manager-${LOG_ROLE}.log</file>
 		<rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
 			<!--
 				%d{yyyyMMdd} rolls the file over once per day; %i splits it again within
@@ -34,15 +87,36 @@
 				place is found weeks later, and the log of the run that moved it has to
 				still be there. totalSizeCap is the emergency brake behind it.
 			-->
-			<fileNamePattern>${LOG_DIR}/nimbus-file-manager-%d{yyyyMMdd}.%i.log</fileNamePattern>
+			<fileNamePattern>${LOG_DIR}/nimbus-file-manager-${LOG_ROLE}-%d{yyyyMMdd}.%i.log</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 			<maxHistory>30</maxHistory>
 			<totalSizeCap>2GB</totalSizeCap>
 			<cleanHistoryOnStart>true</cleanHistoryOnStart>
 		</rollingPolicy>
 		<encoder>
-			<pattern>${FILE_LOG_PATTERN}</pattern>
+			<pattern>${FILE_PATTERN}</pattern>
 			<charset>${FILE_LOG_CHARSET}</charset>
+		</encoder>
+	</appender>
+
+	<!--
+		Which role produced the line, for the one case the file name cannot answer:
+		app-worker-combined, where a single JVM is both and a single console carries
+		both. Read from the MDC, falling back to LOG_ROLE_TOKEN above - so an
+		installed App or Worker is right without anything having to be set, and only
+		the combined run depends on the marker at all.
+
+		Fixed width so the columns after it stay aligned. The separating space lives
+		in the pattern below rather than at the end of this value: Logback trims a
+		property value, so a trailing space there is silently dropped and the token
+		ends up glued to the timestamp.
+	-->
+	<property name="ROLE_PATTERN" value="[%-8X{nimbusRole:-${LOG_ROLE_TOKEN}}]"/>
+
+	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>${ROLE_PATTERN} ${CONSOLE_LOG_PATTERN}</pattern>
+			<charset>${CONSOLE_LOG_CHARSET}</charset>
 		</encoder>
 	</appender>
 

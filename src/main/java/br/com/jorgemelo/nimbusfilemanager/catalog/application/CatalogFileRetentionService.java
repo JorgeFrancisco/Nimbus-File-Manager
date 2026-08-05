@@ -2,11 +2,13 @@ package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.OptionalInt;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -27,11 +29,11 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 class CatalogFileRetentionService {
 
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogMutations catalogMutations;
 	private final Clock clock;
 
-	CatalogFileRetentionService(CatalogFileRepository catalogFileRepository, Clock clock) {
-		this.catalogFileRepository = catalogFileRepository;
+	CatalogFileRetentionService(CatalogMutations catalogMutations, Clock clock) {
+		this.catalogMutations = catalogMutations;
 		this.clock = clock;
 	}
 
@@ -41,20 +43,37 @@ class CatalogFileRetentionService {
 	 * audit rows are detached (SET NULL), so history is preserved. A non-positive
 	 * {@code days} is a no-op (retention disabled).
 	 *
-	 * @return number of catalog rows removed
+	 * <p>
+	 * The taking is pinned first, in this same transaction, and the delete happens
+	 * only if that held. What is removed here cannot be got back - years of
+	 * extracted metadata, perceptual hashes, resolved locations - so a run that
+	 * lost its turn while the rows were being chosen must not be the one that
+	 * carries the choice out. One statement, one unit: there is nothing to fence
+	 * per row.
+	 *
+	 * @param ownership the taking this purge runs as, held in force for the delete
+	 * @return how many catalog rows were removed, or empty when the taking is over
+	 * and nothing was touched
 	 */
 	@Transactional
-	int purgeMissingOlderThan(int days) {
+	OptionalInt purgeMissingOlderThan(int days, ExecutionOwnership ownership) {
 		if (days <= 0) {
-			return 0;
+			return OptionalInt.of(0);
+		}
+
+		if (!ownership.pin()) {
+			log.info("Catalog missing purge was not carried out: the execution it runs as is no longer the current"
+					+ " taking of its row");
+
+			return OptionalInt.empty();
 		}
 
 		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
 
-		int purged = catalogFileRepository.deleteMissingBefore(cutoff);
+		int purged = catalogMutations.purgeMissingBefore(cutoff);
 
 		log.info("Catalog missing purge finished. removed={}, cutoff={}", purged, cutoff);
 
-		return purged;
+		return OptionalInt.of(purged);
 	}
 }

@@ -86,10 +86,27 @@ public interface FingerprintFailureRepository extends JpaRepository<FingerprintF
 	void deleteByCatalogFileIdAndKindAndAlgorithm(Long catalogFileId, FingerprintKind kind, String algorithm);
 
 	/**
-	 * Manual retry: clears failures so exhausted items return to the pending queue.
+	 * Gives every file of this target its attempts back, without forgetting why it
+	 * failed.
+	 *
+	 * <p>
+	 * A rebuild used to delete these rows to make exhausted files pending again,
+	 * and took the diagnosis with them - the reason, the message the tool gave and
+	 * when it was last tried are what the screen shows the user about a file it
+	 * could not read. None of that stops being true because a recompute was asked
+	 * for; the only thing that has to change is that the file may be attempted
+	 * again. Zero is what a failure is born with, before its first attempt is
+	 * counted.
+	 *
+	 * @return how many files got their budget back
 	 */
-	@Transactional
-	long deleteByKindAndAlgorithm(FingerprintKind kind, String algorithm);
+	@Modifying
+	@Query("""
+			update FingerprintFailure fe
+			   set fe.attempts = 0
+			 where fe.kind = :kind and fe.algorithm = :algorithm and fe.attempts > 0
+			""")
+	int restoreAttemptBudget(@Param("kind") FingerprintKind kind, @Param("algorithm") String algorithm);
 
 	/**
 	 * Manual retry clears only what a retry can change. A terminal reason - blank

@@ -1,0 +1,205 @@
+package br.com.jorgemelo.nimbusfilemanager.catalog.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.LocalDateTime;
+import java.util.OptionalInt;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnershipGuard;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
+
+/**
+ * The purge is the one of these four that cannot be undone.
+ *
+ * <p>
+ * Everything else an obsolete taking might materialise can be recomputed:
+ * fingerprints hash again, groupings are derived. A purged catalog row is gone,
+ * and with it the placement and the retention clock that decided it was overdue
+ * - so a run that was replaced while it counted days must not be the one that
+ * carries out the sentence. The taking that replaced it may well have seen the
+ * files come back.
+ *
+ * <p>
+ * Against a real database, on the shared container: the purge runs in a plain
+ * {@code @Transactional} that joins the caller's, so it commits nothing of its
+ * own and the test transaction can hold the whole thing. The assertions read
+ * rows back rather than counting calls, and the cascades - the placement that
+ * follows the file, the movement that only detaches from it - are checked on
+ * both sides of the refusal.
+ */
+class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
+
+	private static final String WORKER = "worker-that-came-back";
+
+	private static final int DAYS = 90;
+
+	@Autowired
+	private CatalogFileRetentionService catalogFileRetentionService;
+
+	@Autowired
+	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
+	private MovementRepository movementRepository;
+
+	@Autowired
+	private ExecutionRepository executionRepository;
+
+	@Autowired
+	private ExecutionOwnershipGuard executionOwnershipGuard;
+
+	/**
+	 * A purge that arrives after its row was taken again deletes nothing - and
+	 * leaves behind everything a purge would have taken with it.
+	 */
+	@Test
+	void aPurgeFromATakingThatWasReplacedDeletesNothing() {
+		CatalogFile overdue = missingSince(200);
+
+		Movement audit = movedBySomeEarlierRun(overdue);
+
+		long executionId = claimedAt(1);
+
+		ExecutionOwnership replaced = Takings.fenced(executionId, WORKER, 1, executionOwnershipGuard);
+
+		takenAgainAt(executionId, 2);
+
+		OptionalInt purged = catalogFileRetentionService.purgeMissingOlderThan(DAYS, replaced);
+
+		assertThat(purged).as("the purge says it did not run").isEmpty();
+		assertThat(catalogFileRepository.findById(overdue.getId())).as("the overdue row is still catalogued")
+				.isPresent();
+		assertThat(catalogFileLocationRepository.findById(overdue.getId())).as("with the placement that would cascade")
+				.isPresent();
+		assertThat(movementRepository.findById(audit.getId())).get().extracting(Movement::getCatalogFile)
+				.as("and the audit still points at it, undetached").isNotNull();
+	}
+
+	/**
+	 * The taking that holds the row purges as before, and a second pass over the
+	 * same window finds nothing left to do. The repeat matters because the refusal
+	 * above leaves the work outstanding: whoever holds the row next has to be able
+	 * to finish it, and finishing it twice must not be an error.
+	 */
+	@Test
+	void theTakingThatHoldsTheRowPurgesAndRepeatingItChangesNothing() {
+		CatalogFile overdue = missingSince(200);
+		CatalogFile recent = missingSince(1);
+
+		Movement audit = movedBySomeEarlierRun(overdue);
+
+		long executionId = claimedAt(1);
+
+		ExecutionOwnership current = Takings.fenced(executionId, WORKER, 1, executionOwnershipGuard);
+
+		assertThat(catalogFileRetentionService.purgeMissingOlderThan(DAYS, current)).hasValue(1);
+
+		assertThat(catalogFileRepository.findById(overdue.getId())).isEmpty();
+		assertThat(catalogFileLocationRepository.findById(overdue.getId())).as("placement cascaded away").isEmpty();
+		assertThat(catalogFileRepository.findById(recent.getId())).as("and the recent one is not overdue yet")
+				.isPresent();
+		assertThat(movementRepository.findById(audit.getId())).get().extracting(Movement::getCatalogFile)
+				.as("history kept, only detached").isNull();
+
+		assertThat(catalogFileRetentionService.purgeMissingOlderThan(DAYS, current)).as("nothing left to purge")
+				.hasValue(0);
+	}
+
+	/**
+	 * A lease that ran out reaches the same refusal without anyone having claimed
+	 * the row again - which is the shape a worker that was only slow arrives in,
+	 * before recovery has even noticed.
+	 */
+	@Test
+	void aPurgeWhoseLeaseRanOutIsRefusedBeforeRecoveryHasEvenRun() {
+		CatalogFile overdue = missingSince(200);
+
+		long executionId = claimedAt(1);
+
+		ExecutionOwnership lapsed = Takings.fenced(executionId, WORKER, 1, executionOwnershipGuard);
+
+		Execution row = executionRepository.findById(executionId).orElseThrow();
+
+		row.setLeaseUntil(LocalDateTime.now().minusMinutes(1));
+
+		executionRepository.saveAndFlush(row);
+
+		assertThat(catalogFileRetentionService.purgeMissingOlderThan(DAYS, lapsed)).isEmpty();
+		assertThat(catalogFileRepository.findById(overdue.getId())).isPresent();
+	}
+
+	/**
+	 * A window of zero days answers before the pin, because it is not a purge at
+	 * all: retention turned off deletes nothing, and asking the database who owns
+	 * the row to establish that would be a question with no consequence.
+	 */
+	@Test
+	void retentionTurnedOffAnswersWithoutAskingWhoHoldsTheRow() {
+		CatalogFile overdue = missingSince(200);
+
+		assertThat(catalogFileRetentionService.purgeMissingOlderThan(0, Takings.over(1L))).hasValue(0);
+		assertThat(catalogFileRepository.findById(overdue.getId())).isPresent();
+	}
+
+	private long claimedAt(int claimCount) {
+		return executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.CATALOG_PURGE)
+				.status(ExecutionStatus.RUNNING).recursive(false).executeFlag(true).claimedBy(WORKER)
+				.claimCount(claimCount).leaseUntil(LocalDateTime.now().plusMinutes(10)).build()).getId();
+	}
+
+	private void takenAgainAt(long executionId, int claimCount) {
+		Execution row = executionRepository.findById(executionId).orElseThrow();
+
+		row.setClaimCount(claimCount);
+		row.setLeaseUntil(LocalDateTime.now().plusMinutes(10));
+
+		executionRepository.saveAndFlush(row);
+
+		Takings.fenced(executionId, WORKER, claimCount, executionOwnershipGuard);
+	}
+
+	private CatalogFile missingSince(int days) {
+		String key = "catalog-purge-fencing-" + System.nanoTime();
+
+		String path = "C:/test/" + key + ".jpg";
+
+		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
+				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING)
+				.lifecycleChangedAt(LocalDateTime.now().minusDays(days)).build();
+		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
+				.originalPath(path).originalFolder("C:/test").build());
+
+		return catalogFileRepository.saveAndFlush(file);
+	}
+
+	private Movement movedBySomeEarlierRun(CatalogFile file) {
+		Execution organization = executionRepository.saveAndFlush(Execution.builder()
+				.executionType(ExecutionType.ORGANIZATION).status(ExecutionStatus.FINISHED).startedAt(
+						LocalDateTime.now())
+				.sourcePath("D:/src").targetPath("D:/dst").recursive(true).executeFlag(true).build());
+
+		return movementRepository.saveAndFlush(Movement.builder().execution(organization).catalogFile(file)
+				.sourcePath("D:/src/a").targetPath("D:/dst/a").status(MovementStatus.MOVED).build());
+	}
+}

@@ -1,16 +1,20 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.atomic.AtomicReference;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -190,9 +194,10 @@ class PhysicalTreeWatcherTest {
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.OVERFLOW, null), changed);
 
 			assertThat(changed).isEmpty();
-			assertThat(watcher.consumeOverflow()).isTrue();
-			// The flag is cleared after being consumed.
-			assertThat(watcher.consumeOverflow()).isFalse();
+			// The WatchService really did drop events, so this is the one reason that
+			// means a loss - and it is cleared once consumed.
+			assertThat(watcher.consumeRecoveryReason()).contains(WatchRecoveryReason.EVENTS_LOST);
+			assertThat(watcher.consumeRecoveryReason()).isEmpty();
 		}
 	}
 
@@ -209,20 +214,33 @@ class PhysicalTreeWatcherTest {
 		}
 	}
 
-	private Path awaitChange(PhysicalTreeWatcher watcher, String fileName) throws InterruptedException {
-		long deadline = System.currentTimeMillis() + 15_000;
+	/**
+	 * Polls until the named file shows up, or gives up and answers null so the
+	 * caller can say what it was waiting for. The draining poll has to happen on
+	 * each attempt, which is why the change is captured on the way past rather
+	 * than read again afterwards.
+	 */
+	private Path awaitChange(PhysicalTreeWatcher watcher, String fileName) {
+		AtomicReference<Path> found = new AtomicReference<>();
 
-		while (System.currentTimeMillis() < deadline) {
-			for (Path changed : watcher.pollChangedFiles()) {
-				if (changed.getFileName().toString().equals(fileName)) {
-					return changed;
-				}
-			}
+		try {
+			await().atMost(Duration.ofSeconds(15)).pollDelay(Duration.ZERO)
+					.pollInterval(Duration.ofMillis(200)).until(() -> {
+						for (Path changed : watcher.pollChangedFiles()) {
+							if (changed.getFileName().toString().equals(fileName)) {
+								found.set(changed);
 
-			Thread.sleep(200);
+								return true;
+							}
+						}
+
+						return false;
+					});
+		} catch (ConditionTimeoutException _) {
+			return null;
 		}
 
-		return null;
+		return found.get();
 	}
 
 	private WatchEvent<?> event(WatchEvent.Kind<?> kind, Path context) {

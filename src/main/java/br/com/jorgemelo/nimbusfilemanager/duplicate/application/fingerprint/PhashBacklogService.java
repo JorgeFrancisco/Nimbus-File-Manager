@@ -7,11 +7,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
@@ -20,15 +20,17 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -51,19 +53,23 @@ public class PhashBacklogService
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
+	private final FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
 	private final PhotoPerceptualHashService photoPerceptualHashService;
+	private final SimilarityRelationWriter similarityRelationWriter;
 	private final FingerprintBacklogEngine engine;
 	private final Clock clock;
 
-	public PhashBacklogService(MediaFingerprintRepository mediaFingerprintRepository,
+	public PhashBacklogService(FingerprintBacklogEngine engine, MediaFingerprintRepository mediaFingerprintRepository,
 			FingerprintFailureRepository fingerprintFailureRepository,
-			PhotoPerceptualHashService photoPerceptualHashService, ProcessingCoordinator processingCoordinator,
-			ExecutionQueryService executionQueryService, PlatformTransactionManager transactionManager, Clock clock) {
+			FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository,
+			PhotoPerceptualHashService photoPerceptualHashService,
+			SimilarityRelationWriter similarityRelationWriter, Clock clock) {
+		this.engine = engine;
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
+		this.fingerprintRebuildTaskRepository = fingerprintRebuildTaskRepository;
 		this.photoPerceptualHashService = photoPerceptualHashService;
-		this.engine = new FingerprintBacklogEngine(mediaFingerprintRepository, fingerprintFailureRepository,
-				processingCoordinator, executionQueryService, transactionManager, clock);
+		this.similarityRelationWriter = similarityRelationWriter;
 		this.clock = clock;
 	}
 
@@ -102,16 +108,34 @@ public class PhashBacklogService
 	}
 
 	/**
-	 * Clears only derived pHash/SSIM data; inventory, metadata and SHA-256 are
-	 * untouched.
+	 * Every catalogued photo that has somewhere to be read from. The placement is
+	 * required for the same reason the pending query joins it: a row with no path
+	 * is not something a decoder can be pointed at.
 	 */
-	public long rebuild() {
-		return engine.rebuild(this);
+	@Override
+	public long seedRebuildTasks(LocalDateTime seededAt) {
+		return fingerprintRebuildTaskRepository.seedPhotos(KIND.name(), DuplicateConstants.ALGORITHM, seededAt);
 	}
 
 	@Override
-	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress) {
-		return engine.drain(this, stop, progress);
+	public boolean rebuildIsOpen() {
+		return engine.rebuildIsOpen(this);
+	}
+
+	/**
+	 * Opens a rebuild by writing down what it owes. Nothing derived is discarded
+	 * here and nothing is discarded anywhere: each photo's fingerprint is replaced
+	 * by its own, later, and until then it is still the answer.
+	 */
+	@Override
+	public OptionalLong seedRebuild(ExecutionOwnership ownership) {
+		return engine.seedRebuild(this, ownership);
+	}
+
+	@Override
+	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress,
+			ExecutionOwnership ownership) {
+		return engine.drain(this, stop, progress, ownership);
 	}
 
 	@Override
@@ -129,8 +153,24 @@ public class PhashBacklogService
 		return MAX_ATTEMPTS;
 	}
 
+	/**
+	 * Where the candidates come from, and there are two answers because there are
+	 * two questions.
+	 *
+	 * <p>
+	 * A rebuild owes a list, and that list is the authority while it is open: the
+	 * files on it all have a fingerprint already - the one about to be replaced -
+	 * so asking the ordinary question would answer nothing. Outside a rebuild the
+	 * ordinary question is the right one: what has no fingerprint yet. Never both,
+	 * and never merged.
+	 */
 	@Override
 	public List<PendingPhoto> fetchPendingBatch(int batchSize) {
+		if (rebuildIsOpen()) {
+			return deduplicate(fingerprintRebuildTaskRepository.findOwedPhotos(KIND, DuplicateConstants.ALGORITHM,
+					MAX_ATTEMPTS, PageRequest.of(0, batchSize)));
+		}
+
 		return deduplicate(mediaFingerprintRepository.findPendingPhotos(KIND, DuplicateConstants.ALGORITHM,
 				MAX_ATTEMPTS, PageRequest.of(0, batchSize)));
 	}
@@ -162,12 +202,25 @@ public class PhashBacklogService
 
 	@Override
 	public void store(PendingPhoto photo, PhotoPerceptualFingerprint fingerprint) {
-		if (!mediaFingerprintRepository.existsByCatalogFileIdAndKindAndAlgorithmAndSampleIndex(photo.catalogFileId(),
-				KIND, DuplicateConstants.ALGORITHM, 0)) {
-			mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(photo.catalogFileId()).kind(KIND)
-					.algorithm(DuplicateConstants.ALGORITHM).sampleIndex(0).hashBytes(fingerprint.hash())
-					.sampleBytes(fingerprint.luminance()).computedAt(LocalDateTime.now(clock)).build());
-		}
+		mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(photo.catalogFileId()).kind(KIND)
+				.algorithm(DuplicateConstants.ALGORITHM).sampleIndex(0).hashBytes(fingerprint.hash())
+				.sampleBytes(fingerprint.luminance()).computedAt(LocalDateTime.now(clock)).build());
+	}
+
+	/**
+	 * Photo relations only. A still exported beside a clip shares a catalog row
+	 * with it and nothing else, so forgetting by file alone would cost the other
+	 * medium a recomputation it never asked for.
+	 */
+	@Override
+	public void forgetWhatWasDerivedFrom(long catalogFileId) {
+		similarityRelationWriter.forget(DuplicateConstants.ALGORITHM, catalogFileId);
+	}
+
+	@Override
+	public int discardIneligibleRebuildTasks() {
+		return fingerprintRebuildTaskRepository.discardIneligiblePhotos(KIND.name(), DuplicateConstants.ALGORITHM,
+				FileType.PHOTO.name());
 	}
 
 	@Override

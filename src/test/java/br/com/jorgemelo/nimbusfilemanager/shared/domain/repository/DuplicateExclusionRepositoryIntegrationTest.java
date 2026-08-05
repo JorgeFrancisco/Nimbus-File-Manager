@@ -10,15 +10,9 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFileExclusion;
@@ -30,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileWithShaRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateGroupRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateSummaryProjection;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
@@ -42,18 +37,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocatio
  * both the group listing and the summary - all without touching the files
  * themselves.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class DuplicateExclusionRepositoryIntegrationTest {
+class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final Pageable PAGE = PageRequest.of(0, 50);
 	private static final String SHA = "a".repeat(64);
 	private static final Set<FileType> PHOTOS = Set.of(FileType.PHOTO);
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

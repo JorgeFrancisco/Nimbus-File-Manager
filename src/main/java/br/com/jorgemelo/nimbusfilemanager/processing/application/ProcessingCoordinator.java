@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.LoggingRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 import jakarta.annotation.PreDestroy;
 
@@ -136,9 +137,16 @@ public class ProcessingCoordinator {
 
 			int slot = index;
 
+			// The role of whoever is submitting travels with the item. This pool is the
+			// one fan-out that would otherwise lose it - a handler's per-file work runs
+			// here, on threads it did not create - and the marker is cleared afterwards
+			// so a reused thread never carries one execution's role into the next.
+			String role = LoggingRole.current();
+
 			try {
-				futures.add(
-						executor.submit(() -> execute(slot, item, submittedAt, cancelled, worker, slots, onItemDone)));
+				futures.add(executor.submit(
+						() -> LoggingRole.runAs(role, () -> execute(slot, item, submittedAt, cancelled, worker, slots,
+								onItemDone))));
 			} catch (RejectedExecutionException rejected) {
 				backpressure.release();
 

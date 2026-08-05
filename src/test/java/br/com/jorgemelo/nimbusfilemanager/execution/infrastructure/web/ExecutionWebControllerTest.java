@@ -15,7 +15,6 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionDetailL
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationUndoResponse;
 
 /**
  * The public UUID-based endpoints of the execution controller: detail
@@ -52,7 +51,7 @@ class ExecutionWebControllerTest {
 
 	@Test
 	void executionRedirectsToInventoryProgressWhileRunning() {
-		when(executionQueryService.get(ID)).thenReturn(response("INVENTORY", "SCANNING_FILES", null));
+		when(executionQueryService.get(ID)).thenReturn(response("INVENTORY", "RUNNING", null));
 
 		Assertions.assertThat(controller.execution(ID, new ExtendedModelMap()))
 				.isEqualTo("redirect:/app/progress/" + ID + "?kind=inventory");
@@ -60,7 +59,7 @@ class ExecutionWebControllerTest {
 
 	@Test
 	void executionRedirectsWithOrganizationExecuteKind() {
-		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "PROCESSING_FILES", true));
+		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "RUNNING", true));
 
 		Assertions.assertThat(controller.execution(ID, new ExtendedModelMap()))
 				.isEqualTo("redirect:/app/progress/" + ID + "?kind=organization-execute");
@@ -68,27 +67,24 @@ class ExecutionWebControllerTest {
 
 	@Test
 	void executionRedirectsWithOrganizationPreviewKind() {
-		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "STARTED", false));
+		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "RUNNING", false));
 
 		Assertions.assertThat(controller.execution(ID, new ExtendedModelMap()))
 				.isEqualTo("redirect:/app/progress/" + ID + "?kind=organization-preview");
 	}
 
+	/**
+	 * The reversal is queued and followed on the progress screen, like every other
+	 * run that moves files. Re-rendering this page with a summary only worked while
+	 * the moving happened inside the request.
+	 */
 	@Test
-	void undoRendersDetailUsingUndoPublic() {
-		when(executionQueryService.get(ID)).thenReturn(response("ORGANIZATION", "FINISHED", true));
-		when(organizationService.undoPublic(ID)).thenReturn(mock(OrganizationUndoResponse.class));
-		when(executionQueryService.steps(ID)).thenReturn(List.of());
-		when(executionQueryService.errors(ID)).thenReturn(List.of());
-		when(executionQueryService.movements(ID)).thenReturn(List.of());
+	void undoQueuesTheReversalAndFollowsItOnTheProgressScreen() {
+		UUID queuedId = UUID.randomUUID();
 
-		ExtendedModelMap model = new ExtendedModelMap();
+		when(organizationService.undoPublic(ID)).thenReturn(response(queuedId));
 
-		String view = controller.undo(ID, model);
-
-		Assertions.assertThat(view).isEqualTo("app/execution-detail");
-		Assertions.assertThat(model.get("undo")).isNotNull();
-		Assertions.assertThat(model).containsEntry("canUndo", true).containsEntry("canReprocess", false);
+		Assertions.assertThat(controller.undo(ID)).isEqualTo("redirect:/app/progress/" + queuedId);
 	}
 
 	@Test
@@ -128,5 +124,10 @@ class ExecutionWebControllerTest {
 	private ExecutionResponse response(String type, String status, Boolean executeFlag) {
 		return new ExecutionResponse(1L, type, status, NOW, NOW, "src", null, 1, 1, 0, 0, 0, 0, null, null, "ok",
 				executeFlag);
+	}
+
+	private ExecutionResponse response(UUID executionId) {
+		return new ExecutionResponse(executionId, "UNDO", "PENDING", null, null, "src", "target", 0, 0, 0, 0, 0, 0,
+				null, null, null, true);
 	}
 }

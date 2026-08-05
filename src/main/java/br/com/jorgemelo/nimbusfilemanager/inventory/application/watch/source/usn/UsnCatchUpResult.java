@@ -3,16 +3,23 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.us
 import java.nio.file.Path;
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
+
 /**
  * The outcome of a one-shot USN startup catch-up: the files changed while the
  * application was down (empty when nothing changed or the cursor could not be
- * replayed), plus whether a full reconcile is still needed - because the cursor
- * could not be replayed, or a directory moved within the offline window.
+ * replayed), plus why - if at all - a full reconcile is still needed.
+ *
+ * <p>
+ * A reason rather than a flag, because the two cases that produce one are
+ * different facts about the journal and used to be indistinguishable once they
+ * reached the watcher.
  *
  * @param offlineChanges the files changed while the app was down.
- * @param reconcileNeeded whether the catalog must be reconciled anyway.
+ * @param recoveryReason why the catalog must be reconciled anyway, or
+ * {@code null} when the replay accounted for the whole window.
  */
-public record UsnCatchUpResult(List<Path> offlineChanges, boolean reconcileNeeded) {
+public record UsnCatchUpResult(List<Path> offlineChanges, WatchRecoveryReason recoveryReason) {
 
 	public UsnCatchUpResult {
 		offlineChanges = offlineChanges == null ? List.of() : List.copyOf(offlineChanges);

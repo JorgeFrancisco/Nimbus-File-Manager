@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source
 import java.nio.file.Path;
 import java.util.Optional;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCatchUpResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnUnavailableException;
@@ -47,6 +48,44 @@ public final class WindowsUsnSupport {
 		} catch (UsnUnavailableException unavailable) {
 			log.info("USN catch-up unavailable for {} (using real-time watch only): {}", normalized,
 					unavailable.getMessage());
+
+			return Optional.empty();
+		}
+	}
+
+	/**
+	 * Where the journal ends right now, without replaying anything and without
+	 * touching the stored cursor.
+	 *
+	 * <p>
+	 * Opens and closes the volume exactly like the catch-up does, because a
+	 * handle held across an inventory is a handle held for minutes on a device
+	 * this application does not own.
+	 *
+	 * @return the journal's identity and end, or empty when the volume cannot be
+	 * opened - the same ordinary outcome the catch-up has without elevation
+	 */
+	public static Optional<PersistedCursor> readWatermark(Path root) {
+		Path normalized = root.toAbsolutePath().normalize();
+
+		String driveLetter = driveLetterOf(normalized);
+
+		if (driveLetter == null) {
+			return Optional.empty();
+		}
+
+		try {
+			FfmUsnVolume volume = FfmUsnVolume.open(driveLetter);
+
+			try {
+				return Optional.of(new PersistedCursor(volume.journalId(), volume.nextUsn()));
+			} finally {
+				volume.close();
+			}
+		} catch (UsnUnavailableException unavailable) {
+			// Deliberately louder than the catch-up's equivalent: reaching here after a
+			// catch-up that did open the volume is a contradiction worth reading about.
+			log.info("No journal watermark for {}: {}", normalized, unavailable.getMessage());
 
 			return Optional.empty();
 		}

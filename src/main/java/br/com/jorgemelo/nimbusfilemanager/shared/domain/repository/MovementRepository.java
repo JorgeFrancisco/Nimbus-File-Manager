@@ -49,6 +49,14 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 			Collection<MovementReason> reasons, LocalDateTime cutoff, Pageable pageable);
 
 	/**
+	 * Whether anything at all is overdue, without loading it. The daily pass asks
+	 * this before queueing itself, so a day with nothing to expunge leaves no row
+	 * behind on the executions screen.
+	 */
+	boolean existsByStatusAndReasonInAndMovedAtBefore(MovementStatus status, Collection<MovementReason> reasons,
+			LocalDateTime cutoff);
+
+	/**
 	 * How many movement rows still reference a given media file - used to know when
 	 * it is safe to delete it.
 	 */

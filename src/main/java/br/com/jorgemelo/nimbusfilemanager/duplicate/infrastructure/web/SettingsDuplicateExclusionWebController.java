@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityCaches;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
@@ -23,20 +22,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 public class SettingsDuplicateExclusionWebController extends LocalizedComponent {
 
 	private final DuplicateExclusionService duplicateExclusionService;
-	private final SimilarityCaches similarityCaches;
 
 	@Autowired
-	public SettingsDuplicateExclusionWebController(DuplicateExclusionService duplicateExclusionService,
-			SimilarityCaches similarityCaches) {
+	public SettingsDuplicateExclusionWebController(DuplicateExclusionService duplicateExclusionService) {
 		this.duplicateExclusionService = duplicateExclusionService;
-		this.similarityCaches = similarityCaches;
 	}
 
 	/** Restores a single file to duplicate comparison. */
 	@PostMapping("/app/settings/duplicate-exclusions/file/remove")
 	public String removeDuplicateFileExclusion(@RequestParam Long id, RedirectAttributes redirectAttributes) {
 		duplicateExclusionService.removeFileExclusion(id);
-		similarityCaches.invalidateAll();
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
 
@@ -47,7 +42,6 @@ public class SettingsDuplicateExclusionWebController extends LocalizedComponent 
 	@PostMapping("/app/settings/duplicate-exclusions/folder/remove")
 	public String removeDuplicateFolderExclusion(@RequestParam Long id, RedirectAttributes redirectAttributes) {
 		duplicateExclusionService.removeFolderExclusion(id);
-		similarityCaches.invalidateAll();
 
 		redirectAttributes.addFlashAttribute(SharedConstants.ATTR_SUCCESS, message("backend.settings.dupExclRemoved"));
 

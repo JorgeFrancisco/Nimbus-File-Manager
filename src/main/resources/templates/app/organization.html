@@ -80,6 +80,13 @@
 	<div th:replace="~{fragments/folder-picker :: folderPicker}"></div>
 	<div class="panel section" th:if="${plan != null}">
 		<h2 th:text="#{org.preview}">Preview</h2>
+
+		<!-- The run recalculates instead of replaying this plan, so the library having moved
+		     since is normal rather than an error. Saying so here is what keeps it from being
+		     a surprise after the files have been moved. -->
+		<div class="alert" role="status" th:if="${catalogChanged}">
+			<span th:text="#{organization.catalogChanged}">A biblioteca mudou desde que esta pré-visualização foi gerada.</span>
+		</div>
 		<div class="grid">
 			<div><div class="metric" th:text="#{category.files}">Arquivos</div><div class="value" th:text="${plan.summary().totalFiles()}">0</div></div>
 			<div><div class="metric" th:text="#{execution.movements}">Movimentos</div><div class="value" th:text="${plan.summary().plannedMoves()}">0</div></div>

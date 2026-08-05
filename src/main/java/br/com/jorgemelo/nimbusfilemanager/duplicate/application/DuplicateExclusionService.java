@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFolder
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFileExclusionRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFolderExclusionRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileExclusionView;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.EligibilityChanged;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -25,11 +27,13 @@ public class DuplicateExclusionService {
 
 	private final DuplicateFileExclusionRepository fileRepository;
 	private final DuplicateFolderExclusionRepository folderRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public DuplicateExclusionService(DuplicateFileExclusionRepository fileRepository,
-			DuplicateFolderExclusionRepository folderRepository) {
+			DuplicateFolderExclusionRepository folderRepository, ApplicationEventPublisher eventPublisher) {
 		this.fileRepository = fileRepository;
 		this.folderRepository = folderRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/** @return true when a new exclusion was created, false if already excluded. */
@@ -40,6 +44,8 @@ public class DuplicateExclusionService {
 		}
 
 		fileRepository.save(DuplicateFileExclusion.builder().publicId(publicId).build());
+
+		eventPublisher.publishEvent(new EligibilityChanged("file exclusion"));
 
 		return true;
 	}
@@ -68,12 +74,34 @@ public class DuplicateExclusionService {
 
 		folderRepository.save(DuplicateFolderExclusion.builder().folderPath(normalized).build());
 
+		eventPublisher.publishEvent(new EligibilityChanged("folder exclusion"));
+
 		return true;
 	}
 
 	@Transactional(readOnly = true)
 	public List<UUID> excludedFilePublicIds() {
 		return fileRepository.findAllPublicIds();
+	}
+
+	/**
+	 * A deterministic fingerprint of both lists, so a similarity result computed
+	 * before the user changed one of them is never reused as if it still applied.
+	 *
+	 * <p>
+	 * Saying "these two are not duplicates" changes what the analysis is allowed to
+	 * find, which makes it a parameter of the analysis in every sense that matters.
+	 * Until now it was invisible to the key: the cache was cleared by hand from the
+	 * controller, which worked only because the cache lived in the same process as
+	 * the click.
+	 */
+	@Transactional(readOnly = true)
+	public String signature() {
+		List<String> files = fileRepository.findAllPublicIds().stream().map(UUID::toString).sorted().toList();
+
+		List<String> folders = folderRepository.findAllFolderPaths().stream().sorted().toList();
+
+		return SimilarityDigest.ofExclusions(files, folders);
 	}
 
 	@Transactional(readOnly = true)
@@ -114,13 +142,31 @@ public class DuplicateExclusionService {
 		return folderRepository.findAll();
 	}
 
+	/**
+	 * Lifting an exclusion is the case the stored relations were kept for: the
+	 * files come back to the analysed set and what was already computed about them
+	 * is still true. Announced only when a row really went, so that deleting an id
+	 * twice asks for one regroup rather than two.
+	 */
 	@Transactional
 	public void removeFileExclusion(Long id) {
+		if (!fileRepository.existsById(id)) {
+			return;
+		}
+
 		fileRepository.deleteById(id);
+
+		eventPublisher.publishEvent(new EligibilityChanged("file exclusion lifted"));
 	}
 
 	@Transactional
 	public void removeFolderExclusion(Long id) {
+		if (!folderRepository.existsById(id)) {
+			return;
+		}
+
 		folderRepository.deleteById(id);
+
+		eventPublisher.publishEvent(new EligibilityChanged("folder exclusion lifted"));
 	}
 }

@@ -12,9 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerActionResult;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
-import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerDeletionService;
+import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerCommandLauncher;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerPropertiesService;
-import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.ExplorerRenameService;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.ExplorerDeleteMode;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,23 +26,23 @@ import io.swagger.v3.oas.annotations.Operation;
  *
  * <p>
  * Restricted to ADMIN in {@code SecurityConfig} alongside the other operational
- * APIs - these three write to the user's own disk. A refused action answers
- * {@code success=false} carrying the reason already localized: the screen shows
- * the sentence it is handed and never composes one.
+ * APIs - these three end in changes to the user's own disk, made by the worker
+ * that takes them off the queue. A refused action answers {@code success=false}
+ * and one that outlived the wait answers {@code pending=true}, both carrying the
+ * reason already localized: the screen shows the sentence it is handed and never
+ * composes one.
  */
 @RestController
 @RequestMapping("/api/files")
 public class FileExplorerActionsController {
 
 	private final ExplorerPropertiesService propertiesService;
-	private final ExplorerDeletionService deletionService;
-	private final ExplorerRenameService renameService;
+	private final ExplorerCommandLauncher commandLauncher;
 
 	public FileExplorerActionsController(ExplorerPropertiesService propertiesService,
-			ExplorerDeletionService deletionService, ExplorerRenameService renameService) {
+			ExplorerCommandLauncher commandLauncher) {
 		this.propertiesService = propertiesService;
-		this.deletionService = deletionService;
-		this.renameService = renameService;
+		this.commandLauncher = commandLauncher;
 	}
 
 	@GetMapping("/properties")
@@ -55,14 +54,14 @@ public class FileExplorerActionsController {
 	@PostMapping("/delete")
 	@Operation(summary = "Sends an entry to quarantine or deletes it permanently")
 	public ExplorerActionResult delete(@RequestParam String path, @RequestParam ExplorerDeleteMode mode) {
-		return mode == ExplorerDeleteMode.PERMANENT ? deletionService.deletePermanently(target(path))
-				: deletionService.quarantine(target(path));
+		return mode == ExplorerDeleteMode.PERMANENT ? commandLauncher.deletePermanently(target(path))
+				: commandLauncher.quarantine(target(path));
 	}
 
 	@PostMapping("/rename")
 	@Operation(summary = "Renames a file or folder")
 	public ExplorerActionResult rename(@RequestParam String path, @RequestParam String newName) {
-		return renameService.rename(target(path), newName);
+		return commandLauncher.rename(target(path), newName);
 	}
 
 	private Path target(String path) {

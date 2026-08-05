@@ -13,14 +13,18 @@ import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionStopReason;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineMessages;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.Outcome;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -40,59 +44,40 @@ import lombok.extern.slf4j.Slf4j;
  * keeps the purge from racing a concurrent restore of the same file.
  *
  * <p>
- * Each run is capped ({@link #MAX_PER_RUN}); leftovers and any items that
- * errored (a file that could not be deleted) are simply retried on the next
- * daily run. This class is pure logic - the schedule lives in
- * {@code QuarantinePurgeScheduler}.
+ * Each run is capped ({@link QuarantineConstants#MAX_PER_RUN}); leftovers and
+ * any items that errored (a file that could not be deleted) are simply retried
+ * on the next daily run. This class is pure logic - it runs off the queue, and
+ * the schedule lives in {@code QuarantinePurgeScheduler}.
  */
 @Slf4j
 @Service
-public class QuarantinePurgeService extends LocalizedComponent {
-
-	/**
-	 * How many overdue items a single run will attempt, to bound memory and IO per
-	 * pass.
-	 */
-	private static final int MAX_PER_RUN = 5_000;
-
-	/** Fail-safe: an unreadable retention window runs no purge at all. */
-	private static final int DISABLED_RETENTION = -1;
+class QuarantinePurgeService extends LocalizedComponent {
 
 	private final MovementRepository movementRepository;
 	private final QuarantinePurgePersistence purgePersistence;
 	private final OperationLockService operationLockService;
-	private final AppSettingService appSettingService;
+	private final ExecutionStopReason executionStopReason;
 	private final QuarantineOperationLog purgeLog;
+	private final LibraryFileMutations libraryFileMutations;
 	private final Clock clock;
 
-	public QuarantinePurgeService(MovementRepository movementRepository, QuarantinePurgePersistence purgePersistence,
-			OperationLockService operationLockService, AppSettingService appSettingService,
-			QuarantineOperationLog purgeLog, Clock clock) {
+	QuarantinePurgeService(MovementRepository movementRepository, QuarantinePurgePersistence purgePersistence,
+			OperationLockService operationLockService, ExecutionStopReason executionStopReason,
+			QuarantineOperationLog purgeLog, LibraryFileMutations libraryFileMutations, Clock clock) {
 		this.movementRepository = movementRepository;
 		this.purgePersistence = purgePersistence;
 		this.operationLockService = operationLockService;
-		this.appSettingService = appSettingService;
+		this.executionStopReason = executionStopReason;
 		this.purgeLog = purgeLog;
+		this.libraryFileMutations = libraryFileMutations;
 		this.clock = clock;
-	}
-
-	/**
-	 * How long a file stays in quarantine before the scheduled purge expunges it,
-	 * or {@code 0} when no purge runs at all. The fallback is deliberately
-	 * non-positive instead of the product default: a blank or invalid setting must
-	 * disable the destructive purge, and must not promise the user a deadline
-	 * nobody enforces. Read fresh on every call, so a change in Settings applies
-	 * immediately.
-	 */
-	public int retentionDays() {
-		return Math.max(0, appSettingService.intValue(SettingsConstants.TRASH_RETENTION_DAYS, DISABLED_RETENTION));
 	}
 
 	/**
 	 * Expunges quarantined files whose soft-delete happened more than {@code days}
 	 * days ago. A non-positive {@code days} is a no-op (retention disabled).
 	 */
-	QuarantinePurgeResult purgeOlderThan(int days) {
+	QuarantinePurgeResult purgeOlderThan(int days, Execution execution, ExecutionOwnership ownership) {
 		if (days <= 0) {
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
@@ -101,16 +86,20 @@ public class QuarantinePurgeService extends LocalizedComponent {
 
 		List<Movement> overdue = movementRepository
 				.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(MovementStatus.MOVED,
-						QuarantineConstants.QUARANTINED_REASONS, cutoff, PageRequest.of(0, MAX_PER_RUN))
+						QuarantineConstants.QUARANTINED_REASONS, cutoff,
+						PageRequest.of(0, QuarantineConstants.MAX_PER_RUN))
 				.getContent();
 
-		// A pass with nothing overdue writes no execution: a daily row saying "0
-		// purged" would bury the rows that record an actual deletion.
+		// Nothing overdue is asked before this pass is queued, so getting here means
+		// the last item was expunged in between; the row exists either way and says
+		// so rather than being left to be read as work still to come.
 		if (overdue.isEmpty()) {
+			purgeLog.finish(ownership, 0, 0, 0, 0, QuarantineMessages.purgeCompleted(0, 0, 0, 0));
+
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
 
-		return purgeAll(overdue, overdue.size(), 0);
+		return purgeAll(overdue, overdue.size(), 0, execution, ownership);
 	}
 
 	/**
@@ -120,7 +109,8 @@ public class QuarantinePurgeService extends LocalizedComponent {
 	 * disk are reconciled (record cleaned). Ids that are not/no longer quarantined
 	 * are skipped.
 	 */
-	public QuarantinePurgeResult purgeSelected(List<UUID> movementIds) {
+	QuarantinePurgeResult purgeSelected(List<UUID> movementIds, Execution execution,
+			ExecutionOwnership ownership) {
 		if (movementIds == null || movementIds.isEmpty()) {
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
@@ -130,12 +120,16 @@ public class QuarantinePurgeService extends LocalizedComponent {
 		int unresolved = movementIds.size() - selected.size();
 
 		// Every id left quarantine between the listing and the click: nothing will be
-		// deleted, so there is no operation to record.
+		// deleted, and the row has to say why - "0 apagados" on its own reads as a
+		// success to whoever asked for the deletion.
 		if (selected.isEmpty()) {
+			purgeLog.finish(ownership, movementIds.size(), 0, unresolved, 0,
+					QuarantineMessages.alreadyLeftQuarantine(unresolved));
+
 			return new QuarantinePurgeResult(movementIds.size(), 0, 0, unresolved, 0, 0);
 		}
 
-		return purgeAll(selected, movementIds.size(), unresolved);
+		return purgeAll(selected, movementIds.size(), unresolved, execution, ownership);
 	}
 
 	/** The selected ids still quarantined, in the order they were given. */
@@ -160,26 +154,36 @@ public class QuarantinePurgeService extends LocalizedComponent {
 	 * it runs as an execution: what was purged, what could not be, and which file
 	 * failed all end up on the executions screen instead of only in the log.
 	 */
-	private QuarantinePurgeResult purgeAll(List<Movement> items, int requested, int unresolved) {
-		Execution execution = purgeLog.startPurge(requested);
-
+	private QuarantinePurgeResult purgeAll(List<Movement> items, int requested, int unresolved, Execution execution,
+			ExecutionOwnership ownership) {
 		try {
-			return purgeEach(execution, items, requested, unresolved);
+			return purgeEach(execution, items, requested, unresolved, ownership);
 		} catch (RuntimeException purgeError) {
-			purgeLog.fail(execution, purgeError.getMessage());
+			purgeLog.fail(ownership, purgeError.getMessage());
 
 			throw purgeError;
 		}
 	}
 
-	private QuarantinePurgeResult purgeEach(Execution execution, List<Movement> items, int requested, int unresolved) {
+	private QuarantinePurgeResult purgeEach(Execution execution, List<Movement> items, int requested, int unresolved,
+			ExecutionOwnership ownership) {
 		int purged = 0;
 		int catalogsFreed = 0;
 		int skipped = unresolved;
 		int busy = 0;
 		int errors = 0;
 
+		ExecutionStatus stoppedAs = null;
+
 		for (Movement movement : items) {
+			// Deleting a file for good is the most irreversible thing here, so both the
+			// right to do it and the wish to are confirmed immediately before each one.
+			stoppedAs = executionStopReason.of(execution, ownership);
+
+			if (stoppedAs != null) {
+				break;
+			}
+
 			switch (purgeOne(execution, movement)) {
 			case PURGED -> purged++;
 			case PURGED_WITH_CATALOG -> {
@@ -197,48 +201,81 @@ public class QuarantinePurgeService extends LocalizedComponent {
 
 		// A busy item is not a failure - the path is held by another operation and the
 		// next pass takes it - so it is counted with the skips, not with the errors.
-		purgeLog.finish(execution, requested, purged, skipped + busy, errors,
-				message("backend.quarantine.purgeCompleted", purged, skipped, busy, errors));
+		if (stoppedAs == null) {
+			purgeLog.finish(ownership, requested, purged, skipped + busy, errors,
+					outcome(purged, skipped, busy, errors));
+		} else {
+			purgeLog.stop(ownership, stoppedAs, requested, purged, skipped + busy, errors,
+					stoppedOutcome(stoppedAs, purged, skipped, busy, errors));
+		}
 
 		return new QuarantinePurgeResult(requested, purged, catalogsFreed, skipped, busy, errors);
 	}
 
-	/**
-	 * Removes the records of quarantined items whose file is no longer in the
-	 * quarantine folder ("Ausente"). Nothing is deleted from disk (there is nothing
-	 * there). Crucially, it re-checks each file on disk right now instead of
-	 * trusting the screen: if the quarantine folder/drive was just temporarily
-	 * unavailable (which makes every item look absent), the files reappear and
-	 * their records are kept, so a transient outage never wipes real entries.
-	 * Returns how many were removed.
-	 */
-	public int cleanupAbsent() {
-		List<Movement> absent = movementRepository
-				.findByStatusAndReasonInOrderByIdDesc(MovementStatus.MOVED, QuarantineConstants.QUARANTINED_REASONS,
-						PageRequest.of(0, MAX_PER_RUN))
-				.getContent().stream()
-				.filter(movement -> !Files.exists(PathUtils.normalizePath(movement.getTargetPath()))).toList();
-
-		// Nothing absent: no record will end, so there is no operation to record.
-		if (absent.isEmpty()) {
-			return 0;
+	private ExecutionMessage stoppedOutcome(ExecutionStatus stoppedAs, int purged, int skipped, int busy, int errors) {
+		if (stoppedAs == ExecutionStatus.CANCELLED) {
+			return QuarantineMessages.purgeCancelled(purged, skipped, busy, errors);
 		}
 
-		Execution execution = purgeLog.startAbsentCleanup(absent.size());
+		return QuarantineMessages.purgeInterrupted(purged, skipped, busy, errors);
+	}
+
+	/**
+	 * What the screen shows when the purge ends. A pass that deleted nothing is
+	 * the one the person has to be told about in words - "0 apagados" reads as
+	 * success - so it says which of the three reasons stopped it and what to do
+	 * about it, instead of the four counters that describe a pass that worked.
+	 */
+	private ExecutionMessage outcome(int purged, int skipped, int busy, int errors) {
+		if (purged == 0 && busy > 0) {
+			return QuarantineMessages.heldByAnotherOperation(busy);
+		}
+
+		if (purged == 0 && errors > 0) {
+			return QuarantineMessages.couldNotDeleteFromDisk(errors);
+		}
+
+		if (purged == 0 && skipped > 0) {
+			return QuarantineMessages.alreadyLeftQuarantine(skipped);
+		}
+
+		return QuarantineMessages.purgeCompleted(purged, skipped, busy, errors);
+	}
+
+	/**
+	 * Removes the records of quarantined items whose file is no longer in the
+	 * quarantine folder ("Ausente"). Nothing is deleted from disk - there is
+	 * nothing there.
+	 *
+	 * <p>
+	 * The list arrives from a reading the screen took; what makes the operation
+	 * safe is that it is not trusted. Every file is looked at again here, under its
+	 * own lock, immediately before its record goes: if the quarantine folder or its
+	 * drive was briefly unavailable - which makes every item look absent at once -
+	 * the files are there again and the records are kept.
+	 *
+	 * @return how many records were removed
+	 */
+	int cleanupAbsent(List<UUID> movementIds, Execution execution, ExecutionOwnership ownership) {
+		List<Movement> candidates = stillQuarantined(movementIds == null ? List.of() : movementIds);
 
 		try {
-			return cleanupEach(execution, absent);
+			return cleanupEach(execution, candidates, ownership);
 		} catch (RuntimeException cleanupError) {
-			purgeLog.fail(execution, cleanupError.getMessage());
+			purgeLog.fail(ownership, cleanupError.getMessage());
 
 			throw cleanupError;
 		}
 	}
 
-	private int cleanupEach(Execution execution, List<Movement> absent) {
+	private int cleanupEach(Execution execution, List<Movement> absent, ExecutionOwnership ownership) {
 		int removed = 0;
 
 		for (Movement movement : absent) {
+			if (executionStopReason.of(execution, ownership) != null) {
+				break;
+			}
+
 			Path quarantine = PathUtils.normalizePath(movement.getTargetPath());
 
 			try (var _ = operationLockService.acquire(ExecutionType.QUARANTINE_PURGE, quarantine)) {
@@ -263,15 +300,18 @@ public class QuarantinePurgeService extends LocalizedComponent {
 
 		// No errors to count: an item held by another operation, or whose file came
 		// back under the lock, was kept on purpose - the next pass looks again.
-		purgeLog.finish(execution, absent.size(), removed, kept, 0,
-				message("backend.quarantine.cleanupCompleted", removed, kept));
+		purgeLog.finish(ownership, absent.size(), removed, kept, 0,
+				QuarantineMessages.cleanupCompleted(removed, kept));
 
 		return removed;
 	}
 
 	private boolean deleteQuarantinedFile(Execution execution, Path quarantine) {
 		try {
-			Files.delete(quarantine);
+			// The quarantine root is a setting, and people do put it inside the library
+			// they are watching, so emptying it is a mutation of the user's own files -
+			// announced to the watcher by the port, like every other one.
+			libraryFileMutations.deleteFile(quarantine, execution.getId());
 
 			return true;
 		} catch (IOException e) {
@@ -307,7 +347,7 @@ public class QuarantinePurgeService extends LocalizedComponent {
 				return Outcome.SKIPPED;
 			}
 
-			removeEmptyParent(quarantine);
+			removeEmptyParent(execution, quarantine);
 
 			if (!fileWasPresent) {
 				log.info("Quarantine purge reconciled {} - the file was already gone; its record was cleaned",
@@ -341,7 +381,7 @@ public class QuarantinePurgeService extends LocalizedComponent {
 	}
 
 	/** Removes the now-empty {@code exec-<id>} folder left behind, best-effort. */
-	private void removeEmptyParent(Path quarantineFile) {
+	private void removeEmptyParent(Execution execution, Path quarantineFile) {
 		Path parent = quarantineFile.getParent();
 
 		if (parent == null || !Files.isDirectory(parent)) {
@@ -350,7 +390,7 @@ public class QuarantinePurgeService extends LocalizedComponent {
 
 		try (DirectoryStream<Path> entries = Files.newDirectoryStream(parent)) {
 			if (!entries.iterator().hasNext()) {
-				Files.delete(parent);
+				libraryFileMutations.deleteEmptyDirectory(parent, execution.getId());
 			}
 		} catch (IOException e) {
 			log.debug("Could not remove quarantine subfolder {}", parent, e);

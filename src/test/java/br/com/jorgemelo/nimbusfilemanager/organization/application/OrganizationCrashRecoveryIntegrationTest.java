@@ -53,7 +53,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 	private InventoryBatchTestSeeder inventorySeeder;
 
 	@Autowired
-	private OrganizationReconcileService organizationReconcileService;
+	private OrganizationReconcileApply organizationReconcileApply;
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
@@ -88,7 +88,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 		Assertions.assertThat(Files.exists(original)).isFalse();
 		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isPresent();
 
-		organizationReconcileService
+		organizationReconcileApply
 				.reconcileAndApply(new OrganizationReconcileRequest(root.toString(), true, false, 100));
 
 		// The catalog followed the file to its real location instead of dangling.
@@ -116,7 +116,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 		// Crash simulation: file moved out of the reconcile scope, catalog untouched.
 		Files.move(original, outside.resolve("clip.txt"));
 
-		organizationReconcileService
+		organizationReconcileApply
 				.reconcileAndApply(new OrganizationReconcileRequest(sourceDir.toString(), true, false, 100));
 
 		// It cannot be relocated (the new file is outside the scanned scope), but the

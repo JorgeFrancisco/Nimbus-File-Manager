@@ -1,15 +1,15 @@
 package br.com.jorgemelo.nimbusfilemanager.processing.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.junit.jupiter.api.Test;
+import static org.awaitility.Awaitility.await;
 
 import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
 
 class ExternalToolGateTest {
 
@@ -46,10 +46,12 @@ class ExternalToolGateTest {
 		}
 
 		// Limit is 2, so at most two hold the permit at once; the other two block.
-		Thread.sleep(300);
-
-		assertThat(current.get()).isEqualTo(2);
-		assertThat(maxObserved.get()).isEqualTo(2);
+		// Held for a while rather than sampled once: the claim is that it settles at
+		// two and stays there, which a single reading after a pause cannot show.
+		await().during(Duration.ofMillis(300)).atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+			assertThat(current.get()).isEqualTo(2);
+			assertThat(maxObserved.get()).isEqualTo(2);
+		});
 
 		release.countDown();
 

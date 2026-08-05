@@ -1,9 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@Profile(NimbusProfiles.APP)
 public class ExternalToolBootstrapInstaller {
 
 	private final ExternalToolInstaller installer;

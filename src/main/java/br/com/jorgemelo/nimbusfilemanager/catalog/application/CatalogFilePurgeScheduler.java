@@ -4,16 +4,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Runs the catalog missing-record purge once a day on its own daemon thread,
- * mirroring the quarantine purge (the app has no Spring
+ * Asks for the catalog missing-record purge once a day on its own daemon
+ * thread, mirroring the quarantine purge (the app has no Spring
  * {@code @EnableScheduling}). The retention window is read fresh from
  * {@link SettingsConstants#CATALOG_MISSING_RETENTION_DAYS} each run, so
  * changing it in Settings takes effect on the next pass. Any non-positive,
@@ -23,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
+@Profile(NimbusProfiles.APP)
 class CatalogFilePurgeScheduler {
 
 	/**
@@ -32,7 +35,7 @@ class CatalogFilePurgeScheduler {
 	private static final long PERIOD_MINUTES = 24L * 60;
 
 	private final AppSettingService appSettingService;
-	private final CatalogFileRetentionService catalogFileRetentionService;
+	private final CatalogPurgeLauncherService catalogPurgeLauncherService;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "nimbus-file-manager-catalog-purge");
 
@@ -43,9 +46,9 @@ class CatalogFilePurgeScheduler {
 	private volatile boolean shuttingDown;
 
 	CatalogFilePurgeScheduler(AppSettingService appSettingService,
-			CatalogFileRetentionService catalogFileRetentionService) {
+			CatalogPurgeLauncherService catalogPurgeLauncherService) {
 		this.appSettingService = appSettingService;
-		this.catalogFileRetentionService = catalogFileRetentionService;
+		this.catalogPurgeLauncherService = catalogPurgeLauncherService;
 
 		executor.scheduleWithFixedDelay(this::runOnce, INITIAL_DELAY_MINUTES, PERIOD_MINUTES, TimeUnit.MINUTES);
 	}
@@ -65,7 +68,10 @@ class CatalogFilePurgeScheduler {
 				return;
 			}
 
-			catalogFileRetentionService.purgeMissingOlderThan(days);
+			// Queued, never run here. Removing catalog rows is workload like any other,
+			// and the timer's job ends at asking for it - which it only does when there
+			// is something to ask about, so a quiet day leaves no row behind.
+			catalogPurgeLauncherService.launch(days);
 		} catch (Exception e) {
 			if (shuttingDown || Thread.currentThread().isInterrupted()) {
 				log.debug("Scheduled catalog missing purge interrupted during shutdown", e);

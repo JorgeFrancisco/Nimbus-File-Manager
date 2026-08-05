@@ -37,7 +37,12 @@ class GeoJsonBoundaryImporterTest {
 
 	private final GeoAdminBoundaryImportRepository boundaryRepository = mock(GeoAdminBoundaryImportRepository.class);
 	private final GeoJsonBoundaryReader reader = new GeoJsonBoundaryReader(new ObjectMapper());
-	private final GeoDatasetProgress progress = new GeoDatasetProgress();
+	/**
+	 * Attached to nothing, which is what an import outside a run is: it reports
+	 * where there is no execution to report to, and says so by doing nothing.
+	 */
+	private final GeoDatasetProgress progress = new GeoDatasetProgress(
+			mock(br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService.class));
 
 	// Snapshotted at call time: the importer reuses and clears the batch list
 	// after each flush, so capturing the live reference would read as empty.

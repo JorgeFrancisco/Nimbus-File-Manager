@@ -6,6 +6,8 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoComparisonInputs;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinates;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
@@ -23,14 +25,38 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 public class CatalogFileMapper {
 
 	private final MediaDateResolver mediaDateResolver;
+	private final VideoRelationInvalidator videoRelationInvalidator;
 	private final Clock clock;
 
-	public CatalogFileMapper(MediaDateResolver mediaDateResolver, Clock clock) {
+	public CatalogFileMapper(MediaDateResolver mediaDateResolver, VideoRelationInvalidator videoRelationInvalidator,
+			Clock clock) {
 		this.mediaDateResolver = mediaDateResolver;
+		this.videoRelationInvalidator = videoRelationInvalidator;
 		this.clock = clock;
 	}
 
-	public void updateEntity(CatalogFile catalogFile, Path file, Path sourcePath, MetadataResult metadata) {
+	/**
+	 * Re-catalogues a file that is already known, which is what a re-scan does when
+	 * the bytes on disk moved on.
+	 *
+	 * <p>
+	 * The duration and display size are read before anything is written, because
+	 * they are what a video's approved similarity relations were decided by and
+	 * they do not live in its fingerprint - a re-encode keeps the catalog id, keeps
+	 * the fingerprint until the backlog gets to it, and silently changes the answer
+	 * the gates would give. Comparing before with after is what turns that into a
+	 * recomputation instead of a stale fact.
+	 *
+	 * @return whether this brought the entry back from MISSING or DELETED. Read at
+	 * the end of the pass rather than acted on here: a file returning to the
+	 * catalog returns to what a duplicate analysis may look at, and that is a fact
+	 * about the run rather than about the file
+	 */
+	public boolean updateEntity(CatalogFile catalogFile, Path file, Path sourcePath, MetadataResult metadata) {
+		VideoComparisonInputs before = VideoComparisonInputs.of(catalogFile);
+
+		boolean wasSetAside = !catalogFile.isActive();
+
 		catalogFile.setFileName(metadata.getFileName());
 		catalogFile.setExtension(metadata.getExtension());
 		catalogFile.setSizeBytes(metadata.getSizeBytes());
@@ -64,6 +90,10 @@ public class CatalogFileMapper {
 			catalogFile.setVideo(null);
 		}
 		}
+
+		videoRelationInvalidator.invalidateIfChanged(catalogFile, before);
+
+		return wasSetAside;
 	}
 
 	private void updateLocation(CatalogFile catalogFile, Path file, Path sourcePath) {

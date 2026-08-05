@@ -60,8 +60,8 @@ class TemplateStyleReferenceTest {
 
 			while (matcher.find()) {
 				for (String name : matcher.group(1).trim().split("\\s+")) {
-					if (!name.isBlank() && !name.startsWith("bi-") && !name.startsWith("js-") && !EXTERNAL.contains(name)
-							&& !defined.contains(name) && !scripts.contains(name)) {
+					if (!name.isBlank() && !name.startsWith("bi-") && !name.startsWith("js-")
+							&& !EXTERNAL.contains(name) && !defined.contains(name) && !scripts.contains(name)) {
 						missing.add(name + " (" + template.getFileName() + ")");
 					}
 				}

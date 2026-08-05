@@ -5,16 +5,11 @@ import java.time.LocalDateTime;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
@@ -30,14 +25,7 @@ import jakarta.persistence.EntityManager;
  * {@code FALSE}). The pure-Java default is covered by
  * {@code MediaGeoLocationDefaultTest}; this is the persisted-value counterpart.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class MediaGeoLocationPersistenceIntegrationTest {
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+class MediaGeoLocationPersistenceIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

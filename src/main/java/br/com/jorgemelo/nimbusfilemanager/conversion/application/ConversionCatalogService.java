@@ -4,6 +4,7 @@ import java.nio.file.Path;
 
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
@@ -39,8 +40,13 @@ public class ConversionCatalogService {
 	/**
 	 * @param originalDate the capture date already resolved for the file this one
 	 * replaces, or {@code null} when there is none to inherit.
+	 * @return whether this brought a catalog entry back from the dead. Converting
+	 * to a path the catalog knew and had marked missing - the previous output of
+	 * the same conversion, removed from outside the application - makes that entry
+	 * active again, which puts it back in the set a duplicate analysis looks at.
+	 * Nothing is announced here: the fact travels to the batch, which says it once
 	 */
-	public void catalog(Path file, ResolvedMediaDate originalDate) {
+	public boolean catalog(Path file, ResolvedMediaDate originalDate) {
 		// forceAnalysis, so a stale row left at this exact path (a file converted,
 		// removed and converted again) is updated instead of quietly kept as a cache
 		// hit with the old size, codec and hashes.
@@ -48,7 +54,8 @@ public class ConversionCatalogService {
 
 		MetadataResult metadata = keepingTheBestDate(metadataFacade.extract(file, options), originalDate);
 
-		inventoryPersistenceService.save(file, inventoryRoot(file), metadata, options);
+		return inventoryPersistenceService.save(file, inventoryRoot(file), metadata,
+				options).action() == InventoryPersistenceAction.REACTIVATED;
 	}
 
 	/**

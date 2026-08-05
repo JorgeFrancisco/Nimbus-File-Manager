@@ -26,7 +26,8 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunning
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerEntry;
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.FileExplorerView;
 import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.FileExplorerService;
-import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildAsyncRunner;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRebuildLauncher;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
@@ -81,7 +82,10 @@ class FileExplorerTilesFragmentTest {
 	private AppSettingService appSettingService;
 
 	@MockitoBean
-	private MetadataRebuildAsyncRunner metadataRebuildAsyncRunner;
+	private MetadataRebuildLauncher metadataRebuildLauncher;
+
+	@MockitoBean
+	private MetadataRunReader metadataRunReader;
 
 	@MockitoBean
 	private InventoryRunningState inventoryRunningState;

@@ -7,20 +7,26 @@ import java.util.stream.Collectors;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 
 /**
- * The single definition of the statuses an execution is in while its background
- * thread is still running - derived from {@link ExecutionStatus#isTerminal()}
- * (the non-terminal states), so adding a status never needs editing this set
- * too. {@link #IN_PROGRESS_NAMES} is the same set as the stored/serialized
- * status names, for the controllers that compare the string status of an
+ * The statuses an execution can still move on from - derived from
+ * {@link ExecutionStatus#isTerminal()}, so adding a status never needs editing
+ * this set too. {@link #ACTIVE_NAMES} is the same set as the stored/serialized
+ * names, for the controllers that compare the string status of an
  * {@code ExecutionResponse} (the dashboard refresh cadence and the
  * execution-detail redirect to the live progress screen).
+ *
+ * <p>
+ * "Active" here means the screen still has something to show, which includes an
+ * execution nobody has taken yet. Whoever needs "a worker is holding this right
+ * now" wants {@link ExecutionStatus#RUNNING} alone - recovery in particular,
+ * since a PENDING row surviving a restart is the point of keeping the queue in
+ * the database.
  */
 public final class ExecutionStatusNames {
 
-	public static final Set<ExecutionStatus> IN_PROGRESS = Arrays.stream(ExecutionStatus.values())
+	public static final Set<ExecutionStatus> ACTIVE = Arrays.stream(ExecutionStatus.values())
 			.filter(status -> !status.isTerminal()).collect(Collectors.toUnmodifiableSet());
 
-	public static final Set<String> IN_PROGRESS_NAMES = IN_PROGRESS.stream().map(Enum::name)
+	public static final Set<String> ACTIVE_NAMES = ACTIVE.stream().map(Enum::name)
 			.collect(Collectors.toUnmodifiableSet());
 
 	private ExecutionStatusNames() {

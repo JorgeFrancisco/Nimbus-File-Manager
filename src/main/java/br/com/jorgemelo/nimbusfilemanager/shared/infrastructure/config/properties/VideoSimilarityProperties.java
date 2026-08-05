@@ -24,8 +24,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "nimbus-file-manager.duplicates.video-similarity")
 public record VideoSimilarityProperties(Integer minConcordantFrames, Integer trimmedLowestFrames,
-		Integer maxFrameHashDistance, Double durationToleranceSeconds, Double aspectRatioTolerance,
-		Integer maxCandidates) {
+		Integer maxFrameHashDistance, Double durationToleranceSeconds, Double aspectRatioTolerance) {
 
 	private static final Logger log = LoggerFactory.getLogger(VideoSimilarityProperties.class);
 
@@ -40,10 +39,6 @@ public record VideoSimilarityProperties(Integer minConcordantFrames, Integer tri
 
 	public static final double DEFAULT_DURATION_TOLERANCE_SECONDS = 3.0;
 	public static final double DEFAULT_ASPECT_RATIO_TOLERANCE = 0.12;
-
-	public static final int DEFAULT_MAX_CANDIDATES = 8000;
-	public static final int MIN_MAX_CANDIDATES = 1;
-	public static final int MAX_MAX_CANDIDATES = 100_000;
 
 	/**
 	 * How many aligned frame pairs must reach the similarity threshold for two
@@ -77,11 +72,6 @@ public record VideoSimilarityProperties(Integer minConcordantFrames, Integer tri
 
 	public double aspectRatioToleranceOrDefault() {
 		return normalizeDouble("aspectRatioTolerance", aspectRatioTolerance, DEFAULT_ASPECT_RATIO_TOLERANCE);
-	}
-
-	public int maxCandidatesOrDefault() {
-		return normalizeInt("maxCandidates", maxCandidates, DEFAULT_MAX_CANDIDATES, MIN_MAX_CANDIDATES,
-				MAX_MAX_CANDIDATES);
 	}
 
 	private static int normalizeInt(String name, Integer value, int fallback, int min, int max) {

@@ -2,10 +2,12 @@ package br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web;
 
 import java.io.IOException;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
@@ -28,6 +30,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * the caller from. Only the bundles are touched, never a table.
  */
 @Component
+@Profile(NimbusProfiles.APP)
 public class RestoreInProgressInterceptor extends LocalizedComponent implements HandlerInterceptor {
 
 	/** Long enough not to hammer the server, short enough to feel alive. */

@@ -9,7 +9,7 @@
 > and this file has not been retranslated. Update both in the same commit, and refresh the
 > marker below with the hash the test reports.
 
-<!-- agents-sha256: 18fb616793a1d08658fe2f7a87826036275b0425f465785645854f87780fa59c -->
+<!-- agents-sha256: b656c2c80a4a22665436ba668568c70fc18f657d02dfa4d287c8717572c6baa1 -->
 
 > **Permanent reference document of the project.**
 
@@ -213,6 +213,8 @@ Hexagonal architecture is to be applied **pragmatically, not ceremonially**.
 - **Ports and adapters at the real boundaries.** Adapters for external I/O (ffmpeg/exiftool/mediainfo, HTTP, filesystem, mail, native glue) live **only** in `infrastructure`. Domain support that unavoidably crosses the framework boundary (e.g. `ClockHolder`, the static bridge for the `@PrePersist`/`@PreUpdate` callbacks of entities, which receive no injection) lives in the domain (`shared/domain`), not in `application`.
 - **Abstraction only where it pays.** Create a port/interface when it isolates a real boundary — an external system, a technology that may change, or a concrete testability gain. Do **not** create abstraction as ritual: an interface with a single implementer that merely wraps the framework, with no variation point and no test value, is ceremony — avoid it.
 - **Conscious pragmatic exceptions.** JPA entities (`@Entity`) **are** the domain model and Spring Data repositories (`extends JpaRepository`) **are** the ports — they live in the `domain` even while carrying technology annotations. We do not separate a POJO model from the JPA entities, nor create an adapter just to wrap Spring Data: the mapping boilerplate does not pay for itself in an application (unlike a complex domain library). It is an explicit decision — the isolation of the first item applies to dependencies **between project classes**; JPA/Spring inside the `domain` is the accepted pragmatic boundary.
+- **Narrow exception: a custom JDBC repository read by `application`.** The rule above sends the custom JDBC repository (a concrete `@Repository` class over `NamedParameterJdbcTemplate`, with no Spring Data interface) to `<domain>/infrastructure/persistence`; the direction rule forbids `application` from knowing `infrastructure`. Together, the two can only be satisfied by creating a single-implementer interface that merely wraps the `JdbcTemplate` — precisely the ceremony the previous item refuses. **It is settled: `application` may import a custom JDBC repository of this project**, just as it already consumes the Spring Data ports that live in the `domain`. It is the same concept — a persistence boundary — implemented directly instead of behind an interface, and it is what the code does in every existing case.
+  The exception is **persistence only**, and does **not** open `application` to `infrastructure` in general. **Still invisible** to `application`, among others: `infrastructure/rest` and `infrastructure/web` controllers, REST/HTTP clients, ProcessRunners, filesystem and native glue (FFM/kernel32), external-service adapters, and any framework detail that is not a persistence boundary. For those the direction `infrastructure → application → domain` holds undiminished, and the port remains the way through.
 
 ---
 
@@ -408,6 +410,14 @@ The ratchet **does not** authorise a shortcut: it still holds that a test valida
 ---
 
 # Static quality (Sonar)
+
+The analysis runs against a **local SonarQube**. `host.url`, `projectKey` and `projectName` already live in `pom.xml`, so the command line is only:
+
+```bash
+./mvnw clean verify sonar:sonar
+```
+
+The **analysis token never enters the repository**: it lives in the Maven `settings.xml` of whoever runs it (`~/.m2/settings.xml`), in a profile activated by the **absence of a property** (`<name>!skipSonarToken</name>`) and **not** by `<activeByDefault>` — Maven switches the latter off as soon as any other profile is activated with `-P` (for instance `-Pspotbugs`), which would drop the token and fail the analysis for lack of authorisation.
 
 - **Every task must end without creating a single new Sonar issue.** Run the analysis at the end and compare the total — and the count **per rule** — with the previous state.
 - **Pre-existing** issues may remain only when they are **outside the scope** of the task.

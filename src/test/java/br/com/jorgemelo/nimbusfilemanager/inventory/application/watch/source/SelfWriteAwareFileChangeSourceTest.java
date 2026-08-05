@@ -9,12 +9,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -24,7 +28,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegi
  */
 class SelfWriteAwareFileChangeSourceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
+			Clock.systemDefaultZone());
 	private final FileChangeSource delegate = mock(FileChangeSource.class);
 	private final ScanExclusionService scanExclusionService = mock(ScanExclusionService.class);
 
@@ -84,14 +89,19 @@ class SelfWriteAwareFileChangeSourceTest {
 	}
 
 	/**
-	 * Overflow is the source admitting it may have missed changes, so it has to
-	 * reach the watcher untouched: that is the signal that forces a full re-scan.
+	 * The recovery reason is the source admitting it may have missed changes, so
+	 * it has to reach the watcher untouched - including which of the three it was,
+	 * since this wrapper has no opinion about any of them.
 	 */
 	@Test
-	void letsTheOverflowSignalThrough() {
-		when(delegate.consumeOverflow()).thenReturn(true);
+	void letsTheRecoveryReasonThroughUnchanged() {
+		when(delegate.consumeRecoveryReason()).thenReturn(Optional.of(WatchRecoveryReason.EVENTS_LOST));
 
-		Assertions.assertThat(source.consumeOverflow()).isTrue();
+		Assertions.assertThat(source.consumeRecoveryReason()).contains(WatchRecoveryReason.EVENTS_LOST);
+
+		when(delegate.consumeRecoveryReason()).thenReturn(Optional.of(WatchRecoveryReason.JOURNAL_UNREPLAYABLE));
+
+		Assertions.assertThat(source.consumeRecoveryReason()).contains(WatchRecoveryReason.JOURNAL_UNREPLAYABLE);
 	}
 
 	@Test

@@ -86,8 +86,20 @@ public class InventoryPersistenceService {
 		return catalogFileRepository.findByFileKey(fileKey).isPresent() && !options.forceAnalysis();
 	}
 
-	public ProcessResult save(Path file, Path sourcePath, MetadataResult metadata, MetadataOptions options) {
-		return saveOrCache(file, sourcePath, options, () -> metadata).result();
+	/**
+	 * Catalogues one file and says what that did to it.
+	 *
+	 * <p>
+	 * The whole result rather than only {@code ProcessResult}, because "written"
+	 * and "written, and the entry was brought back from the dead" are the same
+	 * answer to the caller's question and very different answers to somebody
+	 * else's: a revived entry rejoins the set a duplicate analysis may look at, and
+	 * only the operation that called this can say so once for all the files it
+	 * catalogued.
+	 */
+	public InventoryPersistenceResult save(Path file, Path sourcePath, MetadataResult metadata,
+			MetadataOptions options) {
+		return saveOrCache(file, sourcePath, options, () -> metadata);
 	}
 
 	InventoryPersistenceResult saveOrCache(Path file, Path sourcePath, MetadataOptions options,
@@ -104,13 +116,13 @@ public class InventoryPersistenceService {
 
 			MetadataResult metadata = metadataSupplier.get();
 
-			catalogFileMapper.updateEntity(existing, file, sourcePath, metadata);
+			boolean reactivated = catalogFileMapper.updateEntity(existing, file, sourcePath, metadata);
 
 			catalogFileRepository.save(existing);
 
 			resolveLocationsQuietly(List.of(existing));
 
-			return new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.UPDATED);
+			return new InventoryPersistenceResult(ProcessResult.ANALYZED, actionOf(reactivated));
 		}).orElseGet(() -> {
 			MetadataResult metadata = metadataSupplier.get();
 
@@ -310,12 +322,12 @@ public class InventoryPersistenceService {
 	private InventoryBatchItemResult persistExtracted(Path file, Path sourcePath, CatalogFile existing,
 			MetadataResult metadata, List<CatalogFile> toPersist) {
 		if (existing != null) {
-			catalogFileMapper.updateEntity(existing, file, sourcePath, metadata);
+			boolean reactivated = catalogFileMapper.updateEntity(existing, file, sourcePath, metadata);
 
 			toPersist.add(existing);
 
 			return InventoryBatchItemResult.of(file,
-					new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.UPDATED));
+					new InventoryPersistenceResult(ProcessResult.ANALYZED, actionOf(reactivated)));
 		}
 
 		CatalogFile entity = catalogFileMapper.toEntity(file, sourcePath, metadata);
@@ -324,6 +336,15 @@ public class InventoryPersistenceService {
 
 		return InventoryBatchItemResult.of(file,
 				new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.CREATED));
+	}
+
+	/**
+	 * Both kinds of update, told apart by whether the entry was set aside before
+	 * it. The distinction is not cosmetic: only one of the two changes which files
+	 * the rest of the product may look at, and the pass reports it once at the end.
+	 */
+	private static InventoryPersistenceAction actionOf(boolean reactivated) {
+		return reactivated ? InventoryPersistenceAction.REACTIVATED : InventoryPersistenceAction.UPDATED;
 	}
 
 	private InventoryBatchItemResult cacheResult(Path file) {

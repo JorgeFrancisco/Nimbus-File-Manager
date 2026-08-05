@@ -1,7 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -10,6 +14,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,7 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationSubdi
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationForm;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
@@ -143,10 +148,10 @@ class OrganizationWebControllerTest {
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap foundModel = new ExtendedModelMap();
 		ExtendedModelMap missingModel = new ExtendedModelMap();
-		OrganizationPlan plan = plan();
+		StoredPlanPage plan = plan();
 
-		when(organizationService.getPreviewPlan(1L)).thenReturn(plan);
-		when(organizationService.getPreviewPlan(2L)).thenReturn(null);
+		when(organizationService.planPage(eq(1L), anyInt(), anyInt(), anyBoolean())).thenReturn(Optional.of(plan));
+		when(organizationService.planPage(eq(2L), anyInt(), anyInt(), anyBoolean())).thenReturn(Optional.empty());
 
 		String foundView = controller.previewResult(1L, 0, 20, foundModel);
 		String missingView = controller.previewResult(2L, 0, 20, missingModel);
@@ -163,7 +168,8 @@ class OrganizationWebControllerTest {
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		UUID executionId = UUID.randomUUID();
-		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(null);
+		when(organizationService.planPagePublic(eq(executionId), anyInt(), anyInt(), anyBoolean()))
+				.thenReturn(Optional.empty());
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		String view = controller.previewResult(executionId, 0, 50, false, null, model);
@@ -184,7 +190,8 @@ class OrganizationWebControllerTest {
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
 				mock(UserPagePreferenceService.class), executionQueryService);
 		UUID executionId = UUID.randomUUID();
-		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(null);
+		when(organizationService.planPagePublic(eq(executionId), anyInt(), anyInt(), anyBoolean()))
+				.thenReturn(Optional.empty());
 		when(executionQueryService.get(executionId)).thenReturn(new ExecutionResponse(executionId, "ORGANIZATION",
 				"ERROR", null, null, null, null, null, null, null, null, null, null, null, null, null, null));
 		ExtendedModelMap model = new ExtendedModelMap();
@@ -206,7 +213,7 @@ class OrganizationWebControllerTest {
 	void organizationPreviewResultExplainsEachReasonThePlanIsNoLongerThere() {
 		Assertions.assertThat(previewErrorFor("FINISHED")).contains("não está mais disponível");
 		Assertions.assertThat(previewErrorFor("CANCELLED")).contains("não está mais disponível");
-		Assertions.assertThat(previewErrorFor("PROCESSING_FILES")).contains("ainda está sendo processada");
+		Assertions.assertThat(previewErrorFor("RUNNING")).contains("ainda está sendo processada");
 		Assertions.assertThat(previewErrorFor("FINISHED_WITH_ERRORS")).contains("terminou com erro");
 	}
 
@@ -219,7 +226,8 @@ class OrganizationWebControllerTest {
 
 		UUID executionId = UUID.randomUUID();
 
-		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(null);
+		when(organizationService.planPagePublic(eq(executionId), anyInt(), anyInt(), anyBoolean()))
+				.thenReturn(Optional.empty());
 		when(executionQueryService.get(executionId)).thenReturn(new ExecutionResponse(executionId, "ORGANIZATION",
 				status, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
 
@@ -238,7 +246,7 @@ class OrganizationWebControllerTest {
 				mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		when(organizationService.getPreviewPlan(1L)).thenReturn(plan());
+		when(organizationService.planPage(1L, 0, 20, false)).thenReturn(Optional.of(plan()));
 		when(preferences.find(null, "organization")).thenReturn(Map.of("limit", "250", "recursive", "false"));
 
 		controller.previewResult(1L, 0, 20, model);
@@ -316,16 +324,56 @@ class OrganizationWebControllerTest {
 		verify(preferences).save("admin@example.com", "organization", "allowConflicts", "true");
 	}
 
+	/**
+	 * The other half of the same screen: a form the user left on its defaults saves
+	 * only what it actually carries. Saving a null as a value would overwrite the
+	 * choice they made last time with nothing.
+	 *
+	 * <p>
+	 * The exception is the minimum confidence, where "Qualquer" <em>is</em> a
+	 * choice and has to overwrite a stricter one saved before - so it is written as
+	 * an empty value rather than skipped.
+	 */
 	@Test
-	void organizationPreviewResultShouldPaginateNonEmptyPlan() {
+	void executeSavesOnlyTheChoicesTheFormActuallyCarries() throws Exception {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
+		OrganizationWebController controller = new OrganizationWebController(organizationService, preferences,
+				mock(ExecutionQueryService.class));
+		TestingAuthenticationToken auth = new TestingAuthenticationToken("admin@example.com", "password");
+		Path source = Files.createDirectories(tempDir.resolve("bare-source"));
+		Path target = tempDir.resolve("bare-target");
+
+		when(organizationService.executeAsync(any())).thenReturn(execution());
+
+		OrganizationForm form = new OrganizationForm(source.toString(), target.toString(), true,
+				OrganizationLayout.DEFAULT, null, true, false, 0, null, null, null, null);
+
+		controller.execute(form, auth, new ExtendedModelMap());
+
+		verify(preferences, never()).save(any(), any(), eq("limit"), any());
+		verify(preferences, never()).save(any(), any(), eq("locationSubdivision"), any());
+		verify(preferences, never()).save(any(), any(), eq("locationFallback"), any());
+		verify(preferences).save("admin@example.com", "organization", "locationMinConfidence", "");
+	}
+
+	/**
+	 * The paging moved into the query, so what the screen still decides is what the
+	 * arrows do. The page it renders is the page it was handed - twenty rows of a
+	 * plan of twenty-five - and this pins that it derives "there is a next page"
+	 * from the plan's own total rather than from the rows in front of it.
+	 */
+	@Test
+	void previewResultDerivesThePagingControlsFromTheStoredTotal() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
-		OrganizationPlan plan = planWithItems(25);
+
 		ExtendedModelMap firstPageModel = new ExtendedModelMap();
 		ExtendedModelMap lastPageModel = new ExtendedModelMap();
 
-		when(organizationService.getPreviewPlan(1L)).thenReturn(plan);
+		when(organizationService.planPage(1L, 0, 20, false)).thenReturn(Optional.of(pageOf(items(20), 0, 20, 25)));
+		when(organizationService.planPage(1L, 1, 20, false)).thenReturn(Optional.of(pageOf(items(5), 1, 20, 25)));
 
 		controller.previewResult(1L, 0, 20, firstPageModel);
 		controller.previewResult(1L, 1, 20, lastPageModel);
@@ -335,30 +383,53 @@ class OrganizationWebControllerTest {
 		Assertions.assertThat(lastPageModel).containsEntry("hasPrevious", true).containsEntry("hasNext", false);
 	}
 
+	/**
+	 * "Only conflicts" is a different query now rather than a filter over rows this
+	 * process holds - so what the screen has to get right is passing the flag on
+	 * and rendering the totals that come back.
+	 */
 	@Test
-	void previewResultWithOnlyConflictsShouldPaginateJustTheConflictedItems() {
+	void previewResultWithOnlyConflictsAsksTheQueryForThem() {
 		OrganizationService organizationService = mock(OrganizationService.class);
 		OrganizationWebController controller = new OrganizationWebController(organizationService,
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		List<OrganizationItem> items = new ArrayList<>();
-		for (int i = 0; i < 5; i++) {
-			boolean conflict = i % 2 == 0; // items 0, 2, 4 conflict -> 3 total
-			items.add(new OrganizationItem((long) i, "file" + i + ".jpg", "C:/in/file" + i + ".jpg",
-					"C:/out/file" + i + ".jpg", "202405", "09", "MEDIA", "CAMERA", "IMAGENS", "CAMERA", null, 100L,
-					false, false, conflict, false, conflict, conflict ? "TARGET_EXISTS" : null));
-		}
-		OrganizationPlan plan = new OrganizationPlan("C:/in", "C:/out", OrganizationLayout.DEFAULT, false,
-				new OrganizationSummary(5, 5, 0, 0, 5, 0, 3, 3, 0), items);
-
 		UUID executionId = UUID.randomUUID();
-		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(plan);
+
+		when(organizationService.planPagePublic(executionId, 0, 20, true))
+				.thenReturn(Optional.of(pageOf(items(3), 0, 20, 3)));
 
 		controller.previewResult(executionId, 0, 20, true, null, model);
 
 		Assertions.assertThat(model).containsEntry("onlyConflicts", true).containsEntry("totalItems", 3);
 		Assertions.assertThat((List<?>) model.get("previewItems")).hasSize(3);
+
+		verify(organizationService, never()).planPagePublic(executionId, 0, 20, false);
+	}
+
+	/**
+	 * The plan being stale is information the screen shows, not a refusal. The run
+	 * recalculates either way; what this holds is that the user is told.
+	 */
+	@Test
+	void previewResultSaysWhenTheCatalogMovedSinceThePlanWasBuilt() {
+		OrganizationService organizationService = mock(OrganizationService.class);
+		OrganizationWebController controller = new OrganizationWebController(organizationService,
+				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
+
+		UUID executionId = UUID.randomUUID();
+
+		when(organizationService.planPagePublic(executionId, 0, 50, false)).thenReturn(Optional.of(new StoredPlanPage(
+				"C:/in", "C:/out", OrganizationLayout.DEFAULT, new OrganizationSummary(1, 0, 0, 0, 1, 0, 0, 0, 0),
+				true, items(1), 0, 50, 1)));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.previewResult(executionId, 0, 50, false, null, model);
+
+		Assertions.assertThat(model).containsEntry("catalogChanged", true);
+		Assertions.assertThat(model.get("error")).isNull();
 	}
 
 	@Test
@@ -368,7 +439,7 @@ class OrganizationWebControllerTest {
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		when(organizationService.getPreviewPlan(1L)).thenReturn(plan());
+		when(organizationService.planPage(1L, 0, 20, false)).thenReturn(Optional.of(plan()));
 
 		controller.previewResult(1L, 0, 20, model);
 
@@ -467,9 +538,9 @@ class OrganizationWebControllerTest {
 		Assertions.assertThat(unsupportedSizeModel).containsEntry("size", 50);
 	}
 
-	private OrganizationPlan plan() {
-		return new OrganizationPlan("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT, false,
-				new OrganizationSummary(0, 0, 0, 0, 0, 0, 0, 0, 0), List.of());
+	private StoredPlanPage plan() {
+		return new StoredPlanPage("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT,
+				new OrganizationSummary(0, 0, 0, 0, 0, 0, 0, 0, 0), false, List.of(), 0, 50, 0);
 	}
 
 	private static OrganizationForm orgForm(String sourcePath, String targetPath, boolean recursive,
@@ -478,17 +549,22 @@ class OrganizationWebControllerTest {
 				null, null);
 	}
 
-	private OrganizationPlan planWithItems(int count) {
+	private List<OrganizationItem> items(int count) {
 		List<OrganizationItem> items = new ArrayList<>();
 
-		for (int i = 0; i < count; i++) {
-			items.add(new OrganizationItem((long) i, "file" + i + ".jpg", "C:/media/input/file" + i + ".jpg",
-					"C:/media/output/file" + i + ".jpg", "202405", "09", "MEDIA", "CAMERA", "IMAGENS", "CAMERA", null,
-					100L, false, false, false, false, false, null));
+		for (int index = 0; index < count; index++) {
+			items.add(new OrganizationItem(null, UUID.randomUUID(), "file" + index + ".jpg",
+					"C:/media/input/file" + index + ".jpg", "C:/media/output/file" + index + ".jpg", null, null, null,
+					null, null, null, null, 100L, false, false, false, false, false, null, null, null));
 		}
 
-		return new OrganizationPlan("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT, false,
-				new OrganizationSummary(count, count, 0, count, 0, 0, 0, 0, 0), items);
+		return items;
+	}
+
+	private StoredPlanPage pageOf(List<OrganizationItem> items, int page, int size, int totalItems) {
+		return new StoredPlanPage("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT,
+				new OrganizationSummary(totalItems, 0, 0, 0, totalItems, 0, 0, 0, 0), false, items, page, size,
+				totalItems);
 	}
 
 	private ExecutionResponse execution() {
@@ -548,10 +624,11 @@ class OrganizationWebControllerTest {
 				mock(UserPagePreferenceService.class), mock(ExecutionQueryService.class));
 		UUID executionId = UUID.randomUUID();
 
-		OrganizationPlan plan = new OrganizationPlan("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT,
-				false, new OrganizationSummary(9600, 9600, 0, 0, 9600, 49_100_000_000L, 0, 0, 0), List.of());
+		StoredPlanPage plan = new StoredPlanPage("C:/media/input", "C:/media/output", OrganizationLayout.DEFAULT,
+				new OrganizationSummary(9600, 9600, 0, 0, 9600, 49_100_000_000L, 0, 0, 0), false, List.of(), 0, 50,
+				9600);
 
-		when(organizationService.getPreviewPlanPublic(executionId)).thenReturn(plan);
+		when(organizationService.planPagePublic(executionId, 0, 50, false)).thenReturn(Optional.of(plan));
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		controller.previewResult(executionId, 0, 50, false, null, model);

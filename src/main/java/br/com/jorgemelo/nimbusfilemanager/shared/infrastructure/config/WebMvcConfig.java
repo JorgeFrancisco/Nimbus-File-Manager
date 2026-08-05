@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -9,6 +10,7 @@ import br.com.jorgemelo.nimbusfilemanager.security.application.PasswordChangeReq
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.LibraryConfigurationInterceptor;
 
 @Configuration
+@ConditionalOnWebApplication
 public class WebMvcConfig implements WebMvcConfigurer {
 
 	private static final String SCREENS = "/app/**";

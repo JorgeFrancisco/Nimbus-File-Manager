@@ -7,14 +7,9 @@ import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -32,14 +27,7 @@ import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionM
  * while the LEFT-join lookups still return those rows with null metrics
  * columns.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class ExecutionTelemetryQueryIntegrationTest {
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+class ExecutionTelemetryQueryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
 	private ExecutionRepository executionRepository;

@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -28,8 +29,7 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.Org
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Defaults;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationForm;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationConflictType;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
@@ -44,7 +44,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.SizeFormatter;
 @Controller
 public class OrganizationWebController extends LocalizedComponent {
 
-	/** Model attribute holding the sentence the Execute button asks before moving anything. */
+	/**
+	 * Model attribute holding the sentence the Execute button asks before moving
+	 * anything.
+	 */
 	private static final String EXECUTE_CONFIRMATION = "executeConfirmation";
 
 	private static final String INTERRUPTED = "INTERRUPTED";
@@ -149,9 +152,11 @@ public class OrganizationWebController extends LocalizedComponent {
 			@RequestParam(defaultValue = "50") Integer size,
 			@RequestParam(defaultValue = "false") boolean onlyConflicts, Authentication authentication, Model model) {
 		Defaults defaults = loadDefaults(authentication);
-		OrganizationPlan plan = organizationService.getPreviewPlanPublic(executionId);
 
-		if (plan == null) {
+		Optional<StoredPlanPage> plan = organizationService.planPagePublic(executionId, safePage(page), safeSize(size),
+				onlyConflicts);
+
+		if (plan.isEmpty()) {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
@@ -161,22 +166,15 @@ public class OrganizationWebController extends LocalizedComponent {
 			return VIEW;
 		}
 
-		restoreForm(model, defaults, plan.sourcePath(), plan.targetPath(), plan.layout(), page, size);
+		restoreForm(model, defaults, plan.get().sourcePath(), plan.get().targetPath(), plan.get().layout(), page, size);
 
 		model.addAttribute("executionId", executionId);
 
-		addPlan(model, plan, page, size, onlyConflicts);
+		addPlan(model, plan.get(), onlyConflicts);
 
 		return VIEW;
 	}
 
-	/**
-	 * Wording for a missing preview plan that reflects the execution's real state
-	 * instead of always claiming it is "still processing": a plan can be gone
-	 * because the organization errored, finished (plan expired), is genuinely still
-	 * running, or the id no longer exists. The screen also turns
-	 * {@code errorProgressId} into a link to the execution.
-	 */
 	private String previewMissingMessage(UUID executionId) {
 		String status = executionStatus(executionId);
 
@@ -202,13 +200,18 @@ public class OrganizationWebController extends LocalizedComponent {
 			return null;
 		}
 	}
-
+	/**
+	 * The package-private overload the tests drive, by internal id. It reads the
+	 * same published rows the public one does - there is no second path into a
+	 * plan.
+	 */
 	String previewResult(Long executionId, Integer page, Integer size, Model model) {
 		Defaults defaults = loadDefaults(null);
 
-		OrganizationPlan plan = organizationService.getPreviewPlan(executionId);
+		Optional<StoredPlanPage> plan = organizationService.planPage(executionId, safePage(page), safeSize(size),
+				false);
 
-		if (plan == null) {
+		if (plan.isEmpty()) {
 			restoreForm(model, defaults, defaults.sourcePath(), defaults.targetPath(), defaults.layout(), 0,
 					defaults.size());
 
@@ -218,11 +221,11 @@ public class OrganizationWebController extends LocalizedComponent {
 			return VIEW;
 		}
 
-		restoreForm(model, defaults, plan.sourcePath(), plan.targetPath(), plan.layout(), page, size);
+		restoreForm(model, defaults, plan.get().sourcePath(), plan.get().targetPath(), plan.get().layout(), page, size);
 
 		model.addAttribute("executionId", executionId);
 
-		addPlan(model, plan, page, size, false);
+		addPlan(model, plan.get(), false);
 
 		return VIEW;
 	}
@@ -321,24 +324,18 @@ public class OrganizationWebController extends LocalizedComponent {
 		model.addAttribute("locationFallbackValue", fallback == null ? LocationFallbackMode.IGNORE : fallback);
 	}
 
-	private void addPlan(Model model, OrganizationPlan plan, Integer requestedPage, Integer requestedSize,
-			boolean onlyConflicts) {
-		// "Só conflitos" narrows the paginated table to the conflicted items (finding
-		// 34
-		// conflicts among ~9600 items by paging is otherwise hopeless). The summary
-		// cards
-		// keep describing the whole plan; only the table/pagination reflect the filter.
-		List<OrganizationItem> items = onlyConflicts ? plan.items().stream().filter(OrganizationItem::conflict).toList()
-				: plan.items();
-
-		int size = safeSize(requestedSize);
-		int totalItems = items.size();
-		int totalPages = totalItems == 0 ? 1 : (int) Math.ceil((double) totalItems / size);
-		int page = Math.min(safePage(requestedPage), totalPages - 1);
-		int from = Math.min(page * size, totalItems);
-		int to = Math.min(from + size, totalItems);
-
-		List<OrganizationItem> pageItems = items.subList(from, to);
+	/**
+	 * Renders one page of a published plan.
+	 *
+	 * <p>
+	 * The paging is done by the read, not here: the page arrives already narrowed
+	 * to fifty rows out of what may be a hundred thousand, and the summary cards
+	 * come from the plan's own counts. "Only conflicts" is likewise a different
+	 * query rather than a filter over rows this process would otherwise have to
+	 * hold.
+	 */
+	private void addPlan(Model model, StoredPlanPage plan, boolean onlyConflicts) {
+		int totalPages = plan.totalItems() == 0 ? 1 : (int) Math.ceil((double) plan.totalItems() / plan.size());
 
 		model.addAttribute("plan", plan);
 
@@ -347,15 +344,20 @@ public class OrganizationWebController extends LocalizedComponent {
 		model.addAttribute(EXECUTE_CONFIRMATION, message(OrganizationMessages.EXECUTE_CONFIRM_PLANNED,
 				plan.summary().plannedMoves(), SizeFormatter.format(plan.summary().totalSizeBytes())));
 
-		model.addAttribute("previewItems", pageItems);
+		model.addAttribute("previewItems", plan.items());
 		model.addAttribute("conflictTypeLabels", conflictTypeLabels());
-		model.addAttribute("page", page);
-		model.addAttribute("size", size);
-		model.addAttribute("totalItems", totalItems);
+		model.addAttribute("page", plan.page());
+		model.addAttribute("size", plan.size());
+		model.addAttribute("totalItems", plan.totalItems());
 		model.addAttribute("totalPages", totalPages);
-		model.addAttribute("hasPrevious", page > 0);
-		model.addAttribute("hasNext", page + 1 < totalPages);
+		model.addAttribute("hasPrevious", plan.page() > 0);
+		model.addAttribute("hasNext", plan.page() + 1 < totalPages);
 		model.addAttribute("onlyConflicts", onlyConflicts);
+
+		// The run recalculates rather than replaying this plan, so the library having
+		// moved since is normal - and saying so is what keeps it from being a surprise
+		// afterwards.
+		model.addAttribute("catalogChanged", plan.catalogChanged());
 	}
 
 	/**

@@ -1,109 +1,164 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
-import org.assertj.core.api.Assertions;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Duration;
+import java.time.Instant;
+
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
+
+/**
+ * Cancellation, now that the request outlives the process that made it.
+ *
+ * <p>
+ * The flag used to be an {@code AtomicBoolean} in a map, so a cancel could only
+ * reach work running in the same JVM. These tests are about the two things that
+ * changed: the request goes to the row, and the answer is read back through a
+ * cache short enough that nobody notices it, yet real enough that a per-file
+ * check does not become a per-file query.
+ */
 class ExecutionCancellationServiceTest {
 
-	@Test
-	void isCancelledShouldBeFalseForAnUnregisteredExecution() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	private final ExecutionQueue executionQueue = mock(ExecutionQueue.class);
 
-		Assertions.assertThat(service.isCancelled(1L)).isFalse();
+	private final AdvanceableClock clock = new AdvanceableClock(Instant.parse("2026-08-04T10:00:00Z"));
+
+	private final ExecutionCancellationService service = new ExecutionCancellationService(executionQueue, clock);
+
+	@Test
+	void reportsNoCancellationWithoutAnExecution() {
+		assertThat(service.isCancelled(null)).isFalse();
 	}
 
 	@Test
-	void requestCancellationShouldReturnFalseWhenExecutionIsNotRegistered() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void asksTheRowWhetherCancellationWasRequested() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(true);
 
-		Assertions.assertThat(service.requestCancellation(1L)).isFalse();
+		assertThat(service.isCancelled(7L)).isTrue();
 	}
 
 	@Test
-	void requestCancellationShouldFlagARegisteredExecutionAndReturnTrue() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void recordsTheRequestOnTheRowSoAnotherProcessCanSeeIt() {
+		when(executionQueue.requestCancel(7L)).thenReturn(true);
 
-		service.register(1L);
+		assertThat(service.requestCancellation(7L)).isTrue();
 
-		Assertions.assertThat(service.isCancelled(1L)).isFalse();
-		Assertions.assertThat(service.requestCancellation(1L)).isTrue();
-		Assertions.assertThat(service.isCancelled(1L)).isTrue();
+		verify(executionQueue).requestCancel(7L);
 	}
 
 	@Test
-	void unregisterShouldForgetTheExecutionSoCancellationNoLongerApplies() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void reportsFailureWhenThereIsNothingRunningToCancel() {
+		when(executionQueue.requestCancel(7L)).thenReturn(false);
 
-		service.register(1L);
-		service.unregister(1L);
-
-		Assertions.assertThat(service.requestCancellation(1L)).isFalse();
-		Assertions.assertThat(service.isCancelled(1L)).isFalse();
+		assertThat(service.requestCancellation(7L)).isFalse();
 	}
 
 	@Test
-	void registeringTwoExecutionsShouldTrackThemIndependently() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void ignoresARequestWithoutAnExecution() {
+		assertThat(service.requestCancellation(null)).isFalse();
 
-		service.register(1L);
-		service.register(2L);
-		service.requestCancellation(1L);
-
-		Assertions.assertThat(service.isCancelled(1L)).isTrue();
-		Assertions.assertThat(service.isCancelled(2L)).isFalse();
-	}
-
-	@Test
-	void methodsShouldTolerateNullExecutionIdWithoutThrowing() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
-
-		service.register(null);
-		service.unregister(null);
-
-		Assertions.assertThat(service.isCancelled(null)).isFalse();
-		Assertions.assertThat(service.requestCancellation(null)).isFalse();
-		Assertions.assertThat(service.isLive(null)).isFalse();
+		verify(executionQueue, never()).requestCancel(anyLong());
 	}
 
 	/**
-	 * Liveness is what keeps a genuinely-running execution from being marked
-	 * INTERRUPTED: it holds only while the background thread still owns the id.
+	 * The check sits inside per-file loops, so repeating it must not repeat the
+	 * query.
 	 */
 	@Test
-	void isLiveShouldTrackOnlyExecutionsWhoseThreadIsStillRegistered() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void answersRepeatedChecksWithoutAskingAgain() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(false);
 
-		Assertions.assertThat(service.isLive(1L)).isFalse();
+		service.isCancelled(7L);
+		service.isCancelled(7L);
+		service.isCancelled(7L);
 
-		service.register(1L);
-
-		Assertions.assertThat(service.isLive(1L)).isTrue();
-
-		service.requestCancellation(1L);
-
-		Assertions.assertThat(service.isLive(1L)).isTrue();
-
-		service.unregister(1L);
-
-		Assertions.assertThat(service.isLive(1L)).isFalse();
+		verify(executionQueue, times(1)).isCancelRequested(7L);
 	}
 
 	@Test
-	void requestAllCancellationsShouldFlagEveryRegisteredExecutionAndReturnHowMany() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void asksAgainOnceTheAnswerHasGoneStale() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(false, true);
 
-		service.register(1L);
-		service.register(2L);
+		assertThat(service.isCancelled(7L)).isFalse();
 
-		Assertions.assertThat(service.requestAllCancellations()).isEqualTo(2);
-		Assertions.assertThat(service.isCancelled(1L)).isTrue();
-		Assertions.assertThat(service.isCancelled(2L)).isTrue();
+		clock.advance(Duration.ofSeconds(2));
+
+		assertThat(service.isCancelled(7L)).isTrue();
 	}
 
+	/**
+	 * A cancel arriving in this process must not wait out the cache: the runner
+	 * may well be here, and half a second of "not cancelled" is half a second of
+	 * files still moving.
+	 */
 	@Test
-	void requestAllCancellationsShouldReportZeroWhenNothingIsRunning() {
-		ExecutionCancellationService service = new ExecutionCancellationService();
+	void dropsAStaleAnswerAsSoonAsCancellationIsRequestedHere() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(false, true);
+		when(executionQueue.requestCancel(7L)).thenReturn(true);
 
-		Assertions.assertThat(service.requestAllCancellations()).isZero();
+		assertThat(service.isCancelled(7L)).isFalse();
+
+		service.requestCancellation(7L);
+
+		assertThat(service.isCancelled(7L)).isTrue();
+	}
+
+	/**
+	 * Dropping a cached answer is housekeeping, so being handed nothing is not an
+	 * error - it is a call with nothing to drop.
+	 */
+	@Test
+	void forgettingDropsTheCachedAnswerWithoutChangingIt() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(true);
+
+		assertThat(service.isCancelled(7L)).isTrue();
+
+		service.forget(null);
+		service.forget(7L);
+
+		// The row still says cancelled: what was dropped is the memory of having
+		// asked, never the answer.
+		assertThat(service.isCancelled(7L)).isTrue();
+	}
+
+	/**
+	 * Everywhere, not here. Walking the executions this process started was true
+	 * while there was only one process: with the work in another JVM it meant an
+	 * administrative operation asking the database whether anything was still
+	 * active, seeing the worker's inventory, and cancelling nothing - waiting for
+	 * something it had never asked to stop.
+	 */
+	@Test
+	void cancelsEveryExecutionAnywhereRatherThanTheOnesItStarted() {
+		when(executionQueue.requestCancelOfEverything()).thenReturn(3);
+
+		assertThat(service.requestAllCancellations()).isEqualTo(3);
+
+		verify(executionQueue).requestCancelOfEverything();
+		verify(executionQueue, never()).requestCancel(anyLong());
+	}
+
+	/**
+	 * The cached answers are dropped with the request, so a loop that asked half a
+	 * second ago is told the truth on its next check rather than after the cache
+	 * decides to expire.
+	 */
+	@Test
+	void forgetsWhatItLastAnsweredWhenEverythingIsCancelled() {
+		when(executionQueue.isCancelRequested(7L)).thenReturn(false, true);
+
+		assertThat(service.isCancelled(7L)).isFalse();
+
+		service.requestAllCancellations();
+
+		assertThat(service.isCancelled(7L)).isTrue();
 	}
 }

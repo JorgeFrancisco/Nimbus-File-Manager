@@ -96,4 +96,18 @@ public record OrganizationPreviewRequest(
 	public LocationFallbackMode locationFallbackValue() {
 		return locationFallback == null ? LocationFallbackMode.IGNORE : locationFallback;
 	}
+	/**
+	 * The same request, as the queue carries it.
+	 *
+	 * <p>
+	 * A preview is a dry run of an organization and always was - the executor takes
+	 * one request and a flag. Conflicts are allowed and nothing is overwritten
+	 * because neither decides anything here: no file is touched, and what the
+	 * plan does with a conflict is describe it.
+	 */
+	public OrganizationExecuteRequest toExecuteRequest() {
+		return new OrganizationExecuteRequest(sourcePath, targetPath, recursive, layout, limit, rebuildMetadata,
+				rebuild, skipAlreadyOrganized, onlyCategories, onlySubcategories, onlyExtensions, onlyFileTypes, true,
+				false, locationSubdivision, locationMinConfidence, locationFallback, true);
+	}
 }

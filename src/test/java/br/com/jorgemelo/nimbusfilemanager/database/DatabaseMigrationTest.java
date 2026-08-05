@@ -75,6 +75,43 @@ class DatabaseMigrationTest {
 				"ALTER TABLE movement DROP COLUMN error_message");
 	}
 
+	/**
+	 * A run that happened, happened. The private job table of the fingerprint
+	 * backlogs goes because the execution table already holds every column it had,
+	 * but it goes carrying its rows: a database that is dropped instead of
+	 * transported passes on an empty test schema and erases years of history on the
+	 * machine of whoever uses the product.
+	 */
+	@Test
+	void fingerprintRunsBecomeExecutionsBeforeTheirTableGoes() throws Exception {
+		String migration = Files.readString(
+				Path.of("src/main/resources/db/migration/V24__fingerprint_backlog_becomes_an_execution.sql"));
+
+		Assertions.assertThat(migration).contains("INSERT INTO execution", "FROM fingerprint_job_run",
+				"WHEN kind = 'VIDEO_PHASH' THEN 'FINGERPRINT_VIDEO' ELSE 'FINGERPRINT_PHOTO'",
+				"DROP TABLE fingerprint_job_run");
+		Assertions.assertThat(migration.indexOf("FROM fingerprint_job_run"))
+				.isLessThan(migration.indexOf("DROP TABLE fingerprint_job_run"));
+	}
+
+	/**
+	 * The dry run of the metadata rebuild is the only part of it that produces
+	 * something to look at, so it is the only part that gets a table - and it
+	 * hangs off the execution, which is what makes a finished run the flag that
+	 * publishes it.
+	 */
+	@Test
+	void theMetadataPreviewHangsOffTheExecutionThatProducedIt() throws Exception {
+		String migration = Files.readString(
+				Path.of("src/main/resources/db/migration/V25__metadata_rebuild_becomes_an_execution.sql"));
+
+		Assertions.assertThat(migration).contains("CREATE TABLE metadata_rebuild_preview",
+				"execution_id BIGINT PRIMARY KEY", "REFERENCES execution (id) ON DELETE CASCADE",
+				"CONSTRAINT pk_metadata_rebuild_preview_item PRIMARY KEY (execution_id, ordinal)",
+				"REFERENCES metadata_rebuild_preview (execution_id) ON DELETE CASCADE");
+		Assertions.assertThat(migration.toUpperCase()).doesNotContain("DROP TABLE", "DELETE FROM");
+	}
+
 	@Test
 	void shouldCreateQueryPerformanceIndexes() throws Exception {
 		String migration = Files.readString(MIGRATION);

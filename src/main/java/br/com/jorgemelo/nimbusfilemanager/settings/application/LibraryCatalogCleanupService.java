@@ -9,35 +9,41 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterProtection;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 public class LibraryCatalogCleanupService {
 
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogMutations catalogMutations;
 	private final WorkspaceManager workspaceManager;
+	private final EligibilityAnnouncer eligibilityAnnouncer;
 
-	public LibraryCatalogCleanupService(CatalogFileRepository catalogFileRepository,
-			WorkspaceManager workspaceManager) {
-		this.catalogFileRepository = catalogFileRepository;
+	public LibraryCatalogCleanupService(CatalogMutations catalogMutations, WorkspaceManager workspaceManager,
+			EligibilityAnnouncer eligibilityAnnouncer) {
+		this.catalogMutations = catalogMutations;
 		this.workspaceManager = workspaceManager;
+		this.eligibilityAnnouncer = eligibilityAnnouncer;
 	}
 
+	/**
+	 * Forgetting a library removes catalogued files wholesale, active ones
+	 * included, so whatever a published analysis was about is not what is there any
+	 * more. Announced once for the whole switch and only when rows really went - a
+	 * root nothing was catalogued under leaves nothing to bring up to date.
+	 */
 	@Transactional
 	public int clear(String libraryPath) {
-		Path root = PathUtils.normalizePath(libraryPath);
-
-		String rootText = PathUtils.normalize(root);
-
-		String prefix = rootText + root.getFileSystem().getSeparator();
-
-		int deleted = catalogFileRepository.deleteWithinLibrary(rootText, prefix);
+		int deleted = catalogMutations.forgetLibrary(libraryPath);
 
 		clearThumbnailCache();
+
+		if (deleted > 0) {
+			eligibilityAnnouncer.announce("library switch");
+		}
 
 		return deleted;
 	}

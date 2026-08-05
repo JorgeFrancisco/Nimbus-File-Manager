@@ -1,9 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.rest;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,18 +14,24 @@ import org.springframework.web.bind.annotation.RestController;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.FingerprintFailureLabels;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityBounds;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityLauncher;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityViewService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintFailureResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityMemberResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PagedResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import io.swagger.v3.oas.annotations.Operation;
 
 @RestController
@@ -31,20 +39,20 @@ import io.swagger.v3.oas.annotations.Operation;
 public class DuplicateController {
 
 	private final DuplicateService duplicateService;
-	private final PhotoSimilarityService photoSimilarityService;
+	private final SimilarityViewService similarityViewService;
+	private final SimilarityLauncher similarityLauncher;
 	private final PhashBacklogService phashBacklogService;
-	private final VideoSimilarityService videoSimilarityService;
 	private final VideoFingerprintBacklogService videoFingerprintBacklogService;
 	private final FingerprintFailureLabels fingerprintFailureLabels;
 
-	public DuplicateController(DuplicateService duplicateService, PhotoSimilarityService photoSimilarityService,
-			PhashBacklogService phashBacklogService, VideoSimilarityService videoSimilarityService,
+	public DuplicateController(DuplicateService duplicateService, SimilarityViewService similarityViewService,
+			SimilarityLauncher similarityLauncher, PhashBacklogService phashBacklogService,
 			VideoFingerprintBacklogService videoFingerprintBacklogService,
 			FingerprintFailureLabels fingerprintFailureLabels) {
 		this.duplicateService = duplicateService;
-		this.photoSimilarityService = photoSimilarityService;
+		this.similarityViewService = similarityViewService;
+		this.similarityLauncher = similarityLauncher;
 		this.phashBacklogService = phashBacklogService;
-		this.videoSimilarityService = videoSimilarityService;
 		this.videoFingerprintBacklogService = videoFingerprintBacklogService;
 		this.fingerprintFailureLabels = fingerprintFailureLabels;
 	}
@@ -76,12 +84,26 @@ public class DuplicateController {
 		return PagedResponse.from(duplicateService.candidates(pageable, null));
 	}
 
+	/**
+	 * The published grouping, or an accepted request for one.
+	 *
+	 * <p>
+	 * It never groups anything itself. Comparing a library is minutes of CPU, and a
+	 * request that did it would be a second engine beside the worker - with two
+	 * processes free to run it at once, and no way for either to see the other's
+	 * answer. So: a published result is returned, and when there is none the
+	 * analysis is queued and the answer is 202 with the execution to follow.
+	 */
 	@GetMapping("/similar-photos")
 	@Operation(summary = "Returns groups of visually similar photos",
-			description = "Groups PHOTO files by perceptual-hash similarity. minSimilarity is clamped to [70, 100], with 70 as the floor and default.")
-	public PagedResponse<SimilarPhotoGroupResponse> similarPhotos(@RequestParam(required = false) Integer minSimilarity,
-			@PageableDefault(size = 20) Pageable pageable) {
-		return PagedResponse.from(photoSimilarityService.groups(minSimilarity, pageable));
+			description = "Returns the published grouping of PHOTO files by perceptual-hash similarity."
+					+ " When no grouping has been published for these parameters yet, the analysis is queued and"
+					+ " the response is 202 Accepted with the execution to follow. minSimilarity is clamped to"
+					+ " [70, 100], with 70 as the floor and default.")
+	public ResponseEntity<PagedResponse<SimilarityGroupResponse>> similarPhotos(
+			@RequestParam(required = false) Integer minSimilarity, @PageableDefault(size = 20) Pageable pageable) {
+		return published(similarityViewService.photos(SimilarityBounds.clamp(minSimilarity), pageable),
+				() -> similarityLauncher.launchPhotos(SimilarityBounds.clamp(minSimilarity)));
 	}
 
 	@GetMapping("/similar-photos/failures")
@@ -90,12 +112,51 @@ public class DuplicateController {
 		return fingerprintFailureLabels.describe(phashBacklogService.failures());
 	}
 
+	/** Video counterpart of {@link #similarPhotos}, with the same contract. */
 	@GetMapping("/similar-videos")
 	@Operation(summary = "Returns groups of visually similar videos",
-			description = "Groups VIDEO files by multi-frame perceptual-hash similarity. minSimilarity is clamped to [70, 100], with 70 as the floor and default.")
-	public PagedResponse<SimilarVideoGroupResponse> similarVideos(@RequestParam(required = false) Integer minSimilarity,
-			@PageableDefault(size = 20) Pageable pageable) {
-		return PagedResponse.from(videoSimilarityService.groups(minSimilarity, pageable));
+			description = "Returns the published grouping of VIDEO files by multi-frame perceptual-hash similarity."
+					+ " When no grouping has been published for these parameters yet, the analysis is queued and"
+					+ " the response is 202 Accepted with the execution to follow. minSimilarity is clamped to"
+					+ " [70, 100], with 70 as the floor and default.")
+	public ResponseEntity<PagedResponse<SimilarityGroupResponse>> similarVideos(
+			@RequestParam(required = false) Integer minSimilarity, @PageableDefault(size = 20) Pageable pageable) {
+		return published(similarityViewService.videos(SimilarityBounds.clamp(minSimilarity), pageable),
+				() -> similarityLauncher.launchVideos(SimilarityBounds.clamp(minSimilarity)));
+	}
+
+	/**
+	 * The published page, or 202 with the analysis that will produce it.
+	 *
+	 * <p>
+	 * An outdated result is still returned rather than withheld: it is a true
+	 * statement about the files it examined, and the flag says the library has
+	 * moved since. Withholding it would leave a consumer with nothing while a
+	 * perfectly usable answer sits in the database.
+	 */
+	private ResponseEntity<PagedResponse<SimilarityGroupResponse>> published(SimilarityView view,
+			Supplier<Execution> queue) {
+		if (!view.published()) {
+			Execution execution = queue.get();
+
+			return ResponseEntity.accepted().header("Location", "/api/executions/" + execution.getPublicId()).build();
+		}
+
+		return ResponseEntity.ok(PagedResponse.from(view.groups().map(group -> toResponse(group, view.outdated()))));
+	}
+
+	private SimilarityGroupResponse toResponse(PublishedGroup group, boolean outdated) {
+		return new SimilarityGroupResponse(group.groupId(), group.similarityPercent(), group.wastedBytes(), outdated,
+				group.members().stream().map(this::toResponse).toList());
+	}
+
+	private SimilarityMemberResponse toResponse(PublishedMember member) {
+		SimilarityMemberFile file = member.file();
+
+		return new SimilarityMemberResponse(member.decision().mediaPublicId(), file == null ? null : file.fileName(),
+				file == null ? null : file.currentPath(), file == null ? null : file.sizeBytes(),
+				member.decision().verdict().name(),
+				member.decision().reason() == null ? null : member.decision().reason().name(), member.actionable());
 	}
 
 	@GetMapping("/similar-videos/failures")

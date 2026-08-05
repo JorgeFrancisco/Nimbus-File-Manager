@@ -7,13 +7,9 @@ import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -44,14 +40,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepos
  * (so the retention clock is stable across reconciles).</li>
  * </ul>
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class CatalogFilePurgeIntegrationTest {
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+class CatalogFilePurgeIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
 	private CatalogFileRetentionService catalogFileRetentionService;
@@ -74,7 +63,7 @@ class CatalogFilePurgeIntegrationTest {
 		Long recent = persist("recent", LifecycleStatus.MISSING, LocalDateTime.now().minusDays(1)).getId();
 		Long active = persist("active", LifecycleStatus.ACTIVE, null).getId();
 
-		int removed = catalogFileRetentionService.purgeMissingOlderThan(90);
+		int removed = catalogFileRetentionService.purgeMissingOlderThan(90, Takings.unfenced(1L)).orElseThrow();
 
 		Assertions.assertThat(removed).isEqualTo(1);
 		Assertions.assertThat(catalogFileRepository.findById(overdue)).isEmpty();
@@ -94,7 +83,7 @@ class CatalogFilePurgeIntegrationTest {
 		Movement movement = movementRepository.saveAndFlush(Movement.builder().execution(execution).catalogFile(file)
 				.sourcePath("D:/src/a").targetPath("D:/dst/a").status(MovementStatus.MOVED).build());
 
-		catalogFileRetentionService.purgeMissingOlderThan(90);
+		catalogFileRetentionService.purgeMissingOlderThan(90, Takings.unfenced(1L)).orElseThrow();
 
 		Assertions.assertThat(catalogFileRepository.findById(file.getId())).isEmpty();
 		Assertions.assertThat(movementRepository.findById(movement.getId())).get().extracting(Movement::getCatalogFile)

@@ -21,7 +21,8 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.domain.enums.GeoPresence;
  * units the person on the screen thinks in; the conversion to bytes happens on
  * the way in, once.
  */
-public record TimelineFilterForm(LocalDate capturedFrom, LocalDate capturedTo, String manufacturer, String model, Long minSizeMb,
+public record TimelineFilterForm(LocalDate capturedFrom, LocalDate capturedTo, String manufacturer, String model,
+		Long minSizeMb,
 		Long maxSizeMb, Double minDurationSeconds, Double maxDurationSeconds, Integer minLongestSide,
 		GeoPresence geo) {
 }

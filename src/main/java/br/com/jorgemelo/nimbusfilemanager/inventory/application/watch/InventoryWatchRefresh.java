@@ -1,10 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.CatalogRestored;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@Profile(NimbusProfiles.APP)
 public class InventoryWatchRefresh {
 
 	private final InventoryWatchService inventoryWatchService;

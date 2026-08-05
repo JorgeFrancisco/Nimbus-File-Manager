@@ -5,16 +5,21 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePaths;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePreparation;
@@ -23,6 +28,8 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.MoveResult;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -31,10 +38,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.NumberUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
@@ -51,80 +56,91 @@ public class OrganizationExecutor {
 	private static final int STEP_PROGRESS_STRIDE = 500;
 
 	private final OrganizationPlanner organizationPlanner;
-	private final ExecutionRepository executionRepository;
 	private final CatalogFileRepository catalogFileRepository;
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
 	private final OrganizationMovementLog organizationMovementLog;
 	private final OperationLockService operationLockService;
 	private final ExecutionProgressService executionProgressService;
 	private final ExecutionCancellationService executionCancellationService;
-	private final SecureFileMove secureFileMove;
+	private final LibraryFileMutations libraryFileMutations;
 	private final OrganizationMovePersistence organizationMovePersistence;
-	private final OrganizationPlanStore organizationPlanStore;
 	private final EmptyDirectoryCleaner emptyDirectoryCleaner;
+	private final EligibilityAnnouncer eligibilityAnnouncer;
 	private final Clock clock;
 
 	@Autowired
-	public OrganizationExecutor(OrganizationPlanner organizationPlanner, ExecutionRepository executionRepository,
-			CatalogFileRepository catalogFileRepository, CatalogFileLocationRepository catalogFileLocationRepository,
+	public OrganizationExecutor(OrganizationPlanner organizationPlanner, CatalogFileRepository catalogFileRepository,
+			CatalogFileLocationRepository catalogFileLocationRepository,
 			OrganizationMovementLog organizationMovementLog, OperationLockService operationLockService,
 			ExecutionProgressService executionProgressService,
-			ExecutionCancellationService executionCancellationService, SecureFileMove secureFileMove,
-			OrganizationMovePersistence organizationMovePersistence, OrganizationPlanStore organizationPlanStore,
-			EmptyDirectoryCleaner emptyDirectoryCleaner, Clock clock) {
+			ExecutionCancellationService executionCancellationService, LibraryFileMutations libraryFileMutations,
+			OrganizationMovePersistence organizationMovePersistence, EmptyDirectoryCleaner emptyDirectoryCleaner,
+			EligibilityAnnouncer eligibilityAnnouncer, Clock clock) {
 		this.organizationPlanner = organizationPlanner;
-		this.executionRepository = executionRepository;
 		this.catalogFileRepository = catalogFileRepository;
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
 		this.organizationMovementLog = organizationMovementLog;
 		this.operationLockService = operationLockService;
 		this.executionProgressService = executionProgressService;
 		this.executionCancellationService = executionCancellationService;
-		this.secureFileMove = secureFileMove;
+		this.libraryFileMutations = libraryFileMutations;
 		this.organizationMovePersistence = organizationMovePersistence;
-		this.organizationPlanStore = organizationPlanStore;
 		this.emptyDirectoryCleaner = emptyDirectoryCleaner;
+		this.eligibilityAnnouncer = eligibilityAnnouncer;
 		this.clock = clock;
 	}
 
-	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request) {
-		return execute(request, startExecution(request));
+	/**
+	 * @param ownership the worker's claim on the source and target trees, and the
+	 * taking every write about the row is made under. Checked before every move: a
+	 * real move under an ownership that is gone is a process writing to a library
+	 * it may already have lost the right to write to, which is the one state this
+	 * whole mechanism exists to prevent
+	 */
+	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request, Execution execution,
+			ExecutionOwnership ownership) {
+		return execute(request, execution, ownership, _ -> {
+		});
 	}
 
-	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request, Execution execution) {
+	/**
+	 * @param onPlanned handed the plan as soon as it exists, before a single file
+	 * is touched. It is how the preview gets what it came for without this class
+	 * knowing where a plan is kept - and why a real run, which passes nothing,
+	 * stops writing a plan that nobody ever read
+	 */
+	public OrganizationExecuteResponse execute(OrganizationExecuteRequest request, Execution execution,
+			ExecutionOwnership ownership, Consumer<OrganizationPlan> onPlanned) {
+		boolean dryRun = request.dryRunValue();
+
 		long moved = 0;
 		long skipped = 0;
 		long errors = 0;
 
-		register(execution);
-
-		boolean dryRun = request.dryRunValue();
-
 		try (var _ = operationLockService.acquire(ExecutionType.ORGANIZATION, request.source(), request.target())) {
-			OrganizationPlan plan = organizationPlanner.preview(request.toPreviewRequest());
+			OrganizationPlan plan = organizationPlanner.preview(request.toPreviewRequest(), ownership);
 
-			// Keep the plan available to the result screen in both modes: the preview
-			// (dry-run) reads it back from the store, and it is harmless for a real run.
-			organizationPlanStore.put(execution.getId(), plan);
+			onPlanned.accept(plan);
 
 			long plannedMoves = plan.items().stream().filter(item -> !item.samePath()).count();
 
-			executionProgressService.updateTotal(execution, plan.items().size());
+			executionProgressService.updateTotal(ownership, plan.items().size());
 
 			if (plan.summary().conflicts() > 0 && !request.allowConflictsValue()) {
 				String message = "Organization rejected because the plan contains " + plan.summary().conflicts()
 						+ " conflict(s). Run preview and fix conflicts, or execute with allowConflicts=true.";
 
-				finishExecution(execution, ExecutionStatus.REJECTED, plan.summary().totalFiles(), 0, 0, 0,
+				finishExecution(execution, ownership, ExecutionStatus.REJECTED,
+						new ExecutionCounts(NumberUtils.toInt(plan.summary().totalFiles()), 0, 0, 0),
 						ExecutionMessages.rejectedConflicts(plan.summary().conflicts()));
 
 				return toResponse(execution, plannedMoves, 0, plannedMoves, 0, true, message);
 			}
 
-			// Move the execution into PROCESSING_FILES so the shared progress UI (sidebar
-			// banner and progress page) computes and shows the estimated time remaining -
-			// its ETA only kicks in for PROCESSING_FILES, same as the inventory scanner.
-			executionProgressService.updateStatus(execution, ExecutionStatus.PROCESSING_FILES,
+			// Move the execution into the PROCESSING phase so the shared progress UI
+			// (sidebar banner and progress page) computes and shows the estimated time
+			// remaining - its ETA only kicks in there, same as the inventory scanner.
+			executionProgressService.updatePhase(ownership, ExecutionPhase.PROCESSING,
 					ExecutionStepType.PROCESSING_STARTED, ExecutionMessages.processingFiles());
 
 			// Preview already has its own start/finish logs in OrganizationPlanner; log the
@@ -141,6 +157,14 @@ public class OrganizationExecutor {
 			for (OrganizationItem item : plan.items()) {
 				ensureNotCancelled(execution);
 
+				// Asked once per file rather than once per batch, which is a stronger reading
+				// than the design asks for and is affordable here for a measurable reason:
+				// each move already reads the whole file twice, once for the baseline and once
+				// to verify it. A round trip on an idle connection next to that is noise, and
+				// what it buys is that no file is moved on the strength of a lock the previous
+				// file still had.
+				ownership.assertMayGoOnWorking();
+
 				processed++;
 
 				MoveResult result = resolveItemResult(execution, item, request);
@@ -151,19 +175,16 @@ public class OrganizationExecutor {
 				case ERROR -> errors++;
 				}
 
-				reportExecuteProgress(execution, processed, moved, skipped, errors, item);
+				reportExecuteProgress(ownership, processed, moved, skipped, errors, item);
 			}
 
-			ExecutionStatus status = errors > 0 ? ExecutionStatus.FINISHED_WITH_ERRORS : ExecutionStatus.FINISHED;
+			ExecutionStatus status = statusOf(errors);
 
-			String message = dryRun
-					? "Preview finished. would move=" + moved + SKIPPED_LABEL + skipped + ERRORS_LABEL + errors + "."
-					: "Organization finished. moved=" + moved + SKIPPED_LABEL + skipped + ERRORS_LABEL + errors + ".";
+			String message = finishedMessage(dryRun, moved, skipped, errors);
 
-			ExecutionMessage entityMessage = dryRun ? ExecutionMessages.previewFinished(moved, skipped, errors)
-					: ExecutionMessages.organizationFinished(moved, skipped, errors);
-
-			finishExecution(execution, status, plan.summary().totalFiles(), moved, skipped, errors, entityMessage);
+			finishExecution(execution, ownership, status,
+					counts(plan.summary().totalFiles(), moved, skipped, errors),
+					finishedOutcome(dryRun, moved, skipped, errors));
 
 			if (!dryRun) {
 				log.info("Organization execute finished. executionId={}, status={}, moved={}, skipped={}, errors={}",
@@ -175,14 +196,30 @@ public class OrganizationExecutor {
 			String message = "Organization cancelled by user. moved=" + moved + SKIPPED_LABEL + skipped + ERRORS_LABEL
 					+ errors + ".";
 
-			finishExecution(execution, ExecutionStatus.CANCELLED, moved + skipped + errors, moved, skipped, errors,
+			finishExecution(execution, ownership, ExecutionStatus.CANCELLED,
+					counts(moved + skipped + errors, moved, skipped, errors),
 					ExecutionMessages.organizationCancelled(moved, skipped, errors));
+
+			return toResponse(execution, 0, moved, skipped, errors, false, message);
+		} catch (OwnershipLostException e) {
+			// Nothing went wrong with the work and nothing is half-moved: what went is
+			// the right to write here, and it went between two files. Everything already
+			// moved was moved while the locks were held and verified byte for byte, so
+			// the run ends where it stands instead of failing.
+			String message = "Organization interrupted: " + e.getMessage() + " moved=" + moved + SKIPPED_LABEL + skipped
+					+ ERRORS_LABEL + errors + ".";
+
+			log.warn(message);
+
+			finishExecution(execution, ownership, ExecutionStatus.INTERRUPTED,
+					counts(moved + skipped + errors, moved, skipped, errors),
+					ExecutionMessages.executionInterrupted());
 
 			return toResponse(execution, 0, moved, skipped, errors, false, message);
 		} catch (OperationLockException e) {
 			String message = "Organization rejected: " + e.getMessage();
 
-			finishExecution(execution, ExecutionStatus.ERROR, 0, moved, skipped, errors + 1,
+			finishExecution(execution, ownership, ExecutionStatus.ERROR, counts(0, moved, skipped, errors + 1),
 					ExecutionMessages.organizationRejected(e.getMessage()));
 
 			return toResponse(execution, 0, moved, skipped, errors + 1, true, message);
@@ -191,33 +228,47 @@ public class OrganizationExecutor {
 
 			log.error(message, e);
 
-			finishExecution(execution, ExecutionStatus.ERROR, 0, moved, skipped, errors + 1,
+			finishExecution(execution, ownership, ExecutionStatus.ERROR, counts(0, moved, skipped, errors + 1),
 					ExecutionMessages.organizationFailed(e.getMessage()));
 
 			return toResponse(execution, 0, moved, skipped, errors + 1, false, message);
 		} finally {
-			unregister(execution);
+			executionCancellationService.forget(execution.getId());
+
+			announceEligibility(dryRun, moved, request);
 		}
 	}
 
-	private void register(Execution execution) {
-		if (execution != null) {
-			executionCancellationService.register(execution.getId());
+	/**
+	 * One announcement for the run, in the {@code finally} because a run that was
+	 * cancelled or lost its locks still moved everything it moved before it
+	 * stopped - and those files are in a different folder now whatever the run's
+	 * final status says.
+	 *
+	 * <p>
+	 * A move changes exactly one thing a duplicate analysis reads: the folder the
+	 * file is in, which matters only because folders can be excluded from the
+	 * comparison. So an organization of a hundred thousand files over a library
+	 * with no excluded folder announces nothing at all - there is no answer that
+	 * would come out different - and one that crosses that line announces once,
+	 * never once per file.
+	 *
+	 * <p>
+	 * A dry run has moved nothing and says nothing, however many moves it counted.
+	 */
+	private void announceEligibility(boolean dryRun, long moved, OrganizationExecuteRequest request) {
+		if (dryRun || moved == 0) {
+			return;
+		}
+
+		if (eligibilityAnnouncer.repointCanChangeEligibility(PathUtils.normalize(request.source()),
+				PathUtils.normalize(request.target()))) {
+			eligibilityAnnouncer.announce("organization move");
 		}
 	}
 
-	private void unregister(Execution execution) {
-		if (execution != null) {
-			executionCancellationService.unregister(execution.getId());
-		}
-	}
-
-	private boolean isCancelled(Execution execution) {
-		return execution != null && executionCancellationService.isCancelled(execution.getId());
-	}
-
-	private void reportExecuteProgress(Execution execution, int processed, long moved, long skipped, long errors,
-			OrganizationItem item) {
+	private void reportExecuteProgress(ExecutionOwnership ownership, int processed, long moved, long skipped,
+			long errors, OrganizationItem item) {
 		boolean step = processed == 1 || processed % STEP_PROGRESS_STRIDE == 0;
 		boolean live = processed % LIVE_PROGRESS_STRIDE == 0;
 
@@ -233,13 +284,38 @@ public class OrganizationExecutor {
 		// live updates only refresh the row so the bar advances per file without
 		// flooding the steps table.
 		if (step) {
-			executionProgressService.updateProgress(execution, processed, movedInt, skippedInt, errorsInt,
+			executionProgressService.updateProgress(ownership, processed, movedInt, skippedInt, errorsInt,
 					item == null ? null : item.sourcePath());
 		} else {
-			executionProgressService.updateLiveProgress(execution, processed, movedInt, skippedInt, errorsInt,
+			executionProgressService.updateLiveProgress(ownership, processed, movedInt, skippedInt, errorsInt,
 					item == null ? ExecutionMessages.progressUpdated()
 							: ExecutionMessages.processing(item.sourcePath()));
 		}
+	}
+
+	/** The four numbers a finished organization reports, from the run's longs. */
+	private ExecutionCounts counts(long found, long moved, long skipped, long errors) {
+		return new ExecutionCounts(NumberUtils.toInt(found), NumberUtils.toInt(moved), NumberUtils.toInt(skipped),
+				NumberUtils.toInt(errors));
+	}
+
+	private ExecutionStatus statusOf(long errors) {
+		return errors > 0 ? ExecutionStatus.FINISHED_WITH_ERRORS : ExecutionStatus.FINISHED;
+	}
+
+	/**
+	 * The sentence this call returns to whoever asked for it, in this process.
+	 * What the row keeps is the coded outcome beside it, which the request that
+	 * reads it localises.
+	 */
+	private String finishedMessage(boolean dryRun, long moved, long skipped, long errors) {
+		return (dryRun ? "Preview finished. would move=" : "Organization finished. moved=") + moved + SKIPPED_LABEL
+				+ skipped + ERRORS_LABEL + errors + ".";
+	}
+
+	private ExecutionMessage finishedOutcome(boolean dryRun, long moved, long skipped, long errors) {
+		return dryRun ? ExecutionMessages.previewFinished(moved, skipped, errors)
+				: ExecutionMessages.organizationFinished(moved, skipped, errors);
 	}
 
 	/**
@@ -249,7 +325,7 @@ public class OrganizationExecutor {
 	 * stays identical.
 	 */
 	private void ensureNotCancelled(Execution execution) {
-		if (isCancelled(execution)) {
+		if (executionCancellationService.isCancelled(execution.getId())) {
 			throw new ExecutionCancelledException("Organization cancelled by user.");
 		}
 	}
@@ -309,12 +385,12 @@ public class OrganizationExecutor {
 			// exists,
 			// moves, and verifies the target byte-for-byte (immune to a stale catalog
 			// hash).
-			secureFileMove.move(source, target, request.overwriteExistingValue());
+			libraryFileMutations.move(source, target, request.overwriteExistingValue(), execution.getId());
 
 			organizationMovePersistence.persistSuccessfulMove(execution, preparation.catalogFile(),
 					preparation.location(), source, target);
 
-			removeEmptySourceFolders(source, request.source());
+			removeEmptySourceFolders(source, request.source(), execution);
 
 			return MoveResult.MOVED;
 		} catch (Exception e) {
@@ -408,7 +484,7 @@ public class OrganizationExecutor {
 		boolean movedOnDisk = !Files.exists(source) && Files.exists(target);
 
 		boolean rolledBack = movedOnDisk && !request.overwriteExistingValue()
-				&& secureFileMove.rollback(target, source);
+				&& libraryFileMutations.rollback(target, source);
 
 		MovementReason reason = resolveFailureReason(integrityFailure, movedOnDisk);
 
@@ -434,12 +510,12 @@ public class OrganizationExecutor {
 	 * successful move into an error. The removed folders are rebuilt automatically
 	 * on undo, since moving the file back re-creates its parent directories.
 	 */
-	private void removeEmptySourceFolders(Path movedSource, Path sourceRoot) {
+	private void removeEmptySourceFolders(Path movedSource, Path sourceRoot, Execution execution) {
 		try {
 			Path parent = movedSource.getParent();
 
 			if (parent != null && sourceRoot != null) {
-				emptyDirectoryCleaner.removeEmptyAncestors(parent, sourceRoot);
+				emptyDirectoryCleaner.removeEmptyAncestors(parent, sourceRoot, execution.getId());
 			}
 		} catch (RuntimeException e) {
 			log.warn("Empty-folder cleanup failed after moving {}; the move itself is unaffected", movedSource, e);
@@ -498,46 +574,26 @@ public class OrganizationExecutor {
 		return new MovePreparation(catalogFile, location);
 	}
 
-	private Execution startExecution(OrganizationExecuteRequest request) {
-		Execution execution = Execution.builder().executionType(ExecutionType.ORGANIZATION)
-				.status(ExecutionStatus.STARTED).startedAt(LocalDateTime.now(clock))
-				.sourcePath(PathUtils.normalize(request.source())).targetPath(PathUtils.normalize(request.target()))
-				.recursive(request.recursiveValue()).executeFlag(true)
-				.statusMessage(StatusMessage.code(ExecutionMessages.ORGANIZATION_STARTED)).filesFound(0)
-				.filesAnalyzed(0).cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
+	/**
+	 * Closes the row through the shared finisher, which loads it, checks the taking
+	 * and touches only the finish fields. Writing the caller's in-memory instance
+	 * instead would clobber columns set in other transactions - notably
+	 * {@code totalExpected} from {@code updateTotal}, which showed up as "Total
+	 * estimado -" and a stuck "Preparando..." in the sidebar after a finished run.
+	 *
+	 * <p>
+	 * {@code cacheHits} carries the skipped count (the "Ignorados"/"Já organizados"
+	 * card), written here so the final value is exact rather than the last
+	 * progress-cadence sample.
+	 */
+	private void finishExecution(Execution execution, ExecutionOwnership ownership, ExecutionStatus status,
+			ExecutionCounts counts, ExecutionMessage message) {
+		executionProgressService.finishCommand(ownership, status, counts, message);
 
-		return executionRepository.save(execution);
-	}
-
-	private void finishExecution(Execution execution, ExecutionStatus status, long filesFound, long filesMoved,
-			long skipped, long errors, ExecutionMessage message) {
-		// Re-load the managed row so we only touch the finish fields. Saving the
-		// caller's
-		// in-memory instance instead would clobber columns set in other transactions
-		// (notably totalExpected from updateTotal), which showed up as "Total estimado
-		// -"
-		// and a stuck "Preparando..." in the sidebar after a finished run.
-		Execution managed = executionRepository.findById(execution.getId()).orElse(execution);
-
-		managed.setStatus(status);
-		managed.setFinishedAt(LocalDateTime.now(clock));
-		managed.setFilesFound(NumberUtils.toInt(filesFound));
-		managed.setFilesAnalyzed(NumberUtils.toInt(filesFound));
-		managed.setFilesMoved(NumberUtils.toInt(filesMoved));
-		// cacheHits carries the skipped count (the "Ignorados"/"Já organizados" card),
-		// set
-		// here so the final value is exact rather than the last progress-cadence
-		// sample.
-		managed.setCacheHits(NumberUtils.toInt(skipped));
-		managed.setErrors(NumberUtils.toInt(errors));
-
-		executionProgressService.applyMessage(managed, message);
-
-		executionRepository.save(managed);
-
-		// Keep the caller's instance in sync so toResponse() reports the final state.
+		// Keep the caller's instance in sync so toResponse() reports what this call
+		// concluded. It is what this process answers with; the row is the truth.
 		execution.setStatus(status);
-		execution.setFinishedAt(managed.getFinishedAt());
+		execution.setFinishedAt(LocalDateTime.now(clock));
 	}
 
 	private OrganizationExecuteResponse toResponse(Execution execution, long plannedMoves, long moved, long skipped,

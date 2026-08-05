@@ -76,6 +76,6 @@ public class DashboardWebController {
 
 	private boolean hasRunningExecutions(Page<ExecutionResponse> executionsPage) {
 		return executionsPage.getContent().stream()
-				.anyMatch(execution -> ExecutionStatusNames.IN_PROGRESS_NAMES.contains(execution.status()));
+				.anyMatch(execution -> ExecutionStatusNames.ACTIVE_NAMES.contains(execution.status()));
 	}
 }

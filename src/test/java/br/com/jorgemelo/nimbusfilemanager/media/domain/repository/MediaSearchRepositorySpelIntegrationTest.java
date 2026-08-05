@@ -7,17 +7,12 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchFilter;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchRawResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
@@ -36,16 +31,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.FilterBuilder
  * {@code (:x IS NULL OR ...)} branches are proven to fire at runtime, not just
  * compile.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class MediaSearchRepositorySpelIntegrationTest {
+class MediaSearchRepositorySpelIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final Pageable PAGE = PageRequest.of(0, 10);
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

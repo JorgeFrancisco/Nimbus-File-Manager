@@ -5,17 +5,12 @@ import java.time.LocalDateTime;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
@@ -28,16 +23,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
  * {@code ON DELETE CASCADE}, and the exhausted-failure lookup must expose the
  * file's current path and last error.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class FingerprintPersistenceIntegrationTest {
+class FingerprintPersistenceIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final String ALGORITHM = "FFMPEG_LANCZOS_PHASH_256_V1";
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

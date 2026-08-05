@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.mapper;
 
+import static org.mockito.Mockito.mock;
+
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -8,6 +10,8 @@ import java.time.Month;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
@@ -29,10 +33,21 @@ class CatalogFileMapperTest {
 	private final MediaDateResolver mediaDateResolver = new MediaDateResolver(
 			new CaptureDateValidator(Clock.systemDefaultZone()));
 
+	/**
+	 * Real invalidator over a mocked writer: what it decides - whether the video's
+	 * comparison inputs moved - is the behaviour under test in
+	 * {@code VideoRelationInvalidatorTest}, and stubbing it here would let the
+	 * mapper forget to call it without anything noticing.
+	 */
+	private final SimilarityRelationWriter similarityRelationWriter = mock(SimilarityRelationWriter.class);
+
+	private final VideoRelationInvalidator videoRelationInvalidator = new VideoRelationInvalidator(
+			similarityRelationWriter);
+
 	@Test
 	void toEntityShouldRejectAPathWithoutParentDirectory() {
 		MetadataResult metadata = photoMetadata(LocalDateTime.of(2024, Month.MAY, 9, 10, 30));
-		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone());
+		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone());
 
 		Path root = Path.of("/");
 
@@ -46,7 +61,7 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = photoMetadata(captureDate);
 
-		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone())
+		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone())
 				.toEntity(Path.of("C:/input/photo.jpg"), Path.of("C:/input"), metadata);
 
 		Assertions.assertThat(catalogFile.getFileName()).isEqualTo("photo.jpg");
@@ -70,7 +85,7 @@ class CatalogFileMapperTest {
 
 		CatalogFile catalogFile = CatalogFile.builder().fileType(FileType.PHOTO).build();
 
-		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
 				Path.of("C:/input/video.mp4"), Path.of("C:/input"), metadata);
 
 		Assertions.assertThat(catalogFile.getFileName()).isEqualTo("video.mp4");
@@ -89,7 +104,7 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = videoMetadata(captureDate);
 
-		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone())
+		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone())
 				.toEntity(Path.of("C:/input/video.mp4"), Path.of("C:/input"), metadata);
 
 		Assertions.assertThat(catalogFile.getPhoto()).isNull();
@@ -100,7 +115,7 @@ class CatalogFileMapperTest {
 
 		MetadataResult updated = photoMetadata(captureDate);
 
-		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
 				Path.of("C:/input/photo.jpg"), Path.of("C:/input"), updated);
 
 		Assertions.assertThat(catalogFile.getLocation()).isNotNull();
@@ -123,7 +138,7 @@ class CatalogFileMapperTest {
 		CatalogFile catalogFile = CatalogFile.builder().photo(Photo.builder().build()).video(Video.builder().build())
 				.build();
 
-		new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone()).updateEntity(catalogFile,
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
 				Path.of("C:/input/doc.pdf"), Path.of("C:/input"), metadata);
 
 		Assertions.assertThat(catalogFile.getPhoto()).isNull();
@@ -135,7 +150,7 @@ class CatalogFileMapperTest {
 	void shouldNormalizeOnlyExactZeroPairAtPersistenceBoundary() {
 		LocalDateTime captureDate = LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
 
-		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, Clock.systemDefaultZone());
+		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone());
 
 		MetadataResult zeroPair = coordinatesMetadata(captureDate, 0.0, 0.0);
 

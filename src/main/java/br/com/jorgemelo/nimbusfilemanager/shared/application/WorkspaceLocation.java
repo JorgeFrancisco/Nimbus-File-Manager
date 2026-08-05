@@ -6,6 +6,8 @@ import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.
 import static br.com.jorgemelo.nimbusfilemanager.database.application.constants.WorkspaceConstants.WORKSPACE_PROPERTY;
 
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Optional;
 
 /**
  * Decides where the workspace lives, once, before anything reads it.
@@ -30,12 +32,60 @@ import java.nio.file.Path;
  */
 public final class WorkspaceLocation {
 
+	/** The property, as a Spring-style argument, which is how it travels. */
+	private static final String ARGUMENT_PREFIX = "--" + WORKSPACE_PROPERTY + "=";
+
 	private WorkspaceLocation() {
 	}
 
 	public static String resolve() {
 		return resolve(System.getProperty(WORKSPACE_PROPERTY), System.getenv(WORKSPACE_ENVIRONMENT_VARIABLE),
 				System.getProperty("user.home"));
+	}
+
+	/**
+	 * Takes the workspace a previous process wrote on this one's command line.
+	 *
+	 * <p>
+	 * Only the restart with administrator rights writes it, and only because
+	 * Windows builds that process a fresh environment from the registry rather than
+	 * copying the one it came from - so a workspace chosen by
+	 * {@code NIMBUS_FILE_MANAGER_WORKSPACE} would silently become the default one,
+	 * and an installation that was relocated would come back up against a different
+	 * catalogue without saying so.
+	 *
+	 * <p>
+	 * Promoted to the system property rather than resolved here, so the order below
+	 * is left exactly as it was: the property already wins, and the value carried
+	 * over is the one that order produced on the other side. Nothing else crosses -
+	 * an elevated process is the last place to hand a copy of an environment nobody
+	 * read.
+	 */
+	public static void adoptFrom(String[] arguments) {
+		argumentIn(arguments).ifPresent(workspace -> System.setProperty(WORKSPACE_PROPERTY, workspace));
+	}
+
+	/**
+	 * The command-line form of the workspace this process resolved, for the restart
+	 * to be given.
+	 */
+	public static String argumentFor(String workspace) {
+		return ARGUMENT_PREFIX + workspace;
+	}
+
+	/**
+	 * Whether an argument is the workspace one, so a restart can drop what it was
+	 * given before writing its own. Exactly one is ever passed on, which is what
+	 * makes the first match below the only match.
+	 */
+	public static boolean isWorkspaceArgument(String argument) {
+		return argument.startsWith(ARGUMENT_PREFIX);
+	}
+
+	static Optional<String> argumentIn(String[] arguments) {
+		return Arrays.stream(arguments).filter(WorkspaceLocation::isWorkspaceArgument)
+				.map(argument -> argument.substring(ARGUMENT_PREFIX.length())).filter(value -> !value.isBlank())
+				.findFirst();
 	}
 
 	/**

@@ -44,13 +44,16 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 	margin: -6px 0 22px;
 	overflow: hidden;
-	padding: 14px 16px 10px;
+	/* The bottom padding clears both bars (8px + 6px) plus a little air, so the
+	   copy never sits on top of them and the step bar appearing changes nothing
+	   about the rest of the banner. */
+	padding: 14px 16px 20px;
 	position: relative;
 }
 
 /* The banner declares a display, and that beats the browser's own rule for
-   [hidden] - without this the background-job banner renders empty, as a bar
-   with nothing but 0%, whenever there is no job to show. */
+   [hidden] - without this it renders empty, as a bar with nothing in it,
+   during the far more common state of nothing running. */
 .active-execution[hidden] {
 	display: none;
 }
@@ -120,15 +123,12 @@
 	min-width: 0;
 }
 
+/* A path is longer than the banner and must not push the percentage off the
+   row, so it is cut with an ellipsis rather than wrapped - the banner is one
+   line by design, and the whole path is on the execution page it links to. */
 .active-execution-folder {
-	align-items: center;
 	color: var(--muted);
-	display: flex;
-	gap: 6px;
 	min-width: 0;
-}
-
-.active-execution-folder .path {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -136,6 +136,13 @@
 
 .active-execution-summary {
 	gap: 12px;
+}
+
+/* Deliberately quiet: the queue behind the primary is context, not the
+   headline, and the execution page it links to is where it is read in full. */
+.active-execution-others {
+	color: var(--muted);
+	white-space: nowrap;
 }
 
 .active-execution-pulse {
@@ -147,14 +154,28 @@
 	animation: active-execution-pulse 1.6s infinite;
 }
 
-.active-execution-progress {
-	background: var(--accent-soft-hover);
+/* One strip pinned to the foot of the banner, holding both bars stacked the way
+   an unpacker stacks them: what is done on top, what is being done underneath.
+   Stacked rather than each positioned on its own so that a run reporting only
+   one level leaves the overall bar flush with the edge instead of floating
+   above the gap where the second one would have been. Out of the flow entirely,
+   so a bar appearing never reflows the row above it. */
+.active-execution-bars {
 	bottom: 0;
-	grid-column: 1 / -1;
-	height: 4px;
+	display: flex;
+	flex-direction: column;
 	left: 0;
 	position: absolute;
 	right: 0;
+}
+
+.active-execution-progress {
+	background: var(--accent-soft-hover);
+	height: 8px;
+}
+
+.active-execution-progress.step {
+	height: 6px;
 }
 
 .active-execution-progress span {
@@ -164,18 +185,19 @@
 	transition: width 0.35s ease;
 }
 
-.active-execution.completed {
-	background: var(--ok-soft);
-	border-color: var(--ok);
+/* A colour of its own rather than a fainter accent: --accent-strong is defined
+   in both themes and inverts between them (dark blue on light, light blue on
+   dark), so the step bar reads on either. A soft tint does not - on the dark
+   palette it lands almost exactly on the banner's own background. The hierarchy
+   between the two bars comes from thickness and position, not from washing this
+   one out until it disappears. */
+.active-execution-progress.step span {
+	background: var(--accent-strong);
 }
 
-.active-execution.completed .active-execution-pulse {
-	animation: none;
-	background: var(--ok);
-}
-
-.active-execution.completed .active-execution-progress span {
-	background: var(--ok);
+.active-execution-step {
+	color: var(--muted);
+	white-space: nowrap;
 }
 
 @keyframes active-execution-pulse {

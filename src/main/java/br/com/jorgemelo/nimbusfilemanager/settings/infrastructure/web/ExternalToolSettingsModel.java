@@ -1,10 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.infrastructure.web;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSectionModel;
@@ -16,6 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.SettingsSect
  * constructor; the matching action lives in {@link SettingsToolsWebController}.
  */
 @Component
+@Profile(NimbusProfiles.APP)
 public class ExternalToolSettingsModel implements SettingsSectionModel {
 
 	private final ExternalToolInstaller externalToolInstaller;

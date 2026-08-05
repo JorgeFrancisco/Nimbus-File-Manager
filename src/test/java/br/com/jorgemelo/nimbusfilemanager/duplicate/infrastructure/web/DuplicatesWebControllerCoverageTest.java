@@ -2,11 +2,11 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,13 +15,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.task.TaskRejectedException;
+import org.mockito.InOrder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -40,14 +39,20 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateExc
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateExclusionResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.AnalyzedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicatesViewRequest;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.enums.MediaTypeFilter;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.Fixture;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
@@ -74,7 +79,7 @@ class DuplicatesWebControllerCoverageTest {
 				.asInstanceOf(InstanceOfAssertFactories.iterable(String.class))
 				.containsExactlyInAnyOrder("PHOTO", "VIDEO");
 
-		verify(fixture.similarity).cachedPage(85, PageRequest.of(2, 100));
+		verify(fixture.similarityView).photos(85, PageRequest.of(2, 100));
 		verify(fixture.preferences).save("system", DuplicateConstants.PAGE_KEY, DuplicateConstants.TYPE_FILTER_KEY,
 				"PHOTO,VIDEO");
 	}
@@ -90,7 +95,7 @@ class DuplicatesWebControllerCoverageTest {
 
 		mockMvc.perform(get("/app/duplicates").param("tab", "similar").param("size", "100")).andExpect(status().isOk());
 
-		verify(fixture.similarity).cachedPage(anyInt(), eq(PageRequest.of(0, 100)));
+		verify(fixture.similarityView).photos(anyInt(), eq(PageRequest.of(0, 100)));
 	}
 
 	@Test
@@ -208,12 +213,8 @@ class DuplicatesWebControllerCoverageTest {
 	}
 
 	@Test
-	void stoppedFingerprintJobsAndEmptyDeleteRequestsDoNotLaunchBackgroundWork() {
+	void theFingerprintActionsAskTheQueueAndAnEmptyDeleteAsksNothing() {
 		Fixture fixture = new Fixture();
-
-		when(fixture.phashRunner.start()).thenReturn(false);
-		when(fixture.phashRunner.prepareRebuild()).thenReturn(false);
-		when(fixture.deletionRunner.start(0)).thenReturn(false);
 
 		Assertions.assertThat(fixture.controller().retryFingerprints())
 				.isEqualTo("redirect:/app/duplicates?tab=similar");
@@ -223,13 +224,15 @@ class DuplicatesWebControllerCoverageTest {
 		fixture.controller().delete(null);
 		fixture.controller().delete(new DuplicateDeleteRequest(null));
 
-		verify(fixture.phashRunner, never()).run();
-		verify(fixture.deletionRunner, never()).run(anyList());
-		verify(fixture.deletionRunner, times(2)).start(0);
+		// The screen asks; whether a second ask is a second run is the queue's
+		// business, not a flag this process reads before deciding.
+		verify(fixture.fingerprintLauncher).launch(ExecutionType.FINGERPRINT_PHOTO, false);
+		verify(fixture.fingerprintLauncher).launch(ExecutionType.FINGERPRINT_PHOTO, true);
+		verify(fixture.deletionLauncher, never()).launch(anyList());
 	}
 
 	@Test
-	void excludeFileHidesItFromComparisonAndInvalidatesTheSimilarCache() {
+	void excludeFileHidesItFromComparison() {
 		Fixture fixture = new Fixture();
 		UUID publicId = UUID.randomUUID();
 		when(fixture.exclusions.excludeFile(publicId)).thenReturn(true);
@@ -239,11 +242,10 @@ class DuplicatesWebControllerCoverageTest {
 
 		Assertions.assertThat(response.created()).isTrue();
 		verify(fixture.exclusions).excludeFile(publicId);
-		verify(fixture.similarity).invalidateCache();
 	}
 
 	@Test
-	void excludeFolderHidesItFromComparisonAndInvalidatesTheSimilarCache() {
+	void excludeFolderHidesItFromComparison() {
 		Fixture fixture = new Fixture();
 		when(fixture.exclusions.excludeFolder("C:/Fotos")).thenReturn(true);
 
@@ -252,7 +254,6 @@ class DuplicatesWebControllerCoverageTest {
 
 		Assertions.assertThat(response.created()).isTrue();
 		verify(fixture.exclusions).excludeFolder("C:/Fotos");
-		verify(fixture.similarity).invalidateCache();
 	}
 
 	@Test
@@ -264,18 +265,40 @@ class DuplicatesWebControllerCoverageTest {
 
 		verify(fixture.exclusions).excludeFile(null);
 		verify(fixture.exclusions).excludeFolder(null);
-		verify(fixture.similarity, times(2)).invalidateCache();
 	}
 
+	/**
+	 * Clearing the exhausted failures is what makes those files pending again, so
+	 * it has to happen before the drain is asked for - a request that arrived first
+	 * would find nothing to do.
+	 */
 	@Test
-	void retryRunsTheFingerprintBacklogWhenTheJobStartsSuccessfully() {
+	void retryClearsTheFailuresBeforeAskingForTheDrain() {
 		Fixture fixture = new Fixture();
-
-		when(fixture.phashRunner.start()).thenReturn(true);
 
 		fixture.controller().retryFingerprints();
 
-		verify(fixture.phashRunner).run();
+		InOrder order = inOrder(fixture.phash, fixture.fingerprintLauncher);
+
+		order.verify(fixture.phash).resetFailures();
+		order.verify(fixture.fingerprintLauncher).launch(ExecutionType.FINGERPRINT_PHOTO, false);
+	}
+
+	@Test
+	void theVideoFingerprintActionsAskForVideoWorkAndReturnToItsTab() {
+		Fixture fixture = new Fixture();
+
+		Assertions.assertThat(fixture.controller().retryVideoFingerprints())
+				.isEqualTo("redirect:/app/duplicates?tab=videos");
+		Assertions.assertThat(fixture.controller().rebuildVideoFingerprints())
+				.isEqualTo("redirect:/app/duplicates?tab=videos");
+
+		verify(fixture.videoBacklog).resetFailures();
+		verify(fixture.fingerprintLauncher).launch(ExecutionType.FINGERPRINT_VIDEO, false);
+		verify(fixture.fingerprintLauncher).launch(ExecutionType.FINGERPRINT_VIDEO, true);
+
+		// The video actions ask for video work and nothing else.
+		verify(fixture.fingerprintLauncher, never()).launch(eq(ExecutionType.FINGERPRINT_PHOTO), anyBoolean());
 	}
 
 	@Test
@@ -299,7 +322,7 @@ class DuplicatesWebControllerCoverageTest {
 	void runningFingerprintJobIsNotOfferedForRebuild() {
 		Fixture fixture = new Fixture();
 
-		when(fixture.phashRunner.isRunning()).thenReturn(true);
+		when(fixture.fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_PHOTO)).thenReturn(true);
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -340,11 +363,7 @@ class DuplicatesWebControllerCoverageTest {
 	void similarMultiFileGroupUsesThePluralHeading() {
 		Fixture fixture = new Fixture();
 
-		DuplicateCandidateFileResponse keep = file(1, "keep.jpg", "jpg", "PHOTO");
-		DuplicateCandidateFileResponse candidate = file(2, "candidate.jpg", "jpg", "PHOTO");
-
-		when(fixture.similarity.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.of(new PageImpl<>(List
-				.of(new SimilarPhotoGroupResponse("similar", 2, 90, SizeResponse.of(10), keep, List.of(candidate))))));
+		when(fixture.similarityView.photos(70, PageRequest.of(0, 50))).thenReturn(twoPhotoGroup());
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -352,6 +371,71 @@ class DuplicatesWebControllerCoverageTest {
 				model);
 
 		Assertions.assertThat(groups(model).getFirst().headerText()).isEqualTo("2 fotos semelhantes");
+	}
+
+	/**
+	 * A published group can come back with a single member: the others were
+	 * excluded or deleted after the analysis ran, and the group is still what the
+	 * screen shows until a new one is published. The heading has to agree with the
+	 * number in front of it.
+	 */
+	@Test
+	void aPublishedGroupLeftWithOneMemberIsHeadedInTheSingular() {
+		Fixture fixture = new Fixture();
+
+		PublishedGroup alone = new PublishedGroup("lonely", 90, 10L,
+				List.of(member("keep.jpg", Verdict.KEEP, Reason.ORIGINAL)), 1);
+
+		when(fixture.similarityView.photos(70, PageRequest.of(0, 50)))
+				.thenReturn(new SimilarityView(new PageImpl<>(List.of(alone)), true, false, false, 1, 1, 4000, true));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		fixture.controller().duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null), null,
+				model);
+
+		Assertions.assertThat(groups(model).getFirst().headerText()).isEqualTo("1 foto semelhante");
+	}
+
+	/**
+	 * A conversion holds the quarantine folder a deletion writes to. The screen
+	 * says so before the user picks files, and it says it in words the back end
+	 * resolved - the page only shows what it is given.
+	 */
+	@Test
+	void aRunningConversionSaysWhyDeletionIsBlockedInsteadOfRefusingTheClick() {
+		Fixture fixture = new Fixture();
+
+		when(fixture.phash.conversionActive()).thenReturn(true);
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		fixture.controller().duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
+
+		Assertions.assertThat(model.get("deletionBlockedMessage")).asString().isEqualTo(
+				"Uma conversão está em andamento e usa a pasta de quarentena. A exclusão fica bloqueada até ela terminar.");
+	}
+
+	/**
+	 * The Videos tab is its own reading of the same page: its own backlog, its own
+	 * published groups and its own heading - a video group never says "fotos".
+	 */
+	@Test
+	void theVideosTabHeadsItsGroupsAsVideosAndAsksTheVideoBacklog() {
+		Fixture fixture = new Fixture();
+
+		when(fixture.similarityView.videos(70, PageRequest.of(0, 50))).thenReturn(videoGroups());
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		fixture.controller().duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, model);
+
+		Assertions.assertThat(groups(model)).extracting(DuplicateGroupView::headerText).containsExactly(
+				"1 vídeo semelhante", "2 vídeos semelhantes");
+		Assertions.assertThat(model).containsEntry("failuresUrl", "/api/duplicates/similar-videos/failures");
+
+		verify(fixture.fingerprintRunReader).isRunning(ExecutionType.FINGERPRINT_VIDEO);
+		verify(fixture.similarityView, never()).photos(anyInt(), any());
 	}
 
 	@Test
@@ -412,8 +496,38 @@ class DuplicatesWebControllerCoverageTest {
 	}
 
 	private static DuplicateCandidateFileResponse file(long id, String name, String extension, String type) {
-		return new DuplicateCandidateFileResponse(id, name, extension, type, SizeResponse.of(100), "C:/" + name, "C:/",
-				NOW);
+		return new DuplicateCandidateFileResponse(UuidV7.fromLegacy(id), name, extension, type, SizeResponse.of(100),
+				"C:/" + name, "C:/", NOW);
+	}
+
+	/** A published pair, which is the smallest group the heading pluralises for. */
+	private static SimilarityView twoPhotoGroup() {
+		PublishedGroup group = new PublishedGroup("similar", 90, 10L,
+				List.of(member("keep.jpg", Verdict.KEEP, Reason.ORIGINAL),
+						member("candidate.jpg", Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY)),
+				2);
+
+		return new SimilarityView(new PageImpl<>(List.of(group)), true, false, false, 2, 2, 8000, true);
+	}
+
+	/** A lone video and a pair of them: one heading of each number. */
+	private static SimilarityView videoGroups() {
+		PublishedGroup alone = new PublishedGroup("lonely", 90, 10L,
+				List.of(member("clip.mp4", Verdict.KEEP, Reason.ORIGINAL)), 1);
+
+		PublishedGroup pair = new PublishedGroup("pair", 95, 20L,
+				List.of(member("keep.mp4", Verdict.KEEP, Reason.ORIGINAL),
+						member("candidate.mp4", Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY)),
+				2);
+
+		return new SimilarityView(new PageImpl<>(List.of(alone, pair)), true, false, false, 3, 2, 30000, true);
+	}
+
+	private static PublishedMember member(String name, Verdict verdict, Reason reason) {
+		return new PublishedMember(new AnalyzedMember(UUID.randomUUID(), verdict, reason),
+				new SimilarityMemberFile(UUID.randomUUID(), name, "jpg", "PHOTO", 100L, "C:/" + name, "C:/", NOW, 1920,
+						1080, NOW, DateSource.EXIF, LifecycleStatus.ACTIVE),
+				true);
 	}
 
 	private static DuplicateCandidateFileResponse file(long id, String name, String extension, String type,
@@ -423,21 +537,18 @@ class DuplicatesWebControllerCoverageTest {
 	}
 
 	/**
-	 * When the shared executor refuses the task, the claim taken by start() is
-	 * never released by run(): the screen would report a deletion in progress
-	 * forever and no further deletion could begin.
+	 * There is no executor to refuse it any more: the request becomes a row, and
+	 * whether a worker is free to take it is the queue's business rather than this
+	 * screen's.
 	 */
 	@Test
-	void aDeletionTheExecutorRefusedReleasesTheClaim() {
+	void aDeletionIsQueuedRatherThanSubmittedToAnExecutor() {
 		Fixture fixture = new Fixture();
 
 		List<UUID> ids = List.of(UUID.randomUUID());
 
-		when(fixture.deletionRunner.start(1)).thenReturn(true);
-		doThrow(new TaskRejectedException("executor saturated")).when(fixture.deletionRunner).run(ids);
-
 		fixture.controller().delete(new DuplicateDeleteRequest(ids));
 
-		verify(fixture.deletionRunner).releaseRejectedSubmission();
+		verify(fixture.deletionLauncher).launch(ids);
 	}
 }

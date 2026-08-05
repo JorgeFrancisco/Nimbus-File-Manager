@@ -1,24 +1,24 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
+import java.time.Duration;
 import java.util.Optional;
-
 import org.assertj.core.api.Assertions;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 
 /**
  * End-to-end validation of the real {@code ReadDirectoryChangesW} source
@@ -114,29 +114,32 @@ class WindowsRdcwIntegrationTest {
 			Path outside = other.resolve("elsewhere.jpg");
 			Files.writeString(outside, "x");
 
-			for (int poll = 0; poll < 5; poll++) {
-				Assertions.assertThat(source.pollChangedFiles()).doesNotContain(outside);
-
-				Thread.sleep(POLL_PAUSE_MILLIS);
-			}
+			// The claim is a negative, so it has to hold over several polls rather than
+			// at one instant: a change from outside the root could arrive late.
+			await().during(Duration.ofMillis(5 * POLL_PAUSE_MILLIS)).atMost(Duration.ofSeconds(5))
+					.pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(POLL_PAUSE_MILLIS))
+					.untilAsserted(() -> Assertions.assertThat(source.pollChangedFiles()).doesNotContain(outside));
 		} finally {
 			source.close();
 		}
 	}
 
-	private boolean awaitChange(FileChangeSource source, Path expected) throws InterruptedException {
+	/**
+	 * Whether the change turns up within the budget. Answers rather than throws so
+	 * each caller keeps the label that says which change it was waiting for.
+	 */
+	private boolean awaitChange(FileChangeSource source, Path expected) {
 		Path normalized = expected.toAbsolutePath().normalize();
 
-		for (int poll = 0; poll < MAX_POLLS; poll++) {
-			List<Path> changed = source.pollChangedFiles();
+		try {
+			await().atMost(Duration.ofMillis(MAX_POLLS * POLL_PAUSE_MILLIS)).pollDelay(Duration.ZERO)
+					.pollInterval(Duration.ofMillis(POLL_PAUSE_MILLIS))
+					.until(() -> source.pollChangedFiles().stream()
+							.map(path -> path.toAbsolutePath().normalize()).anyMatch(normalized::equals));
 
-			if (changed.stream().map(path -> path.toAbsolutePath().normalize()).anyMatch(normalized::equals)) {
-				return true;
-			}
-
-			Thread.sleep(POLL_PAUSE_MILLIS);
+			return true;
+		} catch (ConditionTimeoutException _) {
+			return false;
 		}
-
-		return false;
 	}
 }

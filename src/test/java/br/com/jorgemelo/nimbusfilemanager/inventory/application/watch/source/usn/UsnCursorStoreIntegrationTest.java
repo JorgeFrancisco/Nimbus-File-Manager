@@ -3,14 +3,9 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.us
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 
 /**
  * Runtime checks that the USN cursor round-trips through PostgreSQL: a first
@@ -18,16 +13,9 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCur
  * keys read back empty. The 64-bit journal id / USN bit patterns must survive
  * the BIGINT columns unchanged.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class UsnCursorStoreIntegrationTest {
+class UsnCursorStoreIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final String VOLUME_KEY = "C:/Media";
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private UsnCursorStore cursorStore;

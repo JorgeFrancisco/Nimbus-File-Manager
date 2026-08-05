@@ -245,7 +245,10 @@ public class TimelineQueryRepository {
 				.addValue("geo", narrowing.geo() == GeoPresence.ANY ? null : narrowing.geo().name(), Types.VARCHAR);
 	}
 
-	/** A field left empty on the screen is "any", never a search for the empty string. */
+	/**
+	 * A field left empty on the screen is "any", never a search for the empty
+	 * string.
+	 */
 	private String blankToNull(String value) {
 		return value == null || value.isBlank() ? null : value.trim();
 	}

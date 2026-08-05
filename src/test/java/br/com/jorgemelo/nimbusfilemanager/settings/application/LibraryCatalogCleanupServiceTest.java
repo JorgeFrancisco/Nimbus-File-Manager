@@ -1,6 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.settings.application;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
@@ -13,8 +15,11 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
 
 @ExtendWith(MockitoExtension.class)
 class LibraryCatalogCleanupServiceTest {
@@ -26,7 +31,13 @@ class LibraryCatalogCleanupServiceTest {
 	private CatalogFileRepository catalogFileRepository;
 
 	@Mock
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Mock
 	private WorkspaceManager workspaceManager;
+
+	@Mock
+	private EligibilityAnnouncer eligibilityAnnouncer;
 
 	@Test
 	void clearShouldDeleteCatalogRowsAndWipeThumbnailCacheContents() throws Exception {
@@ -84,7 +95,37 @@ class LibraryCatalogCleanupServiceTest {
 		Assertions.assertThat(Files.exists(data)).isTrue();
 	}
 
+	/**
+	 * Forgetting a library takes active, fingerprinted files out of the catalog
+	 * wholesale, so the answer a duplicate analysis published is about a collection
+	 * that is no longer there. Said once for the switch.
+	 */
+	@Test
+	void clearShouldAskForOneRegroupWhenRowsWereReallyForgotten() {
+		when(catalogFileRepository.deleteWithinLibrary(anyString(), anyString())).thenReturn(7);
+		when(workspaceManager.getWorkspacePath()).thenReturn(tempDir);
+		when(workspaceManager.resolve("cache", "thumbnails")).thenReturn(tempDir.resolve("cache"));
+
+		service().clear(tempDir.resolve("library").toString());
+
+		verify(eligibilityAnnouncer).announce("library switch");
+	}
+
+	/** A root nothing was catalogued under leaves nothing to bring up to date. */
+	@Test
+	void clearShouldAskForNothingWhenNoRowWasForgotten() {
+		when(catalogFileRepository.deleteWithinLibrary(anyString(), anyString())).thenReturn(0);
+		when(workspaceManager.getWorkspacePath()).thenReturn(tempDir);
+		when(workspaceManager.resolve("cache", "thumbnails")).thenReturn(tempDir.resolve("cache"));
+
+		service().clear(tempDir.resolve("library").toString());
+
+		verifyNoInteractions(eligibilityAnnouncer);
+	}
+
 	private LibraryCatalogCleanupService service() {
-		return new LibraryCatalogCleanupService(catalogFileRepository, workspaceManager);
+		return new LibraryCatalogCleanupService(
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository), workspaceManager,
+				eligibilityAnnouncer);
 	}
 }

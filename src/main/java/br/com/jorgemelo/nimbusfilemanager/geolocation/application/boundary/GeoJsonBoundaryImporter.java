@@ -62,6 +62,8 @@ public class GeoJsonBoundaryImporter {
 
 		for (LeveledBoundaryFile file : files) {
 			total += importLevel(file.kind(), file.file(), source, datasetVersion);
+
+			progress.levelFinished();
 		}
 
 		if (total == 0) {

@@ -2,11 +2,13 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
+import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -17,11 +19,15 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintB
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
  * Media-agnostic engine that drains a fingerprint backlog OUTSIDE the
@@ -39,10 +45,9 @@ import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
  * drain, transaction handling, retry bounds and rebuild/reset live in exactly
  * one place - with no {@code PHOTO}/{@code VIDEO} branching.
  */
+@Component
 class FingerprintBacklogEngine {
 
-	private static final String INVENTORY = "INVENTORY";
-	private static final String CONVERSION = "CONVERSION";
 
 	static final int BATCH_SIZE = 200;
 	private static final int MAX_ERROR_LENGTH = 500;
@@ -54,18 +59,22 @@ class FingerprintBacklogEngine {
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
+	private final FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
 	private final ProcessingCoordinator processingCoordinator;
-	private final ExecutionQueryService executionQueryService;
+	private final ExecutionRepository executionRepository;
 	private final TransactionTemplate writeTransaction;
 	private final Clock clock;
 
 	public FingerprintBacklogEngine(MediaFingerprintRepository mediaFingerprintRepository,
-			FingerprintFailureRepository fingerprintFailureRepository, ProcessingCoordinator processingCoordinator,
-			ExecutionQueryService executionQueryService, PlatformTransactionManager transactionManager, Clock clock) {
+			FingerprintFailureRepository fingerprintFailureRepository,
+			FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository,
+			ProcessingCoordinator processingCoordinator, ExecutionRepository executionRepository,
+			PlatformTransactionManager transactionManager, Clock clock) {
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
+		this.fingerprintRebuildTaskRepository = fingerprintRebuildTaskRepository;
 		this.processingCoordinator = processingCoordinator;
-		this.executionQueryService = executionQueryService;
+		this.executionRepository = executionRepository;
 		this.writeTransaction = new TransactionTemplate(transactionManager);
 		this.writeTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		this.clock = clock;
@@ -77,7 +86,7 @@ class FingerprintBacklogEngine {
 	 * inventory's own progress with it, and a conversion is not an inventory.
 	 */
 	public boolean inventoryActive() {
-		return activeTypeIsOneOf(INVENTORY);
+		return activeTypeIsOneOf(ExecutionType.INVENTORY);
 	}
 
 	/**
@@ -87,7 +96,7 @@ class FingerprintBacklogEngine {
 	 * refusing the click afterwards.
 	 */
 	public boolean conversionActive() {
-		return activeTypeIsOneOf(CONVERSION);
+		return activeTypeIsOneOf(ExecutionType.CONVERSION);
 	}
 
 	/**
@@ -102,22 +111,40 @@ class FingerprintBacklogEngine {
 	 * the database and everything already computed was persisted per batch.
 	 */
 	public boolean pausedByActiveExecution() {
-		return activeTypeIsOneOf(INVENTORY, CONVERSION);
+		return activeTypeIsOneOf(ExecutionType.INVENTORY, ExecutionType.CONVERSION);
 	}
 
-	private boolean activeTypeIsOneOf(String... executionTypes) {
-		return executionQueryService.active()
-				.map(execution -> Set.of(executionTypes).contains(execution.executionType())).orElse(false);
+	/**
+	 * Asked of every active row rather than of the most recent one: a worker runs
+	 * several executions at a time, so "the newest active execution is an
+	 * inventory" answers a different question - and answers this one wrong
+	 * whenever something else started later.
+	 */
+	private boolean activeTypeIsOneOf(ExecutionType... executionTypes) {
+		return Arrays.stream(executionTypes)
+				.anyMatch(type -> executionRepository.existsByExecutionTypeAndStatusIn(type,
+						ExecutionStatusNames.ACTIVE));
 	}
 
+	/**
+	 * What is left, and the two ways of asking it.
+	 *
+	 * <p>
+	 * While a rebuild is open, what is owed is what the work list says - the
+	 * fingerprints it is going to replace are still there, so the ordinary
+	 * question ("which files have none?") would answer zero and call a rebuild
+	 * that has not started finished. Outside a rebuild the ordinary question is
+	 * the right one, and the two are never added together: exactly one of them is
+	 * asked.
+	 */
 	public FingerprintBacklogStatus status(FingerprintProducer<?, ?> producer) {
 		long done = mediaFingerprintRepository.countFingerprintedCatalogFiles(producer.kind(), producer.algorithm());
 
 		long failed = producer.countExhaustedFailures();
 
-		long pending = producer.countPending();
+		long owed = fingerprintRebuildTaskRepository.countByKindAndAlgorithm(producer.kind(), producer.algorithm());
 
-		return new FingerprintBacklogStatus(pending, done, failed);
+		return new FingerprintBacklogStatus(owed > 0 ? owed : producer.countPending(), done, failed);
 	}
 
 	public List<FingerprintFailureDetail> failures(FingerprintProducer<?, ?> producer) {
@@ -130,15 +157,70 @@ class FingerprintBacklogEngine {
 				FingerprintFailureReason.retryable());
 	}
 
-	/** Clears only this kind/algorithm's derived fingerprints and failures. */
-	public long rebuild(FingerprintProducer<?, ?> producer) {
-		Long removed = writeTransaction.execute(_ -> {
-			fingerprintFailureRepository.deleteByKindAndAlgorithm(producer.kind(), producer.algorithm());
+	/**
+	 * Writes down what a rebuild owes, instead of deleting what it is going to
+	 * replace.
+	 *
+	 * <p>
+	 * The fingerprints stay exactly where they are. Every eligible file of the
+	 * kind gets a task, and each one is replaced later by its own short
+	 * transaction, so the answer the library gives never passes through empty:
+	 * before this, re-opening the work meant deleting the data, and a run
+	 * interrupted after that left the whole algorithm missing until something
+	 * recomputed it.
+	 *
+	 * <p>
+	 * The attempt budget is restored rather than the failures being erased. What
+	 * made a file fail is the diagnosis the screen shows - the reason, the error,
+	 * when it was last tried - and none of it stops being true because the user
+	 * asked for a recompute; what has to change is only that the file is allowed
+	 * to be tried again.
+	 *
+	 * <p>
+	 * Seeding and the reset are one transaction because a rebuild that owed work
+	 * nobody was allowed to attempt would never finish, and a budget restored for
+	 * work nobody owes would let the next incremental pass retry files this run
+	 * never claimed.
+	 *
+	 * @return empty when the taking is over, in which case nothing was seeded and
+	 * no budget was restored
+	 */
+	public OptionalLong seedRebuild(FingerprintProducer<?, ?> producer, ExecutionOwnership ownership) {
+		return Objects.requireNonNull(writeTransaction.execute(_ -> {
+			if (!ownership.pin()) {
+				return OptionalLong.empty();
+			}
 
-			return mediaFingerprintRepository.deleteByKindAndAlgorithm(producer.kind(), producer.algorithm());
-		});
+			long seeded = producer.seedRebuildTasks(LocalDateTime.now(clock));
 
-		return removed == null ? 0 : removed;
+			fingerprintFailureRepository.restoreAttemptBudget(producer.kind(), producer.algorithm());
+
+			return OptionalLong.of(seeded);
+		}));
+	}
+
+	/** Whether a rebuild of this target still owes anything. */
+	public boolean rebuildIsOpen(FingerprintProducer<?, ?> producer) {
+		return fingerprintRebuildTaskRepository.existsByKindAndAlgorithm(producer.kind(), producer.algorithm());
+	}
+
+	/**
+	 * Drops the debts of files that stopped being candidates while the rebuild ran.
+	 *
+	 * <p>
+	 * Its own short transaction, and deliberately not part of persisting a chunk: a
+	 * file that went missing produced no outcome to write down, and treating it as
+	 * one would mean inventing a result for work that never ran. What it is instead
+	 * is a debt that can no longer be paid, and the only thing standing between
+	 * that and a rebuild which never closes is dropping it.
+	 *
+	 * <p>
+	 * Pinned like every other mutation the worker makes: a run that has been
+	 * replaced does not get to decide what the taking after it still owes.
+	 */
+	public int discardIneligible(FingerprintProducer<?, ?> producer, ExecutionOwnership ownership) {
+		return Objects.requireNonNull(
+				writeTransaction.execute(_ -> ownership.pin() ? producer.discardIneligibleRebuildTasks() : 0));
 	}
 
 	/**
@@ -155,7 +237,7 @@ class FingerprintBacklogEngine {
 	 * {@code PERSIST_SIZE} items are ever at risk.
 	 */
 	public <P, R> DrainResult drain(FingerprintProducer<P, R> producer, BooleanSupplier stop,
-			ProgressListener progress) {
+			ProgressListener progress, ExecutionOwnership ownership) {
 		long processed = 0;
 
 		long failed = 0;
@@ -163,7 +245,18 @@ class FingerprintBacklogEngine {
 		// Checked per item, not only between batches: a batch is BATCH_SIZE videos and
 		// each one costs seconds of ffmpeg, so waiting for the batch boundary would
 		// keep competing with the conversion for several minutes after it started.
-		BooleanSupplier halt = () -> stop.getAsBoolean() || pausedByActiveExecution();
+		// A taking that has been replaced stops here too - that answer is free, comes
+		// from memory, and only saves work: what refuses the write is the pin below.
+		BooleanSupplier halt = () -> stop.getAsBoolean() || pausedByActiveExecution()
+				|| !ownership.takingIsStillCurrent();
+
+		// Before reading anything, settle the debts that cannot be paid. A file the
+		// catalog lost sight of since the seed never reaches a chunk, so nothing else
+		// in this loop would ever account for it, and the rebuild would stay open on
+		// it for as long as it stayed away.
+		if (rebuildIsOpen(producer)) {
+			discardIneligible(producer, ownership);
+		}
 
 		while (!halt.getAsBoolean()) {
 			List<P> batch = producer.fetchPendingBatch(BATCH_SIZE);
@@ -181,8 +274,18 @@ class FingerprintBacklogEngine {
 				List<Outcome<P, R>> outcomes = processingCoordinator.process(chunk, halt, producer::compute,
 						done -> progress.onProgress(baseProcessed + done, baseFailed));
 
-				BatchCounts counts = Objects
-						.requireNonNull(writeTransaction.execute(_ -> persistBatch(producer, outcomes)));
+				// The chunk is one unit against the taking: everything it writes - the
+				// fingerprint, the failure it retires on success, the failure it records -
+				// is inside this transaction, behind this pin. A chunk computed by a run
+				// that has since been replaced is thrown away whole rather than half
+				// written, which is the only shape that cannot contradict the taking that
+				// replaced it.
+				BatchCounts counts = writeTransaction
+						.execute(_ -> ownership.pin() ? persistBatch(producer, outcomes) : null);
+
+				if (counts == null) {
+					return new DrainResult(processed, failed);
+				}
 
 				processed += counts.done();
 
@@ -204,11 +307,7 @@ class FingerprintBacklogEngine {
 			P item = outcome.item();
 
 			if (outcome.executed()) {
-				producer.store(item, outcome.value());
-
-				// A prior failed attempt that later succeeds must not linger as a failure.
-				fingerprintFailureRepository.deleteByCatalogFileIdAndKindAndAlgorithm(producer.catalogFileId(item),
-						producer.kind(), producer.algorithm());
+				replace(producer, item, outcome.value());
 
 				done++;
 			} else if (outcome.failed()) {
@@ -220,6 +319,44 @@ class FingerprintBacklogEngine {
 		}
 
 		return new BatchCounts(done, failed);
+	}
+
+	/**
+	 * One file changing hands, whole.
+	 *
+	 * <p>
+	 * The old rows go before the new ones arrive, because a replacement may be a
+	 * different size: a video re-read at a new duration is sampled at different
+	 * frames, and writing over it sample by sample would leave the tail of the old
+	 * set behind, attributed to a hash that never produced it.
+	 *
+	 * <p>
+	 * What was concluded from the old fingerprint goes with it. Nothing published
+	 * can tell a relation computed from the hash that was just replaced from one
+	 * computed from the hash that replaced it - the composition digest a grouping
+	 * carries is over the files it examined, not over their fingerprints - so a
+	 * relation left behind would be indistinguishable from a current one and would
+	 * be read as an answer.
+	 *
+	 * <p>
+	 * All of it inside the caller's pinned transaction, so a file is either
+	 * entirely replaced or entirely untouched.
+	 */
+	private <P, R> void replace(FingerprintProducer<P, R> producer, P item, R value) {
+		long catalogFileId = producer.catalogFileId(item);
+
+		mediaFingerprintRepository.deleteByCatalogFileIdAndKindAndAlgorithm(catalogFileId, producer.kind(),
+				producer.algorithm());
+
+		producer.store(item, value);
+
+		// A prior failed attempt that later succeeds must not linger as a failure.
+		fingerprintFailureRepository.deleteByCatalogFileIdAndKindAndAlgorithm(catalogFileId, producer.kind(),
+				producer.algorithm());
+
+		producer.forgetWhatWasDerivedFrom(catalogFileId);
+
+		fingerprintRebuildTaskRepository.consume(producer.kind(), producer.algorithm(), catalogFileId);
 	}
 
 	private <P, R> void recordFailure(FingerprintProducer<P, R> producer, P item, Exception error) {
@@ -241,6 +378,15 @@ class FingerprintBacklogEngine {
 		failure.setLastAttemptAt(LocalDateTime.now(clock));
 
 		fingerprintFailureRepository.save(failure);
+
+		// A rebuild owes a file until something is written down about it, and a spent
+		// budget is an answer: this one will not decode, and no later pass is going to
+		// change that. Owing it anyway would keep the rebuild open on a file nobody
+		// will ever attempt again. An attempt that is still allowed leaves the debt
+		// where it is, in the same transaction that recorded the failure.
+		if (failure.getAttempts() >= producer.maxAttempts()) {
+			fingerprintRebuildTaskRepository.consume(producer.kind(), producer.algorithm(), catalogFileId);
+		}
 	}
 
 	private String truncate(Exception error) {

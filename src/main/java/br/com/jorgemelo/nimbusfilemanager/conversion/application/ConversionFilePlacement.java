@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileNames;
 import lombok.extern.slf4j.Slf4j;
@@ -24,11 +24,12 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class ConversionFilePlacement {
 
-	private final SecureFileMove secureFileMove;
+	private final LibraryFileMutations libraryFileMutations;
 	private final ConversionFileNaming conversionFileNaming;
 
-	public ConversionFilePlacement(SecureFileMove secureFileMove, ConversionFileNaming conversionFileNaming) {
-		this.secureFileMove = secureFileMove;
+	public ConversionFilePlacement(LibraryFileMutations libraryFileMutations,
+			ConversionFileNaming conversionFileNaming) {
+		this.libraryFileMutations = libraryFileMutations;
 		this.conversionFileNaming = conversionFileNaming;
 	}
 
@@ -39,14 +40,14 @@ public class ConversionFilePlacement {
 	 * set - the "(H.265)" suffix keeps the two apart instead of overwriting
 	 * anything.
 	 */
-	public Path place(Path converted, Path source, ConversionOptions options) throws IOException {
+	public Path place(Path converted, Path source, ConversionOptions options, Long executionId) throws IOException {
 		Path desired = conversionFileNaming.finalName(source, options);
 
 		Path target = Files.exists(desired)
 				? FileNames.nextAvailable(FileNames.withSuffix(desired, ConversionConstants.CONVERTED_SUFFIX))
 				: desired;
 
-		secureFileMove.move(converted, target, false);
+		libraryFileMutations.move(converted, target, false, executionId);
 
 		// The move says it verified the file byte for byte, so this can only fail if
 		// something outside the application took the file away in between. It happened
@@ -66,7 +67,7 @@ public class ConversionFilePlacement {
 	 * user knows. Purely cosmetic: if the name is somehow taken or the rename
 	 * fails, the file stays where it is and the conversion still counts as done.
 	 */
-	public Path renameToOriginalName(Path converted, Path source) {
+	public Path renameToOriginalName(Path converted, Path source, Long executionId) {
 		Path desired = FileNames.withExtension(source, ExtensionUtils.fromPath(converted));
 
 		if (desired.equals(converted) || Files.exists(desired)) {
@@ -74,7 +75,7 @@ public class ConversionFilePlacement {
 		}
 
 		try {
-			secureFileMove.move(converted, desired, false);
+			libraryFileMutations.move(converted, desired, false, executionId);
 
 			return desired;
 		} catch (Exception e) {

@@ -17,17 +17,21 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.Setting
 class CatalogFilePurgeSchedulerTest {
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
-	private final CatalogFileRetentionService retentionService = mock(CatalogFileRetentionService.class);
+	private final CatalogPurgeLauncherService catalogPurgeLauncherService = mock(CatalogPurgeLauncherService.class);
 	private final CatalogFilePurgeScheduler scheduler = new CatalogFilePurgeScheduler(appSettingService,
-			retentionService);
+			catalogPurgeLauncherService);
 
+	/**
+	 * The timer asks; it no longer purges. What it passes on is the window that was
+	 * configured, and which rows are past it is decided when the purge runs.
+	 */
 	@Test
-	void runsPurgeWithConfiguredRetention() {
+	void asksForThePurgeWithTheConfiguredRetention() {
 		when(appSettingService.intValue(eq(SettingsConstants.CATALOG_MISSING_RETENTION_DAYS), anyInt())).thenReturn(30);
 
 		scheduler.runOnce();
 
-		verify(retentionService).purgeMissingOlderThan(30);
+		verify(catalogPurgeLauncherService).launch(30);
 	}
 
 	/**
@@ -37,7 +41,7 @@ class CatalogFilePurgeSchedulerTest {
 	@Test
 	void purgeSwallowsAnUnexpectedFailureSoTheTimerSurvives() {
 		when(appSettingService.intValue(eq(SettingsConstants.CATALOG_MISSING_RETENTION_DAYS), anyInt())).thenReturn(30);
-		doThrow(new IllegalStateException("catalog unreachable")).when(retentionService).purgeMissingOlderThan(30);
+		doThrow(new IllegalStateException("catalog unreachable")).when(catalogPurgeLauncherService).launch(30);
 
 		Assertions.assertThatCode(scheduler::runOnce).doesNotThrowAnyException();
 	}
@@ -49,7 +53,7 @@ class CatalogFilePurgeSchedulerTest {
 	@Test
 	void purgeStaysQuietWhenTheFailureComesFromShuttingDown() {
 		when(appSettingService.intValue(eq(SettingsConstants.CATALOG_MISSING_RETENTION_DAYS), anyInt())).thenReturn(30);
-		doThrow(new IllegalStateException("interrupted")).when(retentionService).purgeMissingOlderThan(30);
+		doThrow(new IllegalStateException("interrupted")).when(catalogPurgeLauncherService).launch(30);
 
 		scheduler.shutdown();
 
@@ -62,7 +66,7 @@ class CatalogFilePurgeSchedulerTest {
 
 		scheduler.runOnce();
 
-		verify(retentionService, never()).purgeMissingOlderThan(anyInt());
+		verify(catalogPurgeLauncherService, never()).launch(anyInt());
 	}
 
 	@Test
@@ -75,6 +79,6 @@ class CatalogFilePurgeSchedulerTest {
 
 		scheduler.runOnce();
 
-		verify(retentionService, never()).purgeMissingOlderThan(anyInt());
+		verify(catalogPurgeLauncherService, never()).launch(anyInt());
 	}
 }

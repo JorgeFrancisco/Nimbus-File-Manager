@@ -8,17 +8,17 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentMatchers;
+import org.mockito.ArgumentCaptor;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ReconcileExecutionRecorder;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationReconcileService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -31,8 +31,7 @@ class ReconcileSchedulerTest {
 	Path tempDir;
 
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
-	private final OrganizationReconcileService organizationReconcileService = mock(OrganizationReconcileService.class);
-	private final ReconcileExecutionRecorder reconcileExecutionRecorder = mock(ReconcileExecutionRecorder.class);
+	private final ExecutionEnqueueService executionEnqueueService = mock(ExecutionEnqueueService.class);
 
 	private ReconcileScheduler scheduler;
 
@@ -44,21 +43,42 @@ class ReconcileSchedulerTest {
 	}
 
 	@Test
-	void runOnceReconcilesTheConfiguredFolderAndRecordsWithTimerTrigger() {
+	void runOnceQueuesTheReconcileInsteadOfRunningIt() {
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
 		when(appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(true);
-		when(appSettingService.booleanValue(SettingsConstants.WATCH_INCLUDE_HIDDEN, false)).thenReturn(false);
-
-		OrganizationReconcileResponse response = response();
-
-		when(organizationReconcileService.reconcileAndApply(any())).thenReturn(response);
 
 		scheduler = scheduler();
 		scheduler.runOnce();
 
-		verify(organizationReconcileService).reconcileAndApply(any());
-		verify(reconcileExecutionRecorder).recordIfRepaired(ExecutionTrigger.TIMER,
-				tempDir.toAbsolutePath().normalize(), response);
+		ArgumentCaptor<Execution> queued = ArgumentCaptor.captor();
+
+		verify(executionEnqueueService).enqueue(queued.capture());
+
+		Assertions.assertThat(queued.getValue().getExecutionType()).isEqualTo(ExecutionType.RECONCILE);
+		Assertions.assertThat(queued.getValue().getTriggerEvent()).isEqualTo(ExecutionTrigger.TIMER);
+		Assertions.assertThat(queued.getValue().getSourcePath())
+				.isEqualTo(tempDir.toAbsolutePath().normalize().toString());
+		Assertions.assertThat(queued.getValue().getDedupKey()).isEqualTo(OperationPathKey.canonical(tempDir));
+		Assertions.assertThat(queued.getValue().getRecursive()).isTrue();
+	}
+
+	/**
+	 * The recursive setting travels with the request: a library configured not to
+	 * recurse must not be walked in full by the pass that reconciles it.
+	 */
+	@Test
+	void carriesTheConfiguredRecursionIntoTheQueuedRequest() {
+		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(tempDir.toString());
+		when(appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(false);
+
+		scheduler = scheduler();
+		scheduler.runOnce();
+
+		ArgumentCaptor<Execution> queued = ArgumentCaptor.captor();
+
+		verify(executionEnqueueService).enqueue(queued.capture());
+
+		Assertions.assertThat(queued.getValue().getRecursive()).isFalse();
 	}
 
 	/**
@@ -70,14 +90,12 @@ class ReconcileSchedulerTest {
 		Path folder = Files.createDirectories(tempDir.resolve("library"));
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
-		when(organizationReconcileService.reconcileAndApply(ArgumentMatchers.any()))
+		when(executionEnqueueService.enqueue(any()))
 				.thenThrow(new IllegalStateException("catalog unreachable"));
 
 		scheduler = scheduler();
 
 		Assertions.assertThatCode(() -> scheduler.runOnce()).doesNotThrowAnyException();
-
-		verifyNoInteractions(reconcileExecutionRecorder);
 	}
 
 	/**
@@ -89,7 +107,7 @@ class ReconcileSchedulerTest {
 		Path folder = Files.createDirectories(tempDir.resolve("library"));
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
-		when(organizationReconcileService.reconcileAndApply(ArgumentMatchers.any()))
+		when(executionEnqueueService.enqueue(any()))
 				.thenThrow(new IllegalStateException("interrupted"));
 
 		scheduler = scheduler();
@@ -105,8 +123,7 @@ class ReconcileSchedulerTest {
 		scheduler = scheduler();
 		scheduler.runOnce();
 
-		verifyNoInteractions(organizationReconcileService);
-		verifyNoInteractions(reconcileExecutionRecorder);
+		verifyNoInteractions(executionEnqueueService);
 	}
 
 	@Test
@@ -117,21 +134,15 @@ class ReconcileSchedulerTest {
 		scheduler = scheduler();
 		scheduler.runOnce();
 
-		verifyNoInteractions(organizationReconcileService);
-		verifyNoInteractions(reconcileExecutionRecorder);
+		verifyNoInteractions(executionEnqueueService);
 	}
 
 	private ReconcileScheduler scheduler() {
-		return new ReconcileScheduler(appSettingService, organizationReconcileService, reconcileExecutionRecorder,
-				properties());
+		return new ReconcileScheduler(appSettingService, executionEnqueueService, properties());
 	}
 
 	private NimbusFileManagerProperties properties() {
 		return new NimbusFileManagerProperties(null, new Inventory(false, 60_000L), null, null, null);
 	}
 
-	private OrganizationReconcileResponse response() {
-		return new OrganizationReconcileResponse(tempDir.toString(), true, false, 0, 0, 0, 0, 0, List.of(), List.of(),
-				List.of(), 1, 0, 0);
-	}
 }

@@ -1,8 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,884 +10,343 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.ui.ExtendedModelMap;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.PhotoSimilarityService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateFileResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCandidateGroupResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.AnalyzedMember;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeleteRequest;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionResult;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletionProgress;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateExcludeRequest;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicatesViewRequest;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarPhotoGroupResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarVideoGroupResponse;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogAsyncRunner;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
-import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.DateSourceLabels;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.Fixture;
 
+/**
+ * The Duplicados screen, now that similarity is something it reads rather than
+ * something it starts.
+ *
+ * <p>
+ * What changed is where the answer comes from; what did not is anything about
+ * tabs, page sizes, view modes, thresholds or the exact-duplicates tab. Both are
+ * pinned here - the second group deliberately, because a migration that quietly
+ * changes the screen around it is the failure this slice most needed to avoid.
+ */
 class DuplicatesWebControllerTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-08T12:00:00");
 
-	/**
-	 * Collaborators bundled for the constructor. Every panel reads its counts from
-	 * the runner's live status, so a runner left answering null leaves the screen
-	 * with nothing to render - which is how fourteen of these tests failed at once.
-	 */
-	private static PhashBacklogAsyncRunner phashRunner() {
-		PhashBacklogAsyncRunner runner = mock(PhashBacklogAsyncRunner.class);
+	private final Fixture fixture = new Fixture();
 
-		when(runner.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-
-		return runner;
-	}
-
-	private static VideoFingerprintBacklogAsyncRunner videoBacklogRunner() {
-		return mock(VideoFingerprintBacklogAsyncRunner.class);
-	}
-
-	private static VideoSimilarityWeb videoWeb() {
-		return new VideoSimilarityWeb(mock(VideoSimilarityService.class), mock(VideoSimilarityAsyncRunner.class),
-				mock(VideoFingerprintBacklogService.class), videoBacklogRunner());
-	}
+	private final DuplicatesWebController controller = fixture.controller();
 
 	@Test
-	void videosTabRendersTheVideoSimilarityGroupingWithVideoActions() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhashBacklogService phashBacklogService = mock(PhashBacklogService.class);
-		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any()))
-				.thenReturn(Optional.of(new PageImpl<>(List.of())));
-
-		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, videoBacklogRunner);
+	void showsThePublishedAnalysisOfTheSimilarTab() {
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		String view = new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class),
-				phashBacklogService, phashRunner(), preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(request("similar"), null, model);
 
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("activeTab", "videos")
-				.containsEntry("rebuildAction", "/app/duplicates/phash-video/rebuild")
-				.containsEntry("retryAction", "/app/duplicates/phash-video/retry");
+		Assertions.assertThat(model.getAttribute("similarityPublished")).isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("similarityComputing")).isEqualTo(false);
+		Assertions.assertThat(groups(model)).hasSize(1);
+		Assertions.assertThat(groups(model).getFirst().files()).hasSize(2);
 	}
 
 	/**
-	 * The video groups get their own wording, separate from the photo tab's: a
-	 * one-file group reads in the singular and anything larger in the plural, and
-	 * the badge carries the similarity plus the recoverable size.
+	 * The rule the whole durable model exists for: a photo arriving does not take
+	 * the analysis off the screen. It stays, and the screen says there is something
+	 * newer to be found.
 	 */
 	@Test
-	void videosTabRendersGroupHeadersInSingularAndPluralWithTheirOwnWording() {
-		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.mp4", "mp4", "VIDEO",
-				SizeResponse.of(100), "C:/keep.mp4", "C:/", NOW);
-		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(2L, "dup.mp4", "mp4", "VIDEO",
-				SizeResponse.of(100), "C:/dup.mp4", "C:/", NOW);
-
-		var page = new PageImpl<>(
-				List.of(new SimilarVideoGroupResponse("single", 1, 98, SizeResponse.of(0), keep, List.of()),
-						new SimilarVideoGroupResponse("many", 3, 91, SizeResponse.of(200), keep, List.of(candidate))),
-				PageRequest.of(0, 50), 2);
-
-		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.of(page));
-
-		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, videoBacklogRunner);
+	void keepsTheAnalysisOnScreenAndFlagsThatTheLibraryMovedSince() {
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(request("similar"), null, model);
 
-		Assertions.assertThat(model.get("groups"))
-				.asInstanceOf(InstanceOfAssertFactories.list(DuplicateGroupView.class)).satisfiesExactly(single -> {
-					Assertions.assertThat(single.groupId()).isEqualTo("single");
-					Assertions.assertThat(single.headerText()).contains("1");
-				}, many -> {
-					Assertions.assertThat(many.groupId()).isEqualTo("many");
-					Assertions.assertThat(many.headerText()).contains("3");
-					Assertions.assertThat(many.badgeText()).contains("91");
-				});
+		Assertions.assertThat(model.getAttribute("similarityOutdated")).isEqualTo(true);
+		Assertions.assertThat(groups(model)).hasSize(1);
 	}
 
+	/** A new analysis running never replaces the one that is published. */
 	@Test
-	void videosTabReadsItsOwnSavedSimilarityIndependentlyOfPhotos() {
-		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		// Photo threshold 80, video threshold 95: the video tab must read its own key.
-		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(
-				Map.of(DuplicateConstants.MIN_SIMILARITY_KEY, "80", DuplicateConstants.MIN_SIMILARITY_VIDEO_KEY, "95"));
-		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any()))
-				.thenReturn(Optional.of(new PageImpl<>(List.of())));
-
-		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 5, 0));
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, mock(VideoSimilarityAsyncRunner.class),
-				videoBacklog, videoBacklogRunner);
+	void keepsTheAnalysisOnScreenWhileANewOneIsBeingComputed() {
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, true, true));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("videos", 0, null, "details", null, null),
-						null, model);
+		controller.duplicates(request("similar"), null, model);
 
-		Assertions.assertThat(model).containsEntry("minSimilarity", 95);
-		verify(videoSimilarity).cachedPage(95, PageRequest.of(0, 50));
+		Assertions.assertThat(model.getAttribute("similarityComputing")).isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("similarityPublished")).isEqualTo(true);
+		Assertions.assertThat(groups(model)).hasSize(1);
 	}
 
 	@Test
-	void videosTabComputesSimilarityInBackgroundWhenNotCached() {
-		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		VideoSimilarityService videoSimilarity = mock(VideoSimilarityService.class);
-		VideoSimilarityAsyncRunner videoSimilarityRunner = mock(VideoSimilarityAsyncRunner.class);
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(videoSimilarity.cachedPage(ArgumentMatchers.anyInt(), any())).thenReturn(Optional.empty());
-		when(videoSimilarityRunner.start(70)).thenReturn(true);
-		when(videoSimilarityRunner.percent()).thenReturn(40d);
-		when(videoSimilarityRunner.processed()).thenReturn(2);
-		when(videoSimilarityRunner.total()).thenReturn(5);
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(videoSimilarity, videoSimilarityRunner, videoBacklog,
-				videoBacklogRunner());
+	void showsTheProcessingStateWhenNothingWasEverPublished() {
+		when(fixture.similarityView.photos(anyInt(), any()))
+				.thenReturn(new SimilarityView(Page.empty(), false, false, true, 120, 0, 8000, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null),
-						null, model);
-
-		verify(videoSimilarityRunner).run(70);
-		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent",
-				40.0);
-	}
-
-	@Test
-	void videosTabIsBlockedWhileVideoFingerprintsArePending() {
-		UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		VideoFingerprintBacklogAsyncRunner videoBacklogRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(preferences.find(any(), eq(DuplicateConstants.PAGE_KEY))).thenReturn(Map.of());
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(3, 0, 0));
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
-				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoBacklogRunner);
-
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb,
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("phashBlocking", true);
-	}
-
-	@Test
-	void retryVideoFingerprintsResetsFailuresAndRedirects() {
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-		VideoFingerprintBacklogAsyncRunner videoRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(videoRunner.start()).thenReturn(true);
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
-				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoRunner);
-
-		String redirect = controllerWith(videoWeb).retryVideoFingerprints();
-
-		verify(videoBacklog).resetFailures();
-		verify(videoRunner).run();
-		Assertions.assertThat(redirect).isEqualTo("redirect:/app/duplicates?tab=videos");
-	}
-
-	@Test
-	void rebuildVideoFingerprintsStartsTheTrackedVideoJob() {
-		VideoFingerprintBacklogAsyncRunner videoRunner = mock(VideoFingerprintBacklogAsyncRunner.class);
-
-		when(videoRunner.prepareRebuild()).thenReturn(true);
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
-				mock(VideoSimilarityAsyncRunner.class), mock(VideoFingerprintBacklogService.class), videoRunner);
-
-		String redirect = controllerWith(videoWeb).rebuildVideoFingerprints();
-
-		verify(videoRunner).run();
-		Assertions.assertThat(redirect).isEqualTo("redirect:/app/duplicates?tab=videos");
-	}
-
-	private static DuplicatesWebController controllerWith(VideoSimilarityWeb videoWeb) {
-		return new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels());
-	}
-
-	@Test
-	void duplicatesShouldMapExactCandidatesAndFallBackToDetailsViewForInvalidValue() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		ExtendedModelMap model = new ExtendedModelMap();
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
-				SizeResponse.of(100), "C:/keep.jpg", "C:/", NOW);
-		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(2L, "dup.jpg", "jpg", "PHOTO",
-				SizeResponse.of(100), "C:/dup.jpg", "C:/", NOW);
-		var page = new PageImpl<>(
-				List.of(new DuplicateCandidateGroupResponse("sha", 2, SizeResponse.of(100), keep, List.of(candidate))),
-				PageRequest.of(0, 20), 1);
-
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(page);
-
-		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(
-						new DuplicatesViewRequest("exact", 0, 70, "not-a-real-view", null, null), null, model);
-
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("view", "details").containsEntry("activeTab", "exact");
-
-		@SuppressWarnings("unchecked")
-		List<DuplicateGroupView> groups = (List<DuplicateGroupView>) model.get("groups");
-
-		Assertions.assertThat(groups).hasSize(1);
-		Assertions.assertThat(groups.getFirst().groupId()).isEqualTo("sha");
-		Assertions.assertThat(groups.getFirst().headerText()).isEqualTo("2 arquivos idênticos");
-		Assertions.assertThat(groups.getFirst().files()).extracting("id").containsExactly(UuidV7.fromLegacy(1L),
-				UuidV7.fromLegacy(2L));
-		Assertions.assertThat(groups.getFirst().files().getFirst().keep()).isTrue();
-		Assertions.assertThat(groups.getFirst().files().getLast().keep()).isFalse();
-		Assertions.assertThat(groups.getFirst().files().getFirst().image()).isTrue();
-		Assertions.assertThat(groups.getFirst().files().getFirst().previewUrl())
-				.isEqualTo("/api/media/" + groups.getFirst().files().getFirst().id() + "/thumbnail?w=320");
-	}
-
-	@Test
-	void duplicatesShouldClampMinSimilarityBelowFloorForSimilarTab() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		ExtendedModelMap model = new ExtendedModelMap();
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "keep.jpg", "jpg", "PHOTO",
-				SizeResponse.of(200), "C:/keep.jpg", "C:/", NOW);
-		var page = new PageImpl<>(
-				List.of(new SimilarPhotoGroupResponse("1", 1, 92, SizeResponse.of(0), keep, List.of())),
-				PageRequest.of(0, 20), 1);
-
-		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.of(page));
-
-		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("similar", 0, 10, "small", null, null),
-						null, model);
-
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("minSimilarity", 70).containsEntry("view", "small")
-				.containsEntry("similarityComputing", false);
-
-		@SuppressWarnings("unchecked")
-		List<DuplicateGroupView> groups = (List<DuplicateGroupView>) model.get("groups");
-
-		Assertions.assertThat(groups.getFirst().badgeText()).contains("92% de semelhança");
-		verify(photoSimilarityService).cachedPage(70, PageRequest.of(0, 50));
-	}
-
-	@Test
-	void duplicatesShouldComputeSimilarityInBackgroundWhenNotCached() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
-		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
-		when(similarityRunner.start(70)).thenReturn(true);
-		when(similarityRunner.percent()).thenReturn(42d);
-		when(similarityRunner.processed()).thenReturn(21);
-		when(similarityRunner.total()).thenReturn(50);
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), similarityRunner,
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("similarityComputing", true).containsEntry("similarityPercent", 42.0)
-				.containsEntry("similarityProcessed", 21).containsEntry("similarityTotal", 50);
-		Assertions.assertThat((List<?>) model.get("groups")).isEmpty();
-		verify(similarityRunner).start(70);
-		verify(similarityRunner).run(70);
-	}
-
-	@Test
-	void duplicatesShouldNotRestartBackgroundSimilarityWhenAlreadyRunning() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var similarityRunner = mock(PhotoSimilarityAsyncRunner.class);
-		when(photoSimilarityService.cachedPage(70, PageRequest.of(0, 50))).thenReturn(Optional.empty());
-		when(similarityRunner.start(70)).thenReturn(false);
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), similarityRunner,
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("similarityComputing", true);
-		verify(similarityRunner).start(70);
-		verify(similarityRunner, never()).run(ArgumentMatchers.anyInt());
-	}
-
-	@Test
-	void duplicatesShouldPersistTheRequestedTab() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(List.of()));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("activeTab", "exact");
-		verify(preferences).save("system", DuplicateConstants.PAGE_KEY, DuplicateConstants.TAB_KEY, "exact");
-	}
-
-	@Test
-	void duplicatesShouldFallBackToTheSavedTabWhenNoneIsRequested() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicateConstants.TAB_KEY, "similar"));
-		var photoSimilarityService = mock(PhotoSimilarityService.class);
-		when(photoSimilarityService.cachedPage(ArgumentMatchers.anyInt(), ArgumentMatchers.any()))
-				.thenReturn(Optional.of(new PageImpl<>(List.of())));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest(null, 0, 70, "details", null, null), null,
-						model);
-
-		Assertions.assertThat(model).containsEntry("activeTab", "similar");
-	}
-
-	@Test
-	void duplicatesShouldPersistAndApplyTheRequestedPageSize() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Map.of());
-		when(duplicateService.candidates(eq(PageRequest.of(0, 100)), any())).thenReturn(new PageImpl<>(List.of()));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", 100, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("pageSize", 100);
-		verify(preferences).save("system", DuplicateConstants.PAGE_KEY, SharedConstants.PAGE_SIZE_KEY, "100");
-		verify(duplicateService).candidates(eq(PageRequest.of(0, 100)), any());
-	}
-
-	@Test
-	void duplicatesShouldFallBackToTheSavedPageSize() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(SharedConstants.PAGE_SIZE_KEY, "200"));
-		when(duplicateService.candidates(eq(PageRequest.of(0, 200)), any())).thenReturn(new PageImpl<>(List.of()));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("pageSize", 200);
-		verify(duplicateService).candidates(eq(PageRequest.of(0, 200)), any());
-	}
-
-	@Test
-	void duplicatesShouldFallBackToTheSavedViewMode() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicateConstants.VIEW_KEY, "large"));
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(List.of()));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, null, null, null), null,
-						model);
-
-		Assertions.assertThat(model).containsEntry("view", "large");
-	}
-
-	@Test
-	void duplicatesShouldFallBackToTheSavedMinSimilarity() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		var preferences = mock(UserPagePreferenceService.class);
-		when(preferences.find(ArgumentMatchers.any(), ArgumentMatchers.any()))
-				.thenReturn(Map.of(DuplicateConstants.MIN_SIMILARITY_KEY, "100"));
-		when(photoSimilarityService.cachedPage(100, PageRequest.of(0, 50)))
-				.thenReturn(Optional.of(new PageImpl<>(List.of())));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, preferences, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("similar", 0, null, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(model).containsEntry("minSimilarity", 100);
-		verify(photoSimilarityService).cachedPage(100, PageRequest.of(0, 50));
-	}
-
-	@Test
-	void duplicatesShouldBlockSimilarTabWhileFingerprintsArePending() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(5, 3, 1));
-		ExtendedModelMap model = new ExtendedModelMap();
-
-		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("similar", 0, 70, "details", null, null),
-						null, model);
-
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("phashBlocking", true);
-		Assertions.assertThat((List<?>) model.get("groups")).isEmpty();
-		verify(photoSimilarityService, never()).groups(ArgumentMatchers.anyInt(), ArgumentMatchers.any());
-	}
-
-	@Test
-	void deleteStartsTheBackgroundMoveAndReturnsTheInitialSnapshot() {
-		var deletionRunner = mock(DuplicateDeletionAsyncRunner.class);
-		List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID());
-		when(deletionRunner.start(2)).thenReturn(true);
-		when(deletionRunner.isRunning()).thenReturn(true);
-		when(deletionRunner.processed()).thenReturn(0);
-		when(deletionRunner.total()).thenReturn(2);
-		when(deletionRunner.percent()).thenReturn(0d);
-
-		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), deletionRunner, mock(DuplicateExclusionService.class),
-				videoWeb(), new DateSourceLabels());
-
-		var progress = controller.delete(new DuplicateDeleteRequest(ids));
-
-		Assertions.assertThat(progress.running()).isTrue();
-		Assertions.assertThat(progress.total()).isEqualTo(2);
-		Assertions.assertThat(progress.result()).isNull();
-		verify(deletionRunner).start(2);
-		verify(deletionRunner).run(ids);
-	}
-
-	@Test
-	void deleteDoesNotStartASecondMoveWhileOneIsRunning() {
-		var deletionRunner = mock(DuplicateDeletionAsyncRunner.class);
-		when(deletionRunner.start(ArgumentMatchers.anyInt())).thenReturn(false);
-		when(deletionRunner.isRunning()).thenReturn(true);
-
-		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), deletionRunner, mock(DuplicateExclusionService.class),
-				videoWeb(), new DateSourceLabels());
-
-		controller.delete(new DuplicateDeleteRequest(List.of(UUID.randomUUID())));
-
-		verify(deletionRunner, never()).run(ArgumentMatchers.anyCollection());
-	}
-
-	@Test
-	void deleteProgressReturnsTheFinalResultOnceTheMoveIsDone() {
-		var deletionRunner = mock(DuplicateDeletionAsyncRunner.class);
-		var result = new DuplicateDeletionResult(true, 2, 2, 0, 0, UUID.randomUUID(), "ok");
-		when(deletionRunner.isRunning()).thenReturn(false);
-		when(deletionRunner.processed()).thenReturn(2);
-		when(deletionRunner.total()).thenReturn(2);
-		when(deletionRunner.percent()).thenReturn(100d);
-		when(deletionRunner.lastResult()).thenReturn(result);
-
-		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), phashRunner(), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), deletionRunner, mock(DuplicateExclusionService.class),
-				videoWeb(), new DateSourceLabels());
-
-		var progress = controller.deleteProgress();
-
-		Assertions.assertThat(progress.running()).isFalse();
-		Assertions.assertThat(progress.percent()).isEqualTo(100);
-		Assertions.assertThat(progress.result()).isSameAs(result);
-	}
-
-	@Test
-	void retryFingerprintsResetsFailuresAndRedirects() {
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-
-		String redirect = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				phashBacklogService, phashBacklogAsyncRunner, mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels()).retryFingerprints();
-
-		Assertions.assertThat(redirect).isEqualTo("redirect:/app/duplicates?tab=similar");
-		verify(phashBacklogService).resetFailures();
-	}
-
-	@Test
-	void rebuildFingerprintsStartsOnlyTheTrackedFingerprintJob() {
-		var runner = mock(PhashBacklogAsyncRunner.class);
-		when(runner.prepareRebuild()).thenReturn(true);
-		var controller = new DuplicatesWebController(mock(DuplicateService.class), mock(PhotoSimilarityService.class),
-				mock(PhashBacklogService.class), runner, mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels());
-
-		Assertions.assertThat(controller.rebuildFingerprints()).isEqualTo("redirect:/app/duplicates?tab=similar");
-		verify(runner).prepareRebuild();
-		verify(runner).run();
+		controller.duplicates(request("similar"), null, model);
+
+		Assertions.assertThat(model.getAttribute("similarityPublished")).isEqualTo(false);
+		Assertions.assertThat(model.getAttribute("similarityComputing")).isEqualTo(true);
+		Assertions.assertThat(groups(model)).isEmpty();
 	}
 
 	/**
-	 * The failures dialog is one piece of markup shared by the tabs, so the tab
-	 * decides which list it loads. It asked for photos on every tab, and the Videos
-	 * tab answered with photo files.
+	 * The coverage the analysis really had. A library above the candidate cap is
+	 * analysed in part, and the screen has the numbers to say so instead of
+	 * implying everything was compared (V28a).
 	 */
 	@Test
-	void theFailuresDialogLoadsTheListOfTheTabItWasOpenedFrom() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
+	void publishesTheRealCoverageOfTheAnalysis() {
+		when(fixture.similarityView.photos(anyInt(), any()))
+				.thenReturn(new SimilarityView(published(), true, false, false, 98000, 8000, 8000, false));
 
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+		ExtendedModelMap model = new ExtendedModelMap();
 
-		ExtendedModelMap exact = new ExtendedModelMap();
+		controller.duplicates(request("similar"), null, model);
 
-		controllerWith(duplicateService, phashBacklogService)
-				.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, exact);
-
-		Assertions.assertThat(exact.get("failuresUrl")).asString().isEqualTo("/api/duplicates/similar-photos/failures");
-
-		ExtendedModelMap videos = new ExtendedModelMap();
-
-		controllerWith(duplicateService, phashBacklogService)
-				.duplicates(new DuplicatesViewRequest("videos", 0, 70, "details", null, null), null, videos);
-
-		Assertions.assertThat(videos.get("failuresUrl")).asString()
-				.isEqualTo("/api/duplicates/similar-videos/failures");
-	}
-
-	private DuplicatesWebController controllerWith(DuplicateService duplicateService,
-			PhashBacklogService phashBacklogService) {
-		VideoFingerprintBacklogService videoBacklog = mock(VideoFingerprintBacklogService.class);
-
-		when(videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-
-		VideoSimilarityWeb videoWeb = new VideoSimilarityWeb(mock(VideoSimilarityService.class),
-				mock(VideoSimilarityAsyncRunner.class), videoBacklog, videoBacklogRunner());
-
-		return new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb, new DateSourceLabels());
+		Assertions.assertThat(model.getAttribute("similarityEligible")).isEqualTo(98000);
+		Assertions.assertThat(model.getAttribute("similarityAnalyzed")).isEqualTo(8000);
+		Assertions.assertThat(model.getAttribute("similarityCandidateLimit")).isEqualTo(8000);
+		Assertions.assertThat(model.getAttribute("similarityCoverageComplete")).isEqualTo(false);
 	}
 
 	/**
-	 * A conversion does not make the analysis wrong, so the results stay on screen
-	 * - only the deletion is refused, and the reason arrives ready to display
-	 * instead of the screen working it out.
+	 * A member quarantined after the analysis keeps its place in the group - the
+	 * analysis was not wrong - and arrives flagged so the screen offers nothing
+	 * over it.
 	 */
 	@Test
-	void duplicatesShouldRefuseDeletionWithAReasonWhileAConversionRuns() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
+	void marksMembersThatCanNoLongerBeActedUpon() {
+		PublishedMember gone = new PublishedMember(
+				new AnalyzedMember(UUID.randomUUID(), Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY),
+				file("quarantined.jpg", LifecycleStatus.DELETED), false);
 
-		when(phashBacklogService.conversionActive()).thenReturn(true);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+		Page<PublishedGroup> page = new PageImpl<>(
+				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember(), gone), 1)));
+
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels())
-						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
+		controller.duplicates(request("similar"), null, model);
 
-		Assertions.assertThat(model.get("deletionBlockedMessage")).asString().isNotBlank();
-		Assertions.assertThat(model).containsEntry("inventoryActive", false);
+		List<DuplicateFileView> files = groups(model).getFirst().files();
+
+		Assertions.assertThat(files).hasSize(2);
+		Assertions.assertThat(files.get(0).actionable()).isTrue();
+		Assertions.assertThat(files.get(1).actionable()).isFalse();
+	}
+
+	/** A member whose catalog row is gone has nothing to draw, and is not drawn. */
+	@Test
+	void doesNotRenderAMemberWhoseCatalogRecordDisappeared() {
+		PublishedMember vanished = new PublishedMember(
+				new AnalyzedMember(UUID.randomUUID(), Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY), null, false);
+
+		Page<PublishedGroup> page = new PageImpl<>(
+				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember(), vanished), 1)));
+
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false, false));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("similar"), null, model);
+
+		DuplicateGroupView group = groups(model).getFirst();
+
+		Assertions.assertThat(group.files()).hasSize(1);
+
+		// The header still counts what the analysis found, not what survived.
+		Assertions.assertThat(group.headerText()).contains("2");
 	}
 
 	@Test
-	void duplicatesShouldNotAnnounceABlockWhenNothingIsRunning() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-		when(duplicateService.candidates(ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Page.empty());
+	void showsThePublishedAnalysisOfTheVideosTab() {
+		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(published(), true, false, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(duplicateService, mock(PhotoSimilarityService.class), phashBacklogService,
-				mock(PhashBacklogAsyncRunner.class), mock(UserPagePreferenceService.class),
-				mock(PhotoSimilarityAsyncRunner.class), mock(DuplicateDeletionAsyncRunner.class),
-				mock(DuplicateExclusionService.class), videoWeb(), new DateSourceLabels())
-						.duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null), null, model);
+		controller.duplicates(request("videos"), null, model);
 
-		Assertions.assertThat(model.get("deletionBlockedMessage")).isNull();
+		Assertions.assertThat(groups(model)).hasSize(1);
+
+		// The heading has to say videos, not photos: the same view type serves both
+		// tabs, and what tells them apart is the flag the controller passes.
+		Assertions.assertThat(groups(model).getFirst().headerText()).contains("vídeo");
+
+		verify(fixture.similarityView).videos(anyInt(), any());
+		verify(fixture.similarityView, never()).photos(anyInt(), any());
 	}
 
 	@Test
-	void duplicatesShouldBlockTheWholeScreenDuringAnActiveInventory() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.inventoryActive()).thenReturn(true);
+	void aSingleVideoGroupUsesTheSingularHeading() {
+		Page<PublishedGroup> page = new PageImpl<>(
+				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember()), 1)));
+
+		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(page, true, false, false));
+
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		String view = new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(request("videos"), null, model);
 
-		Assertions.assertThat(view).isEqualTo("app/duplicates");
-		Assertions.assertThat(model).containsEntry("inventoryActive", true);
-		Assertions.assertThat((List<?>) model.get("groups")).isEmpty();
-		verify(duplicateService, never()).candidates(ArgumentMatchers.any(), ArgumentMatchers.any());
-		verify(phashBacklogService, never()).status();
+		Assertions.assertThat(groups(model).getFirst().headerText()).isEqualTo("1 vídeo semelhante");
 	}
 
 	@Test
-	void duplicatesShouldExposeResolutionForEachListedFile() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+	void askingForANewAnalysisQueuesItAndReturnsToTheTab() {
+		Assertions.assertThat(controller.analyzePhotos(90, null)).isEqualTo("redirect:/app/duplicates?tab=similar");
+		Assertions.assertThat(controller.analyzeVideos(85, null)).isEqualTo("redirect:/app/duplicates?tab=videos");
 
-		UUID keepId = UuidV7.fromLegacy(1L);
-		UUID candidateId = UuidV7.fromLegacy(2L);
+		verify(fixture.similarityLauncher).launchPhotos(90);
+		verify(fixture.similarityLauncher).launchVideos(85);
+	}
 
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(keepId, "keep.jpg", "jpg", "PHOTO",
-				SizeResponse.of(100), "C:/keep.jpg", "C:/", NOW, Verdict.KEEP, Reason.ORIGINAL, 4000, 3000, NOW,
-				DateSource.EXIF);
-
-		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(candidateId, "dup.jpg", "jpg",
-				"PHOTO", SizeResponse.of(100), "C:/dup.jpg", "C:/", NOW, Verdict.DELETE_CANDIDATE, Reason.WHATSAPP_COPY,
-				2000, 1500, NOW.minusYears(1), DateSource.FILE_NAME);
-
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any()))
-				.thenReturn(new PageImpl<>(List.of(new DuplicateCandidateGroupResponse("sha", 2, SizeResponse.of(100),
-						keep, List.of(candidate), List.of())), PageRequest.of(0, 20), 1));
+	/** Nothing is grouped while the fingerprints those groups need are missing. */
+	@Test
+	void doesNotShowGroupsWhileFingerprintsAreStillBeingComputed() {
+		when(fixture.phash.status()).thenReturn(new FingerprintBacklogStatus(50, 10, 0));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(request("similar"), null, model);
 
-		@SuppressWarnings("unchecked")
-		List<DuplicateGroupView> groups = (List<DuplicateGroupView>) model.get("groups");
-		DuplicateFileView keepView = groups.getFirst().files().getFirst();
-
-		Assertions.assertThat(keepView.id()).isEqualTo(keepId);
-		Assertions.assertThat(keepView.resolution()).isEqualTo("4000 × 3000");
-		Assertions.assertThat(keepView.keep()).isTrue();
-		Assertions.assertThat(keepView.highlight()).isEqualTo("ORIGINAL");
-		Assertions.assertThat(keepView.highlightLabel()).isEqualTo("📷 Original");
-		Assertions.assertThat(keepView.reason()).contains("Original");
-
-		DuplicateFileView candidateView = groups.getFirst().files().getLast();
-		Assertions.assertThat(candidateView.keep()).isFalse();
-		Assertions.assertThat(candidateView.highlight()).isEqualTo("WHATSAPP_COPY");
-		Assertions.assertThat(candidateView.highlightLabel()).isEqualTo("📱 WhatsApp");
+		Assertions.assertThat(groups(model)).isEmpty();
+		Assertions.assertThat(model.getAttribute("phashBlocking")).isEqualTo(true);
 	}
 
 	@Test
-	void duplicatesShouldOpenPdfDetectedByInventoryEvenWithoutExtension() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
-
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(1L, "document.pdf", "pdf", "PDF",
-				SizeResponse.of(100), "C:/document.pdf", "C:/", NOW);
-		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(2L, "DOC-20220814-WA0019", "",
-				"PDF", SizeResponse.of(100), "C:/DOC-20220814-WA0019", "C:/", NOW);
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any())).thenReturn(new PageImpl<>(
-				List.of(new DuplicateCandidateGroupResponse("sha", 2, SizeResponse.of(100), keep, List.of(candidate))),
-				PageRequest.of(0, 20), 1));
+	void clampsAThresholdBelowTheFloor() {
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, mock(UserPagePreferenceService.class), mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(new DuplicatesViewRequest("similar", 0, 10, "details", 50, null), null, model);
 
-		@SuppressWarnings("unchecked")
-		List<DuplicateGroupView> groups = (List<DuplicateGroupView>) model.get("groups");
-		DuplicateFileView document = groups.getFirst().files().getLast();
-		Assertions.assertThat(document.pdf()).isTrue();
-		Assertions.assertThat(document.previewable()).isTrue();
-		Assertions.assertThat(document.contentUrl()).endsWith("/content");
-		Assertions.assertThat(document.lightboxClass()).isEqualTo("js-lightbox-pdf");
+		Assertions.assertThat(model.getAttribute("minSimilarity"))
+				.isEqualTo(DuplicateConstants.MIN_SIMILARITY_PERCENT);
 	}
 
 	@Test
-	void duplicatesShouldKeepOneOfTwoIdenticalOriginalsAndMarkTheCopy() {
-		DuplicateService duplicateService = mock(DuplicateService.class);
-		PhotoSimilarityService photoSimilarityService = mock(PhotoSimilarityService.class);
-		var phashBacklogService = mock(PhashBacklogService.class);
-		var phashBacklogAsyncRunner = mock(PhashBacklogAsyncRunner.class);
-		var userPagePreferenceService = mock(UserPagePreferenceService.class);
-		when(phashBacklogService.status()).thenReturn(new FingerprintBacklogStatus(0, 0, 0));
+	void remembersTheTabThePageSizeTheViewAndTheThreshold() {
+		ExtendedModelMap model = new ExtendedModelMap();
 
-		UUID keepId = UuidV7.fromLegacy(1L);
-		UUID candidateId = UuidV7.fromLegacy(2L);
+		controller.duplicates(new DuplicatesViewRequest("videos", 0, 95, "large", 100, null), null, model);
 
-		DuplicateCandidateFileResponse keep = new DuplicateCandidateFileResponse(keepId, "keep.jpg", "jpg", "PHOTO",
-				SizeResponse.of(100), "C:/keep.jpg", "C:/", NOW, Verdict.KEEP, Reason.ORIGINAL, 4000, 3000, NOW,
-				DateSource.EXIF);
+		verify(fixture.preferences).save(any(), eq(DuplicateConstants.PAGE_KEY), eq("tab"), eq("videos"));
+		verify(fixture.preferences).save(any(), eq(DuplicateConstants.PAGE_KEY), eq(SharedConstants.PAGE_SIZE_KEY),
+				eq("100"));
+		verify(fixture.preferences).save(any(), eq(DuplicateConstants.PAGE_KEY),
+				eq(DuplicateConstants.MIN_SIMILARITY_VIDEO_KEY), eq("95"));
+		verify(fixture.preferences).save(any(), eq(DuplicateConstants.PAGE_KEY), eq("view"), eq("large"));
+	}
 
-		DuplicateCandidateFileResponse candidate = new DuplicateCandidateFileResponse(candidateId, "dup.jpg", "jpg",
-				"PHOTO", SizeResponse.of(100), "C:/dup.jpg", "C:/", NOW, Verdict.DELETE_CANDIDATE,
-				Reason.IDENTICAL_COPY, 2000, 1500, NOW, DateSource.EXIF);
-
-		when(duplicateService.candidates(eq(PageRequest.of(0, 50)), any()))
-				.thenReturn(new PageImpl<>(List.of(new DuplicateCandidateGroupResponse("sha", 2, SizeResponse.of(100),
-						keep, List.of(candidate), List.of())), PageRequest.of(0, 20), 1));
+	@Test
+	void fallsBackToTheSavedPreferencesWhenTheRequestOmitsThem() {
+		when(fixture.preferences.find(any(), eq(DuplicateConstants.PAGE_KEY)))
+				.thenReturn(Map.of("tab", "similar", SharedConstants.PAGE_SIZE_KEY, "200",
+						DuplicateConstants.MIN_SIMILARITY_KEY, "85", "view", "xlarge"));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
-		new DuplicatesWebController(duplicateService, photoSimilarityService, phashBacklogService,
-				phashBacklogAsyncRunner, userPagePreferenceService, mock(PhotoSimilarityAsyncRunner.class),
-				mock(DuplicateDeletionAsyncRunner.class), mock(DuplicateExclusionService.class), videoWeb(),
-				new DateSourceLabels()).duplicates(new DuplicatesViewRequest("exact", 0, 70, "details", null, null),
-						null, model);
+		controller.duplicates(new DuplicatesViewRequest(null, null, null, null, null, null), null, model);
 
-		@SuppressWarnings("unchecked")
-		List<DuplicateGroupView> groups = (List<DuplicateGroupView>) model.get("groups");
-		List<DuplicateFileView> files = groups.getFirst().files();
+		Assertions.assertThat(model.getAttribute("activeTab")).isEqualTo("similar");
+		Assertions.assertThat(model.getAttribute(SharedConstants.PAGE_SIZE_KEY)).isEqualTo(200);
+		Assertions.assertThat(model.getAttribute("minSimilarity")).isEqualTo(85);
+		Assertions.assertThat(model.getAttribute("view")).isEqualTo("xlarge");
+	}
 
-		Assertions.assertThat(files.getFirst().keep()).isTrue();
-		Assertions.assertThat(files.getFirst().highlight()).isEqualTo("ORIGINAL");
-		Assertions.assertThat(files.getLast().keep()).isFalse();
-		Assertions.assertThat(files.getLast().highlight()).isEqualTo("IDENTICAL_COPY");
+	@Test
+	void deleteQueuesTheMoveAndAnswersWithTheCurrentProgress() {
+		UUID id = UUID.randomUUID();
+
+		when(fixture.deletionProgress.snapshot()).thenReturn(new DuplicateDeletionProgress(true, 1, 2, 50.0, null));
+
+		Assertions.assertThat(controller.delete(new DuplicateDeleteRequest(List.of(id))).running()).isTrue();
+
+		verify(fixture.deletionLauncher).launch(List.of(id));
+	}
+
+	@Test
+	void deleteQueuesNothingWhenNoFileWasNamed() {
+		when(fixture.deletionProgress.snapshot()).thenReturn(new DuplicateDeletionProgress(false, 0, 0, 0.0, null));
+
+		controller.delete(new DuplicateDeleteRequest(List.of()));
+
+		verify(fixture.deletionLauncher, never()).launch(any());
+	}
+
+	/**
+	 * Excluding no longer clears any cache: the exclusion is part of the analysis's
+	 * identity, so a result computed before it simply stops answering the current
+	 * question.
+	 */
+	@Test
+	void excludingAFileOnlyRecordsTheExclusion() {
+		when(fixture.exclusions.excludeFile(any())).thenReturn(true);
+
+		Assertions.assertThat(controller.excludeFile(new DuplicateExcludeRequest(UUID.randomUUID(), null)).created())
+				.isTrue();
+
+		verify(fixture.exclusions).excludeFile(any());
+	}
+
+	private DuplicatesViewRequest request(String tab) {
+		return new DuplicatesViewRequest(tab, 0, 90, "details", 50, null);
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<DuplicateGroupView> groups(ExtendedModelMap model) {
+		return (List<DuplicateGroupView>) model.getAttribute("groups");
+	}
+
+	private SimilarityView view(Page<PublishedGroup> groups, boolean published, boolean outdated, boolean analyzing) {
+		return new SimilarityView(groups, published, outdated, analyzing, 2, 2, 8000, true);
+	}
+
+	private Page<PublishedGroup> published() {
+		return new PageImpl<>(
+				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember(), deleteMember()), 2)));
+	}
+
+	private PublishedMember keepMember() {
+		return new PublishedMember(new AnalyzedMember(UUID.randomUUID(), Verdict.KEEP, Reason.ORIGINAL),
+				file("original.jpg", LifecycleStatus.ACTIVE), true);
+	}
+
+	private PublishedMember deleteMember() {
+		return new PublishedMember(
+				new AnalyzedMember(UUID.randomUUID(), Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY),
+				file("copy.jpg", LifecycleStatus.ACTIVE), true);
+	}
+
+	private SimilarityMemberFile file(String name, LifecycleStatus status) {
+		return new SimilarityMemberFile(UUID.randomUUID(), name, "jpg", "PHOTO", 1024L, "C:/fotos/" + name, "C:/fotos",
+				NOW, 1920, 1080, NOW, DateSource.EXIF, status);
 	}
 }

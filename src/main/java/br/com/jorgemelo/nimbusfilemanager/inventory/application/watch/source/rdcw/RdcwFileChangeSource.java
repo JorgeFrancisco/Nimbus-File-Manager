@@ -3,8 +3,10 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rd
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
 /**
  * The Windows real-time {@link FileChangeSource}, backed by
@@ -28,15 +30,16 @@ public class RdcwFileChangeSource implements FileChangeSource {
 	private final RdcwChangeInterpreter interpreter;
 
 	private List<Path> pendingCatchUp;
-	private boolean startupReconcile;
+	private WatchRecoveryReason startupReason;
 	private boolean overflow;
 
-	public RdcwFileChangeSource(Path root, RdcwReadSeam seam, List<Path> catchUpChanges, boolean reconcileOnStartup) {
+	public RdcwFileChangeSource(Path root, RdcwReadSeam seam, List<Path> catchUpChanges,
+			WatchRecoveryReason startupReason) {
 		this.root = root.toAbsolutePath().normalize();
 		this.seam = seam;
 		this.interpreter = new RdcwChangeInterpreter(this.root);
 		this.pendingCatchUp = catchUpChanges == null ? List.of() : List.copyOf(catchUpChanges);
-		this.startupReconcile = reconcileOnStartup;
+		this.startupReason = startupReason;
 	}
 
 	@Override
@@ -52,14 +55,35 @@ public class RdcwFileChangeSource implements FileChangeSource {
 		return changed;
 	}
 
+	/**
+	 * The journal replay, and never a live notification: the two arrive by
+	 * different roads and only this one is old enough for a full walk to have
+	 * covered it. The directory handle is opened and armed before the replay runs,
+	 * so a change made in between is seen by both - reported twice, which costs a
+	 * poll, and never missed.
+	 */
 	@Override
-	public boolean consumeOverflow() {
-		boolean happened = overflow || startupReconcile;
+	public List<Path> takeOfflineBacklog() {
+		List<Path> backlog = pendingCatchUp;
+
+		pendingCatchUp = List.of();
+
+		return backlog;
+	}
+
+	/**
+	 * The live overflow is reported ahead of the one-shot startup reason when both
+	 * are pending, because it is the one about now - and both ask for the same
+	 * recovery, so nothing is lost by reporting either.
+	 */
+	@Override
+	public Optional<WatchRecoveryReason> consumeRecoveryReason() {
+		WatchRecoveryReason reason = overflow ? WatchRecoveryReason.EVENTS_LOST : startupReason;
 
 		overflow = false;
-		startupReconcile = false;
+		startupReason = null;
 
-		return happened;
+		return Optional.ofNullable(reason);
 	}
 
 	@Override

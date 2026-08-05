@@ -8,15 +8,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
@@ -25,6 +19,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.MediaGeo
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapAdministrativePinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapExifPinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapMediaItemProjection;
+import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
@@ -44,16 +39,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
  * derives from the zoom; coordinate-less media aggregate by their resolved
  * administrative region; inactive media never appear.
  */
-@SpringBootTest
-@Transactional
-@Testcontainers
-class MapRepositoryIntegrationTest {
+class MapRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	private static final Pageable PAGE = PageRequest.of(0, 50);
-
-	@Container
-	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;

@@ -10,6 +10,7 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdc
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCatchUpResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnSupport;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,18 +46,40 @@ public final class WindowsChangeSourceSupport {
 			if (catchUp.isPresent()) {
 				log.info("Change source for {}: ReadDirectoryChangesW (real-time) + USN journal catch-up", normalized);
 
+				describe(normalized, catchUp.get().recoveryReason());
+
 				return new RdcwFileChangeSource(normalized, seam, catchUp.get().offlineChanges(),
-						catchUp.get().reconcileNeeded());
+						catchUp.get().recoveryReason());
 			}
 
 			log.info("Change source for {}: ReadDirectoryChangesW (real-time) only; USN catch-up unavailable "
 					+ "(no elevation) - a startup reconcile covers offline changes", normalized);
 
-			return new RdcwFileChangeSource(normalized, seam, List.of(), true);
+			return new RdcwFileChangeSource(normalized, seam, List.of(),
+					WatchRecoveryReason.JOURNAL_UNREPLAYABLE);
 		} catch (RuntimeException | LinkageError failure) {
 			seam.close();
 
 			throw failure;
+		}
+	}
+
+	/**
+	 * Says in the log which of the journal's two failure modes was met, and says
+	 * nothing when neither was. A replay that covered its whole window is the
+	 * ordinary case and deserves no line of its own.
+	 */
+	private static void describe(Path root, WatchRecoveryReason reason) {
+		if (reason == null) {
+			return;
+		}
+
+		switch (reason) {
+		case JOURNAL_UNREPLAYABLE -> log.info("USN journal for {} could not be replayed from the stored cursor "
+				+ "(absent, recreated or aged out): a reconciliation covers the offline window", root);
+		case JOURNAL_REPLAY_INCOMPLETE -> log.info("USN replay for {} could not account for every record in its "
+				+ "window: a reconciliation covers the difference", root);
+		case EVENTS_LOST -> log.warn("USN catch-up for {} reported lost events", root);
 		}
 	}
 }

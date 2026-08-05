@@ -53,7 +53,7 @@ public class ExecutionWebController extends LocalizedComponent {
 		// While the run is still active, detail would render with incomplete data, so
 		// send the user to the live progress screen (also how they resume watching a
 		// run).
-		if (ExecutionStatusNames.IN_PROGRESS_NAMES.contains(execution.status())) {
+		if (ExecutionStatusNames.ACTIVE_NAMES.contains(execution.status())) {
 			return "redirect:/app/progress/" + id + "?kind=" + progressKind(execution);
 		}
 
@@ -77,21 +77,15 @@ public class ExecutionWebController extends LocalizedComponent {
 		return Boolean.TRUE.equals(execution.executeFlag()) ? "organization-execute" : "organization-preview";
 	}
 
+	/**
+	 * The reversal is queued and the browser follows it on the progress screen,
+	 * which is where the run reports from now that it happens in the worker. It
+	 * used to be answered by re-rendering this page with a one-line summary, which
+	 * only worked while the moving happened inside the request.
+	 */
 	@PostMapping("/app/executions/{id}/undo")
-	public String undo(@PathVariable UUID id, Model model) {
-		ExecutionResponse execution = executionQueryService.get(id);
-
-		model.addAttribute(ATTR_EXECUTION, execution);
-		model.addAttribute("undo", organizationService.undoPublic(id));
-		model.addAttribute(ATTR_STEPS, executionQueryService.steps(id));
-		model.addAttribute(ATTR_ERRORS, executionQueryService.errors(id));
-		model.addAttribute(ATTR_MOVEMENTS, executionQueryService.movements(id));
-		model.addAttribute(ATTR_MOVEMENT_SUMMARY, executionQueryService.movementSummary(id));
-
-		addPermissions(model, execution);
-		addLabels(model);
-
-		return VIEW_EXECUTION_DETAIL;
+	public String undo(@PathVariable UUID id) {
+		return "redirect:/app/progress/" + organizationService.undoPublic(id).executionId();
 	}
 
 	/**

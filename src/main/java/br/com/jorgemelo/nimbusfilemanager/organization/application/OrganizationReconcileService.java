@@ -16,15 +16,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Scan;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.MediaLocationReconcileProjection;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
@@ -45,17 +42,12 @@ public class OrganizationReconcileService {
 
 	private final CatalogFileLocationRepository catalogFileLocationRepository;
 	private final ScanExclusionService scanExclusionService;
-	private final OperationLockService operationLockService;
-	private final ReconcileApplier reconcileApplier;
 
 	@Autowired
 	public OrganizationReconcileService(CatalogFileLocationRepository catalogFileLocationRepository,
-			ScanExclusionService scanExclusionService, OperationLockService operationLockService,
-			ReconcileApplier reconcileApplier) {
+			ScanExclusionService scanExclusionService) {
 		this.catalogFileLocationRepository = catalogFileLocationRepository;
 		this.scanExclusionService = scanExclusionService;
-		this.operationLockService = operationLockService;
-		this.reconcileApplier = reconcileApplier;
 	}
 
 	public OrganizationReconcileResponse reconcile(OrganizationReconcileRequest request) {
@@ -63,38 +55,15 @@ public class OrganizationReconcileService {
 	}
 
 	/**
-	 * Deliberately NOT {@code @Transactional}: the disk walk in {@link #scan}
-	 * (minutes of pure I/O over a whole-drive tree of 100k+ files) must never hold
-	 * a database transaction open, and an app restart mid-walk must not roll back a
-	 * transaction that never had a chance to commit. The scan runs transaction-free
-	 * (its paged repository reads each open their own short read transaction) and
-	 * only the writes go through {@link ReconcileApplier#apply} in a short
-	 * transaction of their own.
+	 * What a reconcile would find, without writing any of it.
+	 *
+	 * <p>
+	 * Package-private rather than public: the screen reaches it through
+	 * {@link #reconcile}, and the applying pass is the only other caller - it lives
+	 * in this package precisely because holding the applier anywhere the
+	 * application can reach was the problem.
 	 */
-	public OrganizationReconcileResponse reconcileAndApply(OrganizationReconcileRequest request) {
-		// Hold the tree lock for the whole apply so catalog mutations never race an
-		// organization/undo/dedup on the same paths. The watcher's blocked gate already
-		// skips this case; the lock closes the check-then-act window it cannot cover.
-		//
-		// Declared as RECONCILE, not ORGANIZATION: the type is what the refusal
-		// message names, so borrowing another operation's type told the user an
-		// organization was running when this background pass held the tree.
-		try (var _ = operationLockService.acquire(ExecutionType.RECONCILE, request.source())) {
-			Scan scan = scan(request);
-
-			return reconcileApplier.apply(scan);
-		} catch (OperationLockException _) {
-			// Never reconcile against a moving target: end here without touching the
-			// catalog
-			// and let the next watcher pass retry - deferred, not dropped.
-			log.info("Reconcile deferred on {}: another critical operation is in progress; it will retry next pass.",
-					request.source());
-
-			return OrganizationReconcileResponse.deferred(PathUtils.normalize(request.source()));
-		}
-	}
-
-	private Scan scan(OrganizationReconcileRequest request) {
+	Scan scan(OrganizationReconcileRequest request) {
 		Path source = request.source();
 
 		validateSourcePath(source);
@@ -103,7 +72,7 @@ public class OrganizationReconcileService {
 
 		ReconcileAccumulator accumulator = new ReconcileAccumulator(request.safeSampleLimit());
 
-		readDatabasePaths(source, accumulator, diskPaths);
+		readDatabasePaths(source, request.recursiveValue(), accumulator, diskPaths);
 
 		for (String diskPath : diskPaths) {
 			if (!accumulator.dbPaths().contains(diskPath)) {
@@ -115,12 +84,26 @@ public class OrganizationReconcileService {
 				request.recursiveValue(), request.includeHiddenValue(), diskPaths.size(), accumulator.filesInDatabase(),
 				accumulator.missingOnDisk(), accumulator.missingInDatabase(), accumulator.pathMismatches(),
 				accumulator.missingOnDiskSamples(), accumulator.missingInDatabaseSamples(),
-				accumulator.pathMismatchSamples(), 0, 0, 0);
+				accumulator.pathMismatchSamples(), 0, 0, 0, 0);
 
 		return new Scan(response, accumulator.pathSyncs());
 	}
 
-	private void readDatabasePaths(Path source, ReconcileAccumulator accumulator, Set<String> diskPaths) {
+	/**
+	 * The catalog side of the comparison, read in the same scope the disk was
+	 * scanned in.
+	 *
+	 * <p>
+	 * The symmetry is the whole point, and it was missing: the walk honoured
+	 * {@code recursive} while this read always asked for the folder and every
+	 * descendant. A shallow pass therefore compared one folder's worth of disk
+	 * against a whole subtree's worth of catalog, concluded that everything in
+	 * every subfolder was gone, and marked it missing - reachable from the
+	 * {@code watch-recursive} setting alone, and silent, because a reconcile that
+	 * repairs is doing exactly what it is supposed to be doing.
+	 */
+	private void readDatabasePaths(Path source, boolean recursive, ReconcileAccumulator accumulator,
+			Set<String> diskPaths) {
 		String sourcePath = PathUtils.normalize(source);
 
 		String descendantPattern = PathUtils.descendantLikePattern(sourcePath, source.getFileSystem().getSeparator());
@@ -128,8 +111,10 @@ public class OrganizationReconcileService {
 		long afterId = 0;
 
 		while (true) {
-			List<MediaLocationReconcileProjection> rows = catalogFileLocationRepository.findForReconcile(sourcePath,
-					descendantPattern, afterId, Limit.of(PAGE_SIZE));
+			List<MediaLocationReconcileProjection> rows = recursive
+					? catalogFileLocationRepository.findForReconcile(sourcePath, descendantPattern, afterId,
+							Limit.of(PAGE_SIZE))
+					: catalogFileLocationRepository.findForShallowReconcile(sourcePath, afterId, Limit.of(PAGE_SIZE));
 
 			if (rows.isEmpty()) {
 				return;

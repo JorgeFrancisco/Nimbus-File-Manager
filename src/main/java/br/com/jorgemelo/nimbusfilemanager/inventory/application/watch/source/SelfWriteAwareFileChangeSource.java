@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
@@ -35,26 +38,50 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 
 	@Override
 	public List<Path> pollChangedFiles() {
-		return delegate.pollChangedFiles().stream().filter(this::worthAnInventory).toList();
+		return worthWaking(delegate.pollChangedFiles());
 	}
 
 	/**
-	 * Two kinds of change the application caused itself.
-	 *
-	 * <p>
-	 * A single registered write is consumed once and forgotten. A folder the
-	 * application owns is excluded for as long as it is configured: quarantine,
-	 * and the catalog backups - which are deliberately put on a synchronised
-	 * drive, often inside the watched library. A backup written there looks like
-	 * hundreds of MB of new files arriving, and answering it means inventorying
-	 * while the file is still being written.
+	 * Filtered exactly like a live poll. The backlog decides whether a second pass
+	 * over the library is queued, so it has to be judged by the same rule: a
+	 * hidden or application-owned path that would never have woken the watcher
+	 * cannot be what keeps it awake now either.
 	 */
-	private boolean worthAnInventory(Path changed) {
-		if (scanExclusionService.isApplicationOwned(changed) || isHidden(changed)) {
-			return false;
+	@Override
+	public List<Path> takeOfflineBacklog() {
+		return worthWaking(delegate.takeOfflineBacklog());
+	}
+
+	/**
+	 * The registry is asked once for the whole round rather than once per path: it
+	 * lives in the database now, because the process that wrote the file is often
+	 * not this one, and a question per path would be a round trip per path.
+	 */
+	private List<Path> worthWaking(List<Path> reported) {
+		List<Path> changed = reported.stream().filter(this::worthAnInventory).toList();
+
+		if (changed.isEmpty()) {
+			return changed;
 		}
 
-		return !selfWrittenPathRegistry.consume(changed);
+		Set<Path> announced = selfWrittenPathRegistry.announcedAmong(changed);
+
+		return changed.stream().filter(path -> !announced.contains(path)).toList();
+	}
+
+	/**
+	 * The changes the application caused itself and can tell without asking
+	 * anybody.
+	 *
+	 * <p>
+	 * A folder the application owns is excluded for as long as it is configured:
+	 * quarantine, and the catalog backups - which are deliberately put on a
+	 * synchronised drive, often inside the watched library. A backup written there
+	 * looks like hundreds of MB of new files arriving, and answering it means
+	 * inventorying while the file is still being written.
+	 */
+	private boolean worthAnInventory(Path changed) {
+		return !scanExclusionService.isApplicationOwned(changed) && !isHidden(changed);
 	}
 
 	/**
@@ -94,8 +121,8 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	}
 
 	@Override
-	public boolean consumeOverflow() {
-		return delegate.consumeOverflow();
+	public Optional<WatchRecoveryReason> consumeRecoveryReason() {
+		return delegate.consumeRecoveryReason();
 	}
 
 	@Override

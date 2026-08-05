@@ -17,6 +17,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryPersistenceResult;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.ProcessResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFacade;
@@ -45,6 +48,32 @@ class ConversionCatalogServiceTest {
 		// Windows and on the Linux CI.
 		library = root.resolve("library");
 		converted = library.resolve("2024").resolve("clip.mp4");
+
+		// The ordinary answer: a converted file the catalog had never heard of. The
+		// tests below are about where and with what it is catalogued, so they all get
+		// this and only the revival test says otherwise.
+		when(inventoryPersistenceService.save(any(), any(), any(), any()))
+				.thenReturn(new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.CREATED));
+	}
+
+	/**
+	 * The one thing this hands back, and the reason it hands anything back: a
+	 * converted file can land on a path the catalog knew and had marked missing -
+	 * the output of a previous conversion, removed from outside the application -
+	 * and cataloguing it brings that entry back to life. The batch reads this to
+	 * decide, once, whether the set a duplicate analysis looks at has changed.
+	 */
+	@Test
+	void saysWhenCataloguingBroughtAMissingEntryBackToLife() {
+		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
+		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
+
+		Assertions.assertThat(service.catalog(converted, null)).as("an entry the catalog had never lost").isFalse();
+
+		when(inventoryPersistenceService.save(any(), any(), any(), any())).thenReturn(
+				new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.REACTIVATED));
+
+		Assertions.assertThat(service.catalog(converted, null)).isTrue();
 	}
 
 	@Test

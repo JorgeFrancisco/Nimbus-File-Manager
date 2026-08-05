@@ -75,7 +75,8 @@ class TimelineFiltersTest {
 	void countsAsNarrowingWhateverTheSingleControlThatWasUsed() {
 		Assertions.assertThat(only(new TimelineFilterForm(LocalDate.of(2008, Month.JANUARY, 1), null, null, null,
 				null, null, null, null, null, null))).isTrue();
-		Assertions.assertThat(only(new TimelineFilterForm(null, LocalDate.of(2008, Month.JANUARY, 1), null, null, null, null, null,
+		Assertions.assertThat(only(new TimelineFilterForm(null, LocalDate.of(2008, Month.JANUARY, 1), null, null, null,
+				null, null,
 				null, null, null))).isTrue();
 		Assertions.assertThat(only(new TimelineFilterForm(null, null, "Canon", null, null, null, null, null, null,
 				null))).isTrue();

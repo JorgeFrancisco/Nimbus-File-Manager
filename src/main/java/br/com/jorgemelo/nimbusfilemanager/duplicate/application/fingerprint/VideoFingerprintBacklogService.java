@@ -7,11 +7,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DrainResult;
@@ -20,15 +20,16 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintFailureRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -49,19 +50,23 @@ public class VideoFingerprintBacklogService
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
+	private final FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
 	private final VideoSimilarityAlgorithm algorithm;
+	private final SimilarityRelationWriter similarityRelationWriter;
 	private final FingerprintBacklogEngine engine;
 	private final Clock clock;
 
-	public VideoFingerprintBacklogService(MediaFingerprintRepository mediaFingerprintRepository,
-			FingerprintFailureRepository fingerprintFailureRepository, VideoSimilarityAlgorithm algorithm,
-			ProcessingCoordinator processingCoordinator, ExecutionQueryService executionQueryService,
-			PlatformTransactionManager transactionManager, Clock clock) {
+	public VideoFingerprintBacklogService(FingerprintBacklogEngine engine,
+			MediaFingerprintRepository mediaFingerprintRepository,
+			FingerprintFailureRepository fingerprintFailureRepository,
+			FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository, VideoSimilarityAlgorithm algorithm,
+			SimilarityRelationWriter similarityRelationWriter, Clock clock) {
+		this.engine = engine;
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
+		this.fingerprintRebuildTaskRepository = fingerprintRebuildTaskRepository;
 		this.algorithm = algorithm;
-		this.engine = new FingerprintBacklogEngine(mediaFingerprintRepository, fingerprintFailureRepository,
-				processingCoordinator, executionQueryService, transactionManager, clock);
+		this.similarityRelationWriter = similarityRelationWriter;
 		this.clock = clock;
 	}
 
@@ -85,15 +90,31 @@ public class VideoFingerprintBacklogService
 		return engine.resetFailures(this);
 	}
 
-	/** Clears only this algorithm's derived video fingerprints and failures. */
+	/**
+	 * Every catalogued video that has a path and a measured duration - the
+	 * duration is what the frame samples are placed by, so a video the catalog has
+	 * not measured cannot be sampled and is not owed.
+	 */
 	@Override
-	public long rebuild() {
-		return engine.rebuild(this);
+	public long seedRebuildTasks(LocalDateTime seededAt) {
+		return fingerprintRebuildTaskRepository.seedVideos(kind().name(), algorithm(), seededAt);
 	}
 
 	@Override
-	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress) {
-		return engine.drain(this, stop, progress);
+	public boolean rebuildIsOpen() {
+		return engine.rebuildIsOpen(this);
+	}
+
+	/** Opens a rebuild by writing down what it owes, discarding nothing. */
+	@Override
+	public OptionalLong seedRebuild(ExecutionOwnership ownership) {
+		return engine.seedRebuild(this, ownership);
+	}
+
+	@Override
+	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress,
+			ExecutionOwnership ownership) {
+		return engine.drain(this, stop, progress, ownership);
 	}
 
 	@Override
@@ -111,8 +132,14 @@ public class VideoFingerprintBacklogService
 		return MAX_ATTEMPTS;
 	}
 
+	/** The owed list while a rebuild is open, the ordinary queue otherwise. */
 	@Override
 	public List<PendingVideo> fetchPendingBatch(int batchSize) {
+		if (rebuildIsOpen()) {
+			return deduplicate(fingerprintRebuildTaskRepository.findOwedVideos(kind(), algorithm(), MAX_ATTEMPTS,
+					PageRequest.of(0, batchSize)));
+		}
+
 		return deduplicate(mediaFingerprintRepository.findPendingVideos(kind(), algorithm(), MAX_ATTEMPTS,
 				PageRequest.of(0, batchSize)));
 	}
@@ -147,14 +174,23 @@ public class VideoFingerprintBacklogService
 		LocalDateTime computedAt = LocalDateTime.now(clock);
 
 		for (VideoFrameFingerprint frame : fingerprint.frames()) {
-			if (!mediaFingerprintRepository.existsByCatalogFileIdAndKindAndAlgorithmAndSampleIndex(
-					video.catalogFileId(), kind(), algorithm(), frame.sampleIndex())) {
-				mediaFingerprintRepository
-						.save(MediaFingerprint.builder().catalogFileId(video.catalogFileId()).kind(kind())
-								.algorithm(algorithm()).sampleIndex(frame.sampleIndex()).positionMs(frame.positionMs())
-								.hashBytes(frame.hash()).sampleBytes(frame.luminance()).computedAt(computedAt).build());
-			}
+			mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(video.catalogFileId())
+					.kind(kind()).algorithm(algorithm()).sampleIndex(frame.sampleIndex())
+					.positionMs(frame.positionMs()).hashBytes(frame.hash()).sampleBytes(frame.luminance())
+					.computedAt(computedAt).build());
 		}
+	}
+
+	/** Video relations only, for the same reason the photo half says.
+	 */
+	@Override
+	public void forgetWhatWasDerivedFrom(long catalogFileId) {
+		similarityRelationWriter.forget(algorithm(), catalogFileId);
+	}
+
+	@Override
+	public int discardIneligibleRebuildTasks() {
+		return fingerprintRebuildTaskRepository.discardIneligibleVideos(kind().name(), algorithm());
 	}
 
 	@Override

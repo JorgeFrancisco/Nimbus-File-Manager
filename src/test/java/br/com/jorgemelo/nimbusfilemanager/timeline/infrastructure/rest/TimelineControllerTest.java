@@ -23,7 +23,9 @@ import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.
 
 class TimelineControllerTest {
 
-	/** The empty panel: what the controller receives when nobody filtered anything. */
+	/**
+	 * The empty panel: what the controller receives when nobody filtered anything.
+	 */
 	private static final TimelineFilterForm NO_FILTER = new TimelineFilterForm(null, null, null, null, null, null,
 			null, null, null, null);
 

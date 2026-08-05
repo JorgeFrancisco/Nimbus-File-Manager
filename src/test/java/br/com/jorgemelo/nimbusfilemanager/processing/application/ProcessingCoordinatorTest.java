@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.processing.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.RejectedExecutionException;
@@ -24,23 +26,73 @@ class ProcessingCoordinatorTest {
 				new ProcessingMetrics());
 	}
 
+	/**
+	 * Results stay with the item they came from even when the items finish in a
+	 * different order from the one they were handed over in.
+	 *
+	 * <p>
+	 * The disorder is arranged rather than hoped for. It used to be a sleep whose
+	 * length varied with the item, which made the completion order a matter of how
+	 * loaded the machine was - and the comment claimed a reversal the arithmetic
+	 * did not actually produce. Here the order is imposed:
+	 * <ul>
+	 * <li>the pool has {@code WORKERS} threads, so the first {@code WORKERS} items
+	 * are the ones running, and a barrier holds them until all of them have
+	 * arrived - which both proves they are running at once and keeps each group
+	 * from mixing with the next;</li>
+	 * <li>inside a group, each item waits for the item after it, so the group
+	 * finishes downwards and the very first result to land is the last item of the
+	 * group.</li>
+	 * </ul>
+	 * The completion order is therefore a fixed sequence and is asserted as one.
+	 *
+	 * <p>
+	 * It cannot deadlock: nothing waits on anything outside its own group, the
+	 * highest item of each group waits for nobody, and the item count is a
+	 * multiple of the worker count so no group is ever left short of an arrival.
+	 * Every wait is bounded anyway, so a coordinator that ran fewer threads than
+	 * it was configured for would fail this test instead of hanging the suite.
+	 */
 	@Test
 	void preservesInputResultAssociationDespiteOutOfOrderCompletion() {
-		ProcessingCoordinator coordinator = coordinator(4, 32);
+		int workers = 4;
+		int size = 20;
+
+		ProcessingCoordinator coordinator = coordinator(workers, 32);
 
 		try {
-			List<Integer> items = IntStream.range(0, 20).boxed().toList();
+			List<Integer> items = IntStream.range(0, size).boxed().toList();
 
-			// Later items finish first, so completion order is the reverse of input order.
+			CyclicBarrier group = new CyclicBarrier(workers);
+
+			CountDownLatch[] finished = IntStream.range(0, size).mapToObj(_ -> new CountDownLatch(1))
+					.toArray(CountDownLatch[]::new);
+
+			Queue<Integer> completed = new ConcurrentLinkedQueue<>();
+
 			List<Outcome<Integer, Integer>> outcomes = coordinator.process(items, () -> false, item -> {
-				Thread.sleep((20 - item) % 7);
+				group.await(10, TimeUnit.SECONDS);
+
+				int next = item + 1;
+
+				// Everything but the last of the group waits for the one above it.
+				if (next % workers != 0) {
+					assertThat(finished[next].await(10, TimeUnit.SECONDS)).isTrue();
+				}
+
+				completed.add(item);
+
+				finished[item].countDown();
 
 				return item * 10;
 			});
 
-			assertThat(outcomes).hasSize(20);
+			assertThat(completed).as("each group of four finished downwards, so nothing finished in input order")
+					.containsExactly(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12, 19, 18, 17, 16);
 
-			for (int i = 0; i < 20; i++) {
+			assertThat(outcomes).hasSize(size);
+
+			for (int i = 0; i < size; i++) {
 				assertThat(outcomes.get(i).item()).isEqualTo(i);
 				assertThat(outcomes.get(i).executed()).isTrue();
 				assertThat(outcomes.get(i).value()).isEqualTo(i * 10);
