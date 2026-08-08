@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueueSignals;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.LoggingRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +92,11 @@ public class WorkerLoop {
 	 * and that execution would then wait out the whole polling interval.
 	 */
 	private void claimUntilStopped() {
+		// This thread is the worker's from here to the end of its life, and in a
+		// combined JVM that is the only thing telling its lines apart from the
+		// application's. Everything the dispatcher and the handlers log runs on it.
+		LoggingRole.markThisThreadAsWorker();
+
 		while (accepting) {
 			long seen = executionQueueSignals.signalCount();
 
@@ -135,7 +141,11 @@ public class WorkerLoop {
 	}
 
 	private Thread renewerThread(Runnable runnable) {
-		Thread thread = new Thread(runnable, "nimbus-lease-renewer");
+		Thread thread = new Thread(() -> {
+			LoggingRole.markThisThreadAsWorker();
+
+			runnable.run();
+		}, "nimbus-lease-renewer");
 
 		thread.setDaemon(true);
 

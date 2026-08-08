@@ -1,5 +1,5 @@
 /**
- * Client-side live ETA estimator for a running execution. Both active-execution.js (sidebar
+ * Client-side live ETA estimator for a running execution. Both execution-activity.js (sidebar
  * widget) and pages/execution-progress.js (full progress page) poll the same execution and need
  * the same "estimated time remaining" number, so it is computed once here over a shared rolling
  * sample window and read by both. Status classification (terminal or not), the status label and

@@ -41,18 +41,20 @@ class SharedTemplatesI18nTest {
 				"#{error.401}", "#{error.generic}", "#{error.retryLater}", "#{error.home}");
 	}
 
+	/**
+	 * The banner carries no server-rendered state at all. It used to be filled from
+	 * the model at render time, which is precisely why it could not see work that
+	 * started after the page was drawn - and why it once had to decide between
+	 * "inventory" and "organization" in the template, announcing a conversion as an
+	 * organization. Everything visible in it now arrives from one poll.
+	 */
 	@Test
-	void activeExecutionUsesMessageExpressionsOutsideSpelExpressions() throws Exception {
+	void theActivityBannerIsAnEmptyShellFilledByPolling() throws Exception {
 		String html = read("src/main/resources/templates/fragments/layout.html");
 
-		// The running execution names itself with the label the back end resolved: the
-		// banner used to decide between "inventory" and "organization" in the template,
-		// so a conversion announced itself as an organization.
-		assertThat(html).contains("#{execution.running(${activeExecution.typeLabel()})}")
-				.contains("${activeExecution.percentComplete() != null} ? "
-						+ "${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} "
-						+ ": #{execution.preparing}")
-				.doesNotContain("execution.organization.running").doesNotContain("+ '%' : #{execution.preparing}}");
+		assertThat(html).contains("id=\"executionActivity\"").contains("/js/execution-activity.js")
+				.doesNotContain("activeExecution").doesNotContain("backgroundJob")
+				.doesNotContain("execution.organization.running");
 	}
 
 	@Test

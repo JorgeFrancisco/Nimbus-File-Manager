@@ -30,8 +30,6 @@ import br.com.jorgemelo.nimbusfilemanager.backup.infrastructure.web.BackupSettin
 import br.com.jorgemelo.nimbusfilemanager.database.application.dto.EmbeddedDatabaseStatus;
 import br.com.jorgemelo.nimbusfilemanager.database.infrastructure.web.EmbeddedDatabaseSettingsModel;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
@@ -130,13 +128,7 @@ class SettingsPageRenderTest {
 	private QuarantineFolderPolicy quarantineFolderPolicy;
 
 	@MockitoBean
-	private ExecutionQueryService executionQueryService;
-
-	@MockitoBean
 	private InventoryWatchService inventoryWatchService;
-
-	@MockitoBean
-	private FingerprintActivityService fingerprintActivityService;
 
 	/**
 	 * Stands in for the geo read model, which the page renders alongside the

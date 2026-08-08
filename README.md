@@ -706,6 +706,21 @@ Screens currently available:
 
 Files, Organization, Duplicates, Quarantine, Conversion, Statistics, Users, Access history and system settings are restricted to accounts with the `ADMIN` role: the sidebar only shows them to administrators, and the underlying routes (screens and their data/export APIs) reject non-admin access. Dashboard, Timeline, Map and the personal preferences tab stay open to any authenticated user. The OpenAPI/Swagger shortcut lives in that same admin-only area of the sidebar rather than the main navigation.
 
+Every screen carries the same activity bar, just below the title: what is running now, how far along
+it is, and how many other things are waiting behind it, with a link straight to the execution. It
+polls `GET /api/execution-activity`, which answers what is active rather than reporting on an
+execution the page was told about when it rendered - so work started after the page was drawn shows
+up on its own, and when one thing finishes the next one takes its place without a reload. Work that
+is only queued is shown as queued, because that is what most of the wait looks like when something
+else holds the lock. Work whose progress has no denominator - a purge, a reconcile - says what it is
+doing and shows no percentage, rather than a bar frozen at zero.
+
+There are two bars when the work reports two levels, the way an unpacker shows them: the overall one
+counts the items that are done, and the one under it is the item still being worked on. Counting
+finished items is not the same as being finished - a geodata update that has imported all three
+administrative levels reads 3 of 3 while it is still writing the supplemental territory files - and
+the second bar is what says so. It appears only when there is a step to report.
+
 Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: `InventoryWatchService` calls `OrganizationReconcileService.reconcileAndApply` automatically - once per debounced batch of file-system changes, and again on a fixed 60-second timer regardless of changes - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Although neither has a screen of its own, both are visible in the execution history: a reconcile is persisted as a distinct `RECONCILE` execution only when it actually repairs the catalog (renames, stale-path fixes or missing marks), while the frequent "nothing changed" checks leave only an in-memory heartbeat in the topbar; each execution (inventory and reconcile alike) also records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`.
 
 The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
@@ -789,6 +804,12 @@ started from a build or from an installed copy:
   backup/
   tools/
 ```
+
+`logs/` holds **one file per process**, named after the role that writes it —
+`nimbus-file-manager-app.log` and `nimbus-file-manager-worker.log`, or
+`nimbus-file-manager-combined.log` when both roles run in one JVM for development. They are separate
+because a rolling file is not safe to share between two JVMs; see
+[ADR 0009](docs/adr/0009-um-arquivo-de-log-por-processo.md).
 
 One location on purpose: while a build wrote beside the project instead, the layout that ships was
 exercised only by the packaged copy, and its bugs were found by running it rather than by any test.
@@ -891,7 +912,7 @@ GET    /api/statistics/errors/files/details
 GET    /api/catalog/export
 GET    /api/diagnostics/export
 
-GET    /api/background-job
+GET    /api/execution-activity
 
 GET    /api/executions
 GET    /api/executions/{id}
@@ -1574,8 +1595,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       3293 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.49% instruction, 92.50% branch, 97.97% line, 98.90% method, 100.00% class
+Tests:       3349 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.49% instruction, 92.45% branch, 97.97% line, 98.90% method, 100.00% class
 ```
 
 ### Coverage ratchet

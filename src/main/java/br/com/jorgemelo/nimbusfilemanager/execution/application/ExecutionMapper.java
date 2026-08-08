@@ -106,13 +106,22 @@ public class ExecutionMapper extends LocalizedComponent {
 	 * but it also stops renewing anything - and every other way a row leaves
 	 * RUNNING clears the column on the way out. Answering null for anything that is
 	 * not running means the bar can only ever show a number somebody is still
-	 * producing.
+	 * producing. Package-private for the same reason as
+	 * {@link #percentComplete(Execution)}: the banner draws this guarantee too,
+	 * and a second copy of it is a second chance to get it wrong.
 	 */
-	private Integer currentItemPercent(Execution execution) {
+	Integer currentItemPercent(Execution execution) {
 		return execution.getStatus() == ExecutionStatus.RUNNING ? execution.getCurrentItemPercent() : null;
 	}
 
-	private Double percentComplete(Execution execution) {
+	/**
+	 * Package-private rather than private because the activity banner shows the
+	 * same percentage as the execution screen, and it has to be the same number.
+	 * A second copy of this arithmetic is a second answer waiting to disagree -
+	 * one rounding, the other not, the same work reading differently depending on
+	 * where the user happened to look.
+	 */
+	Double percentComplete(Execution execution) {
 		Integer total = execution.getTotalExpected();
 		Integer processed = execution.getFilesFound();
 

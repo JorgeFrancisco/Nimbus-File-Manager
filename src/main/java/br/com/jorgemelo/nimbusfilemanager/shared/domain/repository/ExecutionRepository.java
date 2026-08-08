@@ -109,6 +109,18 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	List<Execution> findByFinishedAtIsNullAndStatusIn(Collection<ExecutionStatus> statuses);
 
 	/**
+	 * Everything in flight, for the banner every page polls.
+	 *
+	 * <p>
+	 * On status alone, which the index on that column serves, and never on the
+	 * history: the set is small by construction - one waiting and one running per
+	 * deduplication key, one at a time per type - while the history grows forever.
+	 * Ordering is left to the caller, because the rule the banner follows is the
+	 * queue's own and belongs with it rather than in a method name.
+	 */
+	List<Execution> findByStatusIn(Collection<ExecutionStatus> statuses);
+
+	/**
 	 * The most recent run of one kind, whatever state it is in. The conversion
 	 * screen asks it to answer both of its questions at once: whether a batch is
 	 * going on, and - when none is - what the last one reported.

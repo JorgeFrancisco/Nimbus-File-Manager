@@ -103,9 +103,9 @@ class JavaScriptI18nTest {
 
 	/**
 	 * The catalog is a hand-written list, so a key added to the bundles but not to
-	 * it resolves to its own name and the user reads "js.backgroundJob.count" on
-	 * the screen - which is exactly what shipped once. A key ending in a dot is a
-	 * prefix the script completes at runtime, and matches any catalog key under it.
+	 * it resolves to its own name and the user reads the key itself on the screen -
+	 * which is exactly what shipped once. A key ending in a dot is a prefix the
+	 * script completes at runtime, and matches any catalog key under it.
 	 */
 	@Test
 	void everyKeyTheScriptsAskForExistsInTheCatalog() throws Exception {

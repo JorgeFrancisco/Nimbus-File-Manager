@@ -3,7 +3,6 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,9 +15,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.enums.Role;
@@ -38,16 +34,10 @@ class AppViewModelAdviceTest {
 	private AppSettingService appSettingService;
 
 	@Mock
-	private ExecutionQueryService executionQueryService;
-
-	@Mock
 	private InventoryWatchService inventoryWatchService;
 
 	@Mock
 	private AppUserRepository appUserRepository;
-
-	@Mock
-	private FingerprintActivityService fingerprintActivityService;
 
 	@Test
 	void appVersionShouldReturnConfiguredValue() {
@@ -74,21 +64,6 @@ class AppViewModelAdviceTest {
 		when(appSettingService.intValue(SettingsConstants.IDLE_TIMEOUT_MINUTES, 5)).thenReturn(15);
 
 		Assertions.assertThat(advice.idleTimeoutMinutes()).isEqualTo(15);
-	}
-
-	@Test
-	void activeExecutionShouldOnlyBeLoadedForAuthenticatedUsers() {
-		AppViewModelAdvice advice = advice("1.0.0");
-
-		Authentication authenticated = new UsernamePasswordAuthenticationToken("admin", null, List.of());
-
-		ExecutionResponse execution = new ExecutionResponse(7L, "INVENTORY", "RUNNING", LocalDateTime.now(),
-				null, "C:/midia", null, 25, 20, 5, 0, 0, 0, 100, 25.0, "Processing files.", true);
-
-		when(executionQueryService.active()).thenReturn(Optional.of(execution));
-
-		Assertions.assertThat(advice.activeExecution(null)).isNull();
-		Assertions.assertThat(advice.activeExecution(authenticated)).isSameAs(execution);
 	}
 
 	@Test
@@ -135,9 +110,8 @@ class AppViewModelAdviceTest {
 	}
 
 	private AppViewModelAdvice advice(String version) {
-		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, executionQueryService,
-				inventoryWatchService, appUserRepository, fingerprintActivityService,
-				new UpdateCheckService(Optional::empty, _ -> {
+		return new AppViewModelAdvice(version, userPagePreferenceService, appSettingService, inventoryWatchService,
+				appUserRepository, new UpdateCheckService(Optional::empty, _ -> {
 				}, Clock.systemDefaultZone()));
 	}
 }

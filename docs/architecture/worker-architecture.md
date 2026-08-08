@@ -35,7 +35,13 @@ sintoma que o usuário percebe é execução parada em `PENDING`.
 Existe ainda o profile `app-worker-combined`, que ativa os dois papéis numa JVM só. É para
 desenvolvimento: o Eclipse tem uma launch configuration versionada com ele.
 
-> **ADR:** [0003 — App e Worker como processos separados](../adr/0003-app-e-worker-como-processos-separados.md)
+**Cada processo escreve o seu log.** `logs/nimbus-file-manager-app.log` e
+`…-worker.log` — separados porque um arquivo rotativo não é seguro entre duas JVMs. O console traz o
+papel da linha (`[APP]`, `[WORKER]`, `[COMBINED]`), que é o que distingue os dois quando a execução é
+combinada e há um console só.
+
+> **ADR:** [0003 — App e Worker como processos separados](../adr/0003-app-e-worker-como-processos-separados.md) ·
+> [0009 — Um arquivo de log por processo](../adr/0009-um-arquivo-de-log-por-processo.md)
 
 **Consequência prática:** com o Worker indisponível, um pedido fica `PENDING` até que um Worker o
 tome. A App **não** executa localmente como alternativa — não existe caminho de fallback.

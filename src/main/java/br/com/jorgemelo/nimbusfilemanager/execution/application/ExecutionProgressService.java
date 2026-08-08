@@ -297,7 +297,6 @@ public class ExecutionProgressService {
 		saveStep(managed, ExecutionStepType.CANCELLED, null, message);
 	}
 
-	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	/**
 	 * Ends an execution that stopped without failing.
 	 *
@@ -307,6 +306,7 @@ public class ExecutionProgressService {
 	 * this execution stood on went away, and someone reading the history later
 	 * needs to see exactly that.
 	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void interrupt(Execution execution, ExecutionMessage message) {
 		Execution managed = findExecution(execution);
 
@@ -329,7 +329,16 @@ public class ExecutionProgressService {
 	 * the product; a cancelled one was stopped by somebody. Reading the history to
 	 * ask "did my cancel work?" has to be able to tell those apart, and a shared
 	 * status with a different sentence in it would not.
+	 *
+	 * <p>
+	 * Transactional like every sibling, and it was not: the entity comes back
+	 * detached, so without a transaction the status and the finish time were
+	 * changed on an object nobody would ever write. What did get written was the
+	 * step - {@code save} brings its own transaction - so the history showed the
+	 * execution being rejected over and over while the row stayed RUNNING, and a
+	 * request waiting behind it could never be claimed.
 	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void reject(Execution execution, ExecutionMessage message) {
 		Execution managed = findExecution(execution);
 
@@ -343,6 +352,11 @@ public class ExecutionProgressService {
 		saveStep(managed, ExecutionStepType.REJECTED, null, message);
 	}
 
+	/**
+	 * Same as {@link #reject}, and it was missing the transaction for the same
+	 * reason.
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void fail(Execution execution, ExecutionMessage message) {
 		Execution managed = findExecution(execution);
 

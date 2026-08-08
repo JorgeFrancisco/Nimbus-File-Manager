@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Tests log to the console only. The application's logback-spring.xml also writes
+	to a file under the workspace, so the suite was appending to the very file the
+	running installation writes to. Tests that provoke a warning on purpose -
+	SecureFileMoveTest asserts the "file system disagrees" warning - left entries
+	there indistinguishable from a real incident, and an investigation counted
+	fifteen of them before noticing they all came from @TempDir paths.
+
+	The name is not logback-test.xml, and that is the whole point. Logback picks up
+	logback-test.xml by itself, from anywhere on the classpath - so it also shadowed
+	logback-spring.xml whenever target/test-classes happened to be on the classpath
+	of a running application, which is exactly what Eclipse does when it launches
+	one. The application then ran with the test configuration: console only, and no
+	log file anywhere, in a workspace where somebody was looking for one.
+
+	This name is one Logback and Spring Boot never look for on their own. Surefire
+	points at it explicitly, so the suite keeps this configuration and nothing on
+	the classpath can take the application's away from it.
+-->
+<configuration>
+
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+	<root level="INFO">
+		<appender-ref ref="CONSOLE"/>
+	</root>
+
+</configuration>

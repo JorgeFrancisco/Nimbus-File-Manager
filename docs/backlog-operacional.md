@@ -59,15 +59,24 @@ depende do MSI, de serviços do Windows e de reinícios de máquina.
 
 **MELHORIA CANDIDATA.** A fila é sólida; o que se vê dela ainda não é uniforme.
 
-- experiência consistente para qualquer execução em andamento, venha ela de que tela vier;
-- avaliar se `/api/background-job` deve ser generalizado ou aposentado;
 - um `202 Accepted` deve levar claramente à `Execution` criada;
 - mensagens acionáveis: dizer o que fazer, não só o que houve;
-- mostrar contenção de caminho como espera, e não como travamento — hoje uma execução devolvida à
-  fila parece parada;
+- dizer **por que** uma execução está esperando. Que ela espera já aparece: a faixa global mostra
+  quem está na fila e, ao passar o mouse, quem está à frente. O que falta é o motivo — contenção de
+  caminho, limite de concorrência do tipo — em vez de o usuário deduzir pela lista;
 - oferecer cancelamento **apenas onde ele é suportado** (§5 da arquitetura), em vez de um botão que
   às vezes não faz nada;
-- reexecutar um pedido, onde isso fizer sentido.
+- reexecutar um pedido, onde isso fizer sentido;
+- pedir a atualização da faixa no instante em que uma tela enfileira algo por `fetch`, em vez de
+  esperar o intervalo. Hoje toda tela que enfileira recarrega ou navega, e a faixa consulta assim
+  que a página abre — o intervalo só aparece nos fluxos que não recarregam, onde a espera é de
+  poucos segundos. O gancho seria um evento no `document`, para que nenhuma tela precise conhecer o
+  endpoint.
+
+Já resolvido, e registrado aqui só para não voltar como pendência: **experiência consistente para
+qualquer execução em andamento**. Uma faixa única, em todas as telas, alimentada por
+`/api/execution-activity`; as duas parciais que existiam (`/api/background-job` e o atributo de
+modelo resolvido na renderização) foram aposentadas.
 
 ## 4. Observabilidade
 
@@ -78,6 +87,10 @@ depende do MSI, de serviços do Windows e de reinícios de máquina.
 - motivo estruturado de espera, em vez de texto;
 - duração por `ExecutionType`;
 - tentativas, *retries* e *hand-backs* legíveis.
+
+Já resolvido, e registrado aqui só para não voltar como pendência: **qual papel escreveu a linha**.
+Cada processo tem o seu arquivo e o console traz `[APP]`/`[WORKER]`/`[COMBINED]`
+([ADR 0009](adr/0009-um-arquivo-de-log-por-processo.md)).
 
 ## 5. Resiliência
 

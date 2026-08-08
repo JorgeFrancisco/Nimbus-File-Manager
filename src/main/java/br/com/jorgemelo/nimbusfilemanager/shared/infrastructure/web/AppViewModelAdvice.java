@@ -2,18 +2,13 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
 import java.util.Map;
 
-import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.BackgroundJobActivity;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintActivityService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.InventoryWatchService;
 import br.com.jorgemelo.nimbusfilemanager.preferences.application.UserPagePreferenceService;
@@ -22,6 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.security.domain.model.AppUser;
 import br.com.jorgemelo.nimbusfilemanager.security.domain.repository.AppUserRepository;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.SharedConstants;
 import br.com.jorgemelo.nimbusfilemanager.update.application.UpdateCheckService;
 import br.com.jorgemelo.nimbusfilemanager.update.application.dto.AvailableUpdate;
@@ -58,25 +54,20 @@ public class AppViewModelAdvice {
 	private final String appVersion;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final AppSettingService appSettingService;
-	private final ExecutionQueryService executionQueryService;
 	private final InventoryWatchService inventoryWatchService;
 	private final AppUserRepository appUserRepository;
-	private final FingerprintActivityService fingerprintActivityService;
 	private final UpdateCheckService updateCheckService;
 
 	@Autowired
 	public AppViewModelAdvice(@Value("${application.version}") String appVersion,
 			UserPagePreferenceService userPagePreferenceService, AppSettingService appSettingService,
-			ExecutionQueryService executionQueryService, InventoryWatchService inventoryWatchService,
-			AppUserRepository appUserRepository, FingerprintActivityService fingerprintActivityService,
+			InventoryWatchService inventoryWatchService, AppUserRepository appUserRepository,
 			UpdateCheckService updateCheckService) {
 		this.appVersion = appVersion;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.appSettingService = appSettingService;
-		this.executionQueryService = executionQueryService;
 		this.inventoryWatchService = inventoryWatchService;
 		this.appUserRepository = appUserRepository;
-		this.fingerprintActivityService = fingerprintActivityService;
 		this.updateCheckService = updateCheckService;
 	}
 
@@ -106,28 +97,10 @@ public class AppViewModelAdvice {
 		return appSettingService.intValue(SettingsConstants.IDLE_TIMEOUT_MINUTES, DEFAULT_IDLE_TIMEOUT_MINUTES);
 	}
 
-	@ModelAttribute("activeExecution")
-	public ExecutionResponse activeExecution(Authentication authentication) {
-		if (!isAuthenticated(authentication)) {
-			return null;
-		}
-
-		return executionQueryService.active().orElse(null);
-	}
-
-	/**
-	 * Background work that has no execution record of its own - the fingerprint
-	 * backlogs - so the banner can show it instead of leaving the user guessing
-	 * what is keeping the machine busy.
-	 */
-	@ModelAttribute("backgroundJob")
-	public BackgroundJobActivity backgroundJob(Authentication authentication) {
-		if (!isAuthenticated(authentication)) {
-			return null;
-		}
-
-		return fingerprintActivityService.current().orElse(null);
-	}
+	// The banner used to be filled in here, from whatever was running when the page
+	// rendered. That is exactly why it could not see work that started afterwards:
+	// the model attribute is resolved once and never again. It is polled now, from
+	// /api/execution-activity, so nothing about it belongs in the view model.
 
 	@ModelAttribute("libraryConfigured")
 	public boolean libraryConfigured() {

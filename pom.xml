@@ -12,7 +12,7 @@
 	</parent>
 	<groupId>br.com.jorgemelo</groupId>
 	<artifactId>nimbus-file-manager</artifactId>
-	<version>8.1.5.202</version>
+	<version>8.2.2.206</version>
 	<name>Nimbus File Manager</name>
 	<description>Local-first file management application for continuously inventorying,
     monitoring, enriching, organizing and auditing personal files.</description>
@@ -438,6 +438,15 @@
 					     Testcontainers/Hikari teardown at JVM exit (EOFException, "connection is
 					     closed", ~30s hang, Surefire fork kill). Production keeps the default. -->
 					<systemPropertyVariables>
+						<!-- Named explicitly because the file deliberately is not called
+						     logback-test.xml. Logback picks that name up on its own from anywhere
+						     on the classpath, which made it shadow the application's
+						     logback-spring.xml whenever target/test-classes was on the classpath of
+						     a running application - what Eclipse does when it launches one. The
+						     application then started with the test configuration and wrote no log
+						     file at all. Pointing at it here keeps the suite's behaviour and leaves
+						     the application's configuration untouchable. -->
+						<logging.config>classpath:logback-tests.xml</logging.config>
 						<nimbus-file-manager.inventory.watch.enabled>false</nimbus-file-manager.inventory.watch.enabled>
 					<!-- No @SpringBootTest may reach for the network: the tool auto-install would
 					     otherwise fetch a ~70 MB archive once per context on a Windows developer

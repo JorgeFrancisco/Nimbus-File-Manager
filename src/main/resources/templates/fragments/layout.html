@@ -75,50 +75,40 @@
 				<small th:if="${inventoryWatch.error() != null}" th:text="${inventoryWatch.error()}">Erro</small>
 			</div>
 		</div>
-		<a class="active-execution" id="activeExecution" th:if="${activeExecution != null}"
-				th:href="@{/app/executions/{id}(id=${activeExecution.executionId()})}"
-				th:attr="data-execution-id=${activeExecution.executionId()}">
+		<!--
+			One banner for everything in flight, filled in by execution-activity.js.
+			It starts hidden and empty on purpose: the page no longer needs the server
+			to have found work at render time, because the poller discovers whatever is
+			active - including work that starts after this page was drawn.
+		-->
+		<a class="active-execution" id="executionActivity" th:href="@{/app/executions}" href="/app/executions" hidden>
 			<div class="active-execution-main">
 				<span class="active-execution-pulse" aria-hidden="true"></span>
 				<div class="active-execution-copy">
-					<strong id="activeExecutionTitle"
-							th:text="#{execution.running(${activeExecution.typeLabel()})}">Execução em andamento</strong>
-					<span class="active-execution-folder" id="activeExecutionFolder"
-							th:title="${activeExecution.sourcePath()}">
-						<i class="bi bi-folder2-open"></i>
-						<span th:text="#{execution.folder}">Pasta:</span>
-						<span class="path" th:text="${activeExecution.sourcePath()}">C:\midia</span>
-					</span>
+					<strong id="executionActivityTitle"></strong>
+					<span class="active-execution-folder" id="executionActivityDetail"></span>
 				</div>
 			</div>
 			<div class="active-execution-summary">
-				<span class="badge info" id="activeExecutionStatus" th:text="${activeExecution.statusLabel()}">RUNNING</span>
-				<strong id="activeExecutionPercent"
-						th:text="${activeExecution.percentComplete() != null} ? ${#numbers.formatPercent(activeExecution.percentComplete() / 100.0, 1, 2)} : #{execution.preparing}">0%</strong>
+				<span class="badge info" id="executionActivityStatus"></span>
+				<strong id="executionActivityPercent" hidden></strong>
+				<span class="active-execution-step" id="executionActivityStepPercent" hidden></span>
+				<span class="active-execution-others" id="executionActivityOthers" hidden></span>
 			</div>
-			<div class="active-execution-progress" aria-hidden="true">
-				<span id="activeExecutionProgressFill"
-						th:style="|width: ${activeExecution.percentComplete() != null ? activeExecution.percentComplete() : 0}%|"></span>
-			</div>
-		</a>
-		<a class="active-execution background-job" id="backgroundJob"
-				th:href="@{${backgroundJob != null ? backgroundJob.link() : '/app/duplicates'}}"
-				th:hidden="${backgroundJob == null}">
-			<div class="active-execution-main">
-				<span class="active-execution-pulse" aria-hidden="true"></span>
-				<div class="active-execution-copy">
-					<strong id="backgroundJobLabel" th:text="${backgroundJob != null ? backgroundJob.label() : ''}">Impressões digitais</strong>
-					<span class="active-execution-folder" id="backgroundJobCount"
-							th:text="${backgroundJob != null ? #messages.msg('background.job.count', backgroundJob.processed(), backgroundJob.total()) : ''}">0 de 0</span>
+			<!--
+				Two bars, like any unpacker: the top one counts the items that are done
+				and the bottom one is the item still being worked on. The first alone
+				reads 100% while the work carries on, which is what it did. They stack
+				inside one strip pinned to the foot of the banner, so a run with only
+				one level of progress leaves no gap where the second bar would be.
+			-->
+			<div class="active-execution-bars" aria-hidden="true">
+				<div class="active-execution-progress" id="executionActivityProgress" hidden>
+					<span id="executionActivityProgressFill"></span>
 				</div>
-			</div>
-			<div class="active-execution-summary">
-				<strong id="backgroundJobPercent"
-						th:text="${backgroundJob != null ? #numbers.formatPercent(backgroundJob.percent() / 100.0, 1, 2) : ''}">0%</strong>
-			</div>
-			<div class="active-execution-progress" aria-hidden="true">
-				<span id="backgroundJobProgressFill"
-						th:style="|width: ${backgroundJob != null ? backgroundJob.percent() : 0}%|"></span>
+				<div class="active-execution-progress step" id="executionActivityStepProgress" hidden>
+					<span id="executionActivityStepProgressFill"></span>
+				</div>
 			</div>
 		</a>
 		<div th:replace="${content}"></div>
@@ -158,8 +148,7 @@
 	<script th:src="@{/js/folder-picker.js}"></script>
 	<script th:src="@{/js/idle-timeout.js}"></script>
 	<script th:src="@{/js/execution-status.js}"></script>
-	<script th:src="@{/js/background-job.js}"></script>
-	<script th:src="@{/js/active-execution.js}"></script>
+	<script th:src="@{/js/execution-activity.js}"></script>
 </div>
 </body>
 </html>

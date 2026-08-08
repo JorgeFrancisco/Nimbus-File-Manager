@@ -44,11 +44,11 @@ import lombok.extern.slf4j.Slf4j;
  * exception for another instead of answering "already queued".
  *
  * <p>
- * <strong>A refusal is logged by the persistence layer before it can get here.</strong>
- * Hibernate reports every {@code SQLException} at error level on its way out, so
- * a duplicate that was refused exactly as designed still leaves an error in the
- * log. Nothing in this class can precede that: the writing happens below the
- * level any {@code catch} reaches.
+ * <strong>A refusal is logged by the persistence layer before it can get
+ * here.</strong> Hibernate reports every {@code SQLException} at error level on
+ * its way out, so a duplicate that was refused exactly as designed still leaves
+ * an error in the log. Nothing in this class can precede that: the writing
+ * happens below the level any {@code catch} reaches.
  *
  * <p>
  * So the answer is to ask before inserting, rather than to insert and be
