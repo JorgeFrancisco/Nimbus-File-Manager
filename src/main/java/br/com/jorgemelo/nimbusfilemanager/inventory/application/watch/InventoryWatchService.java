@@ -81,8 +81,12 @@ public class InventoryWatchService extends LocalizedComponent {
 	private volatile long lastEventMillis;
 	private volatile boolean inventoryPending;
 
-	/** What the live source was built with, so a changed setting is noticed. */
-	private boolean watchedRecursive;
+	/**
+	 * What the live source was built with, so a changed setting is noticed.
+	 * Volatile because the poll thread reads it outside the monitor that writes
+	 * it, to decide whether the live watch still matches the settings.
+	 */
+	private volatile boolean watchedRecursive;
 
 	/**
 	 * What asked for the pending inventory. Reported when it launches, because
@@ -444,6 +448,15 @@ public class InventoryWatchService extends LocalizedComponent {
 	 * {@code reconfigure} stores the normalized form and a needless reconfigure
 	 * would tear down a working watcher every cycle.
 	 *
+	 * <p>
+	 * What is compared is folder <em>and</em> depth, the same identity
+	 * {@link #alreadyWatching} uses, and this half is prevention rather than
+	 * repair: every writer of the depth setting today calls a reconfigure of its
+	 * own, so nothing in the product reaches this branch. It is here because the
+	 * folder already changes from another process - the library switch runs in the
+	 * worker - and the day the depth follows it, a poll that compared only the
+	 * folder would go on watching the old depth with nothing to say so.
+	 *
 	 * @return whether the library changed, in which case this cycle ends - the
 	 * inventory of the new one has just been asked for and there is nothing left to
 	 * poll for the old
@@ -452,15 +465,34 @@ public class InventoryWatchService extends LocalizedComponent {
 		String configured = appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "");
 		String watched = status.get().folder();
 
-		if (configured.isBlank() || sameFolder(configured, watched)) {
+		if (configured.isBlank() || (sameFolder(configured, watched) && sameDepth())) {
 			return false;
 		}
 
-		log.info("The monitored library became {}; the watcher was following {}", configured, watched);
+		log.info("The monitored library became {} (recursive={}); the watcher was following {} (recursive={})",
+				configured, appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true), watched,
+				watchedRecursive);
 
 		adoptAndInventory();
 
 		return true;
+	}
+
+	/**
+	 * Whether the live source was built with the depth the setting now asks for.
+	 *
+	 * <p>
+	 * Answered yes when nothing is live: the depth of a source that does not exist
+	 * is not a difference to chase, and treating it as one would have this loop
+	 * rebuild a folder that failed to open twice a second. Reopening after a
+	 * failure stays what it was - somebody saving the setting again.
+	 */
+	private boolean sameDepth() {
+		if (watcher.get() == null || !status.get().running()) {
+			return true;
+		}
+
+		return watchedRecursive == appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true);
 	}
 
 	private boolean sameFolder(String configured, String watched) {
@@ -499,10 +531,14 @@ public class InventoryWatchService extends LocalizedComponent {
 			return;
 		}
 
-		// The watcher already drops directories, symbolic links, junctions and .lnk
-		// shortcuts (via PhysicalFilePolicy), so every path here is a physical file
-		// change worth a debounced re-inventory. Deletes are reported too so the
-		// reconcile removes them from the catalog.
+		// Every path a source reports is worth the debounced pass, and none of them
+		// is screened here on purpose. What arrives is not only files: the Windows
+		// sources report directories too, and they have to, because a folder that
+		// appears already full is the only notice its files ever produce - the
+		// reconcile retires what left, it does not catalogue what arrived. Deletes
+		// come through for the opposite reason, so that reconcile can retire them.
+		// Screening this list by PhysicalFilePolicy, which reads as the obvious
+		// tidying, is what would drop those folders.
 		for (Path changed : currentWatcher.pollChangedFiles()) {
 			lastEventMillis = System.currentTimeMillis();
 
@@ -584,9 +620,21 @@ public class InventoryWatchService extends LocalizedComponent {
 
 		log.info("Re-inventorying because of: {}", pendingReason);
 
-		automaticReconcile(ExecutionTrigger.FILE_EVENT);
+		try {
+			automaticReconcile(ExecutionTrigger.FILE_EVENT);
 
-		inventoryLauncherService.launch(watchRequest(), ExecutionTrigger.FILE_EVENT);
+			inventoryLauncherService.launch(watchRequest(), ExecutionTrigger.FILE_EVENT);
+		} catch (RuntimeException failure) {
+			// Whatever refused the queue - a connection that blinked, a transaction
+			// that could not commit - the change on disk is still uncatalogued, and
+			// nothing else goes looking for it: the reconcile retires what left, it
+			// never catalogues what arrived. So the pending goes back and the next
+			// cycle asks again. Raised rather than assigned, so a reason that
+			// arrived meanwhile keeps its place, and rethrown so the poll logs it.
+			raisePending(pendingReason);
+
+			throw failure;
+		}
 	}
 
 	/**

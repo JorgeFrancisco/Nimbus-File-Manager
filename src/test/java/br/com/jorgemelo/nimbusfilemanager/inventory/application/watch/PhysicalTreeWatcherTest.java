@@ -135,10 +135,11 @@ class PhysicalTreeWatcherTest {
 	/**
 	 * A folder created inside the watched tree has to start being watched at once,
 	 * or everything dropped into it afterwards is invisible - which is how a whole
-	 * new album could arrive without a single event.
+	 * new album could arrive without a single event. And it is reported as a
+	 * change, because registering it only ever covers what lands there next.
 	 */
 	@Test
-	void directoryCreatedInsideTheTreeStartsBeingWatched() throws Exception {
+	void directoryCreatedInsideTheTreeStartsBeingWatchedAndIsReported() throws Exception {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
 			Path album = Files.createDirectory(tempDir.resolve("album"));
 			Path inside = Files.createDirectory(album.resolve("2026"));
@@ -150,8 +151,65 @@ class PhysicalTreeWatcherTest {
 			assertThat(watcher.isWatching(album)).isTrue();
 			assertThat(watcher.isWatching(inside)).isTrue();
 
-			// A new folder is not itself a changed file; what lands in it will be.
+			assertThat(changed).containsExactly(album);
+		}
+	}
+
+	/**
+	 * A folder merely written to is not itself a change: whatever landed in it
+	 * raised its own event, and answering the folder as well would ask for a
+	 * second pass over the library for the one arrival.
+	 */
+	@Test
+	void directoryModifiedInsideTheTreeIsNotReportedAsAChange() throws Exception {
+		Path album = Files.createDirectory(tempDir.resolve("album"));
+
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
+			List<Path> changed = new ArrayList<>();
+
+			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_MODIFY, Path.of("album")), changed);
+
+			assertThat(watcher.isWatching(album)).isTrue();
 			assertThat(changed).isEmpty();
+		}
+	}
+
+	/**
+	 * A shallow watch does not look inside a new folder, so announcing it would
+	 * ask for a pass that could not catalogue anything it holds.
+	 */
+	@Test
+	void directoryCreatedUnderAShallowWatchIsNotReported() throws Exception {
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, false)) {
+			Files.createDirectory(tempDir.resolve("album"));
+
+			List<Path> changed = new ArrayList<>();
+
+			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, Path.of("album")), changed);
+
+			assertThat(changed).isEmpty();
+		}
+	}
+
+	/**
+	 * The loss this guards against, end to end and against the real
+	 * {@link java.nio.file.WatchService}: a folder moved in from outside arrives
+	 * already full, and its files were never created under a watched directory,
+	 * so not one of them raises an event. Nothing later goes looking for them
+	 * either - the reconcile retires what left, it does not catalogue what
+	 * arrived - so unless the folder itself is reported, everything in it stays
+	 * out of the catalog until somebody asks for an inventory by hand.
+	 */
+	@Test
+	void folderMovedInFromOutsideIsReportedSoWhatCameWithItIsNotLost(@TempDir Path outside) throws Exception {
+		Path album = Files.createDirectory(outside.resolve("album"));
+
+		Files.writeString(album.resolve("holiday.jpg"), "jpg");
+
+		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
+			Files.move(album, tempDir.resolve("album"));
+
+			assertThat(awaitChange(watcher, "album")).isNotNull();
 		}
 	}
 

@@ -79,6 +79,18 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	 * synchronised drive, often inside the watched library. A backup written there
 	 * looks like hundreds of MB of new files arriving, and answering it means
 	 * inventorying while the file is still being written.
+	 *
+	 * <p>
+	 * Deliberately narrower than {@link ScanExclusionService#isExcluded}, which
+	 * answers what a scan catalogues rather than what deserves a look. The two
+	 * differ in the one direction that matters: {@code isExcluded} also matches on
+	 * folder name, and asked without a root it matches every component of an
+	 * absolute path - so a library that happens to sit under a folder called
+	 * {@code build} or {@code target} would have every change beneath it
+	 * suppressed, silently and entirely. What its extension half would buy is the
+	 * wake-up for a change that is an excluded file and nothing else, which the
+	 * debounce already folds into the pass its neighbours ask for. A filter too
+	 * narrow costs redundant work; one too wide costs the change.
 	 */
 	private boolean worthAnInventory(Path changed) {
 		return !scanExclusionService.isApplicationOwned(changed) && !isHidden(changed);

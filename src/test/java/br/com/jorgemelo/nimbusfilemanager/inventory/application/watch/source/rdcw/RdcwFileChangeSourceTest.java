@@ -124,6 +124,49 @@ class RdcwFileChangeSourceTest {
 		}
 	}
 
+	/**
+	 * A rename is two entries and the pair is never assembled: each side is
+	 * reported as its own changed path, in whichever batch it arrives. Pairing
+	 * them would buy nothing - the answer to either one is the same debounced
+	 * pass - and would need state that survived a buffer boundary, which is
+	 * exactly what {@code ReadDirectoryChangesW} does not promise: the two halves
+	 * can land in different reads, and this is that case.
+	 */
+	@Test
+	void reportsBothSidesOfARenameEvenWhenTheyLandInDifferentBatches() {
+		FakeSeam seam = new FakeSeam();
+
+		seam.enqueue(new RdcwReadResult(List.of("2024\\was-called.jpg"), false));
+		seam.enqueue(new RdcwReadResult(List.of("2024\\is-called.jpg"), false));
+
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
+			Assertions.assertThat(source.pollChangedFiles())
+					.containsExactly(ROOT.resolve("2024").resolve("was-called.jpg"));
+			Assertions.assertThat(source.pollChangedFiles())
+					.containsExactly(ROOT.resolve("2024").resolve("is-called.jpg"));
+		}
+	}
+
+	/**
+	 * A folder is reported like anything else. It matters because a folder moved
+	 * into the library arrives already full: its files were never created under
+	 * the watched tree, so not one of them produces a notification, and the
+	 * folder's own path is all the notice they get. Screening directories out
+	 * here - which reads as tidying, since directories are not catalogued - is
+	 * what would lose them.
+	 */
+	@Test
+	void reportsAFolderPathAndNotOnlyFilePaths() {
+		FakeSeam seam = new FakeSeam();
+
+		seam.enqueue(new RdcwReadResult(List.of("albums\\holiday-2026"), false));
+
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
+			Assertions.assertThat(source.pollChangedFiles())
+					.containsExactly(ROOT.resolve("albums").resolve("holiday-2026"));
+		}
+	}
+
 	@Test
 	void exposesTheRootAndClosesTheSeam() {
 		FakeSeam seam = new FakeSeam();

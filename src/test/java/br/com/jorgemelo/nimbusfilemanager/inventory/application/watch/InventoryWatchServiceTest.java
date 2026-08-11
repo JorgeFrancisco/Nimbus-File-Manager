@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -865,6 +866,150 @@ class InventoryWatchServiceTest {
 		Assertions.assertThat(status.running()).isFalse();
 		Assertions.assertThat(status.configured()).isTrue();
 		Assertions.assertThat(status.error()).contains("no watcher available on this volume");
+	}
+
+	/**
+	 * The identity the poll follows is folder <em>and</em> depth, not the folder
+	 * alone. Nothing in the product reaches this today - every writer of the depth
+	 * setting calls a reconfigure of its own - so what this holds is an invariant
+	 * rather than a path that was broken. It is held because the folder already
+	 * changes from another process, the library switch being a worker's job, and
+	 * the day the depth follows it the poll must notice.
+	 */
+	@Test
+	void thePollFollowsTheDepthTheSettingAsksForAndNotOnlyTheFolder() throws Exception {
+		AppSettingService settings = configuredSettings();
+
+		AtomicInteger created = new AtomicInteger();
+
+		service = new InventoryWatchService(settings, mock(InventoryLauncherService.class), idleQueries(), enqueue(),
+				executions(), mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
+				watchProps(false), new BackgroundWorkGate());
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(created).as("the poll adopts the configured library").hasValue(1);
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(created).as("nothing changed, so nothing is torn down").hasValue(1);
+
+		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(false);
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(created).as("a different depth is a different watch").hasValue(2);
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(created).as("and the new depth is what is being watched now").hasValue(2);
+	}
+
+	/**
+	 * A change asked for the pass and the queue refused it, so that change is
+	 * still uncatalogued - and nothing else goes looking for it, because the
+	 * reconcile retires what left rather than cataloguing what arrived. The
+	 * pending therefore has to outlive the failure and be asked for again,
+	 * instead of being cleared on the way into a call that never happened.
+	 */
+	@Test
+	void aPendingOutlivesAQueueThatRefusedIt() throws Exception {
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		when(enqueueService.enqueue(any())).thenThrow(new IllegalStateException("This connection has been closed."));
+
+		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
+				new BackgroundWorkGate());
+
+		service.reconfigure();
+
+		setField("inventoryPending", true);
+		setField("lastEventMillis", 0L);
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(booleanField("inventoryPending")).as("the change on disk is still uncatalogued").isTrue();
+
+		verify(launcher, never()).launch(any(), any());
+	}
+
+	/** And it is cleared once the work really is on the queue. */
+	@Test
+	void aPendingIsClearedOnceTheQueueTookTheWork() throws Exception {
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
+				new BackgroundWorkGate());
+
+		service.reconfigure();
+
+		setField("inventoryPending", true);
+		setField("lastEventMillis", 0L);
+
+		invokeNoArgs("pollSafely");
+
+		assertThat(booleanField("inventoryPending")).isFalse();
+
+		verify(enqueueService).enqueue(any());
+		verify(launcher).launch(any(), any());
+	}
+
+	/**
+	 * A folder is a change like any other here, and the watcher must not screen
+	 * it out. The Windows sources report directories deliberately: a folder moved
+	 * into the library arrives already full, its files were never created under
+	 * the watched tree and raise no notification of their own, and the reconcile
+	 * that follows retires what left rather than cataloguing what arrived - so
+	 * the folder's own path is the only notice they ever produce.
+	 */
+	@Test
+	void aFolderThatArrivesWakesTheWatcherLikeAnyOtherChange() throws Exception {
+		Path album = Files.createDirectory(tempDir.resolve("album-moved-in"));
+
+		Files.writeString(album.resolve("holiday.jpg"), "jpg");
+
+		InventoryLauncherService launcher = mock(InventoryLauncherService.class);
+
+		AtomicReference<RecordingFileChangeSource> built = new AtomicReference<>();
+
+		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
+				mock(OperationLockService.class), recordingFactory(built), Clock.systemDefaultZone(),
+				watchProps(false), new BackgroundWorkGate());
+
+		service.reconfigure();
+
+		built.get().reportLive(album);
+
+		// The first cycle takes the change in and stamps the debounce clock; the
+		// second finds the quiet the debounce is waiting for.
+		pollCycle();
+		pollCycle();
+
+		verify(launcher).launch(any(), any());
+	}
+
+	/** One cycle of the loop the scheduler runs, with the debounce satisfied. */
+	private void pollCycle() throws Exception {
+		setField("lastEventMillis", 0L);
+
+		invokeNoArgs("pollSafely");
+	}
+
+	/**
+	 * Hands the service a source the test fills by hand, which is what stands in
+	 * for the Windows ones: the portable {@code WatchService} reports only what it
+	 * really sees, so it cannot be asked for a particular kind of change.
+	 */
+	private FileChangeSourceFactory recordingFactory(AtomicReference<RecordingFileChangeSource> built) {
+		return new FileChangeSourceFactory(root -> {
+			RecordingFileChangeSource created = new RecordingFileChangeSource(root, List.of(), null);
+
+			built.set(created);
+
+			return Optional.of(created);
+		}, pathRegistry, exclusions);
 	}
 
 	private FileChangeSourceFactory watchOnlyFactory() {

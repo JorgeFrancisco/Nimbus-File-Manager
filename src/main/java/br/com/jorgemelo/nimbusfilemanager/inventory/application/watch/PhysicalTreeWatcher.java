@@ -73,11 +73,12 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 	}
 
 	/**
-	 * Drains all pending events and returns the physical files that changed
-	 * (created, modified or deleted). Newly created physical sub-directories are
-	 * registered so their contents are watched too. An {@code OVERFLOW} event sets
-	 * a flag consumable via {@link #consumeOverflow()} - the caller should trigger
-	 * an early reconcile because events may have been dropped.
+	 * Drains all pending events and returns what changed: the physical files
+	 * created, modified or deleted, and the physical sub-directories that
+	 * appeared - which are also registered, so their contents are watched too. An
+	 * {@code OVERFLOW} event sets a flag consumable via
+	 * {@link #consumeRecoveryReason()} - the caller should trigger an early
+	 * reconcile because events may have been dropped.
 	 */
 	@Override
 	public List<Path> pollChangedFiles() {
@@ -137,8 +138,22 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 
 		// CREATE or MODIFY.
 		if (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
-			if (recursive && PhysicalFilePolicy.isProcessable(child)) {
-				registerTree(child);
+			if (!recursive || !PhysicalFilePolicy.isProcessable(child)) {
+				return;
+			}
+
+			registerTree(child);
+
+			// A folder that appears is reported as a change; one that is merely
+			// written to is not. Registering it only covers what lands there next:
+			// a folder moved in from outside the tree arrives already full, and its
+			// files were never created under a watched directory, so they produce
+			// no event of their own - and nothing later goes looking for them,
+			// because the reconcile retires what left rather than cataloguing what
+			// arrived. The same window exists for a folder created and filled in
+			// the moment before this registration ran.
+			if (StandardWatchEventKinds.ENTRY_CREATE.equals(kind)) {
+				changed.add(child);
 			}
 
 			return;

@@ -23,11 +23,14 @@ import java.util.List;
  * </pre>
  *
  * <p>
- * The action is intentionally not surfaced: every action (create, modify,
- * delete, and both sides of a rename) is reported as a changed path, and the
- * debounced full reconcile resolves what actually happened - so a rename yields
- * both the old and the new path, and a directory move is caught by the
- * reconcile.
+ * The action is read off the wire but intentionally not surfaced, because no
+ * decision downstream would differ if it were. Every action - create, modify,
+ * delete and both sides of a rename - becomes one changed path, and the single
+ * answer to any of them is the debounced pair the watcher asks for: a reconcile
+ * to retire what left, and an inventory to catalogue what arrived. A rename
+ * therefore yields both its paths, whichever of the two lies inside the
+ * library, and a folder yields its own path, which is the only notice the files
+ * that came with it ever produce.
  */
 public final class FileNotifyInformationParser {
 

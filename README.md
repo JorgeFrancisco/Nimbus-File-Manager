@@ -734,9 +734,9 @@ finished items is not the same as being finished - a geodata update that has imp
 administrative levels reads 3 of 3 while it is still writing the supplemental territory files - and
 the second bar is what says so. It appears only when there is a step to report.
 
-Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: `InventoryWatchService` calls `OrganizationReconcileService.reconcileAndApply` automatically - once per debounced batch of file-system changes, and again on a fixed 60-second timer regardless of changes - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Although neither has a screen of its own, both are visible in the execution history: a reconcile is persisted as a distinct `RECONCILE` execution only when it actually repairs the catalog (renames, stale-path fixes or missing marks), while the frequent "nothing changed" checks leave only an in-memory heartbeat in the topbar; each execution (inventory and reconcile alike) also records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`.
+Inventory runs continuously in the background once a folder is set up through Onboarding; it has no dedicated screen or REST endpoint of its own. Reconciliation has no web screen or REST endpoint either, but it isn't just internal dead code: it is queued as a `RECONCILE` execution automatically - once per debounced batch of file-system changes by `InventoryWatchService`, and again on a timer by `ReconcileScheduler` regardless of changes, at the interval `nimbus-file-manager.inventory.reconciliation-interval-millis` names - so drift between disk and database (missing files, renames, path mismatches) self-heals in the background without any manual trigger. Neither of the two runs in the process serving the screens: both only enqueue, and the worker claims and executes them. Although neither has a screen of its own, both are visible in the execution history, and each execution records its trigger - `MANUAL`, `FILE_EVENT` or `TIMER`. One narrow exclusion applies to the Dashboard list only: the timer reconciles that finished having repaired nothing are hidden, because on a library that is not moving they are hundreds of identical rows a day. Every one of them is still a row in the table, so the queue and the technical audit stay complete.
 
-The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net.
+The file-system change detection is a pluggable `FileChangeSource`. On Windows the real-time source is **`ReadDirectoryChangesW`** with `bWatchSubtree=true`: a single directory handle on the root, recursive detection, no per-folder lock and **no elevation required**. When the volume can be opened (elevated) the NTFS **USN Change Journal** is added on top purely for startup catch-up of changes made while the app was down. Only if even the single-handle recursive watch cannot be opened does it fall back to the portable per-directory `WatchService`; on Linux that `WatchService` remains the source. Either way the periodic reconcile stays the consistency net for what *left* - it retires catalog entries whose file is gone and repairs renames and stale paths. Cataloguing what *arrived* is the inventory's job alone, which is why every source reports the arrival of a folder as a change: a folder moved in from outside brings files that were never created under a watched directory and so raise no notification of their own.
 
 The journal is the preferred source and the application asks for what it needs to read it: on
 Windows, a start that cannot open a volume handle restarts itself elevated, raising one UAC
@@ -1610,8 +1610,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       3851 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.61% instruction, 92.94% branch, 98.12% line, 99.01% method, 100.00% class
+Tests:       3861 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.63% instruction, 92.95% branch, 98.15% line, 99.01% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1627,11 +1627,29 @@ Floor:  98.61% instruction, 92.78% branch, 98.11% line, 98.99% method, 100.00% c
 Goal:   98.75% instruction, 93.00% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-**The run above clears the floor on all five, and the floor stays where it was.** Every margin is
-inside the drift this suite is known to have between runs (*A medição varia entre execuções* in
-`AGENTS.md`: up to 0.16 on branch and ~0.03 on the rest) - instruction is 0.02 above its floor,
-line 0.04, method 0.06, branch 0.25 - so raising any of them to the reading above would leave no
-room for the next measurement of the same tree and turn ordinary noise into a red build.
+**The run above clears the floor on all five, and the floor stays where it was.** No margin is
+wide enough to raise into: against the drift this suite is known to have between runs (*A medição
+varia entre execuções* in `AGENTS.md`: up to 0.16 on branch and ~0.03 on the rest), instruction is
+0.02 above its floor and method 0.02 - both inside the band outright - while line at 0.04 and
+branch at 0.17 clear it by a single hundredth. A floor set at any of those readings would leave the
+next measurement of the same tree no room at all, which is how ordinary noise becomes a red build.
+Branch is the one worth naming: it read 92.94 on the previous slice and 92.95 on this one, two
+different trees agreeing, so the value is real - and still only a hundredth clear of its own drift.
+
+**A folder that arrives is a change, and a change already asked for outlives a queue that refused
+it.** Two ways the watcher could lose a filesystem change outright, both closed here and both held
+by a test that fails without the fix. A folder moved into the library from outside arrives already
+full: its files were never created under a watched directory, so on the portable `WatchService`
+source not one of them raised an event, and nothing went looking for them afterwards - the
+reconcile retires what left, it never catalogues what arrived. The folder's own arrival is the
+notice now, which is what the Windows sources already reported and why they screen nothing. And the
+pending a change raises is no longer cleared before the work is on the queue: an enqueue that failed
+used to leave the flag down and the file uncatalogued until something else happened to touch it. The
+same slice made the depth setting part of the identity the poll follows, which is prevention rather
+than repair - every writer of it already reconfigures, but the folder is written from the worker and
+the day the depth follows it, a poll comparing only the folder would notice nothing. Ten tests, one
+of them moving a full folder against the real `WatchService` and waiting for the event that used to
+never come.
 
 **That drift was measured directly this time rather than inferred.** Two clean runs of one unchanged
 tree, minutes apart, read 98.62/92.83/98.11/99.00 and 98.60/92.83/98.08/99.00: three hundredths of
