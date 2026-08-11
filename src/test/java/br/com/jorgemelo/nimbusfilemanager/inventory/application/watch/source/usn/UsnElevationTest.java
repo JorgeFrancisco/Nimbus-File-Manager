@@ -1,5 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -20,13 +23,13 @@ class UsnElevationTest {
 	/** An installed copy on Windows, not administrator, has the journal to gain. */
 	@Test
 	void asksWhenTheJournalIsOutOfReachAndThereIsSomethingToRestart() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, false, false)).isTrue();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, false, () -> false)).isTrue();
 	}
 
 	/** Already administrator: the volume opens, so there is nothing to ask for. */
 	@Test
 	void staysQuietWhenTheVolumeAlreadyOpens() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, false, true)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, false, () -> true)).isFalse();
 	}
 
 	/**
@@ -36,7 +39,7 @@ class UsnElevationTest {
 	 */
 	@Test
 	void neverAsksTwiceInTheSameChain() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, true, false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, true, () -> false)).isFalse();
 	}
 
 	/**
@@ -46,21 +49,55 @@ class UsnElevationTest {
 	 */
 	@Test
 	void neverAsksFromABuild() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, null, false, false)).isFalse();
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, "  ", false, false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, null, false, () -> false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, "  ", false, () -> false)).isFalse();
 	}
 
 	/** The journal is a Windows thing; elsewhere the prompt would buy nothing. */
 	@Test
 	void neverAsksAwayFromWindows() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, "Linux", LAUNCHER, false, false)).isFalse();
-		Assertions.assertThat(UsnElevation.shouldRelaunch(true, null, LAUNCHER, false, false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, "Linux", LAUNCHER, false, () -> false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, null, LAUNCHER, false, () -> false)).isFalse();
+	}
+
+	/**
+	 * The volume question is asked last, and only once every other condition
+	 * already holds - which is what keeps it off the platforms that have no
+	 * volume to open. Answering it reaches into kernel32, and merely loading that
+	 * library away from Windows throws an {@code ExceptionInInitializerError}: an
+	 * {@code Error}, so the caller's own {@code catch} does not hold it either. It
+	 * used to be a {@code boolean} parameter, and the call therefore sat in the
+	 * caller's argument list, where Java runs it before this method can rule
+	 * anything out - so every Linux and macOS start died in {@code main}, before
+	 * Spring, and only the one test that boots a real JVM could see it.
+	 */
+	@Test
+	void asksTheVolumeQuestionOnlyWhenEverythingElseAlreadyHolds() {
+		AtomicBoolean asked = new AtomicBoolean();
+
+		BooleanSupplier volume = () -> {
+			asked.set(true);
+
+			return false;
+		};
+
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, "Linux", LAUNCHER, false, volume)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, "Mac OS X", LAUNCHER, false, volume)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(false, WINDOWS, LAUNCHER, false, volume)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, null, false, volume)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, true, volume)).isFalse();
+
+		Assertions.assertThat(asked).as("a start that was never going to relaunch opened a volume anyway").isFalse();
+
+		Assertions.assertThat(UsnElevation.shouldRelaunch(true, WINDOWS, LAUNCHER, false, volume)).isTrue();
+
+		Assertions.assertThat(asked).as("and the one start that could relaunch has to ask").isTrue();
 	}
 
 	/** The way out for anyone who prefers no prompt to a faster catch-up. */
 	@Test
 	void neverAsksWhenTurnedOff() {
-		Assertions.assertThat(UsnElevation.shouldRelaunch(false, WINDOWS, LAUNCHER, false, false)).isFalse();
+		Assertions.assertThat(UsnElevation.shouldRelaunch(false, WINDOWS, LAUNCHER, false, () -> false)).isFalse();
 	}
 
 	/**

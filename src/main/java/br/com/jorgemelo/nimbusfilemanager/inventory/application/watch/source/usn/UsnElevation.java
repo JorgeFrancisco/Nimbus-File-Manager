@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn;
 
 import java.util.Locale;
+import java.util.function.BooleanSupplier;
 
 /**
  * Whether this run should restart itself with administrator rights so the USN
@@ -48,10 +49,21 @@ public final class UsnElevation {
 	private UsnElevation() {
 	}
 
+	/**
+	 * @param volumeReadable asked last, and only once every condition before it
+	 * holds. It is a supplier rather than a {@code boolean} because answering it
+	 * means opening a volume handle through kernel32, and merely loading that
+	 * library away from Windows throws - so the question must not be reachable off
+	 * the platform that has one. As a value it sat in the caller's argument list,
+	 * where Java evaluates it before this method can rule the platform out; the
+	 * {@code ExceptionInInitializerError} that produced is an {@code Error}, so the
+	 * caller's own {@code catch} did not hold it either, and it killed {@code main}
+	 * before Spring on every Linux and macOS start.
+	 */
 	public static boolean shouldRelaunch(boolean enabled, String operatingSystem, String launcher,
-			boolean alreadyAttempted, boolean volumeReadable) {
+			boolean alreadyAttempted, BooleanSupplier volumeReadable) {
 		return enabled && isWindows(operatingSystem) && launcher != null && !launcher.isBlank() && !alreadyAttempted
-				&& !volumeReadable;
+				&& !volumeReadable.getAsBoolean();
 	}
 
 	/** Absent means on: the journal is the tracking this product prefers. */

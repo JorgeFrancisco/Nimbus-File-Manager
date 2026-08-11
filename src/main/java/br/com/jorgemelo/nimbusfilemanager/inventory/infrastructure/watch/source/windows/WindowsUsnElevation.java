@@ -54,8 +54,11 @@ public final class WindowsUsnElevation {
 
 		boolean enabled = UsnElevation.enabled(System.getProperty(UsnElevation.ENABLED_PROPERTY));
 
+		// Handed over rather than called: the volume question is the only step here
+		// that touches kernel32, and the decision it belongs to is the one that knows
+		// whether this is Windows at all.
 		if (!UsnElevation.shouldRelaunch(enabled, System.getProperty("os.name"), launcher,
-				UsnElevation.attempted(arguments), canReadSystemVolume())) {
+				UsnElevation.attempted(arguments), WindowsUsnElevation::canReadSystemVolume)) {
 			return false;
 		}
 
