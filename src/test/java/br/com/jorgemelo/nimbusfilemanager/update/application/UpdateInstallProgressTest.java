@@ -84,7 +84,6 @@ class UpdateInstallProgressTest {
 		progress.verifying();
 
 		Assertions.assertThat(progress.snapshot().percent()).isNegative();
-		Assertions.assertThat(progress.snapshot().etaSeconds()).isNegative();
 	}
 
 	/**

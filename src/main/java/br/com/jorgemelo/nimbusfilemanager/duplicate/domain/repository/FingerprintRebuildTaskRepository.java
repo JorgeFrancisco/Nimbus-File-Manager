@@ -105,7 +105,7 @@ public interface FingerprintRebuildTaskRepository
 	 * has since lost sight of is not one to point ffmpeg at.
 	 */
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto(m.id, l.currentPath)
+			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto(m.id, l.currentPath, m.contentRevision)
 			FROM FingerprintRebuildTask t
 			JOIN CatalogFile m ON m.id = t.catalogFileId
 			JOIN m.location l
@@ -126,7 +126,7 @@ public interface FingerprintRebuildTaskRepository
 	 * not.
 	 */
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo(m.id, l.currentPath, v.durationSeconds)
+			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo(m.id, l.currentPath, v.durationSeconds, m.contentRevision)
 			FROM FingerprintRebuildTask t
 			JOIN CatalogFile m ON m.id = t.catalogFileId
 			JOIN m.location l

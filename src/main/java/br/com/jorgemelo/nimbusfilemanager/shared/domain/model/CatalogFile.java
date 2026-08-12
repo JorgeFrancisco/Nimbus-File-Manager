@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.model;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -50,21 +50,31 @@ public class CatalogFile {
 	 * Optimistic-lock version. CatalogFile is updated by concurrent, non-serialized
 	 * flows (inventory watcher, metadata rebuild, organization, rename detection) -
 	 * none share a global lock - so a lost update is a real risk. Bulk updates
-	 * (e.g. markMissingByIds) bump this column explicitly so already-loaded
+	 * (e.g. mark_catalog_files_missing) bump this column explicitly so already-loaded
 	 * entities become stale instead of clobbering the change.
 	 */
 	@Version
 	@Column(name = "version", nullable = false)
 	private Long version;
 
-	@Column(name = "public_id", nullable = false, unique = true, updatable = false)
-	private UUID publicId;
+	/**
+	 * Which generation of the bytes everything derived from this file was
+	 * computed from.
+	 *
+	 * <p>
+	 * Not {@link #version}, which is the optimistic lock and moves on every write
+	 * including a rename, and not {@code analysisVersion}, which is about the
+	 * algorithm and stays right across an edit. It advances on one thing: a
+	 * digest that disagrees with the one held. Learning a first digest does not
+	 * move it - nothing was proved to have happened - and neither does a change
+	 * of address.
+	 */
+	@Builder.Default
+	@Column(name = "content_revision", nullable = false)
+	private Long contentRevision = 1L;
 
-	@Column(name = "file_key", nullable = false, unique = true, length = 500)
-	private String fileKey;
-
-	@Column(name = "file_name", nullable = false, length = 500)
-	private String fileName;
+	@Column(name = "catalog_file_public_id", nullable = false, unique = true, updatable = false)
+	private UUID catalogFilePublicId;
 
 	@Column(nullable = false, length = 50)
 	private String extension;
@@ -75,20 +85,17 @@ public class CatalogFile {
 	@Column(name = "sha256", length = 64)
 	private String sha256;
 
-	@Column(name = "md5", length = 32)
-	private String md5;
-
 	@Column(name = "mime_type", length = 100)
 	private String mimeType;
 
 	@Column(name = "created_at")
-	private LocalDateTime createdAt;
+	private Instant createdAt;
 
 	@Column(name = "modified_at", nullable = false)
-	private LocalDateTime modifiedAt;
+	private Instant modifiedAt;
 
 	@Column(name = "imported_at", nullable = false)
-	private LocalDateTime importedAt;
+	private Instant importedAt;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "file_type", nullable = false, length = 30)
@@ -105,26 +112,39 @@ public class CatalogFile {
 
 	/**
 	 * When {@link #lifecycleStatus} last changed. Stamped only on a real transition
-	 * (see the {@code mark*} methods and the bulk {@code markMissingByIds}), so it
+	 * (see the {@code mark*} methods and the bulk lifecycle door), so it
 	 * anchors the retention window the catalog purge uses to age MISSING records -
 	 * a file that stays MISSING across successive reconciles keeps its original
 	 * timestamp instead of having the clock reset on every pass.
 	 */
 	@Column(name = "lifecycle_changed_at")
-	private LocalDateTime lifecycleChangedAt;
+	private Instant lifecycleChangedAt;
 
 	@Column(name = "last_analysis")
-	private LocalDateTime lastAnalysis;
+	private Instant lastAnalysis;
 
 	@Column(name = "analysis_version", length = 50)
 	private String analysisVersion;
 
 	/*
-	 * The file's placement on disk. 1:1 (catalog_file.file_key is UNIQUE and is the
-	 * path itself), so a single CatalogFileLocation, not a collection - the DB now
-	 * enforces one placement per file. Renamed from the former "locations" list.
+	 * Where the file is now. One placement per file, enforced by a unique constraint
+	 * on catalog_file_id rather than by the path being the identity - which is the
+	 * whole point of the split: two files may legitimately name one path when only
+	 * one of them is actually there.
+	 *
+	 * REMOVE and nothing else. Saving a file must not be a way to write where it
+	 * is: an aggregate read before a move still names the old path, and a cascade
+	 * that carried it would put the move back - written to disk, recorded as a
+	 * fact, and then undone in the catalog. Placement is written by the door that
+	 * owns it, and the first one is written explicitly by the pass that catalogues
+	 * the file.
+	 *
+	 * REMOVE stays because deletion is the aggregate's: a file leaving takes its
+	 * placement with it. The foreign key says the same, and both are
+	 * needed - without the cascade the placement lingers in the session pointing at
+	 * a row that is going, and the flush refuses it.
 	 */
-	@OneToOne(mappedBy = "catalogFile", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+	@OneToOne(mappedBy = "catalogFile", cascade = CascadeType.REMOVE, fetch = FetchType.LAZY)
 	@ToString.Exclude
 	private CatalogFileLocation location;
 
@@ -153,12 +173,12 @@ public class CatalogFile {
 
 	@PrePersist
 	void prePersist() {
-		if (publicId == null) {
-			publicId = UuidV7.generate();
+		if (catalogFilePublicId == null) {
+			catalogFilePublicId = UuidV7.generate();
 		}
 
 		if (importedAt == null) {
-			importedAt = LocalDateTime.now(ClockHolder.clock());
+			importedAt = Instant.now(ClockHolder.clock());
 		}
 
 		if (lifecycleStatus == null) {
@@ -188,22 +208,7 @@ public class CatalogFile {
 		if (this.lifecycleStatus != LifecycleStatus.ACTIVE) {
 			this.lifecycleStatus = LifecycleStatus.ACTIVE;
 
-			this.lifecycleChangedAt = LocalDateTime.now(ClockHolder.clock());
-		}
-	}
-
-	/**
-	 * Mark as MISSING (absent from disk), preserving the DELETED invariant: a
-	 * DELETED file is never downgraded to MISSING. Only a real ACTIVE -&gt; MISSING
-	 * transition stamps {@link #lifecycleChangedAt}; re-confirming an
-	 * already-MISSING file keeps its original timestamp so the retention clock does
-	 * not reset.
-	 */
-	public void markMissing() {
-		if (this.lifecycleStatus == LifecycleStatus.ACTIVE) {
-			this.lifecycleStatus = LifecycleStatus.MISSING;
-
-			this.lifecycleChangedAt = LocalDateTime.now(ClockHolder.clock());
+			this.lifecycleChangedAt = Instant.now(ClockHolder.clock());
 		}
 	}
 
@@ -212,7 +217,7 @@ public class CatalogFile {
 		if (this.lifecycleStatus != LifecycleStatus.DELETED) {
 			this.lifecycleStatus = LifecycleStatus.DELETED;
 
-			this.lifecycleChangedAt = LocalDateTime.now(ClockHolder.clock());
+			this.lifecycleChangedAt = Instant.now(ClockHolder.clock());
 		}
 	}
 }

@@ -172,4 +172,62 @@ class GeoDatasetProgressTest {
 
 		Assertions.assertThat(progress.recordsImported()).isZero();
 	}
+
+	/**
+	 * The run that found nothing to do is a shorter operation, not the nine-stage
+	 * pipeline running fast - so it reports its own total instead of marking six
+	 * stages done that never happened.
+	 *
+	 * <p>
+	 * Three acquisitions really did take place: the source was asked about every
+	 * level and answered "unchanged". Those are counted. The imports, the
+	 * territories and the publication are not, and the denominator shrinks to match
+	 * - the one place where it may, because drawing a full bar over work that never
+	 * ran is exactly what the fixed denominator exists to prevent.
+	 */
+	@Test
+	void anUpToDateRunCountsOnlyTheStagesThatHappened() {
+		progress.attach(ownership);
+
+		progress.alreadyAvailable(AdminBoundaryKind.COUNTRY);
+		progress.stageFinished();
+		progress.alreadyAvailable(AdminBoundaryKind.STATE);
+		progress.stageFinished();
+		progress.alreadyAvailable(AdminBoundaryKind.MUNICIPALITY);
+		progress.stageFinished();
+
+		progress.alreadyUpToDate();
+
+		// Three acquisitions and the conclusion: four of four, and no import or
+		// publication among them.
+		verify(executionProgressService).updateTotal(ownership, 4);
+
+		Assertions.assertThat(progress.stagesDone()).isEqualTo(4);
+		Assertions.assertThat(progress.recordsImported()).as("nothing was imported").isZero();
+	}
+
+	/** And it says so with its own sentence, in the phase where it happens. */
+	@Test
+	void anUpToDateRunAnnouncesThatNothingNeededImporting() {
+		progress.attach(ownership);
+		progress.alreadyUpToDate();
+
+		ArgumentCaptor<ExecutionMessage> message = ArgumentCaptor.forClass(ExecutionMessage.class);
+
+		verify(executionProgressService).updatePhase(eq(ownership), eq(ExecutionPhase.PROCESSING),
+				eq(ExecutionStepType.PROGRESS_UPDATED), message.capture());
+
+		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.geodata.alreadyUpToDate");
+
+		// No second bar: there is no file being read to measure against.
+		verify(executionProgressService).clearsCurrentItem(ownership);
+	}
+
+	/** Attached to nothing, it reports nowhere rather than failing. */
+	@Test
+	void anUpToDateRunOutsideAnExecutionReportsNowhere() {
+		progress.alreadyUpToDate();
+
+		verifyNoInteractions(executionProgressService);
+	}
 }

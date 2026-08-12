@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
 /**
@@ -42,6 +43,7 @@ public class ExecutionLabels extends LocalizedComponent {
 		case FINGERPRINT_PHOTO -> message("backend.execution.type.FINGERPRINT_PHOTO");
 		case FINGERPRINT_VIDEO -> message("backend.execution.type.FINGERPRINT_VIDEO");
 		case METADATA_REBUILD -> message("backend.execution.type.METADATA_REBUILD");
+		case CONTENT_VERIFICATION -> message("backend.execution.type.CONTENT_VERIFICATION");
 		case LOCATION_REBUILD -> message("backend.execution.type.LOCATION_REBUILD");
 		case GEO_DATASET_UPDATE -> message("backend.execution.type.GEO_DATASET_UPDATE");
 		};
@@ -72,6 +74,45 @@ public class ExecutionLabels extends LocalizedComponent {
 		};
 	}
 
+	private String category(ExternalToolCategory category) {
+		return switch (category) {
+		case FFMPEG_PHOTO_HASH -> message("enum.externalToolCategory.FFMPEG_PHOTO_HASH");
+		case FFMPEG_VIDEO_FRAME -> message("enum.externalToolCategory.FFMPEG_VIDEO_FRAME");
+		case FFPROBE_VIDEO -> message("enum.externalToolCategory.FFPROBE_VIDEO");
+		case FFMPEG_TRANSCODE -> message("enum.externalToolCategory.FFMPEG_TRANSCODE");
+		};
+	}
+
+	/**
+	 * What the activity banner says about everything other than the execution it
+	 * is drawing - {@code null} when that one is all there is.
+	 *
+	 * <p>
+	 * Two numbers rather than one, because they are different facts and the
+	 * banner used to add them up and call the total "in progress": a queue of five
+	 * behind one inventory read as six inventories running at once, which is not
+	 * something this application can even do. Composed here rather than in the
+	 * page because which of the two an execution is in is a question about the
+	 * domain, and the page is not allowed to answer it.
+	 */
+	public String othersInFlight(int running, int queued) {
+		if (running <= 0 && queued <= 0) {
+			return null;
+		}
+
+		if (running <= 0) {
+			return message("backend.execution.activity.othersQueued", queued);
+		}
+
+		if (queued <= 0) {
+			return message("backend.execution.activity.othersRunning", running);
+		}
+
+		return message("backend.execution.activity.othersJoined",
+				message("backend.execution.activity.othersRunning", running),
+				message("backend.execution.activity.othersQueued", queued));
+	}
+
 	/** Every type label by enum, for views that render raw telemetry rows. */
 	public Map<ExecutionType, String> types() {
 		Map<ExecutionType, String> labels = new EnumMap<>(ExecutionType.class);
@@ -89,6 +130,21 @@ public class ExecutionLabels extends LocalizedComponent {
 
 		for (ExecutionStatus status : ExecutionStatus.values()) {
 			labels.put(status, status(status));
+		}
+
+		return labels;
+	}
+
+	/**
+	 * Every external-tool label by enum, so the per-category costs on the
+	 * Statistics screen are named by the backend rather than translated in the
+	 * page.
+	 */
+	public Map<ExternalToolCategory, String> externalToolCategories() {
+		Map<ExternalToolCategory, String> labels = new EnumMap<>(ExternalToolCategory.class);
+
+		for (ExternalToolCategory category : ExternalToolCategory.values()) {
+			labels.put(category, category(category));
 		}
 
 		return labels;

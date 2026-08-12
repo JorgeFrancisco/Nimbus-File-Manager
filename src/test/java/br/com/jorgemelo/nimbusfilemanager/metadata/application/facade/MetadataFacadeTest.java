@@ -16,9 +16,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 @ExtendWith(MockitoExtension.class)
 class MetadataFacadeTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	@TempDir
 	Path tempDir;
@@ -32,19 +37,19 @@ class MetadataFacadeTest {
 
 		MetadataOptions options = new MetadataOptions(true, false);
 
-		MetadataResult expected = MetadataResult.builder().fileName("photo.jpg").build();
+		MetadataResult expected = MetadataResult.builder().build();
 
-		when(metadataExtractor.extract(file, options)).thenReturn(expected);
+		when(metadataExtractor.extract(file, options, metrics)).thenReturn(expected);
 
-		MetadataResult result = new MetadataFacade(metadataExtractor).extract(file, options);
+		MetadataResult result = new MetadataFacade(metadataExtractor).extract(file, options, metrics);
 
 		Assertions.assertThat(result).isSameAs(expected);
 	}
 
 	@Test
 	void extractShouldRejectInvalidFileBeforeDelegating() {
-		assertThatIllegalArgumentException()
-				.isThrownBy(() -> new MetadataFacade(metadataExtractor).extract(tempDir.resolve("missing.jpg"), null))
+		assertThatIllegalArgumentException().isThrownBy(
+				() -> new MetadataFacade(metadataExtractor).extract(tempDir.resolve("missing.jpg"), null, metrics))
 				.withMessageContaining("File does not exist");
 	}
 }

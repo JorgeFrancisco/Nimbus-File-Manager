@@ -181,7 +181,7 @@ class SimilarityPublisher {
 
 		if (retired == 0) {
 			log.info("Similarity grouping {} was derived from an answer that is no longer current, so it was not"
-					+ " published; the analysis that replaced it stands", grouping.getPublicId());
+					+ " published; the analysis that replaced it stands", grouping.getSimilarityGroupingPublicId());
 
 			return false;
 		}
@@ -205,7 +205,8 @@ class SimilarityPublisher {
 		}
 
 		log.info("Similarity grouping {} was not published: the execution that produced it is no longer the current"
-				+ " taking of its row, and the answer that replaced it stands", grouping.getPublicId());
+				+ " taking of its row, and the answer that replaced it stands",
+				grouping.getSimilarityGroupingPublicId());
 
 		return false;
 	}
@@ -214,7 +215,7 @@ class SimilarityPublisher {
 		if (groupingRepository.findActive(grouping.getMediaType(), grouping.getAlgorithmId(),
 				grouping.getGroupingVersion(), grouping.getParametersDigest()).isPresent()) {
 			log.info("Similarity grouping {} was derived from a family that had no answer, and one was published"
-					+ " meanwhile, so it was not published", grouping.getPublicId());
+					+ " meanwhile, so it was not published", grouping.getSimilarityGroupingPublicId());
 
 			return false;
 		}
@@ -228,14 +229,15 @@ class SimilarityPublisher {
 		if (published == 0) {
 			// Not BUILDING any more: something else already decided this grouping's
 			// fate - a reclaim cleaned it up, or it was published twice.
-			log.warn("Similarity grouping {} was no longer building and was not published", grouping.getPublicId());
+			log.warn("Similarity grouping {} was no longer building and was not published",
+					grouping.getSimilarityGroupingPublicId());
 
 			return false;
 		}
 
 		log.info("Published similarity grouping {} for {} ({} groups, {} of {} files analysed), retiring {} previous",
-				grouping.getPublicId(), grouping.getMediaType(), grouping.getGroupCount(), grouping.getAnalyzedCount(),
-				grouping.getEligibleCount(), retired);
+				grouping.getSimilarityGroupingPublicId(), grouping.getMediaType(), grouping.getGroupCount(),
+				grouping.getAnalyzedCount(), grouping.getEligibleCount(), retired);
 
 		return true;
 	}

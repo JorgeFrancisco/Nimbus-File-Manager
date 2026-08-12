@@ -6,6 +6,7 @@ import java.util.List;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFailureReason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * The media-specific half of a fingerprint backlog, plugged into the neutral
@@ -55,8 +56,14 @@ interface FingerprintProducer<P, R> {
 
 	long catalogFileId(P pending);
 
-	/** Heavy computation; runs off-transaction on the processing pool. */
-	R compute(P pending);
+	/**
+	 * Heavy computation; runs off-transaction on the processing pool.
+	 *
+	 * @param metrics the drain's own accumulator. Photo and video drain at the same
+	 * time through one pool and one gate, so what this item costs is counted where
+	 * that drain is counting - never in a place both can reach
+	 */
+	R compute(P pending, ProcessingMetrics metrics);
 
 	/** Persists the fingerprint row(s); runs inside the batch transaction. */
 	void store(P pending, R result);

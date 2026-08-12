@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
@@ -41,7 +42,8 @@ class InventoryLauncherServiceTest {
 	private final ExecutionEnqueueService executionEnqueueService = mock(ExecutionEnqueueService.class);
 
 	private final InventoryLauncherService service = new InventoryLauncherService(executionEnqueueService,
-			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()), "6.0.0");
+			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels(), Progress.reader(),
+					Progress.estimator()), "6.0.0");
 
 	@Test
 	void queuesTheInventoryInsteadOfRunningIt(@TempDir Path folder) {

@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 
@@ -43,7 +44,7 @@ public class ExecutionRetentionService extends LocalizedComponent {
 
 		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
 
-		return executionRepository.deleteFinishedBefore(cutoff);
+		return executionRepository.deleteFinishedBefore(cutoff, QuarantineConstants.QUARANTINED_REASONS);
 	}
 
 	/**
@@ -59,7 +60,7 @@ public class ExecutionRetentionService extends LocalizedComponent {
 		}
 
 		if (keep == 0) {
-			return executionRepository.deleteAllFinished();
+			return executionRepository.deleteAllFinished(QuarantineConstants.QUARANTINED_REASONS);
 		}
 
 		List<Long> keepIds = executionRepository.findFinishedIdsByStartedAtDesc(PageRequest.of(0, keep));
@@ -68,6 +69,6 @@ public class ExecutionRetentionService extends LocalizedComponent {
 			return 0;
 		}
 
-		return executionRepository.deleteFinishedNotIn(keepIds);
+		return executionRepository.deleteFinishedNotIn(keepIds, QuarantineConstants.QUARANTINED_REASONS);
 	}
 }

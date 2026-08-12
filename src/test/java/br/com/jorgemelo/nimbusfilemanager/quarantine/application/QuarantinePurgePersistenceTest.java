@@ -13,6 +13,7 @@ import org.mockito.ArgumentMatchers;
 
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.MovementPurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
@@ -67,7 +68,8 @@ class QuarantinePurgePersistenceTest {
 		CatalogFile catalogFile = mock(CatalogFile.class);
 
 		when(catalogFile.isDeleted()).thenReturn(true);
-		when(movementRepository.countByCatalogFileId(9L)).thenReturn(0L);
+		when(movementRepository.countByCatalogFileIdAndStatusAndReasonIn(9L, MovementStatus.MOVED,
+				QuarantineConstants.QUARANTINED_REASONS)).thenReturn(0L);
 		when(catalogFileRepository.findById(9L)).thenReturn(Optional.of(catalogFile));
 
 		boolean deleted = persistence.deleteCatalogFileIfOrphan(9L);
@@ -79,7 +81,8 @@ class QuarantinePurgePersistenceTest {
 
 	@Test
 	void keepsCatalogFileStillReferencedByAnotherMovement() {
-		when(movementRepository.countByCatalogFileId(9L)).thenReturn(2L);
+		when(movementRepository.countByCatalogFileIdAndStatusAndReasonIn(9L, MovementStatus.MOVED,
+				QuarantineConstants.QUARANTINED_REASONS)).thenReturn(2L);
 
 		boolean deleted = persistence.deleteCatalogFileIfOrphan(9L);
 
@@ -93,7 +96,8 @@ class QuarantinePurgePersistenceTest {
 		CatalogFile catalogFile = mock(CatalogFile.class);
 
 		when(catalogFile.isDeleted()).thenReturn(false);
-		when(movementRepository.countByCatalogFileId(9L)).thenReturn(0L);
+		when(movementRepository.countByCatalogFileIdAndStatusAndReasonIn(9L, MovementStatus.MOVED,
+				QuarantineConstants.QUARANTINED_REASONS)).thenReturn(0L);
 		when(catalogFileRepository.findById(9L)).thenReturn(Optional.of(catalogFile));
 
 		boolean deleted = persistence.deleteCatalogFileIfOrphan(9L);

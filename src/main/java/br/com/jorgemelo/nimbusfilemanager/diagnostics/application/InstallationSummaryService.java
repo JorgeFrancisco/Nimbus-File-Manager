@@ -8,6 +8,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
@@ -29,16 +30,19 @@ public class InstallationSummaryService {
 	private final ObjectProvider<BuildProperties> buildProperties;
 	private final ExternalToolInstaller externalToolInstaller;
 	private final OfflineGeoDataset offlineGeoDataset;
+	private final GeoRunReader geoRunReader;
 	private final CatalogFileRepository catalogFileRepository;
 	private final ExecutionRepository executionRepository;
 	private final Clock clock;
 
 	public InstallationSummaryService(ObjectProvider<BuildProperties> buildProperties,
 			ExternalToolInstaller externalToolInstaller, OfflineGeoDataset offlineGeoDataset,
-			CatalogFileRepository catalogFileRepository, ExecutionRepository executionRepository, Clock clock) {
+			GeoRunReader geoRunReader, CatalogFileRepository catalogFileRepository,
+			ExecutionRepository executionRepository, Clock clock) {
 		this.buildProperties = buildProperties;
 		this.externalToolInstaller = externalToolInstaller;
 		this.offlineGeoDataset = offlineGeoDataset;
+		this.geoRunReader = geoRunReader;
 		this.catalogFileRepository = catalogFileRepository;
 		this.executionRepository = executionRepository;
 		this.clock = clock;
@@ -85,7 +89,14 @@ public class InstallationSummaryService {
 		line(text, "Available", Boolean.toString(geo.available()));
 		line(text, "Version", geo.version() == null ? UNKNOWN : geo.version());
 		line(text, "Imported boundaries", Long.toString(geo.importedRecords()));
-		line(text, "Last error", geo.lastError() == null ? "none" : geo.lastError());
+		line(text, "Imported at", geo.importedAt() == null ? UNKNOWN : geo.importedAt().toString());
+		// Both dates, because they answer different questions: one says how old the
+		// installed boundaries are, the other whether anything has looked at the
+		// source since. A failure belongs to the run that failed, so it is read from
+		// there rather than from the dataset.
+		line(text, "Verified at", geoRunReader.lastVerifiedAt() == null ? UNKNOWN
+				: geoRunReader.lastVerifiedAt().toString());
+		line(text, "Last error", geoRunReader.importError() == null ? "none" : geoRunReader.importError());
 	}
 
 	/**

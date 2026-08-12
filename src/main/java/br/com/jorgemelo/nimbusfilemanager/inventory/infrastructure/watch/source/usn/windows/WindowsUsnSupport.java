@@ -25,7 +25,8 @@ public final class WindowsUsnSupport {
 	}
 
 	/** @return the catch-up result, or empty when the journal cannot be opened. */
-	public static Optional<UsnCatchUpResult> tryCatchUp(Path root, UsnCursorStore cursorStore, int bufferBytes) {
+	public static Optional<UsnCatchUpResult> tryCatchUp(Path root, UsnCursorStore cursorStore, int bufferBytes,
+			String volumeScope) {
 		Path normalized = root.toAbsolutePath().normalize();
 
 		String driveLetter = driveLetterOf(normalized);
@@ -41,7 +42,7 @@ public final class WindowsUsnSupport {
 				FfmUsnPathResolver resolver = new FfmUsnPathResolver(volume.nativeHandle());
 
 				return Optional.of(WindowsUsnCatchUp.catchUp(normalized, volume, resolver, cursorStore,
-						normalized.toString(), bufferBytes));
+						normalized.toString(), volumeScope, bufferBytes));
 			} finally {
 				volume.close();
 			}

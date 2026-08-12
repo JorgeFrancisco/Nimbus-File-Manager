@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,34 +31,15 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection.CatalogExportRow(
-				mf.id, mf.publicId, mf.fileKey, mf.fileName, mf.extension, mf.sizeBytes, mf.sha256, mf.md5,
-				mf.mimeType, CAST(mf.fileType AS string), CAST(mf.lifecycleStatus AS string),
-				mf.createdAt, mf.modifiedAt, mf.importedAt, loc.currentPath, loc.originalPath)
+				mf.id, mf.catalogFilePublicId, catalogFileName(loc.currentPath, CAST(loc.pathFlavor AS string)),
+				mf.extension, mf.sizeBytes, mf.sha256, mf.mimeType, CAST(mf.fileType AS string),
+				CAST(mf.lifecycleStatus AS string), mf.createdAt, mf.modifiedAt, mf.importedAt, loc.currentPath)
 			FROM CatalogFile mf
 			LEFT JOIN mf.location loc
 			WHERE mf.id > :lastId
 			ORDER BY mf.id
 			""")
 	List<CatalogExportRow> findCatalogExportRows(@Param("lastId") Long lastId, Pageable pageable);
-
-	/**
-	 * Marks the given files MISSING (absent from disk) and stamps
-	 * {@code lifecycle_changed_at} with {@code changedAt}. Only real ACTIVE -&gt;
-	 * MISSING transitions are touched: a DELETED file is never downgraded
-	 * (invariant preserved) and an already-MISSING file keeps its original
-	 * timestamp, so the retention clock the catalog purge uses does not reset on
-	 * every reconcile pass.
-	 */
-	@Modifying(clearAutomatically = true)
-	@Query("""
-			update CatalogFile mf
-			   set mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING,
-			       mf.lifecycleChangedAt = :changedAt,
-			       mf.version = mf.version + 1
-			 where inArray(mf.id, :ids)
-			   and mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			""")
-	int markMissingByIds(@Param("ids") Long[] ids, @Param("changedAt") LocalDateTime changedAt);
 
 	/**
 	 * Permanently removes {@code catalog_file} rows that have been MISSING since
@@ -75,7 +57,7 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			 where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING
 			   and mf.lifecycleChangedAt < :cutoff
 			""")
-	int deleteMissingBefore(@Param("cutoff") LocalDateTime cutoff);
+	int deleteMissingBefore(@Param("cutoff") Instant cutoff);
 
 	/**
 	 * Bulk-removes every {@code catalog_file} placed at or under a library root,
@@ -91,41 +73,14 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	@Query(value = """
 			DELETE FROM catalog_file mf
 			WHERE mf.id IN (
-			    SELECT DISTINCT ml.catalog_file_id
-			    FROM catalog_file_location ml
-			    WHERE lower(ml.current_path) = lower(:root)
-			       OR lower(left(ml.current_path, length(:prefix))) = lower(:prefix)
-			       OR lower(ml.inventory_path) = lower(:root)
+			    SELECT l.catalog_file_id
+			    FROM catalog_file_location l
+			    WHERE l.path_flavor = :flavor
+			      AND (l.path_key = canonicalize_catalog_path(:root, :flavor)
+			           OR starts_with(l.path_key, canonicalize_catalog_path(:root, :flavor) || '/'))
 			)
 			""", nativeQuery = true)
-	int deleteWithinLibrary(@Param("root") String root, @Param("prefix") String prefix);
-
-	/**
-	 * Rewrites the leading folder of every catalogued file under it, which is what
-	 * a folder rename does to the collection in one operating-system call.
-	 *
-	 * <p>
-	 * Prefix-matched with {@code left(...)} against the prefix's own length rather
-	 * than with {@code LIKE}: a Windows path is full of backslashes, which is the
-	 * escape character of {@code LIKE}, and file names are full of {@code _} and
-	 * {@code %}, which are its wildcards. Comparing a fixed-length head is the
-	 * same question without any of that.
-	 *
-	 * <p>
-	 * The version is bumped by hand because a bulk statement bypasses the
-	 * optimistic locking Hibernate would have applied row by row - the same reason
-	 * {@code markMissingByIds} does it.
-	 *
-	 * @return how many catalogued files now live somewhere else
-	 */
-	@Modifying(clearAutomatically = true)
-	@Query(value = """
-			UPDATE catalog_file
-			   SET file_key = :newPrefix || substr(file_key, length(:oldPrefix) + 1),
-			       version = version + 1
-			 WHERE lower(left(file_key, length(:oldPrefix))) = lower(:oldPrefix)
-			""", nativeQuery = true)
-	int repointFileKeys(@Param("oldPrefix") String oldPrefix, @Param("newPrefix") String newPrefix);
+	int deleteWithinLibrary(@Param("root") String root, @Param("flavor") String flavor);
 
 	/**
 	 * Whether anything at all is past the retention window - the cheap question the
@@ -134,20 +89,15 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 * the purge runs.
 	 */
 	boolean existsByLifecycleStatusAndLifecycleChangedAtBefore(LifecycleStatus lifecycleStatus,
-			LocalDateTime lifecycleChangedAt);
-
-	Optional<CatalogFile> findByFileKey(String fileKey);
-
-	@EntityGraph(attributePaths = { "location", "metadata", "photo", "video" })
-	@Query("select mf from CatalogFile mf where mf.fileKey = :fileKey")
-	Optional<CatalogFile> findByFileKeyWithDetails(@Param("fileKey") String fileKey);
+			Instant lifecycleChangedAt);
 
 	/**
-	 * Batched existence check: lets callers replace N individual
-	 * {@link #findByFileKey} calls (one SELECT per file during an inventory scan)
-	 * with a single {@code WHERE file_key IN (...)} query per batch of files.
+	 * The files a batch is about to write, with everything the mapper touches
+	 * loaded in the same read - the identities having been decided by
+	 * {@code CatalogPathMatcher} beforehand, from the paths.
 	 */
-	List<CatalogFile> findByFileKeyIn(List<String> fileKeys);
+	@EntityGraph(attributePaths = { "location", "metadata", "photo", "video" })
+	List<CatalogFile> findWithDetailsByIdIn(Collection<Long> ids);
 
 	/**
 	 * Resolves the given public ids to their media files with the location eagerly
@@ -166,37 +116,18 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 */
 	@Query("""
 			select mf from CatalogFile mf
-			where inArray(mf.publicId, :publicIds)
+			left join fetch mf.location
+			where inArray(mf.catalogFilePublicId, :publicIds)
 			""")
-	List<CatalogFile> findByPublicIdIn(@Param("publicIds") UUID[] publicIds);
+	List<CatalogFile> findByCatalogFilePublicIdIn(@Param("publicIds") UUID[] publicIds);
 
-	/**
-	 * Lightweight existence check that returns only the {@code fileKey}s already
-	 * present and active, not whole entities. Used by the parallel inventory to
-	 * identify cached files in a short read transaction (so the connection is
-	 * released) before the heavy extraction runs off any transaction.
-	 *
-	 * <p>
-	 * Active on purpose: a soft-deleted row is not a cache hit. Counting it as one
-	 * meant the persistence step had to load every entity of every batch just to
-	 * find the few that needed reviving - 33 seconds of a 47 second inventory that
-	 * wrote nothing at all.
-	 */
+	/** The one file that identity names, for a caller holding a public id. */
 	@Query("""
-			select mf.fileKey from CatalogFile mf
-			where mf.fileKey in :fileKeys
-			  and mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
+			select mf
+			from CatalogFile mf
+			where mf.catalogFilePublicId = :publicId
 			""")
-	List<String> findExistingFileKeys(@Param("fileKeys") List<String> fileKeys);
-
-	/**
-	 * Batched variant of {@link #findByFileKeyWithDetails}, used when force
-	 * re-analysis needs the full entity graph (location/metadata/photo/video) for
-	 * every already-known file in a batch.
-	 */
-	@EntityGraph(attributePaths = { "location", "metadata", "photo", "video" })
-	@Query("select mf from CatalogFile mf where mf.fileKey in :fileKeys")
-	List<CatalogFile> findByFileKeyInWithDetails(@Param("fileKeys") List<String> fileKeys);
+	Optional<CatalogFile> findByCatalogFilePublicId(@Param("publicId") UUID publicId);
 
 	@Query("""
 			select mf.id
@@ -223,7 +154,7 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			""")
 	List<Long> findIdsForMetadataRebuild(@Param("sourcePath") String sourcePath,
 			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
-			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") LocalDateTime notAnalysedSince,
+			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") Instant notAnalysedSince,
 			@Param("lastId") Long lastId, Pageable pageable);
 
 	/**
@@ -254,7 +185,7 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			""")
 	long countForMetadataRebuild(@Param("sourcePath") String sourcePath,
 			@Param("descendantPattern") String descendantPattern, @Param("captureDateNull") Boolean captureDateNull,
-			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") LocalDateTime notAnalysedSince);
+			@Param("dateSource") DateSource dateSource, @Param("notAnalysedSince") Instant notAnalysedSince);
 
 	@Query("""
 			select distinct mf
@@ -314,4 +245,23 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			""")
 	CatalogSignatureProjection signatureUnder(@Param("folder") String folder,
 			@Param("descendantPattern") String descendantPattern);
+
+	/**
+	 * Of these digests, the ones more than one catalogued file holds.
+	 *
+	 * <p>
+	 * Asked when bytes are the only evidence available for where a file went. A
+	 * digest only one file has can name that file; a digest two of them share
+	 * names neither, and a photo library is full of exact duplicates - the same
+	 * picture imported twice, a copy kept in a second folder. This is what stops
+	 * the weakest evidence in the catalog from merging two of them into one.
+	 */
+	@Query(value = """
+			SELECT m.sha256
+			FROM catalog_file m
+			WHERE m.lifecycle_status = 'ACTIVE' AND m.sha256 = ANY(CAST(:digests AS text[]))
+			GROUP BY m.sha256
+			HAVING count(*) > 1
+			""", nativeQuery = true)
+	List<String> digestsHeldMoreThanOnce(@Param("digests") String[] digests);
 }

@@ -10,6 +10,7 @@ import java.nio.file.attribute.FileTime;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +54,8 @@ public class SecureLibraryFiles implements LibraryFileMutations {
 	 * this port exists to prevent.
 	 */
 	@Override
-	public void move(Path source, Path target, boolean overwrite, Long executionId) throws IOException {
-		secureFileMove.move(source, target, overwrite, executionId);
+	public MoveBaseline move(Path source, Path target, boolean overwrite, Long executionId) throws IOException {
+		return secureFileMove.move(source, target, overwrite, executionId);
 	}
 
 	@Override
@@ -62,12 +63,16 @@ public class SecureLibraryFiles implements LibraryFileMutations {
 		return secureFileMove.rollback(from, to);
 	}
 
+	/**
+	 * One announcement for the folder and none for what is inside it. A directory
+	 * rename produces exactly one record on every source this product reads - the
+	 * descendants keep their entries and are never renamed - so announcing ten
+	 * thousand children would be ten thousand rows written to recognise a
+	 * notification that will never arrive.
+	 */
 	@Override
 	public void renameDirectory(Path source, Path target, Long executionId) throws IOException {
-		selfWrittenPathRegistry.announce(source, executionId);
-		selfWrittenPathRegistry.announce(target, executionId);
-
-		Files.move(source, target);
+		selfWrittenPathRegistry.move(executionId, () -> Files.move(source, target), source, target);
 	}
 
 	/**
@@ -79,8 +84,10 @@ public class SecureLibraryFiles implements LibraryFileMutations {
 	 */
 	@Override
 	public void deleteFile(Path path, Long executionId) throws IOException {
-		selfWrittenPathRegistry.announce(path, executionId);
+		selfWrittenPathRegistry.vacate(executionId, () -> deleteClearingReadOnly(path), path);
+	}
 
+	private void deleteClearingReadOnly(Path path) throws IOException {
 		try {
 			Files.delete(path);
 		} catch (AccessDeniedException _) {
@@ -98,9 +105,7 @@ public class SecureLibraryFiles implements LibraryFileMutations {
 	 */
 	@Override
 	public void deleteEmptyDirectory(Path path, Long executionId) throws IOException {
-		selfWrittenPathRegistry.announce(path, executionId);
-
-		Files.delete(path);
+		selfWrittenPathRegistry.vacate(executionId, () -> Files.delete(path), path);
 	}
 
 	@Override
@@ -109,10 +114,8 @@ public class SecureLibraryFiles implements LibraryFileMutations {
 			return;
 		}
 
-		selfWrittenPathRegistry.announce(path, executionId);
-
 		try {
-			Files.setLastModifiedTime(path, modifiedTime);
+			selfWrittenPathRegistry.occupy(executionId, () -> Files.setLastModifiedTime(path, modifiedTime), path);
 		} catch (IOException exception) {
 			log.debug("Could not carry the modified time over to {}", path, exception);
 		}

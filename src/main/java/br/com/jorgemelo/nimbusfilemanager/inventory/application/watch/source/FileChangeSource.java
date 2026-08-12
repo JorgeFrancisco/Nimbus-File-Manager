@@ -5,24 +5,31 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
 /**
  * A source of physical file-system change events for the monitored library
  * tree. The inventory watcher polls it every cycle and does not care how the
- * changes are detected - Java {@code WatchService} on most platforms, the NTFS
- * USN Change Journal on Windows.
+ * changes are detected - Java {@code WatchService} on most platforms,
+ * {@code ReadDirectoryChangesW} on Windows with a USN journal replay for the
+ * window the application was down.
+ *
+ * <p>
+ * What a source reports is a {@link FileSystemChange} and not a path, because
+ * the sources know more than a path and used to have to throw it away here.
+ * They do not all know the same things, so a source fills what it knows and
+ * leaves the rest null rather than guessing - see {@link FileSystemChange}.
  *
  * <p>
  * Contract expected by {@code InventoryWatchService}:
  * <ul>
- * <li>{@link #pollChangedFiles()} drains the changes seen since the previous
- * call and returns the affected physical files (created, modified, moved-in or
- * deleted). It must be non-blocking and DB-free.</li>
+ * <li>{@link #pollChanges()} drains the changes seen since the previous call.
+ * It must be non-blocking and DB-free.</li>
  * <li>{@link #takeOfflineBacklog()} hands over the changes the source recovered
  * from before it existed, so that whoever is about to walk the whole tree can
  * take responsibility for them. Optional: what nobody takes is reported by
- * {@link #pollChangedFiles()} like any other change.</li>
+ * {@link #pollChanges()} like any other change.</li>
  * <li>{@link #consumeRecoveryReason()} reports (and clears) why the source
  * cannot guarantee it saw every change since the last poll. When present, the
  * watcher forces an early full reconcile - this is the single fallback hook
@@ -38,10 +45,10 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryRe
 public interface FileChangeSource extends Closeable {
 
 	/**
-	 * Drains and returns the physical files changed since the previous call. Never
-	 * blocks; returns an empty list when nothing changed.
+	 * Drains and returns what changed since the previous call. Never blocks;
+	 * returns an empty list when nothing changed.
 	 */
-	List<Path> pollChangedFiles();
+	List<FileSystemChange> pollChanges();
 
 	/**
 	 * Drains and returns what the source recovered about the window before it
@@ -50,14 +57,14 @@ public interface FileChangeSource extends Closeable {
 	 * backlog is produced once, when the source is built.
 	 *
 	 * <p>
-	 * Separate from {@link #pollChangedFiles()} because the two answer different
+	 * Separate from {@link #pollChanges()} because the two answer different
 	 * questions. A live change is news to everybody. A backlog change is old news
 	 * that a full walk of the tree would find on its own, so the caller that is
 	 * about to run such a walk can say so and spare the library a second pass. It
 	 * is a hand-over, not a filter: the caller that takes the backlog owns it, and
 	 * nothing else will report it again.
 	 */
-	List<Path> takeOfflineBacklog();
+	List<FileSystemChange> takeOfflineBacklog();
 
 	/**
 	 * Why the source cannot guarantee it saw every change since the last poll, or

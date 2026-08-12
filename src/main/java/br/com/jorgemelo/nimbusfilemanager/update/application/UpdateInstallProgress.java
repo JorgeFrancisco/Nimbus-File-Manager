@@ -24,7 +24,6 @@ public class UpdateInstallProgress {
 
 	private volatile UpdatePhase phase = UpdatePhase.IDLE;
 	private volatile boolean running;
-	private volatile long stepStartedAtMillis;
 	private volatile long bytesTotal = -1;
 	private volatile String message;
 	private final AtomicLong bytesDone = new AtomicLong();
@@ -35,7 +34,6 @@ public class UpdateInstallProgress {
 		message = null;
 		bytesTotal = -1;
 		bytesDone.set(0);
-		stepStartedAtMillis = System.currentTimeMillis();
 	}
 
 	/**
@@ -46,7 +44,6 @@ public class UpdateInstallProgress {
 		phase = UpdatePhase.DOWNLOADING;
 		bytesTotal = totalBytes > 0 ? totalBytes : -1;
 		bytesDone.set(0);
-		stepStartedAtMillis = System.currentTimeMillis();
 	}
 
 	public void addDownloadedBytes(long bytes) {
@@ -77,14 +74,8 @@ public class UpdateInstallProgress {
 		long done = bytesDone.get();
 		long total = bytesTotal;
 
-		double percent = -1;
-		long etaSeconds = -1;
+		double percent = currentPhase == UpdatePhase.DOWNLOADING ? ProgressMath.percent(done, total) : -1;
 
-		if (currentPhase == UpdatePhase.DOWNLOADING) {
-			percent = ProgressMath.percent(done, total);
-			etaSeconds = ProgressMath.etaSeconds(System.currentTimeMillis() - stepStartedAtMillis, done, total);
-		}
-
-		return new UpdateInstallSnapshot(currentPhase, running, done, total, percent, etaSeconds, message);
+		return new UpdateInstallSnapshot(currentPhase, running, done, total, percent, message);
 	}
 }

@@ -190,7 +190,7 @@
 
 			<div th:if="${toolInstallRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="${toolInstallProgress.extracting()} ? #{settings.tools.extracting} : #{settings.tools.downloading}">Baixando</strong></div>
-				<p th:if="${toolInstallProgress.percent()>= 0}"><span th:text="#{settings.tools.progress(${#numbers.formatDecimal(toolInstallProgress.percent(), 1, 1, 'COMMA')})}"></span><span th:if="${toolInstallProgress.etaSeconds()>= 60}" th:text="#{settings.eta.minutes(${toolInstallProgress.etaSeconds() / 60})}"></span><span th:if="${toolInstallProgress.etaSeconds()>= 0 and toolInstallProgress.etaSeconds() < 60}" th:text="#{settings.eta.seconds(${toolInstallProgress.etaSeconds()})}"></span></p>
+				<p th:if="${toolInstallProgress.percent()>= 0}"><span th:text="#{settings.tools.progress(${#numbers.formatDecimal(toolInstallProgress.percent(), 1, 1, 'COMMA')})}"></span><span th:text="${toolInstallEta}"></span></p>
 				<progress th:if="${toolInstallProgress.bytesTotal()> 0}" th:value="${toolInstallProgress.bytesDone()}" th:max="${toolInstallProgress.bytesTotal()}"
 					th:aria-label="#{settings.tools.installRunning}"></progress>
 				<progress th:unless="${toolInstallProgress.bytesTotal()> 0}" th:aria-label="#{settings.tools.installRunning}"></progress>
@@ -325,8 +325,8 @@
 				<div><dt th:text="#{statistics.version}">Versão</dt><dd th:text="${geoStatus.version()} ?: '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.polygons}">Polígonos importados</dt><dd th:text="${geoStatus.importedRecords()> 0} ? ${#numbers.formatInteger(geoStatus.importedRecords(), 1, 'POINT')} : '—'"></dd></div>
 				<div><dt th:text="#{settings.geo.diskSize}">Tamanho em disco</dt><dd th:text="${geoStatus.sizeBytes()> 0} ? ${#numbers.formatDecimal(geoStatus.sizeBytes() / 1048576.0, 1, 1, 'COMMA')} + ' MB' : '—'"></dd></div>
-				<div><dt th:text="#{settings.geo.downloadedAt}">Baixada em</dt><dd th:text="${geoStatus.downloadedAt() != null} ? ${#temporals.format(geoStatus.downloadedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
-				<div><dt th:text="#{settings.geo.lastUpdate}">Última atualização</dt><dd th:text="${geoStatus.importedAt() != null} ? ${#temporals.format(geoStatus.importedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
+				<div><dt th:text="#{settings.geo.importedAt}">Importada em</dt><dd th:text="${geoStatus.importedAt() != null} ? ${#temporals.format(geoStatus.importedAt(), 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
+				<div><dt th:text="#{settings.geo.verifiedAt}">Verificada em</dt><dd th:text="${geoVerifiedAt != null} ? ${#temporals.format(geoVerifiedAt, 'dd/MM/yyyy HH:mm')} : '—'"></dd></div>
 				<div class="status-directory"><dt th:text="#{settings.geo.directory}">Diretório</dt><dd th:text="${geoStatus.directory()}"></dd></div>
 				<div><dt th:text="#{settings.geo.cache}">Cache de resoluções</dt><dd th:text="#{settings.geo.cacheEntries(${#numbers.formatInteger(geoCacheSize, 1, 'POINT')})}"></dd></div>
 				<div><dt th:text="#{settings.geo.resolved}">Localizações resolvidas</dt><dd th:text="${#numbers.formatInteger(geoResolvedCount, 1, 'POINT')}"></dd></div>
@@ -335,7 +335,7 @@
 
 			<div th:if="${geoRebuildRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.geo.rebuildRunning}">Reconstrução de localizações em andamento</strong></div>
-				<p th:if="${geoRebuildPercent>= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:if="${geoRebuildEta>= 60}" th:text="#{settings.eta.minutes(${geoRebuildEta / 60})}"></span><span th:if="${geoRebuildEta>= 0 and geoRebuildEta < 60}" th:text="#{settings.eta.seconds(${geoRebuildEta})}"></span></p>
+				<p th:if="${geoRebuildPercent>= 0}"><span th:text="#{settings.geo.rebuildProgress(${geoRebuildPercent}, ${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(geoRebuildTotal, 1, 'POINT')})}"></span><span th:text="${geoRebuildEta}"></span></p>
 				<p th:unless="${geoRebuildPercent>= 0}"
 						th:text="#{settings.geo.rebuildProcessed(${#numbers.formatInteger(geoRebuildProcessed, 1, 'POINT')})}"></p>
 				<progress th:if="${geoRebuildTotal> 0}" th:value="${geoRebuildProcessed}" th:max="${geoRebuildTotal}"
@@ -425,7 +425,7 @@
 
 			<div th:if="${metadataRebuildRunning}" class="operation-status" role="status">
 				<div class="operation-heading"><span class="operation-spinner" aria-hidden="true"></span><strong th:text="#{settings.metadata.rebuildRunning}">Reconstrução de metadados em andamento</strong></div>
-				<p th:if="${metadataRebuildPercent>= 0}"><span th:text="#{settings.metadata.rebuildProgress(${metadataRebuildPercent}, ${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildTotal, 1, 'POINT')})}"></span><span th:if="${metadataRebuildEta>= 60}" th:text="#{settings.eta.minutes(${metadataRebuildEta / 60})}"></span><span th:if="${metadataRebuildEta>= 0 and metadataRebuildEta < 60}" th:text="#{settings.eta.seconds(${metadataRebuildEta})}"></span></p>
+				<p th:if="${metadataRebuildPercent>= 0}"><span th:text="#{settings.metadata.rebuildProgress(${metadataRebuildPercent}, ${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')}, ${#numbers.formatInteger(metadataRebuildTotal, 1, 'POINT')})}"></span><span th:text="${metadataRebuildEta}"></span></p>
 				<p th:unless="${metadataRebuildPercent>= 0}"
 						th:text="#{settings.metadata.rebuildProcessed(${#numbers.formatInteger(metadataRebuildProcessed, 1, 'POINT')})}"></p>
 				<progress th:if="${metadataRebuildTotal> 0}" th:value="${metadataRebuildProcessed}" th:max="${metadataRebuildTotal}"
@@ -558,7 +558,7 @@
 			<p class="muted" th:if="${#lists.isEmpty(duplicateFileExclusions)}" th:text="#{settings.dupExcl.empty}">Nenhuma exclusão.</p>
 			<ul class="exclusion-list" th:unless="${#lists.isEmpty(duplicateFileExclusions)}">
 				<li class="exclusion-row" th:each="file : ${duplicateFileExclusions}">
-					<span class="path exclusion-path" th:text="${file.currentPath() ?: file.publicId()}">/arquivo</span>
+					<span class="path exclusion-path" th:text="${file.currentPath() ?: file.catalogFilePublicId()}">/arquivo</span>
 					<form th:action="@{/app/settings/duplicate-exclusions/file/remove}" method="post"
 							th:data-confirm="#{settings.dupExcl.removeConfirm}">
 						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">

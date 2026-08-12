@@ -2,6 +2,8 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -10,12 +12,14 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,7 +29,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.infrastructure.persistence.ContentRevisionGuard;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
@@ -39,13 +45,22 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 @ExtendWith(MockitoExtension.class)
 class MetadataRebuildServiceTest {
+
+	/**
+	 * The moment the file system reports, which is the kind of value the two
+	 * stamps on a catalogued file are - the capture date beside them is a reading
+	 * off the photograph and stays local.
+	 */
+	private static final Instant CAPTURED_AT = Instant.parse("2024-05-09T10:30:00Z");
 
 	@TempDir
 	Path tempDir;
@@ -66,6 +81,23 @@ class MetadataRebuildServiceTest {
 	 */
 	@Mock
 	private SimilarityRelationWriter similarityRelationWriter;
+
+	@Mock
+	private ContentRevisionGuard contentRevisionGuard;
+
+	/**
+	 * The bytes are the ones this rebuild was started for.
+	 *
+	 * <p>
+	 * A rebuild that cannot say so writes nothing - which is the right answer
+	 * when the file really did change underneath it, and silently empties every
+	 * other case if left unsaid. Lenient because the runs that never reach a file
+	 * never ask.
+	 */
+	@BeforeEach
+	void theContentIsTheOneThatWasRead() {
+		lenient().when(contentRevisionGuard.stillAt(any(), any())).thenReturn(true);
+	}
 
 	@Test
 	void dryRunShouldOnlyCountCandidateIds() {
@@ -100,7 +132,8 @@ class MetadataRebuildServiceTest {
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L, 2L, 3L, 4L)))
 				.thenReturn(List.of(success, withoutLocation, missing, error));
-		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
+		when(metadataExtractor.extract(eq(existingFile.toAbsolutePath().normalize()),
+				eq(new MetadataOptions(false, true)), any()))
 				.thenReturn(metadata).thenThrow(new IllegalStateException("bad metadata"));
 
 		var response = service().rebuild(request);
@@ -111,12 +144,13 @@ class MetadataRebuildServiceTest {
 		Assertions.assertThat(response.skippedWithoutLocation()).isEqualTo(1);
 		Assertions.assertThat(response.skippedMissing()).isEqualTo(1);
 		Assertions.assertThat(response.errors()).isEqualTo(1);
+		// The name is not among them: what a file is called is a reading of where it
+		// is, and where it is stopped being a column on the file.
 		Assertions.assertThat(success)
-				.extracting(CatalogFile::getFileName, CatalogFile::getExtension, CatalogFile::getSizeBytes,
-						CatalogFile::getMimeType, CatalogFile::getFileType, CatalogFile::getCreatedAt,
-						CatalogFile::getModifiedAt, CatalogFile::getLifecycleStatus, CatalogFile::getAnalysisVersion)
-				.containsExactly("photo.jpg", "jpg", 100L, "image/jpeg", FileType.PHOTO,
-						LocalDateTime.of(2024, Month.MAY, 9, 10, 30), LocalDateTime.of(2024, Month.MAY, 9, 10, 30),
+				.extracting(CatalogFile::getExtension, CatalogFile::getSizeBytes, CatalogFile::getMimeType,
+						CatalogFile::getFileType, CatalogFile::getCreatedAt, CatalogFile::getModifiedAt,
+						CatalogFile::getLifecycleStatus, CatalogFile::getAnalysisVersion)
+				.containsExactly("jpg", 100L, "image/jpeg", FileType.PHOTO, CAPTURED_AT, CAPTURED_AT,
 						LifecycleStatus.ACTIVE, "1");
 		Assertions.assertThat(success.getLastAnalysis()).isNotNull();
 		Assertions.assertThat(success.getMetadata())
@@ -144,12 +178,16 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(1L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
+		when(metadataExtractor.extract(eq(existingFile.toAbsolutePath().normalize()),
+				eq(new MetadataOptions(false, true)), any()))
 				.thenReturn(metadata);
 
 		service().rebuild(request);
 
-		Assertions.assertThat(catalogFile.getFileName()).isNull();
+		// Where the file is, and so what it is called, is not the rebuild's to write:
+		// it reads the bytes at a path and says what they are.
+		Assertions.assertThat(catalogFile.getLocation().getCurrentPath())
+				.isEqualTo(PathUtils.normalize(existingFile));
 		Assertions.assertThat(catalogFile.getMetadata().getYear()).isEqualTo(2024);
 	}
 
@@ -181,7 +219,10 @@ class MetadataRebuildServiceTest {
 
 		service().rebuild(request);
 
-		Assertions.assertThat(catalogFile.getFileName()).isNull();
+		// Where the file is, and so what it is called, is not the rebuild's to write:
+		// it reads the bytes at a path and says what they are.
+		Assertions.assertThat(catalogFile.getLocation().getCurrentPath())
+				.isEqualTo(PathUtils.normalize(existingFile));
 		Assertions.assertThat(media.getYear()).isEqualTo(2020);
 		Assertions.assertThat(media.getYearMonth()).isEqualTo("2020-01");
 		Assertions.assertThat(media.getLatitude()).isEqualTo(-23.5);
@@ -204,7 +245,7 @@ class MetadataRebuildServiceTest {
 
 		CatalogFile catalogFile = catalogFile(1L, existingFile);
 
-		MetadataResult metadata = MetadataResult.builder().fileName("document.pdf").extension("pdf").sizeBytes(100L)
+		MetadataResult metadata = MetadataResult.builder().extension("pdf").sizeBytes(100L)
 				.mimeType("application/pdf").fileType(FileType.PDF).subcategory(MediaSubcategory.UNKNOWN)
 				.latitude(-23.5).longitude(-46.6).storedWidth(4000).storedHeight(3000).displayWidth(4000)
 				.displayHeight(3000).orientationCode(1).rotation(0).orientationType(MediaOrientation.LANDSCAPE)
@@ -240,7 +281,7 @@ class MetadataRebuildServiceTest {
 		catalogFile.getMetadata().setLatitude(-23.0);
 		catalogFile.getMetadata().setLongitude(-46.0);
 
-		MetadataResult metadata = MetadataResult.builder().fileName("zero.mp4").extension("mp4").mimeType("video/mp4")
+		MetadataResult metadata = MetadataResult.builder().extension("mp4").mimeType("video/mp4")
 				.fileType(FileType.VIDEO).subcategory(MediaSubcategory.CAMERA).latitude(0.0).longitude(0.0).build();
 
 		prepareSingleRebuild(catalogFile, existingFile, metadata);
@@ -280,8 +321,9 @@ class MetadataRebuildServiceTest {
 		MediaDateResolver mediaDateResolver = new MediaDateResolver(
 				new CaptureDateValidator(Clock.systemDefaultZone()));
 
-		return new MetadataRebuildService(catalogFileRepository, metadataExtractor, mediaDateResolver,
-				new VideoRelationInvalidator(similarityRelationWriter), transactionManager,
+		return new MetadataRebuildService(catalogFileRepository, contentRevisionGuard, metadataExtractor,
+				mediaDateResolver, new VideoRelationInvalidator(similarityRelationWriter,
+						mock(VideoSimilarityAlgorithm.class)), transactionManager,
 				Clock.systemDefaultZone());
 	}
 
@@ -297,7 +339,7 @@ class MetadataRebuildServiceTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		catalogFile.setLocation(
-				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).build());
+				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).pathFlavor(PathFlavor.WINDOWS).build());
 
 		prepareSingleRebuild(catalogFile, file, metadata(file));
 
@@ -318,9 +360,8 @@ class MetadataRebuildServiceTest {
 		CatalogFile catalogFile = catalogFile(1L, file);
 
 		catalogFile.setSha256("sha-before");
-		catalogFile.setMd5("md5-before");
 
-		MetadataResult archive = MetadataResult.builder().fileName("sticker.webp").extension("webp").sizeBytes(10L)
+		MetadataResult archive = MetadataResult.builder().extension("webp").sizeBytes(10L)
 				.mimeType("application/zip").fileType(FileType.PHOTO).build();
 
 		prepareSingleRebuild(catalogFile, file, archive);
@@ -328,7 +369,6 @@ class MetadataRebuildServiceTest {
 		service().rebuild(request(false, List.of(MetadataRebuildField.MIME)));
 
 		Assertions.assertThat(catalogFile.getSha256()).isNull();
-		Assertions.assertThat(catalogFile.getMd5()).isNull();
 	}
 
 	/**
@@ -370,7 +410,8 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(1L),
 				any(Pageable.class))).thenReturn(List.of());
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(existingFile.toAbsolutePath().normalize(), new MetadataOptions(false, true)))
+		when(metadataExtractor.extract(eq(existingFile.toAbsolutePath().normalize()),
+				eq(new MetadataOptions(false, true)), any()))
 				.thenReturn(metadata);
 	}
 
@@ -382,7 +423,7 @@ class MetadataRebuildServiceTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(id).metadata(MediaMetadata.builder().build()).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(currentPath.toString()).build();
+				.currentPath(currentPath.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
@@ -393,7 +434,7 @@ class MetadataRebuildServiceTest {
 		LocalDateTime captureDate = LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
 
 		return MetadataResult.builder().fileName(file.getFileName().toString()).extension("jpg").sizeBytes(100L)
-				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(captureDate).modifiedAt(captureDate)
+				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(CAPTURED_AT).modifiedAt(CAPTURED_AT)
 				.captureDate(captureDate).dateSource(DateSource.EXIF).subcategory(MediaSubcategory.CAMERA)
 				.latitude(-23.5).longitude(-46.6).storedWidth(4000).storedHeight(3000).displayWidth(4000)
 				.displayHeight(3000).orientationCode(1).rotation(0).orientationType(MediaOrientation.LANDSCAPE)
@@ -408,10 +449,10 @@ class MetadataRebuildServiceTest {
 	@Test
 	void dryRunShouldSayHowManyTheContinueCutoffIsHiding() {
 		MetadataRebuildRequest request = new MetadataRebuildRequest(tempDir.toString(),
-				List.of(MetadataRebuildField.DATE), null, null, 10, true, LocalDateTime.of(2026, Month.JULY, 20, 8, 0));
+				List.of(MetadataRebuildField.DATE), null, null, 10, true, Instant.parse("2026-07-20T08:00:00Z"));
 
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
-				eq(LocalDateTime.of(2026, Month.JULY, 20, 8, 0)), eq(0L), any(Pageable.class))).thenReturn(List.of(1L));
+				eq(Instant.parse("2026-07-20T08:00:00Z")), eq(0L), any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null),
 				eq(MetadataRebuildRequest.NO_CUTOFF), eq(0L), any(Pageable.class))).thenReturn(List.of(1L, 2L, 3L));
 
@@ -439,7 +480,7 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any(), any())).thenReturn(metadata(file));
 
 		var response = service().simulate(request);
 
@@ -517,7 +558,7 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any()))
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any(), any()))
 				.thenThrow(new IllegalStateException("bad metadata"));
 
 		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
@@ -539,7 +580,7 @@ class MetadataRebuildServiceTest {
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any(), any())).thenReturn(metadata(file));
 
 		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));
@@ -560,12 +601,12 @@ class MetadataRebuildServiceTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		catalogFile.setLocation(
-				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).build());
+				CatalogFileLocation.builder().catalogFile(catalogFile).currentPath(file.toString()).pathFlavor(PathFlavor.WINDOWS).build());
 
 		when(catalogFileRepository.findIdsForMetadataRebuild(any(), any(), eq(null), eq(null), any(), eq(0L),
 				any(Pageable.class))).thenReturn(List.of(1L));
 		when(catalogFileRepository.findForMetadataRebuildByIds(List.of(1L))).thenReturn(List.of(catalogFile));
-		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any())).thenReturn(metadata(file));
+		when(metadataExtractor.extract(eq(file.toAbsolutePath().normalize()), any(), any())).thenReturn(metadata(file));
 
 		var response = service().simulate(new MetadataRebuildRequest(folder.toString(),
 				List.of(MetadataRebuildField.DATE), null, null, 10, true, null));

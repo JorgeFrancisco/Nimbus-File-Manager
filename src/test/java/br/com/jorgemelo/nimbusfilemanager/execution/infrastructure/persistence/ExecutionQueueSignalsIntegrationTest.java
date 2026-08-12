@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -44,7 +46,7 @@ class ExecutionQueueSignalsIntegrationTest {
 	private static final Duration GENEROUS = Duration.ofSeconds(10);
 
 	@Container
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	private PGSimpleDataSource dataSource;
 	private ExecutionQueueSignals signals;

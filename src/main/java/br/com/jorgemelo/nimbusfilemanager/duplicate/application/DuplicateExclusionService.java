@@ -7,12 +7,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFileExclusion;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateExclusionFile;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFolderExclusion;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFileExclusionRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateExclusionFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFolderExclusionRepository;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileExclusionView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateExclusionFileView;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.EligibilityChanged;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -25,29 +27,84 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 @Service
 public class DuplicateExclusionService {
 
-	private final DuplicateFileExclusionRepository fileRepository;
+	private final DuplicateExclusionFileRepository fileRepository;
+	private final CatalogFileRepository catalogFileRepository;
 	private final DuplicateFolderExclusionRepository folderRepository;
 	private final ApplicationEventPublisher eventPublisher;
 
-	public DuplicateExclusionService(DuplicateFileExclusionRepository fileRepository,
+	public DuplicateExclusionService(DuplicateExclusionFileRepository fileRepository,
+			CatalogFileRepository catalogFileRepository,
 			DuplicateFolderExclusionRepository folderRepository, ApplicationEventPublisher eventPublisher) {
 		this.fileRepository = fileRepository;
 		this.folderRepository = folderRepository;
+		this.catalogFileRepository = catalogFileRepository;
 		this.eventPublisher = eventPublisher;
 	}
 
-	/** @return true when a new exclusion was created, false if already excluded. */
+	/**
+	 * Records that the user does not want this file offered as a duplicate, and
+	 * what content they said it about.
+	 *
+	 * <p>
+	 * The revision is read here, at the moment of the decision, because that is
+	 * what the decision was about. Replace the bytes later and the row stays -
+	 * the user did say it - but it stops applying to a picture they never saw.
+	 *
+	 * <p>
+	 * Which is why saying it again has to be able to mean something. Once the
+	 * content has moved on the file is back on the Duplicados screen, and the user
+	 * clicking there is looking at a different picture: that is a new judgement,
+	 * and it replaces the one about the bytes that are gone. Refusing it merely
+	 * because a row exists would leave the button doing nothing at all, for as
+	 * long as the file exists, with nothing on screen to say why.
+	 *
+	 * @return true when a judgement was written, false when the same one was
+	 * already on record - nothing changed, so nothing is announced
+	 */
 	@Transactional
 	public boolean excludeFile(UUID publicId) {
-		if (publicId == null || fileRepository.existsByPublicId(publicId)) {
+		if (publicId == null) {
 			return false;
 		}
 
-		fileRepository.save(DuplicateFileExclusion.builder().publicId(publicId).build());
+		CatalogFile catalogFile = catalogFileRepository.findByCatalogFilePublicId(publicId).orElse(null);
+
+		if (catalogFile == null) {
+			return false;
+		}
+
+		DuplicateExclusionFile said = fileRepository.findByCatalogFileId(catalogFile.getId()).orElse(null);
+
+		if (said != null) {
+			if (said.getContentRevision().equals(catalogFile.getContentRevision())) {
+				return false;
+			}
+
+			supersede(said);
+		}
+
+		fileRepository.save(DuplicateExclusionFile.builder().catalogFile(catalogFile)
+				.contentRevision(catalogFile.getContentRevision()).build());
 
 		eventPublisher.publishEvent(new EligibilityChanged("file exclusion"));
 
 		return true;
+	}
+
+	/**
+	 * Clears the way for a judgement about the content that is there now.
+	 *
+	 * <p>
+	 * The standing row goes rather than being corrected: what it says is not
+	 * updatable, because a judgement about other bytes is another judgement, made
+	 * at another time. Flushed so the delete reaches the database before the insert
+	 * that follows it - Hibernate orders inserts first, and one judgement per file
+	 * is what the table enforces, so the second one would be refused.
+	 */
+	private void supersede(DuplicateExclusionFile said) {
+		fileRepository.delete(said);
+
+		fileRepository.flush();
 	}
 
 	/**
@@ -81,7 +138,7 @@ public class DuplicateExclusionService {
 
 	@Transactional(readOnly = true)
 	public List<UUID> excludedFilePublicIds() {
-		return fileRepository.findAllPublicIds();
+		return fileRepository.findApplyingCatalogFilePublicIds();
 	}
 
 	/**
@@ -97,7 +154,8 @@ public class DuplicateExclusionService {
 	 */
 	@Transactional(readOnly = true)
 	public String signature() {
-		List<String> files = fileRepository.findAllPublicIds().stream().map(UUID::toString).sorted().toList();
+		List<String> files = fileRepository.findApplyingCatalogFilePublicIds().stream().map(UUID::toString)
+				.sorted().toList();
 
 		List<String> folders = folderRepository.findAllFolderPaths().stream().sorted().toList();
 
@@ -133,7 +191,7 @@ public class DuplicateExclusionService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<DuplicateFileExclusionView> fileExclusions() {
+	public List<DuplicateExclusionFileView> fileExclusions() {
 		return fileRepository.findAllViews();
 	}
 

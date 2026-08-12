@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -12,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -60,7 +63,7 @@ class SimilarityAddIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private PhotoSimilarityService photoSimilarityService;
@@ -217,10 +220,8 @@ class SimilarityAddIntegrationTest {
 	}
 
 	private long photo(long look) {
-		String unique = "add-" + System.nanoTime();
-
-		CatalogFile file = catalogFileRepository.saveAndFlush(CatalogFile.builder().fileKey(unique)
-				.fileName(unique + ".jpg").extension("jpg").sizeBytes(1L).modifiedAt(LocalDateTime.now())
+		CatalogFile file = catalogFileRepository.saveAndFlush(CatalogFile.builder()
+				.extension("jpg").sizeBytes(1L).modifiedAt(Instant.now())
 				.fileType(FileType.PHOTO).build());
 
 		mediaFingerprintRepository.saveAndFlush(MediaFingerprint.builder().catalogFileId(file.getId())

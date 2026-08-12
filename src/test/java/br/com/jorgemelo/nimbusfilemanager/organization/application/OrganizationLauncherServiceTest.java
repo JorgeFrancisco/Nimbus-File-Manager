@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
@@ -140,7 +141,7 @@ class OrganizationLauncherServiceTest {
 		Execution queued = invocation.getArgument(0);
 
 		queued.setStatus(ExecutionStatus.PENDING);
-		queued.setPublicId(UUID.randomUUID());
+		queued.setExecutionPublicId(UUID.randomUUID());
 
 		return Optional.of(queued);
 	}
@@ -155,7 +156,8 @@ class OrganizationLauncherServiceTest {
 
 	private OrganizationLauncherService launcher() {
 		return new OrganizationLauncherService(executionEnqueueService, executionPayloadCodec,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()));
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels(),
+						Progress.reader(), Progress.estimator()));
 	}
 
 	private OrganizationExecuteRequest request() {

@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application.model;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
@@ -18,12 +19,11 @@ public class MetadataResult {
 	private Long sizeBytes;
 
 	private String sha256;
-	private String md5;
 	private String mimeType;
 	private FileType fileType;
 
-	private LocalDateTime createdAt;
-	private LocalDateTime modifiedAt;
+	private Instant createdAt;
+	private Instant modifiedAt;
 
 	private LocalDateTime captureDate;
 	private DateSource dateSource;

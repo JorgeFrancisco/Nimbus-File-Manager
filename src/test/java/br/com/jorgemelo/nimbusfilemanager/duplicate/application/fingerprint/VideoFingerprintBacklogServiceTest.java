@@ -36,6 +36,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.FingerprintWriter;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
@@ -44,13 +45,21 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoF
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 
 @ExtendWith(MockitoExtension.class)
 class VideoFingerprintBacklogServiceTest {
+
+	/** This test's own context: nothing here is shared with another run. */
+	private final ExecutionMetricsContext metricsContext = new ExecutionMetricsContext();
+
+	/** The generation of bytes the work started from. */
+	private static final long REVISION = 1L;
+
+	private final FingerprintWriter fingerprintWriter = mock(FingerprintWriter.class);
 
 	private static final String ALGORITHM = FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1;
 
@@ -87,7 +96,7 @@ class VideoFingerprintBacklogServiceTest {
 	/** A video is written off for its own content, never for a missing ffmpeg. */
 	@Test
 	void blamesTheToolAndNotTheFileWhenFfmpegCouldNotStart() {
-		FingerprintFailureReason reason = build().reason(new PendingVideo(9L, "/tmp/trip.mp4", 12_000D),
+		FingerprintFailureReason reason = build().reason(new PendingVideo(9L, "/tmp/trip.mp4", 12_000D, REVISION),
 				new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
 
 		assertThat(reason).isEqualTo(FingerprintFailureReason.TOOL_UNAVAILABLE);
@@ -121,7 +130,7 @@ class VideoFingerprintBacklogServiceTest {
 	 */
 	@Test
 	void aRebuildOpenForVideosReadsWhatIsOwedRatherThanWhatIsMissing() {
-		PendingVideo owed = new PendingVideo(7L, "/tmp/clip.mp4", 10.0);
+		PendingVideo owed = new PendingVideo(7L, "/tmp/clip.mp4", 10.0, REVISION);
 
 		when(fingerprintRebuildTaskRepository.existsByKindAndAlgorithm(FingerprintKind.VIDEO_PHASH, ALGORITHM))
 				.thenReturn(true);
@@ -175,12 +184,12 @@ class VideoFingerprintBacklogServiceTest {
 	private VideoFingerprintBacklogService build() {
 		FingerprintBacklogEngine engine = new FingerprintBacklogEngine(mediaFingerprintRepository,
 				fingerprintFailureRepository, fingerprintRebuildTaskRepository,
-				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
+				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1)),
 				executionRepository, mock(PlatformTransactionManager.class), Clock.systemDefaultZone());
 
 		return new VideoFingerprintBacklogService(engine, mediaFingerprintRepository, fingerprintFailureRepository,
 				fingerprintRebuildTaskRepository, algorithm, similarityRelationWriter,
-				Clock.systemDefaultZone());
+				fingerprintWriter, Clock.systemDefaultZone());
 	}
 
 	private VideoPerceptualFingerprint fingerprint(int frames) {
@@ -195,20 +204,25 @@ class VideoFingerprintBacklogServiceTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	void drainStoresOneRowPerSampledFrame() {
-		PendingVideo video = new PendingVideo(1L, "/tmp/clip.mp4", 10.0);
+		PendingVideo video = new PendingVideo(1L, "/tmp/clip.mp4", 10.0, REVISION);
 
 		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
 				any())).thenReturn(List.of(video), List.of());
-		when(algorithm.fingerprint(Path.of("/tmp/clip.mp4"), 10.0)).thenReturn(fingerprint(3));
+		when(algorithm.fingerprint(eq(Path.of("/tmp/clip.mp4")), eq(10.0), any())).thenReturn(fingerprint(3));
+
+		// The content is still the generation these frames were read from. A refusal
+		// stops the whole video at the frame it happened on, which is a different case.
+		when(fingerprintWriter.insertForRevision(any(), eq(REVISION))).thenReturn(true);
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		assertThat(result.processed()).isEqualTo(1);
 
 		ArgumentCaptor<MediaFingerprint> saved = ArgumentCaptor.forClass(MediaFingerprint.class);
 
-		verify(mediaFingerprintRepository, times(3)).save(saved.capture());
+		// One row per sampled frame, each written for the generation the job read.
+		verify(fingerprintWriter, times(3)).insertForRevision(saved.capture(), eq(REVISION));
 
 		assertThat(saved.getAllValues()).extracting(MediaFingerprint::getSampleIndex).containsExactly(0, 1, 2);
 		assertThat(saved.getAllValues()).extracting(MediaFingerprint::getPositionMs).containsExactly(1000L, 3000L,
@@ -240,17 +254,17 @@ class VideoFingerprintBacklogServiceTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	void anUndecodableVideoBecomesTerminalImmediately() {
-		PendingVideo video = new PendingVideo(2L, "/tmp/broken.mp4", 5.0);
+		PendingVideo video = new PendingVideo(2L, "/tmp/broken.mp4", 5.0, REVISION);
 
 		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
 				any())).thenReturn(List.of(video), List.of());
-		when(algorithm.fingerprint(Path.of("/tmp/broken.mp4"), 5.0))
+		when(algorithm.fingerprint(eq(Path.of("/tmp/broken.mp4")), eq(5.0), any()))
 				.thenThrow(new UnsupportedVideoFingerprintException("no frames"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(2L), any(), any()))
 				.thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 
@@ -268,17 +282,17 @@ class VideoFingerprintBacklogServiceTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	void anUnexpectedErrorIsClassifiedByInspectingTheFile() {
-		PendingVideo video = new PendingVideo(3L, "/tmp/vanished.mp4", 5.0);
+		PendingVideo video = new PendingVideo(3L, "/tmp/vanished.mp4", 5.0, REVISION);
 
 		when(mediaFingerprintRepository.findPendingVideos(eq(FingerprintKind.VIDEO_PHASH), eq(ALGORITHM), anyInt(),
 				any())).thenReturn(List.of(video), List.of());
-		when(algorithm.fingerprint(Path.of("/tmp/vanished.mp4"), 5.0))
+		when(algorithm.fingerprint(eq(Path.of("/tmp/vanished.mp4")), eq(5.0), any()))
 				.thenThrow(new IllegalStateException("ffmpeg vanished"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
 				.thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 

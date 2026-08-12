@@ -23,6 +23,12 @@ final class WindowsRdcwConstants {
 	static final int FILE_NOTIFY_CHANGE_LAST_WRITE = 0x00000010;
 	static final int NOTIFY_FILTER = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME
 			| FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE;
+	/**
+	 * {@code ReadDirectoryNotifyExtendedInformation} of
+	 * {@code READ_DIRECTORY_NOTIFY_INFORMATION_CLASS} - the shape that carries the
+	 * file id and the attributes, rather than a name and an action alone.
+	 */
+	static final int EXTENDED_INFORMATION = 2;
 
 	// OVERLAPPED is 32 bytes on 64-bit; zeroed (hEvent=NULL) so completion signals
 	// the file handle, which GetOverlappedResult polls without waiting.

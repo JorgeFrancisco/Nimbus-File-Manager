@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -17,14 +18,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
-
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryPersistenceResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryScanRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScanOptions;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.ProcessResult;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
@@ -32,6 +33,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFa
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 
 /**
  * One batch, and the tally it leaves behind.
@@ -43,6 +45,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
  * progress written afterwards reflects the whole run rather than this batch.
  */
 class InventoryBatchWriterTest {
+
+	/** This test's own context: nothing here is shared with another run. */
+	private final ExecutionMetricsContext context = new ExecutionMetricsContext();
 
 	private final InventoryPersistenceService inventoryPersistenceService = mock(InventoryPersistenceService.class);
 	private final MetadataFacade metadataFacade = mock(MetadataFacade.class);
@@ -68,7 +73,7 @@ class InventoryBatchWriterTest {
 
 		Execution execution = execution();
 
-		writer.write(execution, request(folder), List.of(file), counters, ownership);
+		writer.write(execution, request(folder), List.of(scanned(file)), counters, ownership, context);
 
 		assertThat(counters.errors()).isEqualTo(1);
 		assertThat(counters.found()).isEqualTo(1);
@@ -88,8 +93,8 @@ class InventoryBatchWriterTest {
 
 		Execution execution = execution();
 
-		writer.write(execution, request(folder), List.of(file), counters, ownership);
-		writer.write(execution, request(folder), List.of(file), counters, ownership);
+		writer.write(execution, request(folder), List.of(scanned(file)), counters, ownership, context);
+		writer.write(execution, request(folder), List.of(scanned(file)), counters, ownership, context);
 
 		assertThat(counters.found()).isEqualTo(2);
 
@@ -111,7 +116,8 @@ class InventoryBatchWriterTest {
 
 		InventoryCounters counters = new InventoryCounters();
 
-		writer.write(execution(), request(folder), List.of(analysed, cached), counters, ownership);
+		writer.write(execution(), request(folder), List.of(scanned(analysed), scanned(cached)), counters, ownership,
+				context);
 
 		assertThat(counters.analyzed()).isEqualTo(1);
 		assertThat(counters.cacheHits()).isEqualTo(1);
@@ -127,14 +133,41 @@ class InventoryBatchWriterTest {
 
 		InventoryCounters counters = new InventoryCounters();
 
-		writer.write(execution(), request(folder), List.of(file), counters, ownership);
+		writer.write(execution(), request(folder), List.of(scanned(file)), counters, ownership, context);
 
 		assertThat(counters.errors()).isEqualTo(1);
+	}
+
+	/**
+	 * A file the catalog had lost and this batch found again is counted apart from
+	 * the ordinary updates. Not for any screen: the pass decides once, at the end,
+	 * whether what it did changed which files a duplicate analysis may look at, and
+	 * an entry coming back from missing is exactly that.
+	 */
+	@Test
+	void countsAFileFoundAgainOnItsOwnColumnAsWellAsAnalysed(@TempDir Path folder) {
+		Path file = folder.resolve("found-again.jpg");
+
+		when(inventoryPersistenceService.saveOrCacheBatch(any(), any(), any(), any(), any(), any())).thenReturn(
+				List.of(InventoryBatchItemResult.of(file, new InventoryPersistenceResult(ProcessResult.ANALYZED,
+						InventoryPersistenceAction.REACTIVATED))));
+
+		InventoryCounters counters = new InventoryCounters();
+
+		writer.write(execution(), request(folder), List.of(scanned(file)), counters, ownership, context);
+
+		assertThat(counters.reactivated()).isEqualTo(1);
+		assertThat(counters.analyzed()).as("it was analysed too - reactivation is how, not instead").isEqualTo(1);
 	}
 
 	private InventoryBatchItemResult result(Path file, ProcessResult outcome) {
 		return InventoryBatchItemResult.of(file, new InventoryPersistenceResult(outcome,
 				InventoryPersistenceAction.CREATED));
+	}
+
+	/** The path plus what the walk was told about it, which is what a batch is. */
+	private ScannedFile scanned(Path file) {
+		return new ScannedFile(file, 1024L, Instant.EPOCH);
 	}
 
 	private Execution execution() {

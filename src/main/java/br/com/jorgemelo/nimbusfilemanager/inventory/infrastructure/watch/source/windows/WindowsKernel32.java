@@ -49,10 +49,18 @@ public final class WindowsKernel32 {
 	// flags, template).
 	private static final MethodHandle CREATE_FILE_W = capturing("CreateFileW",
 			FunctionDescriptor.of(ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT, ADDRESS));
-	// BOOL ReadDirectoryChangesW(dir, buffer, len, watchSubtree, filter,
-	// bytesReturned, overlapped, completion).
-	private static final MethodHandle READ_DIRECTORY_CHANGES_W = capturing("ReadDirectoryChangesW",
-			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+	// BOOL ReadDirectoryChangesExW(dir, buffer, len, watchSubtree, filter,
+	// bytesReturned, overlapped, completion, informationClass).
+	private static final MethodHandle READ_DIRECTORY_CHANGES_EX_W = capturing("ReadDirectoryChangesExW",
+			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS, ADDRESS, ADDRESS,
+					JAVA_INT));
+	// BOOL GetVolumePathNameW(fileName, volumePathName, cch) - which mount point
+	// a path lives under, which is not always its drive root.
+	private static final MethodHandle GET_VOLUME_PATH_NAME_W = capturing("GetVolumePathNameW",
+			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT));
+	// BOOL GetVolumeNameForVolumeMountPointW(mountPoint, volumeName, cch).
+	private static final MethodHandle GET_VOLUME_NAME_FOR_MOUNT_POINT_W = capturing(
+			"GetVolumeNameForVolumeMountPointW", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_INT));
 	// BOOL GetOverlappedResult(file, overlapped, bytesTransferred, wait).
 	private static final MethodHandle GET_OVERLAPPED_RESULT = capturing("GetOverlappedResult",
 			FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
@@ -121,15 +129,41 @@ public final class WindowsKernel32 {
 		}
 	}
 
-	public static boolean readDirectoryChanges(MemorySegment directory, MemorySegment buffer, int bufferLength,
-			boolean watchSubtree, int notifyFilter, MemorySegment overlapped, MemorySegment captureState) {
+	/**
+	 * @param informationClass which shape the OS writes into the buffer. The
+	 * extended one carries the file id, and is why this is the {@code Ex} call: a
+	 * rename reported without it is two names nothing joins.
+	 */
+	public static boolean readDirectoryChangesEx(MemorySegment directory, MemorySegment buffer, int bufferLength,
+			boolean watchSubtree, int notifyFilter, MemorySegment overlapped, int informationClass,
+			MemorySegment captureState) {
 		try {
-			int result = (int) READ_DIRECTORY_CHANGES_W.invoke(captureState, directory, buffer, bufferLength,
-					watchSubtree ? 1 : 0, notifyFilter, MemorySegment.NULL, overlapped, MemorySegment.NULL);
+			int result = (int) READ_DIRECTORY_CHANGES_EX_W.invoke(captureState, directory, buffer, bufferLength,
+					watchSubtree ? 1 : 0, notifyFilter, MemorySegment.NULL, overlapped, MemorySegment.NULL,
+					informationClass);
 
 			return result != 0;
 		} catch (Throwable failure) {
-			throw invocationFailed("ReadDirectoryChangesW", failure);
+			throw invocationFailed("ReadDirectoryChangesExW", failure);
+		}
+	}
+
+	public static boolean getVolumePathName(MemorySegment fileName, MemorySegment volumePathName, int bufferChars,
+			MemorySegment captureState) {
+		try {
+			return (int) GET_VOLUME_PATH_NAME_W.invoke(captureState, fileName, volumePathName, bufferChars) != 0;
+		} catch (Throwable failure) {
+			throw invocationFailed("GetVolumePathNameW", failure);
+		}
+	}
+
+	public static boolean getVolumeNameForVolumeMountPoint(MemorySegment mountPoint, MemorySegment volumeName,
+			int bufferChars, MemorySegment captureState) {
+		try {
+			return (int) GET_VOLUME_NAME_FOR_MOUNT_POINT_W.invoke(captureState, mountPoint, volumeName,
+					bufferChars) != 0;
+		} catch (Throwable failure) {
+			throw invocationFailed("GetVolumeNameForVolumeMountPointW", failure);
 		}
 	}
 

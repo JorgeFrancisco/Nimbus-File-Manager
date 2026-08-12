@@ -16,6 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -63,7 +65,7 @@ class SimilarityCancellationIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private ExecutionRepository executionRepository;
@@ -162,7 +164,7 @@ class SimilarityCancellationIntegrationTest {
 	 * on anything they are about.
 	 */
 	private SimilarityGrouping published(FileType mediaType, String parametersDigest) {
-		return SimilarityGrouping.builder().publicId(UUID.randomUUID()).mediaType(mediaType)
+		return SimilarityGrouping.builder().similarityGroupingPublicId(UUID.randomUUID()).mediaType(mediaType)
 				.algorithmId("STANDING_ANSWER_V1").groupingVersion(SimilarityConstants.GROUPING_VERSION)
 				.parametersDigest(parametersDigest).compositionDigest(COMPOSITION).eligibleCount(120).analyzedCount(118)
 				.candidateLimit(8000).selectionPolicy(SimilarityConstants.SELECTION_OLDEST_ELIGIBLE_FIRST)

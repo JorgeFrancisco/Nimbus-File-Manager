@@ -58,7 +58,7 @@ public class QuarantineRestorePlanner extends LocalizedComponent {
 	public QuarantineRestorePlan plan(UUID movementId, QuarantineRestoreOptions options) {
 		QuarantineRestoreOptions effective = options == null ? QuarantineRestoreOptions.defaults() : options;
 
-		Movement movement = movementRepository.findByPublicId(movementId).orElse(null);
+		Movement movement = movementRepository.findByMovementPublicId(movementId).orElse(null);
 
 		if (movement == null) {
 			return answer(movementId, RestoreOutcome.ERROR, "backend.quarantine.itemNotFound");
@@ -77,7 +77,7 @@ public class QuarantineRestorePlanner extends LocalizedComponent {
 	}
 
 	private QuarantineRestorePlan planMove(UUID movementId, Movement movement, QuarantineRestoreOptions options) {
-		Path quarantine = PathUtils.normalizePath(movement.getTargetPath());
+		Path quarantine = PathUtils.normalizePath(movement.getRequestedTargetPath());
 
 		if (!Files.exists(quarantine)) {
 			return answer(movementId, RestoreOutcome.MISSING_IN_QUARANTINE, "backend.quarantine.fileMissing");
@@ -90,7 +90,7 @@ public class QuarantineRestorePlanner extends LocalizedComponent {
 			return answer(movementId, RestoreOutcome.ERROR, "backend.quarantine.notPhysical");
 		}
 
-		Path original = PathUtils.normalizePath(movement.getSourcePath());
+		Path original = PathUtils.normalizePath(movement.getRequestedSourcePath());
 
 		boolean usingOverride = options.destinationFolder() != null;
 

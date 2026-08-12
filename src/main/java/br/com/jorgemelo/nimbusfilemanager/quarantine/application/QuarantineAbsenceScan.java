@@ -45,7 +45,7 @@ public class QuarantineAbsenceScan {
 				.findByStatusAndReasonInOrderByIdDesc(MovementStatus.MOVED, QuarantineConstants.QUARANTINED_REASONS,
 						PageRequest.of(0, QuarantineConstants.MAX_PER_RUN))
 				.getContent().stream()
-				.filter(movement -> !Files.exists(PathUtils.normalizePath(movement.getTargetPath())))
-				.map(Movement::getPublicId).toList();
+				.filter(movement -> !Files.exists(PathUtils.normalizePath(movement.getRequestedTargetPath())))
+				.map(Movement::getMovementPublicId).toList();
 	}
 }

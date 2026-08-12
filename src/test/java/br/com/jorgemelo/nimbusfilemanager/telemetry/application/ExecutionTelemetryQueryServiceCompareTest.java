@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.telemetry.application;
 
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -20,6 +21,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ExecutionComparison;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsCategoryRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,7 +35,8 @@ class ExecutionTelemetryQueryServiceCompareTest {
 	private ExecutionPhaseRepository executionPhaseRepository;
 
 	private ExecutionTelemetryQueryService service() {
-		return new ExecutionTelemetryQueryService(executionRepository, executionPhaseRepository);
+		return new ExecutionTelemetryQueryService(executionRepository, executionPhaseRepository,
+				mock(ExecutionMetricsRepository.class), mock(ExecutionMetricsCategoryRepository.class));
 	}
 
 	@Test
@@ -68,7 +72,7 @@ class ExecutionTelemetryQueryServiceCompareTest {
 
 	private ExecutionTelemetryRow row(Long id) {
 		return new ExecutionTelemetryRow(id, UUID.randomUUID(), ExecutionType.INVENTORY, ExecutionStatus.FINISHED,
-				LocalDateTime.now(), LocalDateTime.now(), 1_000L, 10.0, 100, 0, "3.4.0.14", 3, 200, 2, 2, 90L, 8L, 2L);
+				LocalDateTime.now(), LocalDateTime.now(), 1_000L, 10.0, 100, 0, "3.4.0.14", 3, 200, 2, 2);
 	}
 
 	private ExecutionPhase phase(Long executionId, ExecutionPhaseType type, long millis) {

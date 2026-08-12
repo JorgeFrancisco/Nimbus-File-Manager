@@ -6,9 +6,6 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,13 +43,13 @@ class VideoThumbnailServiceTest {
 		Path video = temp.resolve("video.mp4");
 		Files.write(video, new byte[] { 1 });
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 12, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), modified, 50D)));
+				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), contentRevision, 50D)));
 		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-video-w320";
+		String key = id + "-" + contentRevision + "-video-w320";
 
 		Path target = temp.resolve(key + ".jpg");
 
@@ -106,14 +103,14 @@ class VideoThumbnailServiceTest {
 	void failsWhenTheVideoSourceIsNotOnDisk() {
 		UUID id = UUID.randomUUID();
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 12, 0);
+		long contentRevision = 4L;
 
 		Path missing = temp.resolve("gone.mp4");
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new VideoThumbnailSource(id, missing.toString(), modified, 10D)));
+				.thenReturn(Optional.of(new VideoThumbnailSource(id, missing.toString(), contentRevision, 10D)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-video-w320";
+		String key = id + "-" + contentRevision + "-video-w320";
 
 		when(workspaceManager.resolve(any(), any(), any(), any())).thenReturn(temp.resolve(key + ".jpg"));
 
@@ -131,15 +128,15 @@ class VideoThumbnailServiceTest {
 		Path video = temp.resolve("v.mp4");
 		Files.write(video, new byte[] { 1 });
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 12, 0);
+		long contentRevision = 4L;
 
 		// durationSeconds null exercises the default-seek branch; width 640 the
 		// large-size branch.
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), modified, null)));
+				.thenReturn(Optional.of(new VideoThumbnailSource(id, video.toString(), contentRevision, null)));
 		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-video-w640";
+		String key = id + "-" + contentRevision + "-video-w640";
 
 		when(workspaceManager.resolve(any(), any(), any(), any())).thenReturn(temp.resolve(key + ".jpg"));
 

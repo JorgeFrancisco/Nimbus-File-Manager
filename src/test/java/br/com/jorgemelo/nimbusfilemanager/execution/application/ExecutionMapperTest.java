@@ -214,7 +214,7 @@ class ExecutionMapperTest {
 		ExecutionLabels labels = new ExecutionLabels();
 		labels.setMessageSource(source);
 
-		ExecutionMapper mapper = new ExecutionMapper(codec, labels);
+		ExecutionMapper mapper = new ExecutionMapper(codec, labels, Progress.reader(), Progress.estimator());
 		mapper.setMessageSource(source);
 
 		return mapper;

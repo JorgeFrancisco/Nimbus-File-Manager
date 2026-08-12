@@ -12,13 +12,13 @@ import org.springframework.stereotype.Service;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
+import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -91,10 +91,15 @@ public class ReconcileScheduler {
 			// 40 microseconds per file, which is about six seconds over a 145k-file
 			// library, every five minutes. That belongs in the worker.
 			//
-			// Deduplication keeps this from piling up: at most one RECONCILE waiting
-			// and one running per folder, so a pass that outlives the interval simply
-			// finds its successor already queued.
-			executionEnqueueService.enqueue(Execution.builder().executionType(ExecutionType.RECONCILE)
+			// Admitted only while nothing equivalent is active, which is stricter than
+			// the queue's ordinary 1 + 1 and has to be. A pass over 146k files was
+			// measured at five to six minutes against this five minute tick, so "one
+			// running and one waiting" was permanently full: every pass was followed
+			// by the successor the previous tick left, and the tick after that left
+			// another - five reconciles in fifteen minutes over one library. A timer
+			// loses nothing by being refused; it asks again by definition.
+			executionEnqueueService.enqueueUnlessAlreadyActive(Execution.builder()
+					.executionType(ExecutionType.RECONCILE)
 					.triggerEvent(ExecutionTrigger.TIMER).sourcePath(folder.toString())
 					.recursive(appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true))
 					.executeFlag(true).dedupKey(OperationPathKey.canonical(folder))

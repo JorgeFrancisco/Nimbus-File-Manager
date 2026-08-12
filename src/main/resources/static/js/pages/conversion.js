@@ -232,8 +232,10 @@
 
 		const parts = [executionStatus.percent(progress.percent || 0)];
 
-		if (progress.etaSeconds >= 0) {
-			parts.push(executionStatus.format(progress.etaSeconds));
+		const eta = executionStatus.eta(progress.eta);
+
+		if (eta) {
+			parts.push(eta);
 		} else {
 			parts.push(t('js.conversion.etaCalculating'));
 		}

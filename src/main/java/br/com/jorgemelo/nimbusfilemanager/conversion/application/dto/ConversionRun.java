@@ -5,6 +5,7 @@ import java.util.function.BooleanSupplier;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 
 /**
  * What stays the same for every file of one conversion batch.
@@ -18,5 +19,5 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
  * @param quarantineRoot where the original goes, or {@code null} to keep it
  */
 public record ConversionRun(Execution execution, ExecutionOwnership ownership, BooleanSupplier cancelled,
-		Path quarantineRoot, ConversionOptions options) {
+		Path quarantineRoot, ConversionOptions options, ExecutionMetricsContext metricsContext) {
 }

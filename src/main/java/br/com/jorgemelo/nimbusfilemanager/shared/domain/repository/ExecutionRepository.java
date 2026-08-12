@@ -15,12 +15,13 @@ import org.springframework.data.repository.query.Param;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
 
 public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
-	Optional<Execution> findByPublicId(UUID publicId);
+	Optional<Execution> findByExecutionPublicId(UUID executionPublicId);
 
 	/**
 	 * Flat performance-telemetry rows (executions that finished and were measured),
@@ -28,10 +29,9 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow(
-				e.id, e.publicId, e.executionType, e.status, e.startedAt, e.finishedAt,
+				e.id, e.executionPublicId, e.executionType, e.status, e.startedAt, e.finishedAt,
 				m.durationMillis, m.filesPerSecond, e.filesFound, e.errors, e.applicationVersion,
-				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit,
-				m.photoHashJvmDecodable, m.photoHashFfmpegOnly, m.photoHashFailures)
+				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit)
 			FROM Execution e JOIN ExecutionMetrics m ON m.id = e.id
 			WHERE m.durationMillis IS NOT NULL
 			  AND (:version IS NULL OR e.applicationVersion = :version)
@@ -41,10 +41,9 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow(
-				e.id, e.publicId, e.executionType, e.status, e.startedAt, e.finishedAt,
+				e.id, e.executionPublicId, e.executionType, e.status, e.startedAt, e.finishedAt,
 				m.durationMillis, m.filesPerSecond, e.filesFound, e.errors, e.applicationVersion,
-				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit,
-				m.photoHashJvmDecodable, m.photoHashFfmpegOnly, m.photoHashFailures)
+				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit)
 			FROM Execution e LEFT JOIN ExecutionMetrics m ON m.id = e.id
 			WHERE e.id = :id
 			""")
@@ -55,10 +54,9 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow(
-				e.id, e.publicId, e.executionType, e.status, e.startedAt, e.finishedAt,
+				e.id, e.executionPublicId, e.executionType, e.status, e.startedAt, e.finishedAt,
 				m.durationMillis, m.filesPerSecond, e.filesFound, e.errors, e.applicationVersion,
-				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit,
-				m.photoHashJvmDecodable, m.photoHashFfmpegOnly, m.photoHashFailures)
+				m.workers, m.chunkSize, m.ffmpegPhotoHashLimit, m.ffprobeVideoLimit)
 			FROM Execution e LEFT JOIN ExecutionMetrics m ON m.id = e.id
 			WHERE e.id IN :ids
 			ORDER BY e.startedAt DESC
@@ -142,8 +140,39 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	Optional<Execution> findFirstByExecutionTypeAndDedupKeyAndStatusInOrderByCreatedAtDesc(ExecutionType executionType,
 			String dedupKey, Collection<ExecutionStatus> statuses);
 
-	Optional<Execution> findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(
-			Collection<ExecutionStatus> statuses);
+	/**
+	 * The run that is actually under way, which is not the same as the row that
+	 * still says one is.
+	 *
+	 * <p>
+	 * What owns a claimed row is its lease. A worker that dies stops renewing it
+	 * but leaves the row RUNNING until something reclaims it, and at start-up that
+	 * recovery happens after the watcher and the pages have already asked - so this
+	 * asks what the queue itself asks, {@code lease_until < now}, and a claimed row
+	 * counts only while its lease still holds. A row nobody has claimed has no
+	 * lease and counts as it always did: work already asked for is work that will
+	 * run.
+	 *
+	 * <p>
+	 * Answering with the dead row was not cosmetic. It told the watcher something
+	 * was running, so adopting the monitored folder queued a full pass instead of
+	 * launching one; the pass could only fire once the queue went quiet, and by then
+	 * an inventory had walked the same tree - so it walked 146k files to catalogue
+	 * nothing, and took the fingerprint backlog down with it on the way in.
+	 *
+	 * @param claimed the status a row reaches by being claimed, which is the only
+	 * one a lease speaks for
+	 */
+	@Query("""
+			select e
+			  from Execution e
+			 where e.finishedAt is null
+			   and e.status in :statuses
+			   and (e.status <> :claimed or e.leaseUntil is null or e.leaseUntil >= :now)
+			 order by e.startedAt desc
+			""")
+	List<Execution> findUnderWay(@Param("statuses") Collection<ExecutionStatus> statuses,
+			@Param("claimed") ExecutionStatus claimed, @Param("now") LocalDateTime now, Pageable pageable);
 
 	/**
 	 * Whether a run of one kind is going on right now, asked of every active row
@@ -177,15 +206,55 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
 	@Query("SELECT e.id FROM Execution e WHERE e.finishedAt IS NOT NULL ORDER BY e.startedAt DESC")
 	List<Long> findFinishedIdsByStartedAtDesc(Pageable pageable);
 
+	/**
+	 * The retention passes below all carry the same guard, and it is not about
+	 * history: a quarantined file is held on disk and the movement is the only
+	 * record of where it came from, so an execution that still owns one is the
+	 * difference between a restorable file and an orphan in a folder. Clearing
+	 * old executions is a request to forget what happened, never to change what
+	 * the library currently holds.
+	 *
+	 * <p>
+	 * The reasons arrive as a parameter rather than being spelled here, so the
+	 * set that protects an item is by construction the same one that lists and
+	 * restores it - {@code QuarantineConstants.QUARANTINED_REASONS}. The moment a
+	 * quarantine is restored or purged its movement row is deleted, and the
+	 * execution becomes eligible again with no further bookkeeping.
+	 */
 	@Modifying
-	@Query("DELETE FROM Execution e WHERE e.finishedAt IS NOT NULL AND e.finishedAt < :cutoff")
-	int deleteFinishedBefore(@Param("cutoff") LocalDateTime cutoff);
+	@Query("""
+			DELETE FROM Execution e
+			 WHERE e.finishedAt IS NOT NULL
+			   AND e.finishedAt < :cutoff
+			   AND NOT EXISTS (SELECT 1 FROM Movement m
+							  WHERE m.execution = e
+								AND m.status = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus.MOVED
+								AND m.reason IN :quarantineReasons)
+			""")
+	int deleteFinishedBefore(@Param("cutoff") LocalDateTime cutoff,
+			@Param("quarantineReasons") Collection<MovementReason> quarantineReasons);
 
 	@Modifying
-	@Query("DELETE FROM Execution e WHERE e.finishedAt IS NOT NULL AND e.id NOT IN :keepIds")
-	int deleteFinishedNotIn(@Param("keepIds") Collection<Long> keepIds);
+	@Query("""
+			DELETE FROM Execution e
+			 WHERE e.finishedAt IS NOT NULL
+			   AND e.id NOT IN :keepIds
+			   AND NOT EXISTS (SELECT 1 FROM Movement m
+							  WHERE m.execution = e
+								AND m.status = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus.MOVED
+								AND m.reason IN :quarantineReasons)
+			""")
+	int deleteFinishedNotIn(@Param("keepIds") Collection<Long> keepIds,
+			@Param("quarantineReasons") Collection<MovementReason> quarantineReasons);
 
 	@Modifying
-	@Query("DELETE FROM Execution e WHERE e.finishedAt IS NOT NULL")
-	int deleteAllFinished();
+	@Query("""
+			DELETE FROM Execution e
+			 WHERE e.finishedAt IS NOT NULL
+			   AND NOT EXISTS (SELECT 1 FROM Movement m
+							  WHERE m.execution = e
+								AND m.status = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus.MOVED
+								AND m.reason IN :quarantineReasons)
+			""")
+	int deleteAllFinished(@Param("quarantineReasons") Collection<MovementReason> quarantineReasons);
 }

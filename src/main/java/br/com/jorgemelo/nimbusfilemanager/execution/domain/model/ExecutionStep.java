@@ -40,8 +40,8 @@ public class ExecutionStep {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(name = "public_id", nullable = false, unique = true, updatable = false)
-	private UUID publicId;
+	@Column(name = "execution_step_public_id", nullable = false, unique = true, updatable = false)
+	private UUID executionStepPublicId;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "execution_id", nullable = false)
@@ -74,8 +74,8 @@ public class ExecutionStep {
 
 	@PrePersist
 	void prePersist() {
-		if (publicId == null) {
-			publicId = UuidV7.generate();
+		if (executionStepPublicId == null) {
+			executionStepPublicId = UuidV7.generate();
 		}
 
 		if (createdAt == null) {

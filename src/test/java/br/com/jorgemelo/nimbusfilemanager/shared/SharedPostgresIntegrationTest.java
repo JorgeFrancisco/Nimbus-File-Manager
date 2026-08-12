@@ -54,7 +54,7 @@ public abstract class SharedPostgresIntegrationTest {
 	 * One instance for the whole JVM. Not annotated with {@code @Container}: see
 	 * the class comment for why the extension's lifecycle is the wrong one here.
 	 */
-	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
+	private static final PostgreSQLContainer<?> POSTGRES = TestPostgres.container();
 
 	static {
 		POSTGRES.start();

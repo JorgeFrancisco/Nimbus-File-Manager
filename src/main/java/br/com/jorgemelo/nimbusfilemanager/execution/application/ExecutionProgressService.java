@@ -62,16 +62,19 @@ public class ExecutionProgressService {
 	private final ExecutionItemProgressWriter executionItemProgressWriter;
 	private final ExecutionStepRepository executionStepRepository;
 	private final ExecutionMessageCodec messageCodec;
+	private final ExecutionRateWindow rateWindow;
 	private final Clock clock;
 
 	public ExecutionProgressService(ExecutionQueue executionQueue, ExecutionRepository executionRepository,
 			ExecutionItemProgressWriter executionItemProgressWriter,
-			ExecutionStepRepository executionStepRepository, ExecutionMessageCodec messageCodec, Clock clock) {
+			ExecutionStepRepository executionStepRepository, ExecutionMessageCodec messageCodec,
+			ExecutionRateWindow rateWindow, Clock clock) {
 		this.executionQueue = executionQueue;
 		this.executionRepository = executionRepository;
 		this.executionItemProgressWriter = executionItemProgressWriter;
 		this.executionStepRepository = executionStepRepository;
 		this.messageCodec = messageCodec;
+		this.rateWindow = rateWindow;
 		this.clock = clock;
 	}
 
@@ -105,10 +108,7 @@ public class ExecutionProgressService {
 
 		Execution managed = findExecution(ownership);
 
-		managed.setFilesFound(filesFound);
-		managed.setFilesAnalyzed(filesAnalyzed);
-		managed.setCacheHits(cacheHits);
-		managed.setErrors(errors);
+		applyCounters(managed, filesFound, filesAnalyzed, cacheHits, errors);
 
 		ExecutionMessage message = currentFile == null ? ExecutionMessages.progressUpdated()
 				: ExecutionMessages.processingFile(currentFile);
@@ -127,10 +127,7 @@ public class ExecutionProgressService {
 
 		Execution managed = findExecution(ownership);
 
-		managed.setFilesFound(filesFound);
-		managed.setFilesAnalyzed(filesAnalyzed);
-		managed.setCacheHits(cacheHits);
-		managed.setErrors(errors);
+		applyCounters(managed, filesFound, filesAnalyzed, cacheHits, errors);
 
 		ExecutionMessage message = currentItem == null ? ExecutionMessages.progressUpdated()
 				: ExecutionMessages.processing(currentItem);
@@ -157,12 +154,28 @@ public class ExecutionProgressService {
 
 		Execution managed = findExecution(ownership);
 
+		applyCounters(managed, filesFound, filesAnalyzed, cacheHits, errors);
+
+		applyMessage(managed, message);
+	}
+
+	/**
+	 * The counters, and the window the estimate is measured over, written together.
+	 *
+	 * <p>
+	 * Together because they are one fact: the window records the count the row now
+	 * carries, so a mark that travelled without its counters - or counters that
+	 * travelled without their mark - would describe a moment that never existed.
+	 * Every progress path goes through here for that reason; the terminal writes
+	 * deliberately do not, because a finished run has nothing left to estimate.
+	 */
+	private void applyCounters(Execution managed, int filesFound, int filesAnalyzed, int cacheHits, int errors) {
 		managed.setFilesFound(filesFound);
 		managed.setFilesAnalyzed(filesAnalyzed);
 		managed.setCacheHits(cacheHits);
 		managed.setErrors(errors);
 
-		applyMessage(managed, message);
+		rateWindow.advance(managed);
 	}
 
 	/**
@@ -585,10 +598,18 @@ public class ExecutionProgressService {
 				.orElseThrow(() -> new IllegalStateException("Execution not found: " + ownership.executionId()));
 	}
 
+	/**
+	 * The step carries no sentence when the caller had none, for the same reason
+	 * the row above keeps the one it had: a counter moving under the same step is
+	 * ordinary. Dereferencing the absent message here was the null the guard in
+	 * {@code applyMessage} was added for, one method later - it took the whole
+	 * progress transaction down, and the step with it.
+	 */
 	private void saveStep(Execution execution, ExecutionStepType stepType, Path path, ExecutionMessage message) {
 		executionStepRepository.save(ExecutionStep.builder().execution(execution).stepType(stepType)
 				.path(path == null ? null : path.toAbsolutePath().normalize().toString())
-				.statusMessage(StatusMessage.coded(message.code(), messageCodec.encode(message.args())))
+				.statusMessage(message == null ? null
+						: StatusMessage.coded(message.code(), messageCodec.encode(message.args())))
 				.filesFound(execution.getFilesFound()).filesAnalyzed(execution.getFilesAnalyzed())
 				.cacheHits(execution.getCacheHits()).errors(execution.getErrors()).build());
 	}

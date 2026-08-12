@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
@@ -24,12 +25,12 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryRe
 class RecordingFileChangeSource implements FileChangeSource {
 
 	private final Path root;
-	private final List<Path> live = new ArrayList<>();
+	private final List<FileSystemChange> live = new ArrayList<>();
 
-	private List<Path> backlog;
+	private List<FileSystemChange> backlog;
 	private WatchRecoveryReason reason;
 
-	RecordingFileChangeSource(Path root, List<Path> backlog, WatchRecoveryReason reason) {
+	RecordingFileChangeSource(Path root, List<FileSystemChange> backlog, WatchRecoveryReason reason) {
 		this.root = root;
 		this.backlog = List.copyOf(backlog);
 		this.reason = reason;
@@ -37,12 +38,12 @@ class RecordingFileChangeSource implements FileChangeSource {
 
 	/** A change seen after the source was built, the way the watcher would. */
 	void reportLive(Path changed) {
-		live.add(changed);
+		live.add(Changes.modified(changed));
 	}
 
 	@Override
-	public List<Path> pollChangedFiles() {
-		List<Path> changed = new ArrayList<>(backlog);
+	public List<FileSystemChange> pollChanges() {
+		List<FileSystemChange> changed = new ArrayList<>(backlog);
 
 		backlog = List.of();
 
@@ -54,8 +55,8 @@ class RecordingFileChangeSource implements FileChangeSource {
 	}
 
 	@Override
-	public List<Path> takeOfflineBacklog() {
-		List<Path> taken = backlog;
+	public List<FileSystemChange> takeOfflineBacklog() {
+		List<FileSystemChange> taken = backlog;
 
 		backlog = List.of();
 

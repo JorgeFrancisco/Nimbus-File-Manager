@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -60,7 +60,7 @@ class PhotoSimilarityRegroupTest {
 	@BeforeEach
 	void defaults() {
 		when(exclusions.signature()).thenReturn("none");
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
 	}
 
 	/**
@@ -220,7 +220,8 @@ class PhotoSimilarityRegroupTest {
 
 	private PhotoHashRawResponse photo(Long id) {
 		return new PhotoHashRawResponse(id, new byte[32], new byte[1024], id + ".jpg", "jpg", 100L,
-				"C:/Fotos/" + id + ".jpg", "C:/Fotos", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0).plusDays(id));
+				"C:/Fotos/" + id + ".jpg", "C:/Fotos",
+				Instant.parse("2024-01-01T10:00:00Z").plus(Duration.ofDays(id)));
 	}
 
 	private UUID publicId(Long catalogFileId) {

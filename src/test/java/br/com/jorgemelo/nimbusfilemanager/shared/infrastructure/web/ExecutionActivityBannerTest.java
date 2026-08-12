@@ -69,8 +69,10 @@ class ExecutionActivityBannerTest {
 	 */
 	@Test
 	void theQueueBehindThePrimaryIsNamed() throws Exception {
+		// The count is not computed here any more: the sentence arrives written,
+		// because telling running from queued is a reading of the domain.
 		assertThat(read()).contains("snapshot.others").contains("others.title")
-				.contains("snapshot.totalActive - 1");
+				.contains("snapshot.othersLabel").doesNotContain("totalActive");
 	}
 
 	/**
@@ -91,18 +93,25 @@ class ExecutionActivityBannerTest {
 	}
 
 	/**
-	 * The step bar has to be legible on both palettes. A soft tint is not: on the
-	 * dark one it lands almost exactly on the banner's own background and the bar
-	 * reads as absent. {@code --accent-strong} is defined in both themes and
-	 * inverts between them, which is the property that matters here.
+	 * The step bar has to be legible on both palettes, and that takes a colour of
+	 * its own on each - which is what {@code --progress-step} is for.
+	 *
+	 * <p>
+	 * This used to require {@code --accent-strong}, on the grounds that it inverts
+	 * between the themes. It does, but inverting is not the same as contrasting
+	 * with the bar above: on the light palette it is #1d4ed8 beside the overall
+	 * bar's #2563eb, two shades of one blue, measured at a contrast ratio of 1,30
+	 * - the two bars read as a single thick one. Requiring the token was pinning
+	 * the means; what has to hold is that the step bar has a value of its own,
+	 * stated for both themes.
 	 */
 	@Test
 	void theStepBarIsLegibleOnBothThemes() throws Exception {
 		String base = Files.readString(Path.of("src/main/resources/static/css/base.css"));
 		String css = Files.readString(Path.of("src/main/resources/static/css/layout.css"));
 
-		assertThat(css).contains("background: var(--accent-strong)");
-		assertThat(base.split("--accent-strong:", -1)).as("--accent-strong must be defined in both themes")
+		assertThat(css).contains("background: var(--progress-step)");
+		assertThat(base.split("--progress-step:", -1)).as("--progress-step must be defined in both themes")
 				.hasSize(3);
 	}
 

@@ -14,7 +14,6 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,14 +33,15 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMov
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -61,7 +61,10 @@ class ExplorerDeletionServiceTest {
 	private final ExplorerDeletionGuard guard = mock(ExplorerDeletionGuard.class);
 	private final EligibilityAnnouncer eligibilityAnnouncer = mock(EligibilityAnnouncer.class);
 	private final QuarantineIntakeService quarantineIntakeService = mock(QuarantineIntakeService.class);
-	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
+	private final CatalogFileLocationRepository catalogFileLocationRepository = mock(
+			CatalogFileLocationRepository.class);
+	private final ExplorerDeletionPersistence explorerDeletionPersistence = mock(
+			ExplorerDeletionPersistence.class);
 	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
 	private final ExecutionOwnership ownership = mock(ExecutionOwnership.class);
 
@@ -77,8 +80,8 @@ class ExplorerDeletionServiceTest {
 	private ExplorerDeletionService service(ExplorerFileSystem fileSystem) {
 		when(guard.refusal(any())).thenReturn(Optional.empty());
 
-		return new ExplorerDeletionService(guard, quarantineIntakeService, catalogFileRepository,
-				executionProgressService, fileSystem, eligibilityAnnouncer);
+		return new ExplorerDeletionService(guard, quarantineIntakeService, catalogFileLocationRepository,
+				executionProgressService, fileSystem, eligibilityAnnouncer, explorerDeletionPersistence);
 	}
 
 	@Test
@@ -106,7 +109,7 @@ class ExplorerDeletionServiceTest {
 			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		service().quarantine(command(file, quarantine), ownership);
 
@@ -121,9 +124,9 @@ class ExplorerDeletionServiceTest {
 			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file)).build();
+		CatalogFile stored = CatalogFiles.at(file);
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file))).thenReturn(Optional.of(stored));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.current().name())).thenReturn(Optional.of(stored));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
 		service().quarantine(command(file, quarantine), ownership);
@@ -146,10 +149,10 @@ class ExplorerDeletionServiceTest {
 		Path first = Files.createFile(folder.resolve("one.jpg"));
 		Path second = Files.createFile(folder.resolve("two.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(first)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(first)).build()));
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(second)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(second)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(first), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(first)));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(second), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(second)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
 		service().quarantine(command(folder, quarantine), ownership);
@@ -162,8 +165,8 @@ class ExplorerDeletionServiceTest {
 	void quarantiningNothingAsksForNothing(@TempDir Path folder, @TempDir Path quarantine) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(file)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.SKIPPED);
 
 		service().quarantine(command(folder, quarantine), ownership);
@@ -175,16 +178,17 @@ class ExplorerDeletionServiceTest {
 	void deletesAFileFromDiskAndMarksTheCatalogEntry(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file)).build();
+		CatalogFile stored = CatalogFiles.at(file);
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file))).thenReturn(Optional.of(stored));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.current().name())).thenReturn(Optional.of(stored));
 
 		service().deletePermanently(command(file, null), ownership);
 
 		Assertions.assertThat(file).doesNotExist();
-		Assertions.assertThat(stored.getLifecycleStatus()).isEqualTo(LifecycleStatus.DELETED);
-
-		verify(catalogFileRepository).saveAll(List.of(stored));
+		// The removal goes through the door that writes the transition and the fact
+		// in one statement, so the test asks who was removed rather than watching a
+		// status being assigned.
+		verify(explorerDeletionPersistence).removed(List.of(stored));
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
 				eq(new ExecutionCounts(1, 1, 0, 0)), carrying("backend.files.deleteDone", 1));
 	}
@@ -201,7 +205,7 @@ class ExplorerDeletionServiceTest {
 		Files.createFile(folder.resolve("a.jpg"));
 		Files.createFile(nested.resolve("b.jpg"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		service().deletePermanently(command(folder, null), ownership);
 
@@ -219,7 +223,7 @@ class ExplorerDeletionServiceTest {
 	void confirmsItStillOwnsTheTreeBeforeTheFirstRemoval(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		service().deletePermanently(command(file, null), ownership);
 
@@ -238,10 +242,10 @@ class ExplorerDeletionServiceTest {
 		Path first = Files.createFile(folder.resolve("a.jpg"));
 		Path second = Files.createFile(folder.resolve("b.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(first)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(first)).build()));
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(second)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(second)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(first), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(first)));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(second), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(second)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
 
 		service().quarantine(command(folder, quarantine), ownership);
@@ -261,8 +265,8 @@ class ExplorerDeletionServiceTest {
 			throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(file)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.ERROR);
 
 		service().quarantine(command(file, quarantine), ownership);
@@ -283,18 +287,18 @@ class ExplorerDeletionServiceTest {
 		Path taken = Files.createFile(folder.resolve("a.jpg"));
 		Path left = Files.createFile(folder.resolve("b.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(taken)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(taken)).build()));
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(left)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(left)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(taken), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(taken)));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(left), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(left)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
 			CatalogFile file = invocation.getArgument(1);
 
-			if (file.getFileKey().equals(PathUtils.normalize(left))) {
+			if (file.getLocation().getCurrentPath().equals(PathUtils.normalize(left))) {
 				return IntakeOutcome.SKIPPED;
 			}
 
-			Files.deleteIfExists(Path.of(file.getFileKey()));
+			Files.deleteIfExists(Path.of(file.getLocation().getCurrentPath()));
 
 			return IntakeOutcome.MOVED;
 		});
@@ -319,12 +323,12 @@ class ExplorerDeletionServiceTest {
 		ExplorerFileSystem refusing = mock(ExplorerFileSystem.class);
 
 		when(refusing.deleteRecursively(any(), any())).thenThrow(new IOException("in use"));
-		when(catalogFileRepository.findByFileKey(any()))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(any(), any()))
+				.thenReturn(Optional.of(CatalogFiles.at(file)));
 
 		service(refusing).deletePermanently(command(file, null), ownership);
 
-		verify(catalogFileRepository, never()).saveAll(any());
+		verify(explorerDeletionPersistence, never()).removed(any());
 		verify(executionProgressService).fail(any(), carrying("backend.files.deleteFailed", "in use"));
 	}
 
@@ -360,8 +364,8 @@ class ExplorerDeletionServiceTest {
 		when(refusing.isDirectory(folder)).thenReturn(true);
 		when(refusing.listFiles(any())).thenReturn(List.of(file));
 		doThrow(new IOException("not empty")).when(refusing).deleteEmptyTree(any(), any());
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(file)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(file)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenReturn(IntakeOutcome.MOVED);
 
 		service(refusing).quarantine(command(folder, quarantine), ownership);
@@ -384,8 +388,8 @@ class ExplorerDeletionServiceTest {
 		Path deeper = Files.createDirectory(year.resolve("praia"));
 		Path photo = Files.createFile(deeper.resolve("a.jpg"));
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(photo)))
-				.thenReturn(Optional.of(CatalogFile.builder().fileKey(PathUtils.normalize(photo)).build()));
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(photo), PathFlavor.current().name()))
+				.thenReturn(Optional.of(CatalogFiles.at(photo)));
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
 
 		service().quarantine(command(album, quarantine), ownership);
@@ -405,10 +409,10 @@ class ExplorerDeletionServiceTest {
 
 		Files.createFile(album.resolve("unknown.jpg"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenAnswer(invocation -> {
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenAnswer(invocation -> {
 			String key = invocation.getArgument(0);
 
-			return key.equals(PathUtils.normalize(known)) ? Optional.of(CatalogFile.builder().fileKey(key).build())
+			return key.equals(PathUtils.normalize(known)) ? Optional.of(CatalogFiles.at(known))
 					: Optional.empty();
 		});
 		when(quarantineIntakeService.intake(any(), any(), any(), any(), any())).thenAnswer(movingTheFileOut());
@@ -466,7 +470,7 @@ class ExplorerDeletionServiceTest {
 	 */
 	private Answer<IntakeOutcome> movingTheFileOut() {
 		return invocation -> {
-			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getFileKey()));
+			Files.deleteIfExists(Path.of(((CatalogFile) invocation.getArgument(1)).getLocation().getCurrentPath()));
 
 			return IntakeOutcome.MOVED;
 		};
@@ -484,8 +488,7 @@ class ExplorerDeletionServiceTest {
 	 * assert that a method was called rather than that a file went away.
 	 */
 	private static SecureLibraryFiles libraryFiles() {
-		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-				Clock.systemUTC());
+		SelfWrittenPathRegistry registry = new SelfWriteOff();
 
 		return new SecureLibraryFiles(
 				new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), registry), registry);

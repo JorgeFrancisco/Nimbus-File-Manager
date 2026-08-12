@@ -20,6 +20,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.TextUtils;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ExecutionComparison;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhaseComparisonRow;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetrics;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetricsCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsCategoryRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 /**
@@ -35,11 +39,17 @@ public class ExecutionTelemetryQueryService {
 
 	private final ExecutionRepository executionRepository;
 	private final ExecutionPhaseRepository executionPhaseRepository;
+	private final ExecutionMetricsRepository executionMetricsRepository;
+	private final ExecutionMetricsCategoryRepository executionMetricsCategoryRepository;
 
 	public ExecutionTelemetryQueryService(ExecutionRepository executionRepository,
-			ExecutionPhaseRepository executionPhaseRepository) {
+			ExecutionPhaseRepository executionPhaseRepository,
+			ExecutionMetricsRepository executionMetricsRepository,
+			ExecutionMetricsCategoryRepository executionMetricsCategoryRepository) {
 		this.executionRepository = executionRepository;
 		this.executionPhaseRepository = executionPhaseRepository;
+		this.executionMetricsRepository = executionMetricsRepository;
+		this.executionMetricsCategoryRepository = executionMetricsCategoryRepository;
 	}
 
 	public List<ExecutionTelemetryRow> recent(String version) {
@@ -52,6 +62,24 @@ public class ExecutionTelemetryQueryService {
 
 	public List<ExecutionPhase> phases(Long executionId) {
 		return executionPhaseRepository.findByExecutionIdOrderByPhaseAsc(executionId);
+	}
+
+	/**
+	 * The aggregate of the attempt that measured the run: counts, waits and the
+	 * configuration it worked under. Absent for an execution nobody measured,
+	 * which the screen has to survive rather than treat as an error.
+	 */
+	public Optional<ExecutionMetrics> aggregate(Long executionId) {
+		return executionMetricsRepository.findById(executionId);
+	}
+
+	/**
+	 * What each external tool cost this run. Only the categories it actually
+	 * used have a row, so an empty list means the run spawned no external
+	 * process - not that it spawned some for free.
+	 */
+	public List<ExecutionMetricsCategory> categories(Long executionId) {
+		return executionMetricsCategoryRepository.findByExecutionIdOrderByCategoryAsc(executionId);
 	}
 
 	public List<String> versions() {

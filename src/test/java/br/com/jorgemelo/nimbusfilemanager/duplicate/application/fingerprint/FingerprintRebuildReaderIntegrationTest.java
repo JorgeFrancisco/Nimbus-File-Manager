@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
@@ -16,11 +17,14 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.FingerprintRebuildTaskRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -59,6 +63,9 @@ class FingerprintRebuildReaderIntegrationTest extends SharedPostgresIntegrationT
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	/**
 	 * The one that matters: a file already fingerprinted is exactly what a rebuild
@@ -227,12 +234,12 @@ class FingerprintRebuildReaderIntegrationTest extends SharedPostgresIntegrationT
 
 		String path = "C:/test/" + key + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now()).fileType(fileType).lifecycleStatus(LifecycleStatus.ACTIVE).build();
+		CatalogFile file = CatalogFile.builder().extension("jpg").sizeBytes(1L)
+				.modifiedAt(Instant.now()).fileType(fileType).lifecycleStatus(LifecycleStatus.ACTIVE).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
-				.originalPath(path).originalFolder("C:/test").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file).getId();
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file).getId();
 	}
 
 	private void fingerprinted(long catalogFileId) {

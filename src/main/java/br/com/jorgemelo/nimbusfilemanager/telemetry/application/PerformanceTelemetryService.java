@@ -7,28 +7,47 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.CategorySnapshot;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ConfigSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhaseSnapshot;
-import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhotoHashCounters;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.Snapshot;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetrics;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetricsCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsCategoryRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 /**
- * Persists the performance telemetry of a finished execution: one
- * {@code execution_metrics} row (duration, files/s, config snapshot and
- * photo-hash counters) plus one {@code execution_phase} row per measured phase.
- * The application version stays on the {@code execution} row. Called once per
- * execution, so it never affects the run's throughput.
+ * Writes down what one attempt of one execution measured: the aggregate, the
+ * macro phases and the cost of each external tool it used.
+ *
+ * <p>
+ * <b>One transaction, fenced at the top.</b> The first thing it does is hold
+ * the attempt in force in the database; everything after that happens under
+ * that hold, and a taking that has been superseded gets no further than the
+ * first statement. Checking in memory and then writing would leave a window
+ * between the two - the recovery pass runs on a timer, so that window is not
+ * theoretical - and a stale attempt reaching the writes could delete the phases
+ * and categories of the taking that replaced it. Not just fail to add its own:
+ * <em>delete</em> the current ones, because consolidation replaces.
+ *
+ * <p>
+ * <b>Terminal is not stale.</b> The run is finished, cancelled or failed by the
+ * time this is called - that is where the duration comes from - so the fence
+ * deliberately says nothing about status or lease. Only a newer attempt
+ * invalidates this one.
  */
 @Service
 public class PerformanceTelemetryService {
@@ -36,40 +55,38 @@ public class PerformanceTelemetryService {
 	private final ExecutionRepository executionRepository;
 	private final ExecutionMetricsRepository executionMetricsRepository;
 	private final ExecutionPhaseRepository executionPhaseRepository;
+	private final ExecutionMetricsCategoryRepository executionMetricsCategoryRepository;
 	private final String applicationVersion;
 	private final Clock clock;
 
 	public PerformanceTelemetryService(ExecutionRepository executionRepository,
 			ExecutionMetricsRepository executionMetricsRepository, ExecutionPhaseRepository executionPhaseRepository,
+			ExecutionMetricsCategoryRepository executionMetricsCategoryRepository,
 			@Value("${application.version:unknown}") String applicationVersion, Clock clock) {
 		this.executionRepository = executionRepository;
 		this.executionMetricsRepository = executionMetricsRepository;
 		this.executionPhaseRepository = executionPhaseRepository;
+		this.executionMetricsCategoryRepository = executionMetricsCategoryRepository;
 		this.applicationVersion = applicationVersion;
 		this.clock = clock;
 	}
 
+	/**
+	 * @return whether anything was written - false means a later attempt owns the
+	 * row and this one's numbers were dropped, which is the fence working rather
+	 * than an error
+	 */
 	@Transactional
-	public void recordMetrics(Long executionId, ConfigSnapshot config, Map<ExecutionPhaseType, PhaseSnapshot> phases) {
-		doRecord(executionId, config, phases, null);
-	}
-
-	@Transactional
-	public void recordMetrics(Long executionId, ConfigSnapshot config, Map<ExecutionPhaseType, PhaseSnapshot> phases,
-			PhotoHashCounters counters) {
-		doRecord(executionId, config, phases, counters);
-	}
-
-	private void doRecord(Long executionId, ConfigSnapshot config, Map<ExecutionPhaseType, PhaseSnapshot> phases,
-			PhotoHashCounters counters) {
-		if (executionId == null) {
-			return;
+	public boolean recordMetrics(ExecutionOwnership ownership, ExecutionMetricsContext context,
+			ConfigSnapshot config) {
+		if (!ownership.pinAttempt()) {
+			return false;
 		}
 
-		Optional<Execution> found = executionRepository.findById(executionId);
+		Optional<Execution> found = executionRepository.findById(ownership.executionId());
 
 		if (found.isEmpty()) {
-			return;
+			return false;
 		}
 
 		Execution execution = found.get();
@@ -78,13 +95,14 @@ public class PerformanceTelemetryService {
 
 		executionRepository.save(execution);
 
-		ExecutionMetrics metrics = buildMetrics(execution, config, counters);
+		executionMetricsRepository.save(aggregate(execution, ownership.claimCount(), context.processing().snapshot(),
+				config));
 
-		if (metrics != null) {
-			executionMetricsRepository.save(metrics);
-		}
+		replacePhases(ownership.executionId(), context.phases().snapshot());
 
-		persistPhases(executionId, phases);
+		replaceCategories(ownership.executionId(), context.processing().snapshot());
+
+		return true;
 	}
 
 	private void applyApplicationVersion(Execution execution) {
@@ -94,41 +112,41 @@ public class PerformanceTelemetryService {
 	}
 
 	/**
-	 * Finds or creates the {@code execution_metrics} row and applies whatever is
-	 * available (duration, config, counters). Returns {@code null} when there is
-	 * nothing to store, so an empty row is never created. {@link ExecutionMetrics}
-	 * is unidirectional now, so it is looked up and saved through its own
-	 * repository instead of cascading from {@code Execution}.
+	 * The row is per execution, not per attempt, so a reclaim overwrites what the
+	 * previous taking left. {@code attemptClaimCount} records which one this is -
+	 * the answer to "whose numbers are these?", and the reason a late writer
+	 * cannot pretend to be the current one.
 	 */
-	private ExecutionMetrics buildMetrics(Execution execution, ConfigSnapshot config, PhotoHashCounters counters) {
-		Long durationMillis = durationMillis(execution);
-
-		if (durationMillis == null && config == null && counters == null) {
-			return null;
-		}
-
-		ExecutionMetrics metrics = executionMetricsRepository.findById(execution.getId())
+	private ExecutionMetrics aggregate(Execution execution, int claimCount, Snapshot metrics, ConfigSnapshot config) {
+		ExecutionMetrics row = executionMetricsRepository.findById(execution.getId())
 				.orElseGet(() -> newMetrics(execution));
 
-		if (durationMillis != null) {
-			metrics.setDurationMillis(durationMillis);
-			metrics.setFilesPerSecond(filesPerSecond(execution, durationMillis));
-		}
+		row.setAttemptClaimCount(claimCount);
+
+		Long durationMillis = durationMillis(execution);
+
+		row.setDurationMillis(durationMillis);
+		row.setFilesPerSecond(durationMillis == null ? null : filesPerSecond(execution, durationMillis));
+
+		row.setTasksExecuted(metrics.tasksExecuted());
+		row.setTasksCacheAvoided(metrics.tasksCacheAvoided());
+		row.setTasksCancelled(metrics.tasksCancelled());
+		row.setTasksError(metrics.tasksError());
+
+		row.setQueueWaitMillis(millis(metrics.queueWaitNanos()));
+		row.setTaskTotalMillis(millis(metrics.taskTotalNanos()));
+		row.setBatchWallClockMillis(millis(metrics.wallClockNanos()));
+
+		row.setMaxConcurrency(metrics.maxConcurrency());
 
 		if (config != null) {
-			metrics.setWorkers(config.workers());
-			metrics.setChunkSize(config.chunkSize());
-			metrics.setFfmpegPhotoHashLimit(config.ffmpegPhotoHashLimit());
-			metrics.setFfprobeVideoLimit(config.ffprobeVideoLimit());
+			row.setWorkers(config.workers());
+			row.setChunkSize(config.chunkSize());
+			row.setFfmpegPhotoHashLimit(config.ffmpegPhotoHashLimit());
+			row.setFfprobeVideoLimit(config.ffprobeVideoLimit());
 		}
 
-		if (counters != null) {
-			metrics.setPhotoHashJvmDecodable(counters.jvmDecodable());
-			metrics.setPhotoHashFfmpegOnly(counters.ffmpegOnly());
-			metrics.setPhotoHashFailures(counters.failures());
-		}
-
-		return metrics;
+		return row;
 	}
 
 	private ExecutionMetrics newMetrics(Execution execution) {
@@ -174,8 +192,15 @@ public class PerformanceTelemetryService {
 		return durationMillis > 0 ? files * 1000.0 / durationMillis : 0.0;
 	}
 
-	private void persistPhases(Long executionId, Map<ExecutionPhaseType, PhaseSnapshot> phases) {
-		if (phases == null || phases.isEmpty()) {
+	/**
+	 * Replaces rather than appends: a reclaimed execution measures its phases
+	 * again from zero, and adding them to what the previous attempt left would
+	 * show a run that took twice as long as it did.
+	 */
+	private void replacePhases(Long executionId, Map<ExecutionPhaseType, PhaseSnapshot> phases) {
+		executionPhaseRepository.deleteByExecutionId(executionId);
+
+		if (phases.isEmpty()) {
 			return;
 		}
 
@@ -185,5 +210,41 @@ public class PerformanceTelemetryService {
 				.durationMillis(snapshot.durationMillis()).items(snapshot.items()).build()));
 
 		executionPhaseRepository.saveAll(rows);
+	}
+
+	/**
+	 * Only the categories this run actually used. A drain that never touched
+	 * ffprobe has no ffprobe row, which is the difference between "did not use it"
+	 * and "used it and it cost nothing".
+	 */
+	private void replaceCategories(Long executionId, Snapshot metrics) {
+		executionMetricsCategoryRepository.deleteByExecutionId(executionId);
+
+		List<ExecutionMetricsCategory> rows = new ArrayList<>();
+
+		metrics.categories().forEach((category, snapshot) -> {
+			if (used(snapshot)) {
+				rows.add(categoryRow(executionId, category, snapshot));
+			}
+		});
+
+		if (!rows.isEmpty()) {
+			executionMetricsCategoryRepository.saveAll(rows);
+		}
+	}
+
+	private boolean used(CategorySnapshot snapshot) {
+		return snapshot.runs() > 0 || snapshot.gateWaitNanos() > 0 || snapshot.externalExecNanos() > 0;
+	}
+
+	private ExecutionMetricsCategory categoryRow(Long executionId, ExternalToolCategory category,
+			CategorySnapshot snapshot) {
+		return ExecutionMetricsCategory.builder().executionId(executionId).category(category).runs(snapshot.runs())
+				.gateWaitMillis(millis(snapshot.gateWaitNanos()))
+				.externalExecMillis(millis(snapshot.externalExecNanos())).build();
+	}
+
+	private long millis(long nanos) {
+		return TimeUnit.NANOSECONDS.toMillis(nanos);
 	}
 }

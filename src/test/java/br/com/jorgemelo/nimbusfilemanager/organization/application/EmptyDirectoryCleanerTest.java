@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -14,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 
@@ -141,8 +140,7 @@ class EmptyDirectoryCleanerTest {
 	 * assert that a method was called rather than that a file went away.
 	 */
 	private static SecureLibraryFiles libraryFiles() {
-		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-				Clock.systemUTC());
+		SelfWrittenPathRegistry registry = new SelfWriteOff();
 
 		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 				registry), registry);

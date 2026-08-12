@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
@@ -45,7 +46,7 @@ class OrganizationPreviewQueueTest {
 
 	private final OrganizationPreviewLauncher launcher = new OrganizationPreviewLauncher(executionEnqueueService,
 			executionPayloadCodec, new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()),
-					new ExecutionLabels()));
+					new ExecutionLabels(), Progress.reader(), Progress.estimator()));
 
 	private final OrganizationPreviewJobHandler handler = new OrganizationPreviewJobHandler(organizationPreviewJob,
 			organizationMetadataRebuild, executionPayloadCodec);

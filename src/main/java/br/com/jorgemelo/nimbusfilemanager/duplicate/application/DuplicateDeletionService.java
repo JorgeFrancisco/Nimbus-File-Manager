@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -24,6 +25,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorT
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -92,11 +94,11 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 		Path quarantineRoot = configured.get();
 
-		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new));
+		List<CatalogFile> files = catalogFileRepository.findByCatalogFilePublicIdIn(publicIds.toArray(UUID[]::new));
 
 		Path[] lockedPaths = Stream
 				.concat(Stream.of(quarantineRoot),
-						files.stream().map(file -> PathUtils.normalizePath(file.getFileKey())))
+						files.stream().map(file -> PathUtils.normalizePath(file.getLocation().getCurrentPath())))
 				.distinct().toArray(Path[]::new);
 
 		executionProgressService.updateTotal(ownership, publicIds.size());
@@ -144,6 +146,10 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			log.warn("Duplicate deletion skipped {} selected id(s) with no active catalog entry", unresolved);
 		}
 
+		// Every operation on record before the first file leaves its folder.
+		Map<Long, PreparedMovement> operations = quarantineIntakeService.prepare(execution, files, quarantineRoot,
+				MovementReason.DUPLICATE_QUARANTINED);
+
 		for (CatalogFile file : files) {
 			if (executionCancellationService.isCancelled(execution.getId())) {
 				break;
@@ -151,8 +157,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 			ownership.assertMayGoOnWorking();
 
-			switch (quarantineIntakeService.intake(execution, file, quarantineRoot,
-					MovementReason.DUPLICATE_QUARANTINED, execution.getId())) {
+			switch (quarantineIntakeService.intake(execution, file, quarantineRoot, operations.get(file.getId()),
+					execution.getId())) {
 			case MOVED -> moved++;
 			case SKIPPED -> skipped++;
 			case ERROR -> {
@@ -160,7 +166,8 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 				// Counted and named: the execution screen used to report the failure without
 				// ever saying which file it belonged to.
-				executionErrorService.save(PathUtils.normalizePath(file.getFileKey()), ExecutionErrorType.MOVE_ERROR,
+				executionErrorService.save(PathUtils.normalizePath(file.getLocation().getCurrentPath()),
+					ExecutionErrorType.MOVE_ERROR,
 						message("backend.duplicates.moveFailed"), execution);
 			}
 			}
@@ -171,7 +178,7 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			// totalExpected, and putting it here made the bar full before the second
 			// file was looked at.
 			executionProgressService.updateLiveProgress(ownership, processed, processed, skipped, errors,
-					ExecutionMessages.processing(file.getFileName()));
+					ExecutionMessages.processing(file.getLocation().fileName()));
 		}
 
 		// Once for the batch, and only if a file really left: every file that moved
@@ -191,7 +198,7 @@ public class DuplicateDeletionService extends LocalizedComponent {
 		// The screen reads the report from the row, where the message is a code the
 		// request localises. This one is only for whoever called in-process.
 		return new DuplicateDeletionResult(true, total, moved, skipped, errors,
-				UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+				UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()),
 				message("backend.duplicates.deletionCompleted", moved, skipped, errors));
 	}
 

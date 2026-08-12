@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -11,10 +12,13 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFolderExclusion;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -49,6 +53,9 @@ class SimilarityEligibleSelectionIntegrationTest extends SharedPostgresIntegrati
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private MediaFingerprintRepository mediaFingerprintRepository;
@@ -175,13 +182,13 @@ class SimilarityEligibleSelectionIntegrationTest extends SharedPostgresIntegrati
 			String unique = folder.hashCode() + "-" + index;
 			String path = folder + backslash() + unique + ".jpg";
 
-			CatalogFile file = CatalogFile.builder().fileKey("eligible-" + unique).fileName(unique + ".jpg")
-					.extension("jpg").sizeBytes(1L).modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).build();
+			CatalogFile file = CatalogFile.builder()
+					.extension("jpg").sizeBytes(1L).modifiedAt(Instant.now()).fileType(FileType.PHOTO).build();
 
 			file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder(folder)
-					.originalPath(path).originalFolder(folder).build());
+					.pathFlavor(PathFlavor.WINDOWS).build());
 
-			CatalogFile saved = catalogFileRepository.saveAndFlush(file);
+			CatalogFile saved = CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 
 			mediaFingerprintRepository.saveAndFlush(MediaFingerprint.builder().catalogFileId(saved.getId())
 					.kind(FingerprintKind.PHOTO_PHASH).algorithm(PHOTO_ALGORITHM).sampleIndex(0).hashBytes(new byte[32])

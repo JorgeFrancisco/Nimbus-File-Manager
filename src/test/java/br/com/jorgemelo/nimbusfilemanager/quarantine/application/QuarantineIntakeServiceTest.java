@@ -1,6 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+
+import static org.mockito.ArgumentMatchers.anyLong;
+
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -11,14 +15,12 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.MoveIntegrityException;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
@@ -27,21 +29,23 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibrary
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 
 class QuarantineIntakeServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
-	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
+	private final MovementWriter movementWriter = mock(MovementWriter.class);
+	private final QuarantinePersistence persistence = mock(QuarantinePersistence.class);
 	private final QuarantineFolderPolicy quarantineFolderPolicy = mock(QuarantineFolderPolicy.class);
-	private final QuarantineIntakeService service = new QuarantineIntakeService(persistence,
+	private final QuarantineIntakeService service = new QuarantineIntakeService(persistence, movementWriter,
 			new SecureLibraryFiles(
 					new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 					pathRegistry), quarantineFolderPolicy);
@@ -66,7 +70,6 @@ class QuarantineIntakeServiceTest {
 		when(quarantineFolderPolicy.root()).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service.root()).isEmpty();
-
 	}
 
 	@Test
@@ -75,9 +78,9 @@ class QuarantineIntakeServiceTest {
 		Path trash = tmp.resolve("trash");
 		Path original = Files.writeString(library.resolve("clip.mp4"), "content");
 
-		CatalogFile file = file(original);
+		CatalogFile file = file();
 
-		IntakeOutcome outcome = service.intake(execution, file, trash, MovementReason.CONVERTED_QUARANTINED, null);
+		IntakeOutcome outcome = service.intake(execution, file, trash, prepared(file, original, trash), null);
 
 		Path quarantined = trash.resolve("exec-1").resolve("10__clip.mp4");
 
@@ -85,23 +88,50 @@ class QuarantineIntakeServiceTest {
 		Assertions.assertThat(original).doesNotExist();
 		Assertions.assertThat(quarantined).hasContent("content");
 
-		verify(persistence).persistQuarantine(execution, file, original, quarantined,
-				MovementReason.CONVERTED_QUARANTINED);
+		verify(persistence).persistQuarantine(anyLong(), any(), eq(file), eq(original), eq(quarantined), any());
 	}
 
 	@Test
 	void skipsAnEntryThatIsNoLongerActive(@TempDir Path tmp) throws Exception {
 		Path original = Files.writeString(tmp.resolve("clip.mp4"), "content");
 
-		CatalogFile file = file(original);
+		CatalogFile file = file();
 
 		file.setLifecycleStatus(LifecycleStatus.DELETED);
 
 		Assertions
-				.assertThat(service.intake(execution, file, tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED,
-						null))
+				.assertThat(service.intake(execution, file, tmp.resolve("trash"),
+						prepared(file, original, tmp.resolve("trash")), null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(original).exists();
+	}
+
+	/**
+	 * A retry of a run whose worker died after the file had already been taken.
+	 *
+	 * <p>
+	 * The intake does not resume: the operation on record is what says the work
+	 * was done, and a settled one is not work to redo. Anything else would take a
+	 * second file - whatever now sits at that path - and file it under an
+	 * operation that was about the first.
+	 */
+	@Test
+	void doesNotTakeAFileAgainForAnOperationAnEarlierAttemptSettled(@TempDir Path tmp) throws Exception {
+		Path original = Files.writeString(tmp.resolve("clip.mp4"), "whatever is there now");
+
+		CatalogFile file = file();
+
+		PreparedMovement settled = PreparedMovements.settled(1L, file.getId(), original,
+				tmp.resolve("trash").resolve("exec-1").resolve("10__clip.mp4"));
+
+		Assertions.assertThat(service.intake(execution, file, tmp.resolve("trash"), settled, null))
+				.isEqualTo(IntakeOutcome.SKIPPED);
+
+		Assertions.assertThat(original).as("nothing was moved a second time").exists();
+
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
+		verify(movementWriter, never()).markMoved(anyLong(), any());
+		verify(movementWriter, never()).markSkipped(anyLong(), any(), any());
 	}
 
 	@Test
@@ -109,17 +139,20 @@ class QuarantineIntakeServiceTest {
 		Path trash = Files.createDirectories(tmp.resolve("trash"));
 		Path inside = Files.writeString(trash.resolve("clip.mp4"), "content");
 
-		Assertions.assertThat(service.intake(execution, file(inside), trash, MovementReason.DUPLICATE_QUARANTINED,
-				null))
+		Assertions.assertThat(service.intake(execution, file(), trash,
+				prepared(file(), inside, trash), null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
 	void skipsAFileThatIsNoLongerOnDisk(@TempDir Path tmp) {
-		Assertions.assertThat(service.intake(execution, file(tmp.resolve("gone.mp4")), tmp.resolve("trash"),
-				MovementReason.DUPLICATE_QUARANTINED, null)).isEqualTo(IntakeOutcome.SKIPPED);
+		CatalogFile gone = file();
+
+		Assertions.assertThat(service.intake(execution, gone, tmp.resolve("trash"),
+				prepared(gone, tmp.resolve("gone.mp4"), tmp.resolve("trash")), null))
+				.isEqualTo(IntakeOutcome.SKIPPED);
 	}
 
 	@Test
@@ -128,10 +161,11 @@ class QuarantineIntakeServiceTest {
 		Path trash = tmp.resolve("trash");
 		Path original = Files.writeString(library.resolve("clip.mp4"), "content");
 
-		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any(),
+		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(anyLong(), any(), any(), any(), any(),
 				any());
 
-		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED,
+		Assertions.assertThat(service.intake(execution, file(), trash,
+				prepared(file(), original, trash),
 				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(original).hasContent("content");
@@ -149,9 +183,10 @@ class QuarantineIntakeServiceTest {
 			Files.writeString(original, "blocker");
 
 			throw new IllegalStateException("db down");
-		}).when(persistence).persistQuarantine(any(), any(), any(), any(), any());
+		}).when(persistence).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 
-		Assertions.assertThat(service.intake(execution, file(original), trash, MovementReason.CONVERTED_QUARANTINED,
+		Assertions.assertThat(service.intake(execution, file(), trash,
+				prepared(file(), original, trash),
 				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__clip.mp4")).exists();
@@ -162,12 +197,13 @@ class QuarantineIntakeServiceTest {
 		Path shortcut = Files.writeString(tmp.resolve("clip.lnk"), "shortcut");
 
 		Assertions.assertThat(
-				service.intake(execution, file(shortcut), tmp.resolve("trash"), MovementReason.CONVERTED_QUARANTINED,
+				service.intake(execution, file(), tmp.resolve("trash"),
+						prepared(file(), shortcut, tmp.resolve("trash")),
 						null))
 				.isEqualTo(IntakeOutcome.SKIPPED);
 		Assertions.assertThat(shortcut).exists();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -183,17 +219,18 @@ class QuarantineIntakeServiceTest {
 		when(verifier.capture(any())).thenReturn(new MoveBaseline(7L, "sha"));
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
-		QuarantineIntakeService failing = new QuarantineIntakeService(persistence,
+		QuarantineIntakeService failing = new QuarantineIntakeService(persistence, movementWriter,
 				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
 						quarantineFolderPolicy);
 
-		Assertions.assertThat(failing.intake(execution, file(original), trash, MovementReason.DUPLICATE_QUARANTINED,
+		Assertions.assertThat(failing.intake(execution, file(), trash,
+				prepared(file(), original, trash),
 				null))
 				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(original).hasContent("content");
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__clip.mp4")).doesNotExist();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	/**
@@ -222,18 +259,29 @@ class QuarantineIntakeServiceTest {
 
 		when(failing.rollback(any(), any())).thenReturn(false);
 
-		QuarantineIntakeService orphaning = new QuarantineIntakeService(persistence, failing, quarantineFolderPolicy);
+		QuarantineIntakeService orphaning = new QuarantineIntakeService(persistence, movementWriter, failing, quarantineFolderPolicy);
 
-		Assertions.assertThat(orphaning.intake(execution, file(original), trash,
-				MovementReason.DUPLICATE_QUARANTINED, 1L)).isEqualTo(IntakeOutcome.ERROR);
+		Assertions.assertThat(orphaning.intake(execution, file(), trash,
+				prepared(file(), original, trash), 1L))
+				.isEqualTo(IntakeOutcome.ERROR);
 		Assertions.assertThat(original).doesNotExist();
 
 		verify(failing).rollback(any(), any());
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
-	private CatalogFile file(Path path) {
-		return CatalogFile.builder().id(10L).fileKey(path.toString()).fileName(path.getFileName().toString())
+	private CatalogFile file() {
+		return CatalogFile.builder().id(10L)
 				.lifecycleStatus(LifecycleStatus.ACTIVE).build();
+	}
+
+	/**
+	 * The movement the door prepared before anything moved, which is what the
+	 * intake is handed now: the identity of the fact it will produce already
+	 * exists, and the operation cannot mint a different one afterwards.
+	 */
+	private PreparedMovement prepared(CatalogFile file, Path source, Path quarantineRoot) {
+		return PreparedMovements.pending(1L, file.getId(), source,
+				quarantineRoot.resolve("exec-1").resolve(file.getId() + "__" + source.getFileName()));
 	}
 }

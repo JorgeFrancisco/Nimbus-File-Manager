@@ -33,6 +33,7 @@ class ExecutionMessagesTest {
 	void detailFactoriesCarryTheFailureTail() {
 		assertMessage(ExecutionMessages.inventoryRejected("locked"), ExecutionMessages.INVENTORY_REJECTED, "locked");
 		assertMessage(ExecutionMessages.inventoryFailed("boom"), ExecutionMessages.INVENTORY_FAILED, "boom");
+		assertMessage(ExecutionMessages.failed("boom"), ExecutionMessages.FAILED, "boom");
 		assertMessage(ExecutionMessages.inventoryStartFailed("bad params"), ExecutionMessages.INVENTORY_START_FAILED,
 				"bad params");
 		assertMessage(ExecutionMessages.processing("item-1"), ExecutionMessages.PROCESSING_ITEM, "item-1");

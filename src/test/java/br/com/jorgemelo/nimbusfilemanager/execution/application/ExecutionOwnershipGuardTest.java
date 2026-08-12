@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -121,6 +122,36 @@ class ExecutionOwnershipGuardTest {
 		assertThat(guard.pin(EXECUTION_ID, 2)).isTrue();
 
 		verify(executionQueue).pin(EXECUTION_ID, "worker-a", 1);
+	}
+
+	/**
+	 * The attempt-only hold, used where the run is already over: the telemetry
+	 * consolidation. It goes to the database with the caller's own number, for
+	 * the same reason {@code pin} does - only the row can say whether a later
+	 * attempt has taken over.
+	 */
+	@Test
+	void anAttemptPinAsksTheRowAboutTheCallersOwnAttempt() {
+		guard.takes(new ExecutionPossession(EXECUTION_ID, "worker-a", 2));
+
+		when(executionQueue.pinAttempt(EXECUTION_ID, 1)).thenReturn(false);
+		when(executionQueue.pinAttempt(EXECUTION_ID, 2)).thenReturn(true);
+
+		assertThat(guard.pinAttempt(EXECUTION_ID, 1)).as("the superseded attempt is refused by the row")
+				.isFalse();
+		assertThat(guard.pinAttempt(EXECUTION_ID, 2)).isTrue();
+	}
+
+	/**
+	 * An execution nobody in this process holds is not fenced, exactly as with
+	 * {@code pin}: those are commands about an execution rather than a run
+	 * reporting on itself, and they answer to the row as it stands.
+	 */
+	@Test
+	void anAttemptPinForARowNobodyHoldsIsNotFenced() {
+		assertThat(guard.pinAttempt(EXECUTION_ID, 1)).isTrue();
+
+		verifyNoInteractions(executionQueue);
 	}
 
 	/**

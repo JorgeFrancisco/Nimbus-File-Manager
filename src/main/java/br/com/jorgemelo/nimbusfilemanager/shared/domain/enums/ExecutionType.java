@@ -50,7 +50,7 @@ public enum ExecutionType {
 	 * the answer is written to the catalog or only shown, which is a flag in the
 	 * request and not a different kind of work to schedule.
 	 */
-	METADATA_REBUILD,
+	METADATA_REBUILD, CONTENT_VERIFICATION,
 
 	/**
 	 * Resolving the location of media that already has coordinates, and acquiring

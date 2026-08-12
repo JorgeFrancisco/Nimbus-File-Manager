@@ -7,7 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
@@ -67,6 +66,13 @@ class SettingsGeodataWebControllerTest {
 		Assertions.assertThat(redirect.getFlashAttributes()).containsKey("success");
 	}
 
+	/**
+	 * The button asks and the worker does, which is also why nothing here consults
+	 * the rule that keeps the <em>automatic</em> acquisition out of a first
+	 * cataloguing's way: a fresh installation with no inventory behind it can still
+	 * download on request. This breaks the moment that guard is pushed down into a
+	 * layer the manual path shares.
+	 */
 	@Test
 	void downloadIsQueued() {
 		queued();

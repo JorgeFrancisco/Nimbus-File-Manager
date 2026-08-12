@@ -45,12 +45,4 @@ public class MediaGeoLocation {
 
 	@Embedded
 	private ResolvedPlace place;
-
-	/**
-	 * A manual location prevails over any automatic resolution. Primitive
-	 * {@code boolean}: default {@code false} explicit in Java and in the DB
-	 * ({@code DEFAULT FALSE}); no third (null) state is meaningful.
-	 */
-	@Column(nullable = false)
-	private boolean manual;
 }

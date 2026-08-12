@@ -549,7 +549,7 @@ class SimilarityJobTest {
 	}
 
 	private SimilarityGrouping grouping() {
-		return SimilarityGrouping.builder().id(1L).publicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
+		return SimilarityGrouping.builder().id(1L).similarityGroupingPublicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
 				.status(GroupingStatus.BUILDING).build();
 	}
 }

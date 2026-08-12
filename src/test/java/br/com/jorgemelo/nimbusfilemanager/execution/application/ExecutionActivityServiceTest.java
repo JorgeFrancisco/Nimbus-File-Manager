@@ -61,7 +61,9 @@ class ExecutionActivityServiceTest {
 
 		assertThat(snapshot.primary()).isNull();
 		assertThat(snapshot.others()).isEmpty();
-		assertThat(snapshot.totalActive()).isZero();
+		assertThat(snapshot.running()).isZero();
+		assertThat(snapshot.queued()).isZero();
+		assertThat(snapshot.othersLabel()).isNull();
 	}
 
 	/**
@@ -109,7 +111,57 @@ class ExecutionActivityServiceTest {
 
 		assertThat(snapshot.primary().status()).isEqualTo("PENDING");
 		assertThat(snapshot.primary().statusLabel()).isEqualTo("Na fila");
-		assertThat(snapshot.totalActive()).isEqualTo(1);
+		assertThat(snapshot.running()).isZero();
+		assertThat(snapshot.queued()).isEqualTo(1);
+	}
+
+	/**
+	 * The banner used to say "+5 in progress" for one inventory with five requests
+	 * queued behind it - work this application cannot even do, since a queue is
+	 * precisely what keeps them from running at once. Running and queued are
+	 * counted apart and the sentence says both.
+	 */
+	@Test
+	void theBannerSaysWhatIsRunningApartFromWhatIsWaiting() {
+		LocaleContextHolder.setLocale(PT_BR);
+
+		when(executionRepository.findByStatusIn(any()))
+				.thenReturn(List.of(execution(ExecutionType.INVENTORY, ExecutionStatus.RUNNING, 0, NOON),
+						execution(ExecutionType.CONVERSION, ExecutionStatus.RUNNING, 0, NOON.plusMinutes(1)),
+						execution(ExecutionType.METADATA_REBUILD, ExecutionStatus.PENDING, 0, NOON),
+						execution(ExecutionType.LOCATION_REBUILD, ExecutionStatus.PENDING, 0, NOON.plusMinutes(2))));
+
+		ExecutionActivitySnapshot snapshot = service.current();
+
+		assertThat(snapshot.running()).isEqualTo(2);
+		assertThat(snapshot.queued()).isEqualTo(2);
+
+		// The primary is one of the running ones, so it is left out of the sentence.
+		assertThat(snapshot.othersLabel()).isEqualTo("+1 em andamento, +2 na fila");
+	}
+
+	/** Nothing waiting: the sentence does not invent a queue of zero. */
+	@Test
+	void theSentenceNamesOnlyTheStateThatHasAnybodyInIt() {
+		LocaleContextHolder.setLocale(PT_BR);
+
+		when(executionRepository.findByStatusIn(any()))
+				.thenReturn(List.of(execution(ExecutionType.INVENTORY, ExecutionStatus.RUNNING, 0, NOON),
+						execution(ExecutionType.CONVERSION, ExecutionStatus.RUNNING, 0, NOON.plusMinutes(1))));
+
+		assertThat(service.current().othersLabel()).isEqualTo("+1 em andamento");
+	}
+
+	/** And the one nobody had an answer for: everything behind it is waiting. */
+	@Test
+	void aQueueBehindTheOnlyRunningExecutionReadsAsAQueue() {
+		LocaleContextHolder.setLocale(PT_BR);
+
+		when(executionRepository.findByStatusIn(any()))
+				.thenReturn(List.of(execution(ExecutionType.INVENTORY, ExecutionStatus.RUNNING, 0, NOON),
+						execution(ExecutionType.RECONCILE, ExecutionStatus.PENDING, 0, NOON.plusMinutes(1))));
+
+		assertThat(service.current().othersLabel()).isEqualTo("+1 na fila");
 	}
 
 	@Test
@@ -157,7 +209,8 @@ class ExecutionActivityServiceTest {
 
 		ExecutionActivitySnapshot snapshot = service.current();
 
-		assertThat(snapshot.totalActive()).isEqualTo(3);
+		assertThat(snapshot.running()).isEqualTo(2);
+		assertThat(snapshot.queued()).isEqualTo(1);
 		assertThat(snapshot.primary().executionType()).isEqualTo("INVENTORY");
 		assertThat(snapshot.others()).extracting(ExecutionActivity::executionType).containsExactly("CONVERSION",
 				"METADATA_REBUILD");
@@ -208,7 +261,10 @@ class ExecutionActivityServiceTest {
 	void theStepStillBeingWorkedOnIsReportedBesideTheOverallCount() {
 		Execution execution = execution(ExecutionType.GEO_DATASET_UPDATE, ExecutionStatus.RUNNING, 0, NOON);
 
+		// Stages, which is what a dataset update counts: three of three behind it,
+		// and 37% into the item it is downloading right now.
 		execution.setFilesFound(3);
+		execution.setFilesAnalyzed(3);
 		execution.setTotalExpected(3);
 		execution.setCurrentItemPercent(37);
 
@@ -275,8 +331,8 @@ class ExecutionActivityServiceTest {
 
 		ExecutionActivity primary = service.current().primary();
 
-		assertThat(primary.executionId()).isEqualTo(execution.getPublicId());
-		assertThat(primary.href()).isEqualTo("/app/executions/" + execution.getPublicId());
+		assertThat(primary.executionId()).isEqualTo(execution.getExecutionPublicId());
+		assertThat(primary.href()).isEqualTo("/app/executions/" + execution.getExecutionPublicId());
 	}
 
 	/** Rows written before public ids exist still have somewhere to link to. */
@@ -284,7 +340,7 @@ class ExecutionActivityServiceTest {
 	void aRowThatPredatesPublicIdsStillLinksSomewhere() {
 		Execution execution = execution(ExecutionType.INVENTORY, ExecutionStatus.RUNNING, 0, NOON);
 
-		execution.setPublicId(null);
+		execution.setExecutionPublicId(null);
 
 		when(executionRepository.findByStatusIn(any())).thenReturn(List.of(execution));
 
@@ -303,7 +359,8 @@ class ExecutionActivityServiceTest {
 	}
 
 	private ExecutionMapper mapper() {
-		ExecutionMapper mapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), labels());
+		ExecutionMapper mapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), labels(),
+				Progress.reader(), Progress.estimator());
 
 		mapper.setMessageSource(messageSource());
 
@@ -324,7 +381,7 @@ class ExecutionActivityServiceTest {
 	}
 
 	private Execution execution(ExecutionType type, ExecutionStatus status, Integer priority, LocalDateTime createdAt) {
-		return Execution.builder().id(nextId++).publicId(UUID.randomUUID()).executionType(type).status(status)
+		return Execution.builder().id(nextId++).executionPublicId(UUID.randomUUID()).executionType(type).status(status)
 				.priority(priority).createdAt(createdAt).sourcePath("C:\\midia").filesFound(0).filesAnalyzed(0)
 				.cacheHits(0).filesMoved(0).simulatedFiles(0).errors(0).build();
 	}

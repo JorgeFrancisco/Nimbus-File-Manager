@@ -432,6 +432,34 @@ contexto (`org.springframework.boot.logging.LoggingSystem`, cuidando de não per
 não dependa do contexto global. Vale notar que `InventoryWatchServiceTest` tem a mesma exposição e
 ainda não foi vista falhando.
 
+## 3.3 Catraca candidata — quem muda o conjunto elegível anuncia que ele mudou
+
+**MELHORIA CANDIDATA.** A regra já vale na prática e é verificada por leitura; o que não existe é o
+teste que a impede de regredir.
+
+**Formulação:** *todo mutador persistente do conjunto elegível deve alcançar `EligibilityChanged` por
+uma boundary aprovada.*
+
+Duas boundaries são legítimas hoje, e a formulação tem de acomodar as duas:
+
+- `EligibilityAnnouncer`, que é o caminho de quase todos — quarentena, explorador, organização,
+  reconciliação, inventário, troca de biblioteca, mudança de conteúdo, expurgo definitivo;
+- **publicação direta de `EligibilityChanged`** pela própria operação, quando ela já sabe que a
+  elegibilidade mudou. É o caso de `DuplicateExclusionService`: o anunciador o injeta para responder
+  `repointCanChangeEligibility`, então mandá-lo passar por ali seria um ciclo, e editar a lista de
+  exclusão é a única mudança de elegibilidade cujo publicador é a própria coisa consultada.
+
+**Não** formular como "todo mutador depende de `EligibilityAnnouncer`": isso condenaria o segundo
+caso, que é correto, e a auditoria da Fase 17 chegou a suspeitar dele por essa formulação antes de
+descartar a suspeita.
+
+O detector, quando a fatia chegar, parte de quem escreve: classes que alteram `duplicate_exclusion*`,
+o *hard delete* de `catalog_file`, e as demais mutações conhecidas da elegibilidade — e verifica a
+alcançabilidade de uma das duas boundaries. O que já é travado hoje está em
+`EligibilityAnnouncementArchitectureTest`: quem pode construir o evento, que há um único consumidor,
+e que nada chamado uma vez por arquivo detém o anunciador. O que falta é o outro lado — que ninguém
+mude o conjunto **sem** dizer.
+
 ## 4. Observabilidade
 
 **MELHORIA CANDIDATA.** Sem tabela nova: tudo abaixo é leitura do que já é durável.
@@ -454,6 +482,17 @@ continuam de acordo depois?
 Matar o Worker durante cada operação; matar o PostgreSQL; reiniciar a máquina; disco cheio; perder a
 unidade da biblioteca no meio; arquivo movido por fora durante uma operação; concorrência entre pasta
 pai e filha; FFmpeg ausente ou morto no meio de uma conversão.
+
+**MELHORIA CANDIDATA — colisão de exclusão simultânea vira 500 em vez de idempotência.**
+`DuplicateExclusionService.excludeFile` consulta e depois escreve, então dois pedidos simultâneos
+sobre o mesmo arquivo passam os dois pela consulta. O **estado final é correto** — quem escreve por
+último é recusado pela `UNIQUE (catalog_file_id)`, provada em
+`DuplicateExclusionSchemaIntegrationTest` — e não há anúncio duplicado, porque quem falha faz
+rollback e o ouvinte é `AFTER_COMMIT`. O que sobra é o mapeamento do erro: o segundo cliente recebe
+500 onde a resposta honesta seria "já está excluído". Não é corrupção, e a constraint continua sendo
+a autoridade certa; corrigir é traduzir a violação em idempotência, **não** tomar lock pessimista. A
+prova concorrente vem antes da correção, e custa um contexto próprio: a que existe é transacional e
+não consegue ver duas transações.
 
 ## 6. Política de recursos do FFmpeg
 

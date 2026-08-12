@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+
 /**
  * The capacity to change a file the user owns.
  *
@@ -40,8 +42,11 @@ public interface LibraryFileMutations {
 	 * @param executionId the execution this move belongs to, or {@code null} for
 	 * one nobody queued. Naming it is what lets a move that outlasts the
 	 * announcement ceiling go on being recognised as this product's own work
+	 * @return the size and SHA-256 the target is now proved to contain. Handing it
+	 * back costs nothing - the bytes were read to verify the move - and spares a
+	 * caller that needs the digest a third full read of the file
 	 */
-	void move(Path source, Path target, boolean overwrite, Long executionId) throws IOException;
+	MoveBaseline move(Path source, Path target, boolean overwrite, Long executionId) throws IOException;
 
 	/**
 	 * Best-effort physical move-back, for a caller whose own post-move step

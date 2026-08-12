@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * A fingerprinted video ready for grouping: its comparison
@@ -15,5 +15,5 @@ import java.time.LocalDateTime;
  * by it, and because it is the order the greedy placement depends on.
  */
 public record VideoCandidate(Long catalogFileId, VideoSignature signature, String fileName, String extension,
-		long sizeBytes, String currentPath, String currentFolder, LocalDateTime modifiedAt) {
+		long sizeBytes, String currentPath, String currentFolder, Instant modifiedAt) {
 }

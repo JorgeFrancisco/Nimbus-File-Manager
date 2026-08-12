@@ -107,7 +107,7 @@ class GeoBoundariesSourceTest {
 		GeoBoundariesSource source = source();
 
 		// First update: nothing on disk yet -> full download.
-		List<LeveledBoundaryFile> first = source.fetch(workspace);
+		List<LeveledBoundaryFile> first = source.fetch(workspace).files();
 
 		// The ETag only guards a published file: until commit the download is staged.
 		source.commit(workspace);
@@ -120,7 +120,7 @@ class GeoBoundariesSourceTest {
 		Assertions.assertThat(fullDownloads).hasValue(1);
 
 		// Second update, same ETag on the server -> 304, file reused from disk.
-		List<LeveledBoundaryFile> second = source.fetch(workspace);
+		List<LeveledBoundaryFile> second = source.fetch(workspace).files();
 
 		source.commit(workspace);
 
@@ -145,7 +145,7 @@ class GeoBoundariesSourceTest {
 	void keepsThePreviousDatasetWhenTheUpdateIsDiscarded() {
 		GeoBoundariesSource source = source();
 
-		Path published = source.fetch(workspace).get(0).file();
+		Path published = source.fetch(workspace).files().get(0).file();
 
 		source.commit(workspace);
 
@@ -267,5 +267,33 @@ class GeoBoundariesSourceTest {
 				Clock.systemDefaultZone());
 
 		Assertions.assertThat(source.fetchMissingCountries(List.of("ABW"), workspace)).isEmpty();
+	}
+
+	/**
+	 * The fact the caller was never told, and the whole reason a worldwide dataset
+	 * was rebuilt every single pass.
+	 *
+	 * <p>
+	 * A {@code 304} and a {@code 200} produce the same path on disk, so a caller
+	 * handed paths alone has nothing to decide with and can only re-import. Here
+	 * the answer carries it: a first acquisition changed everything, a second
+	 * against an unchanged server changed nothing, and a third after the server
+	 * moved changed again.
+	 */
+	@Test
+	void reportsWhetherAnythingActuallyChangedAtTheSource() {
+		GeoBoundariesSource source = source();
+
+		Assertions.assertThat(source.fetch(workspace).changed()).as("nothing on disk yet").isTrue();
+
+		source.commit(workspace);
+
+		Assertions.assertThat(source.fetch(workspace).changed()).as("same ETag, nothing transferred").isFalse();
+
+		source.commit(workspace);
+
+		currentEtag = "\"v2\"";
+
+		Assertions.assertThat(source.fetch(workspace).changed()).as("the server moved").isTrue();
 	}
 }

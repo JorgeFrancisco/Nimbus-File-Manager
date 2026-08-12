@@ -2,23 +2,27 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Collection;
+import java.util.stream.Collectors;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SelfWrittenPath;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.Changes;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -28,8 +32,12 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegi
  */
 class SelfWriteAwareFileChangeSourceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	/**
+	 * Asked, and answering that none of these were ours - which is what makes the
+	 * filtering visible: a source that dropped a change anyway would be dropping it
+	 * for some other reason.
+	 */
+	private final SelfWrittenPathRegistry pathRegistry = mock(SelfWrittenPathRegistry.class);
 	private final FileChangeSource delegate = mock(FileChangeSource.class);
 	private final ScanExclusionService scanExclusionService = mock(ScanExclusionService.class);
 
@@ -41,12 +49,12 @@ class SelfWriteAwareFileChangeSourceTest {
 		Path ours = folder.resolve("converted.mp4");
 		Path theirs = folder.resolve("dropped-in.jpg");
 
-		pathRegistry.announce(ours);
+		announced(ours);
 
 		when(delegate.root()).thenReturn(folder);
-		when(delegate.pollChangedFiles()).thenReturn(List.of(ours, theirs));
+		when(delegate.pollChanges()).thenReturn(List.of(Changes.modified(ours), Changes.modified(theirs)));
 
-		Assertions.assertThat(source.pollChangedFiles()).containsExactly(theirs);
+		Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path).containsExactly(theirs);
 	}
 
 	/**
@@ -62,9 +70,9 @@ class SelfWriteAwareFileChangeSourceTest {
 
 		when(scanExclusionService.isApplicationOwned(backup)).thenReturn(true);
 		when(delegate.root()).thenReturn(folder);
-		when(delegate.pollChangedFiles()).thenReturn(List.of(backup, photo));
+		when(delegate.pollChanges()).thenReturn(List.of(Changes.modified(backup), Changes.modified(photo)));
 
-		Assertions.assertThat(source.pollChangedFiles()).containsExactly(photo);
+		Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path).containsExactly(photo);
 	}
 
 	/**
@@ -83,9 +91,9 @@ class SelfWriteAwareFileChangeSourceTest {
 		Path photo = Files.writeString(drive.resolve("holiday.jpg"), "bytes");
 
 		when(delegate.root()).thenReturn(drive);
-		when(delegate.pollChangedFiles()).thenReturn(List.of(staged, photo));
+		when(delegate.pollChanges()).thenReturn(List.of(Changes.modified(staged), Changes.modified(photo)));
 
-		Assertions.assertThat(source.pollChangedFiles()).containsExactly(photo);
+		Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path).containsExactly(photo);
 	}
 
 	/**
@@ -120,5 +128,19 @@ class SelfWriteAwareFileChangeSourceTest {
 		when(delegate.root()).thenReturn(folder);
 
 		Assertions.assertThat(source.root()).isEqualTo(folder);
+	}
+
+	/**
+	 * What the registry answers for a path this product placed. The registry is
+	 * not the subject here - recognising an announcement is canonicalization and
+	 * role matching, which live in the database and are proved against it. What
+	 * this test is about is the composition: the source asks, and keeps only what
+	 * the answer leaves out.
+	 */
+	private void announced(Path path) {
+		when(pathRegistry.announcedAmong(argThat(claims -> claims.stream().anyMatch(
+				claim -> claim.path().equals(path)))))
+						.thenAnswer(invocation -> invocation.<Collection<SelfWrittenPath>>getArgument(0).stream()
+								.filter(claim -> claim.path().equals(path)).collect(Collectors.toSet()));
 	}
 }

@@ -7,9 +7,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.FileChangeKind;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SelfWrittenPath;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.SelfWriteRole;
 
 /**
  * Wraps any {@link FileChangeSource} and drops the changes the application
@@ -37,8 +41,8 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	}
 
 	@Override
-	public List<Path> pollChangedFiles() {
-		return worthWaking(delegate.pollChangedFiles());
+	public List<FileSystemChange> pollChanges() {
+		return worthWaking(delegate.pollChanges());
 	}
 
 	/**
@@ -48,7 +52,7 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	 * cannot be what keeps it awake now either.
 	 */
 	@Override
-	public List<Path> takeOfflineBacklog() {
+	public List<FileSystemChange> takeOfflineBacklog() {
 		return worthWaking(delegate.takeOfflineBacklog());
 	}
 
@@ -57,16 +61,57 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	 * lives in the database now, because the process that wrote the file is often
 	 * not this one, and a question per path would be a round trip per path.
 	 */
-	private List<Path> worthWaking(List<Path> reported) {
-		List<Path> changed = reported.stream().filter(this::worthAnInventory).toList();
+	private List<FileSystemChange> worthWaking(List<FileSystemChange> reported) {
+		List<FileSystemChange> changed = reported.stream().filter(this::worthAnInventory).toList();
 
 		if (changed.isEmpty()) {
 			return changed;
 		}
 
-		Set<Path> announced = selfWrittenPathRegistry.announcedAmong(changed);
+		Set<SelfWrittenPath> announced = selfWrittenPathRegistry
+				.announcedAmong(changed.stream().flatMap(change -> accountedBy(change).stream()).distinct().toList());
 
-		return changed.stream().filter(path -> !announced.contains(path)).toList();
+		return changed.stream().filter(change -> !announced.containsAll(accountedBy(change))).toList();
+	}
+
+	/**
+	 * What the application would have had to announce for this change to be its
+	 * own doing.
+	 *
+	 * <p>
+	 * A change is judged claim by claim and dropped only when every one of them is
+	 * accounted for. That is what keeps a rename honest in both directions:
+	 * judging it by its destination alone would silence a file the application
+	 * moved out of a folder it owns, and judging it by its origin alone, one moved
+	 * into one.
+	 *
+	 * <p>
+	 * The role is what keeps a reused path visible. Emptying a path explains it
+	 * going quiet; it explains nothing about a file appearing there afterwards,
+	 * and a path this product has just freed is one somebody is likely to fill.
+	 */
+	private static List<SelfWrittenPath> accountedBy(FileSystemChange change) {
+		if (change.previousPath() != null) {
+			return List.of(new SelfWrittenPath(change.previousPath(), SelfWriteRole.VACATING),
+					new SelfWrittenPath(change.path(), SelfWriteRole.OCCUPYING));
+		}
+
+		return List.of(new SelfWrittenPath(change.path(),
+				change.kind() == FileChangeKind.DELETED ? SelfWriteRole.VACATING : SelfWriteRole.OCCUPYING));
+	}
+
+	/**
+	 * Both ends of a rename, and the single path of everything else - for the
+	 * questions that are about the paths themselves rather than about who wrote
+	 * them: a change survives if either end is worth a look.
+	 */
+	private static List<Path> endpoints(FileSystemChange change) {
+		return change.previousPath() == null ? List.of(change.path())
+				: List.of(change.path(), change.previousPath());
+	}
+
+	private boolean worthAnInventory(FileSystemChange change) {
+		return endpoints(change).stream().anyMatch(this::worthALook);
 	}
 
 	/**
@@ -92,7 +137,7 @@ class SelfWriteAwareFileChangeSource implements FileChangeSource {
 	 * debounce already folds into the pass its neighbours ask for. A filter too
 	 * narrow costs redundant work; one too wide costs the change.
 	 */
-	private boolean worthAnInventory(Path changed) {
+	private boolean worthALook(Path changed) {
 		return !scanExclusionService.isApplicationOwned(changed) && !isHidden(changed);
 	}
 

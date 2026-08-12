@@ -16,14 +16,18 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Snapshot;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.Snapshot;
 
 class ProcessingCoordinatorTest {
 
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
 	private ProcessingCoordinator coordinator(int workers, int queueCapacity) {
-		return new ProcessingCoordinator(new ProcessingProperties(workers, queueCapacity, 2, 2, 2, 1),
-				new ProcessingMetrics());
+		return new ProcessingCoordinator(new ProcessingProperties(workers, queueCapacity, 2, 2, 2, 1));
 	}
 
 	/**
@@ -85,7 +89,7 @@ class ProcessingCoordinatorTest {
 				finished[item].countDown();
 
 				return item * 10;
-			});
+			}, metrics);
 
 			assertThat(completed).as("each group of four finished downwards, so nothing finished in input order")
 					.containsExactly(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12, 19, 18, 17, 16);
@@ -112,7 +116,7 @@ class ProcessingCoordinatorTest {
 			AtomicInteger callbackCount = new AtomicInteger();
 			AtomicInteger maxReported = new AtomicInteger();
 
-			coordinator.process(items, () -> false, item -> item, done -> {
+			coordinator.process(items, () -> false, item -> item, metrics, done -> {
 				callbackCount.incrementAndGet();
 				maxReported.accumulateAndGet(done, Math::max);
 			});
@@ -126,10 +130,7 @@ class ProcessingCoordinatorTest {
 
 	@Test
 	void runsTasksConcurrentlyUpToTheWorkerLimit() {
-		ProcessingMetrics metrics = new ProcessingMetrics();
-
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
-				metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1));
 
 		try {
 			// A 2-party barrier only trips if two workers run at the same time; if the
@@ -140,7 +141,7 @@ class ProcessingCoordinatorTest {
 				barrier.await(5, TimeUnit.SECONDS);
 
 				return item;
-			});
+			}, metrics);
 
 			assertThat(outcomes).hasSize(4).allMatch(Outcome::executed);
 			assertThat(metrics.snapshot().maxConcurrency()).isGreaterThanOrEqualTo(2);
@@ -168,7 +169,7 @@ class ProcessingCoordinatorTest {
 				gate.await(5, TimeUnit.SECONDS);
 
 				return item;
-			}));
+			}, metrics));
 			runner.setDaemon(true);
 			runner.start();
 
@@ -204,7 +205,7 @@ class ProcessingCoordinatorTest {
 				workerCalls.incrementAndGet();
 
 				return item;
-			});
+			}, metrics);
 
 			assertThat(outcomes).hasSize(4).allMatch(Outcome::wasCancelled);
 			assertThat(workerCalls.get()).isZero();
@@ -239,7 +240,7 @@ class ProcessingCoordinatorTest {
 				}
 
 				return item;
-			}));
+			}, metrics));
 			runner.setDaemon(true);
 			runner.start();
 
@@ -271,7 +272,7 @@ class ProcessingCoordinatorTest {
 				}
 
 				return item;
-			});
+			}, metrics);
 
 			assertThat(outcomes.get(0).executed()).isTrue();
 			assertThat(outcomes.get(1).failed()).isTrue();
@@ -286,7 +287,7 @@ class ProcessingCoordinatorTest {
 	void shutdownTerminatesThePoolWithoutOrphanThreads() {
 		ProcessingCoordinator coordinator = coordinator(2, 8);
 
-		coordinator.process(List.of(1, 2, 3), () -> false, item -> item);
+		coordinator.process(List.of(1, 2, 3), () -> false, item -> item, metrics);
 
 		coordinator.shutdown();
 
@@ -295,19 +296,16 @@ class ProcessingCoordinatorTest {
 
 	@Test
 	void recordsExecutedCancelledErrorAndTimingMetricsPerOutcome() {
-		ProcessingMetrics metrics = new ProcessingMetrics();
-
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
-				metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1));
 
 		try {
 			// Three batches with known outcomes over a shared metrics instance: 3 executed,
 			// 2 failed, 4 cancelled before submission.
-			coordinator.process(List.of(1, 2, 3), () -> false, item -> item);
+			coordinator.process(List.of(1, 2, 3), () -> false, item -> item, metrics);
 			coordinator.process(List.of(4, 5), () -> false, _ -> {
 				throw new IllegalStateException("boom");
-			});
-			coordinator.process(List.of(6, 7, 8, 9), () -> true, item -> item);
+			}, metrics);
+			coordinator.process(List.of(6, 7, 8, 9), () -> true, item -> item, metrics);
 
 			Snapshot snapshot = metrics.snapshot();
 
@@ -335,15 +333,12 @@ class ProcessingCoordinatorTest {
 		// worker throws InterruptedException directly, so the test is fully
 		// deterministic and
 		// does not depend on real thread-interruption timing.
-		ProcessingMetrics metrics = new ProcessingMetrics();
-
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1),
-				metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(2, 8, 2, 2, 2, 1));
 
 		try {
 			List<Outcome<Integer, Integer>> outcomes = coordinator.process(List.of(1), () -> false, _ -> {
 				throw new InterruptedException("cancelled mid-task");
-			});
+			}, metrics);
 
 			assertThat(outcomes.get(0).wasCancelled()).isTrue();
 			assertThat(outcomes.get(0).failed()).isFalse();
@@ -362,17 +357,14 @@ class ProcessingCoordinatorTest {
 	 */
 	@Test
 	void submissionRejectedByAShutDownExecutorBecomesAnErrorOutcome() {
-		ProcessingMetrics metrics = new ProcessingMetrics();
-
-		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 1, 2, 2, 2, 1),
-				metrics);
+		ProcessingCoordinator coordinator = new ProcessingCoordinator(new ProcessingProperties(1, 1, 2, 2, 2, 1));
 
 		coordinator.shutdown();
 
 		AtomicInteger progress = new AtomicInteger();
 
 		List<Outcome<Integer, Integer>> outcomes = coordinator.process(List.of(1, 2), () -> false, item -> item,
-				progress::set);
+				metrics, progress::set);
 
 		assertThat(outcomes).hasSize(2).allMatch(Outcome::failed);
 		assertThat(outcomes.get(0).error()).isInstanceOf(RejectedExecutionException.class);
@@ -397,7 +389,7 @@ class ProcessingCoordinatorTest {
 				}
 
 				return item;
-			});
+			}, metrics);
 
 			assertThat(outcomes.get(0).wasCancelled()).isTrue();
 			assertThat(outcomes.get(1).executed()).isTrue();

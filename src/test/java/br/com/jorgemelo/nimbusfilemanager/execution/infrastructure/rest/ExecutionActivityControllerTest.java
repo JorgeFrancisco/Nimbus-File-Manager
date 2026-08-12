@@ -38,7 +38,7 @@ class ExecutionActivityControllerTest {
 						62, 43, 120, false, "/app/executions/" + PRIMARY),
 				List.of(new ExecutionActivity(UUID.randomUUID(), "CONVERSION", "Conversão", "PENDING", "Na fila", null,
 						null, null, null, null, false, "/app/executions/x")),
-				2));
+				1, 1, "+1 na fila"));
 
 		mockMvc.perform(get("/api/execution-activity")).andExpect(status().isOk())
 				.andExpect(jsonPath("$.primary.executionId").value(PRIMARY.toString()))
@@ -53,7 +53,9 @@ class ExecutionActivityControllerTest {
 				.andExpect(jsonPath("$.primary.totalExpected").value(120))
 				.andExpect(jsonPath("$.primary.cancelRequested").value(false))
 				.andExpect(jsonPath("$.primary.href").value("/app/executions/" + PRIMARY))
-				.andExpect(jsonPath("$.others.length()").value(1)).andExpect(jsonPath("$.totalActive").value(2));
+				.andExpect(jsonPath("$.others.length()").value(1)).andExpect(jsonPath("$.running").value(1))
+				.andExpect(jsonPath("$.queued").value(1))
+				.andExpect(jsonPath("$.othersLabel").value("+1 na fila"));
 	}
 
 	/**
@@ -68,7 +70,8 @@ class ExecutionActivityControllerTest {
 
 		mockMvc.perform(get("/api/execution-activity")).andExpect(status().isOk())
 				.andExpect(jsonPath("$.primary").doesNotExist()).andExpect(jsonPath("$.others").isEmpty())
-				.andExpect(jsonPath("$.totalActive").value(0));
+				.andExpect(jsonPath("$.running").value(0)).andExpect(jsonPath("$.queued").value(0))
+				.andExpect(jsonPath("$.othersLabel").doesNotExist());
 	}
 
 	@Test
@@ -76,7 +79,7 @@ class ExecutionActivityControllerTest {
 		when(executionActivityService.current()).thenReturn(new ExecutionActivitySnapshot(
 				new ExecutionActivity(PRIMARY, "QUARANTINE_PURGE", "Expurgo", "RUNNING", "Em execução", null, null,
 						null, 37, null, true, "/app/executions/" + PRIMARY),
-				List.of(), 1));
+				List.of(), 1, 0, null));
 
 		mockMvc.perform(get("/api/execution-activity")).andExpect(status().isOk())
 				.andExpect(jsonPath("$.primary.percentComplete").doesNotExist())

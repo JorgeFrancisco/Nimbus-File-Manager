@@ -90,6 +90,22 @@ public class ExecutionOwnershipGuard {
 	}
 
 	/**
+	 * The same hold, for a write that happens after the run ended.
+	 *
+	 * <p>
+	 * {@link #pin} would refuse every one of them: it demands a RUNNING row under
+	 * a live lease, and telemetry is written once the outcome is committed. The
+	 * attempt number is the half that still means something afterwards.
+	 */
+	public boolean pinAttempt(long executionId, int claimCount) {
+		if (possessions.get(executionId) == null) {
+			return EXTERNAL_COMMANDS_ARE_NOT_FENCED;
+		}
+
+		return executionQueue.pinAttempt(executionId, claimCount);
+	}
+
+	/**
 	 * The taking this process registered for the execution, when the caller is
 	 * asking about that one and not a different taking of the same row.
 	 *

@@ -19,18 +19,27 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataConstants;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegGroupRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class PhotoPerceptualHashServiceTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	@TempDir
 	Path tempDir;
@@ -58,10 +67,10 @@ class PhotoPerceptualHashServiceTest {
 
 		byte[] pixels = gradient();
 
-		PhotoPerceptualHashService service = service((_, _) -> pixels);
+		PhotoPerceptualHashService service = service((_, _, _) -> pixels);
 
-		PhotoPerceptualFingerprint first = service.compute(file);
-		PhotoPerceptualFingerprint second = service.compute(file);
+		PhotoPerceptualFingerprint first = service.compute(file, metrics);
+		PhotoPerceptualFingerprint second = service.compute(file, metrics);
 
 		assertThat(first.hash()).hasSize(32).containsExactly(second.hash());
 		assertThat(first.luminance()).hasSize(1024).containsExactly(pixels);
@@ -78,8 +87,8 @@ class PhotoPerceptualHashServiceTest {
 			Arrays.fill(vertical, row * 32, row * 32 + 32, (byte) (row * 8));
 		}
 
-		byte[] first = service((_, _) -> horizontal).compute(file).hash();
-		byte[] second = service((_, _) -> vertical).compute(file).hash();
+		byte[] first = service((_, _, _) -> horizontal).compute(file, metrics).hash();
+		byte[] second = service((_, _, _) -> vertical).compute(file, metrics).hash();
 
 		assertThat(PhotoPerceptualHashService.distance(first, second)).isPositive();
 	}
@@ -88,11 +97,11 @@ class PhotoPerceptualHashServiceTest {
 	void computeShouldWrapFfmpegFailures() throws Exception {
 		Path file = Files.writeString(tempDir.resolve("broken.jpg"), "not a real image");
 
-		PhotoPerceptualHashService service = service((_, _) -> {
+		PhotoPerceptualHashService service = service((_, _, _) -> {
 			throw new IllegalStateException("ffmpeg exploded");
 		});
 
-		assertThatIllegalStateException().isThrownBy(() -> service.compute(file))
+		assertThatIllegalStateException().isThrownBy(() -> service.compute(file, metrics))
 				.withMessageContaining("Could not run ffmpeg");
 	}
 
@@ -100,7 +109,7 @@ class PhotoPerceptualHashServiceTest {
 	void computeShouldRejectUnexpectedPixelDataSize() throws Exception {
 		Path file = Files.writeString(tempDir.resolve("photo.jpg"), "photo");
 
-		assertThatIllegalStateException().isThrownBy(() -> service((_, _) -> new byte[10]).compute(file))
+		assertThatIllegalStateException().isThrownBy(() -> service((_, _, _) -> new byte[10]).compute(file, metrics))
 				.withMessageContaining("Unexpected pixel data size");
 	}
 
@@ -112,10 +121,10 @@ class PhotoPerceptualHashServiceTest {
 
 		var service = service(runner);
 
-		Assertions.assertThatThrownBy(() -> service.compute(file))
+		Assertions.assertThatThrownBy(() -> service.compute(file, metrics))
 				.isInstanceOf(UnsupportedPhotoFingerprintException.class).hasMessageContaining("ZIP/Lottie");
 
-		verify(runner, never()).run(any(), any());
+		verify(runner, never()).run(any(), any(), any());
 	}
 
 	/**
@@ -133,10 +142,10 @@ class PhotoPerceptualHashServiceTest {
 
 			var service = service(runner);
 
-			Assertions.assertThatThrownBy(() -> service.compute(file))
+			Assertions.assertThatThrownBy(() -> service.compute(file, metrics))
 					.isInstanceOf(UnsupportedPhotoFingerprintException.class).hasMessageContaining("ZIP/Lottie");
 
-			verify(runner, never()).run(any(), any());
+			verify(runner, never()).run(any(), any(), any());
 		}
 	}
 
@@ -144,7 +153,7 @@ class PhotoPerceptualHashServiceTest {
 	void computeShouldHashAGenuineWebpWhoseHeaderIsNotZip() throws Exception {
 		Path file = Files.write(tempDir.resolve("photo.webp"), new byte[] { 'R', 'I', 'F', 'F', 1, 2 });
 
-		PhotoPerceptualFingerprint fingerprint = service((_, _) -> gradient()).compute(file);
+		PhotoPerceptualFingerprint fingerprint = service((_, _, _) -> gradient()).compute(file, metrics);
 
 		assertThat(fingerprint.hash()).hasSize(32);
 	}
@@ -157,7 +166,7 @@ class PhotoPerceptualHashServiceTest {
 	void computeShouldNotTreatATruncatedWebpAsAZipPackage() throws Exception {
 		Path file = Files.write(tempDir.resolve("tiny.webp"), new byte[] { 'P', 'K' });
 
-		PhotoPerceptualFingerprint fingerprint = service((_, _) -> gradient()).compute(file);
+		PhotoPerceptualFingerprint fingerprint = service((_, _, _) -> gradient()).compute(file, metrics);
 
 		assertThat(fingerprint.hash()).hasSize(32);
 	}
@@ -178,13 +187,13 @@ class PhotoPerceptualHashServiceTest {
 
 		List<byte[]> handedOver = new ArrayList<>();
 
-		when(runner.run(any(), any())).thenAnswer(invocation -> {
+		when(runner.run(any(), any(), any())).thenAnswer(invocation -> {
 			handedOver.add(Files.readAllBytes(invocation.getArgument(1)));
 
 			return gradient();
 		});
 
-		service(runner).compute(panorama);
+		service(runner).compute(panorama, metrics);
 
 		Assertions.assertThat(handedOver).singleElement().isEqualTo(image);
 	}
@@ -254,7 +263,7 @@ class PhotoPerceptualHashServiceTest {
 
 		// Read inside the call: the extracted frame is scratch and is gone by the time
 		// compute returns, which is what the next test is about.
-		when(runner.run(any(), any())).thenAnswer(invocation -> {
+		when(runner.run(any(), any(), any())).thenAnswer(invocation -> {
 			Path given = invocation.getArgument(1);
 
 			decoded.add(given);
@@ -263,7 +272,7 @@ class PhotoPerceptualHashServiceTest {
 			return gradient();
 		});
 
-		service(runner).compute(sticker);
+		service(runner).compute(sticker, metrics);
 
 		Assertions.assertThat(decoded).singleElement().isNotEqualTo(sticker);
 		Assertions.assertThat(new String(handedOver.getFirst(), 8, 4, StandardCharsets.ISO_8859_1)).isEqualTo("WEBP");
@@ -279,9 +288,9 @@ class PhotoPerceptualHashServiceTest {
 
 		ArgumentCaptor<Path> decoded = ArgumentCaptor.forClass(Path.class);
 
-		when(runner.run(any(), decoded.capture())).thenReturn(gradient());
+		when(runner.run(any(), decoded.capture(), any())).thenReturn(gradient());
 
-		service(runner).compute(sticker);
+		service(runner).compute(sticker, metrics);
 
 		Assertions.assertThat(Files.exists(decoded.getValue())).isFalse();
 	}
@@ -298,17 +307,185 @@ class PhotoPerceptualHashServiceTest {
 
 		FfmpegRunner runner = mock(FfmpegRunner.class);
 
-		when(runner.run(any(), any()))
+		when(runner.run(any(), any(), any()))
 				.thenThrow(new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
 
 		PhotoPerceptualHashService service = service(runner);
 
-		Assertions.assertThatThrownBy(() -> service.compute(photo))
+		Assertions.assertThatThrownBy(() -> service.compute(photo, metrics))
 				.isInstanceOf(ExternalToolNotRunnableException.class)
 				.hasMessageContaining("./tools/bin/ffmpeg.exe");
 	}
 
+	/**
+	 * Nothing in the decoded stream names the photo a sample came from: the only
+	 * thing pairing the two is the position the sample arrived in.
+	 */
+	@Test
+	void computeGroupPairsEverySampleWithThePhotoInTheSamePosition() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		byte[] first = filled((byte) 7);
+		byte[] second = gradient();
+		byte[] third = filled((byte) 200);
+
+		byte[] stream = concat(first, second, third);
+
+		PhotoPerceptualHashService service = service(neverAlone(), (_, _, _) -> stream);
+
+		List<PhotoPerceptualFingerprint> fingerprints = service.computeGroup(files, metrics);
+
+		Assertions.assertThat(fingerprints).hasSize(3);
+		Assertions.assertThat(fingerprints.get(0).luminance()).containsExactly(first);
+		Assertions.assertThat(fingerprints.get(1).luminance()).containsExactly(second);
+		Assertions.assertThat(fingerprints.get(2).luminance()).containsExactly(third);
+	}
+
+	/** A photo read in a group and read on its own is the same photo. */
+	@Test
+	void computeGroupProducesTheSameFingerprintReadingThePhotoAloneDoes() throws Exception {
+		Path file = photo("holiday.jpg");
+
+		byte[] sample = gradient();
+
+		PhotoPerceptualFingerprint alone = service((_, _, _) -> sample).compute(file, metrics);
+
+		PhotoPerceptualFingerprint grouped = service(neverAlone(), (_, _, _) -> sample)
+				.computeGroup(List.of(file), metrics).getFirst();
+
+		Assertions.assertThat(grouped.hash()).containsExactly(alone.hash());
+		Assertions.assertThat(grouped.luminance()).containsExactly(alone.luminance());
+	}
+
+	/**
+	 * Three photos in, three samples out. A group that came back with two has not
+	 * lost the third: it has lost which photo either of the two belongs to, and
+	 * keeping the pair that happens to line up would write one photo's fingerprint
+	 * against another's name.
+	 */
+	@Test
+	void computeGroupRefusesAGroupThatCameBackShortOfOneSamplePerPhoto() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		PhotoPerceptualHashService service = service(neverAlone(),
+				(_, _, _) -> new byte[2 * MetadataConstants.SAMPLE_BYTES]);
+
+		Assertions.assertThatExceptionOfType(PhotoHashGroupMismatchException.class)
+				.isThrownBy(() -> service.computeGroup(files, metrics))
+				.withMessageContaining("Expected " + 3 * MetadataConstants.SAMPLE_BYTES + " bytes, got "
+						+ 2 * MetadataConstants.SAMPLE_BYTES);
+	}
+
+	@Test
+	void computeGroupRefusesAGroupThatCameBackWithMoreSamplesThanPhotos() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		PhotoPerceptualHashService service = service(neverAlone(),
+				(_, _, _) -> new byte[4 * MetadataConstants.SAMPLE_BYTES]);
+
+		Assertions.assertThatExceptionOfType(PhotoHashGroupMismatchException.class)
+				.isThrownBy(() -> service.computeGroup(files, metrics));
+	}
+
+	/**
+	 * The boundary between the two: a stream one byte short of three samples is
+	 * neither two photos nor three, and slicing it would hand the last photo a
+	 * sample it never filled.
+	 */
+	@Test
+	void computeGroupRefusesAStreamThatIsNotAWholeNumberOfSamples() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		PhotoPerceptualHashService service = service(neverAlone(),
+				(_, _, _) -> new byte[3 * MetadataConstants.SAMPLE_BYTES - 1]);
+
+		Assertions.assertThatExceptionOfType(PhotoHashGroupMismatchException.class)
+				.isThrownBy(() -> service.computeGroup(files, metrics));
+	}
+
+	@Test
+	void computeGroupAsksTheToolOnceForTheWholeGroup() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		AtomicInteger invocations = new AtomicInteger();
+
+		PhotoPerceptualHashService service = service(neverAlone(), (_, decoded, _) -> {
+			invocations.incrementAndGet();
+
+			return new byte[decoded.size() * MetadataConstants.SAMPLE_BYTES];
+		});
+
+		service.computeGroup(files, metrics);
+
+		Assertions.assertThat(invocations).hasValue(1);
+	}
+
+	/** In the order given, since the order is what names the samples. */
+	@Test
+	void computeGroupHandsTheToolEveryPhotoInTheOrderItWasGiven() throws Exception {
+		List<Path> files = List.of(photo("a.jpg"), photo("b.jpg"), photo("c.jpg"));
+
+		AtomicReference<List<Path>> handedOver = new AtomicReference<>();
+
+		PhotoPerceptualHashService service = service(neverAlone(), (_, decoded, _) -> {
+			handedOver.set(decoded);
+
+			return new byte[3 * MetadataConstants.SAMPLE_BYTES];
+		});
+
+		service.computeGroup(files, metrics);
+
+		Assertions.assertThat(handedOver.get()).containsExactlyElementsOf(files);
+	}
+
+	/**
+	 * A sticker is decoded from the frame pulled out of it, not from the file the
+	 * decoder refuses - in a group as much as on its own - and the slice that was
+	 * written to hand it over does not outlive the call.
+	 */
+	@Test
+	void computeGroupDecodesTheExtractedFrameAndLeavesNothingBehind() throws Exception {
+		Path sticker = Files.write(tempDir.resolve("sticker.webp"), animatedWebp());
+
+		AtomicReference<List<Path>> handedOver = new AtomicReference<>();
+
+		PhotoPerceptualHashService service = service(neverAlone(), (_, decoded, _) -> {
+			handedOver.set(decoded);
+
+			return new byte[MetadataConstants.SAMPLE_BYTES];
+		});
+
+		service.computeGroup(List.of(sticker), metrics);
+
+		Assertions.assertThat(handedOver.get()).singleElement().isNotEqualTo(sticker);
+		Assertions.assertThat(Files.exists(handedOver.get().getFirst())).isFalse();
+	}
+
+	private Path photo(String name) throws IOException {
+		return Files.writeString(tempDir.resolve(name), name);
+	}
+
+	private static FfmpegRunner neverAlone() {
+		return (_, _, _) -> {
+			throw new UnsupportedOperationException("This test never reads a photo on its own");
+		};
+	}
+
+	private static byte[] filled(byte value) {
+		byte[] sample = new byte[MetadataConstants.SAMPLE_BYTES];
+
+		Arrays.fill(sample, value);
+
+		return sample;
+	}
+
 	private PhotoPerceptualHashService service(FfmpegRunner runner) {
+		return service(runner, (_, _, _) -> {
+			throw new UnsupportedOperationException("This test never asks for a group");
+		});
+	}
+
+	private PhotoPerceptualHashService service(FfmpegRunner runner, FfmpegGroupRunner groupRunner) {
 		ExternalToolPaths externalToolPaths = mock(ExternalToolPaths.class);
 
 		lenient().when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
@@ -317,6 +494,6 @@ class PhotoPerceptualHashServiceTest {
 
 		lenient().when(workspaceManager.temp()).thenReturn(tempDir);
 
-		return new PhotoPerceptualHashService(externalToolPaths, runner, workspaceManager);
+		return new PhotoPerceptualHashService(externalToolPaths, runner, groupRunner, workspaceManager);
 	}
 }

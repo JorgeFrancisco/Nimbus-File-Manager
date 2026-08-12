@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
@@ -22,10 +22,10 @@ public record DuplicateFileWithShaRawResponse(
 
 		String currentPath, String currentFolder,
 
-		LocalDateTime modifiedAt) {
+		Instant modifiedAt) {
 
 	public DuplicateFileWithShaRawResponse(String sha256, Long id, String fileName, String extension, String fileType,
-			long sizeBytes, String currentPath, String currentFolder, LocalDateTime modifiedAt) {
+			long sizeBytes, String currentPath, String currentFolder, Instant modifiedAt) {
 		this(sha256, UuidV7.fromLegacy(id), fileName, extension, fileType, sizeBytes, currentPath, currentFolder,
 				modifiedAt);
 	}

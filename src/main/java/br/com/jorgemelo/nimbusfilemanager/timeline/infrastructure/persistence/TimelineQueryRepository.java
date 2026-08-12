@@ -61,8 +61,8 @@ public class TimelineQueryRepository {
 
 	private static final String SELECT_TIMELINE_ITEMS = """
 			SELECT mf.id AS internal_id,
-			       mf.public_id,
-			       mf.file_name,
+			       mf.catalog_file_public_id,
+			       catalog_file_name(location.current_path, location.path_flavor) AS file_name,
 			       mf.file_type,
 			       m.capture_date,
 			       m.date_source,
@@ -72,6 +72,7 @@ public class TimelineQueryRepository {
 			       gl.city_name, gl.state_name, gl.country_name, gl.open_sea
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
+			JOIN catalog_file_location location ON location.catalog_file_id = mf.id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location gl ON gl.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
@@ -93,6 +94,7 @@ public class TimelineQueryRepository {
 			SELECT m.year, m.month, COUNT(*) AS item_count
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
+			JOIN catalog_file_location location ON location.catalog_file_id = mf.id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location gl ON gl.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
@@ -106,12 +108,14 @@ public class TimelineQueryRepository {
 			""";
 
 	private static final String SELECT_UNDATED_ITEMS = """
-			SELECT mf.id AS internal_id, mf.public_id, mf.file_name, mf.file_type,
+			SELECT mf.id AS internal_id, mf.catalog_file_public_id,
+			       catalog_file_name(location.current_path, location.path_flavor) AS file_name, mf.file_type,
 			       m.capture_date, m.date_source, m.display_width, m.display_height,
 			       v.duration_seconds,
 			       gl.city_name, gl.state_name, gl.country_name, gl.open_sea
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
+			JOIN catalog_file_location location ON location.catalog_file_id = mf.id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location gl ON gl.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
@@ -129,6 +133,7 @@ public class TimelineQueryRepository {
 			       COUNT(*) - COUNT(m.capture_date) AS undated_items
 			FROM media_metadata m
 			JOIN catalog_file mf ON mf.id = m.catalog_file_id
+			JOIN catalog_file_location location ON location.catalog_file_id = mf.id
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location gl ON gl.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
@@ -193,7 +198,7 @@ public class TimelineQueryRepository {
 
 		Timestamp captureDate = rs.getTimestamp("capture_date");
 		String dateSource = rs.getString("date_source");
-		return new TimelineItemProjection(rs.getLong("internal_id"), rs.getObject("public_id", UUID.class),
+		return new TimelineItemProjection(rs.getLong("internal_id"), rs.getObject("catalog_file_public_id", UUID.class),
 				rs.getString("file_name"), FileType.valueOf(rs.getString("file_type")),
 				captureDate == null ? null : captureDate.toLocalDateTime(),
 				dateSource == null ? null : DateSource.valueOf(dateSource), (Integer) rs.getObject("display_width"),

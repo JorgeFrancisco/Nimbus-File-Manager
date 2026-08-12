@@ -44,6 +44,20 @@ class BackupFolderResolverTest {
 		Assertions.assertThat(resolver.folder()).isEqualTo(workspace.resolve("backup")).exists();
 	}
 
+	/**
+	 * An archive is written here and moved into place when it is whole, so nobody
+	 * reading the backup folder ever meets a partial file. Created on first use
+	 * like every other folder this product needs.
+	 */
+	@Test
+	void createsTheStagingFolderItWritesThrough(@TempDir Path workspace) {
+		Path temporary = workspace.resolve("temp");
+
+		when(workspaceManager.resolve(WorkspaceFolders.TEMP)).thenReturn(temporary);
+
+		Assertions.assertThat(resolver.staging()).isEqualTo(temporary).exists();
+	}
+
 	/** A folder chosen on screen wins, and is created if it is not there yet. */
 	@Test
 	void usesTheConfiguredFolderAndCreatesIt(@TempDir Path elsewhere) {

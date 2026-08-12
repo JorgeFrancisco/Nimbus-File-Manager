@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -21,7 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
  */
 public record DuplicateFileView(
 
-		UUID id, String fileName, String currentFolder, String currentPath, SizeResponse size, LocalDateTime modifiedAt,
+		UUID id, String fileName, String currentFolder, String currentPath, SizeResponse size, Instant modifiedAt,
 
 		// System's best date, shown in the "Data" column next to the source badge.
 		LocalDateTime captureDate,
@@ -69,7 +70,7 @@ public record DuplicateFileView(
 	 * time, so there is no gap between what was found and what exists.
 	 */
 	public DuplicateFileView(UUID id, String fileName, String currentFolder, String currentPath, SizeResponse size,
-			LocalDateTime modifiedAt, LocalDateTime captureDate, boolean keep, boolean recommendedKeep, boolean image,
+			Instant modifiedAt, LocalDateTime captureDate, boolean keep, boolean recommendedKeep, boolean image,
 			boolean video, boolean pdf, boolean text, boolean audio, String previewUrl, String contentUrl,
 			String iconClass, String iconLabel, String highlight, String highlightLabel, String reason,
 			String resolution, boolean previewable, String lightboxClass, String openTitle, String dateSourceLabel,

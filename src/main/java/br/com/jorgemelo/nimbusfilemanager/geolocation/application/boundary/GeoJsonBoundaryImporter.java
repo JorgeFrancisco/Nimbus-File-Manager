@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -18,8 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetProgress;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Feature;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.GeoDatasetIdentity;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoDatasetState;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoDatasetStateRepository;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.persistence.GeoAdminBoundaryImportRepository;
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,24 +44,42 @@ public class GeoJsonBoundaryImporter {
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}]");
 
 	private final GeoAdminBoundaryImportRepository boundaryRepository;
+	private final GeoDatasetStateRepository geoDatasetStateRepository;
 	private final GeoJsonBoundaryReader reader;
 	private final GeoDatasetProgress progress;
+	private final Clock clock;
 
-	public GeoJsonBoundaryImporter(GeoAdminBoundaryImportRepository boundaryRepository, GeoJsonBoundaryReader reader,
-			GeoDatasetProgress progress) {
+	public GeoJsonBoundaryImporter(GeoAdminBoundaryImportRepository boundaryRepository,
+			GeoDatasetStateRepository geoDatasetStateRepository, GeoJsonBoundaryReader reader,
+			GeoDatasetProgress progress, Clock clock) {
 		this.boundaryRepository = boundaryRepository;
+		this.geoDatasetStateRepository = geoDatasetStateRepository;
 		this.reader = reader;
 		this.progress = progress;
+		this.clock = clock;
 	}
 
 	/**
 	 * Replaces the whole geo_admin_boundary content with the given per-level files.
 	 * Runs in one transaction: either the new dataset is fully imported or the
 	 * previous one stays untouched.
+	 *
+	 * <p>
+	 * <b>And says what it imported, in the same transaction.</b> The row describing
+	 * the installation - its version, its provenance, the moment it arrived - is
+	 * written here rather than by the caller afterwards, because a fact about these
+	 * rows written outside the transaction that creates them can disagree with
+	 * them, and did: the previous model kept it in a file beside the downloads,
+	 * where a run that imported and then failed left a database and a description
+	 * of two different datasets. It is marked incomplete, because at this point it
+	 * is: the territories and the publication still have to happen.
 	 */
 	@Transactional
-	public long importDataset(List<LeveledBoundaryFile> files, String source, String datasetVersion) {
+	public long importDataset(List<LeveledBoundaryFile> files, GeoDatasetIdentity identity) {
 		boundaryRepository.deleteAll();
+
+		String source = identity.source();
+		String datasetVersion = identity.version();
 
 		long total = 0;
 
@@ -78,6 +101,10 @@ public class GeoJsonBoundaryImporter {
 		if (total == 0) {
 			throw new IllegalStateException("Boundary files have no importable polygons");
 		}
+
+		geoDatasetStateRepository.save(GeoDatasetState.builder().id(GeoDatasetState.SINGLETON_ID)
+				.datasetVersion(datasetVersion).source(source).provider(identity.provider())
+				.license(identity.license()).importedAt(LocalDateTime.now(clock)).complete(false).build());
 
 		log.info("Imported {} boundaries (dataset version {})", total, datasetVersion);
 

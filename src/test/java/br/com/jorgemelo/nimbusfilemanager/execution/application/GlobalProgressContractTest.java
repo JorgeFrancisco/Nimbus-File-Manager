@@ -31,7 +31,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
  */
 class GlobalProgressContractTest {
 
-	private final ExecutionMapper mapper = new ExecutionMapper(null, null);
+	private final ExecutionMapper mapper = new ExecutionMapper(null, null, Progress.reader(), Progress.estimator());
 
 	/**
 	 * A batch of ten videos: two were not eligible and are skipped up front, the

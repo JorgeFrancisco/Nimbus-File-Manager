@@ -58,8 +58,8 @@ public class ConversionItemResult {
 	 * The catalogued video this line is about, or null when the batch was asked
 	 * for an id the catalog no longer knows.
 	 */
-	@Column(name = "media_public_id")
-	private UUID mediaPublicId;
+	@Column(name = "catalog_file_public_id")
+	private UUID catalogFilePublicId;
 
 	@Column(name = "file_name", nullable = false, length = 512)
 	private String fileName;

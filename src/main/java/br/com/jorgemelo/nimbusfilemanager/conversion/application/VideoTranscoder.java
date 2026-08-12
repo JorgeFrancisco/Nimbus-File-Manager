@@ -16,7 +16,8 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeRe
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.TranscodeResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -66,20 +67,21 @@ public class VideoTranscoder {
 	 * Converts {@code request} and reports the progress of this single file (0-100)
 	 * to {@code onFilePercent} while ffmpeg runs.
 	 */
-	public TranscodeResult transcode(TranscodeRequest request, IntConsumer onFilePercent, BooleanSupplier cancelled) {
+	public TranscodeResult transcode(TranscodeRequest request, IntConsumer onFilePercent, BooleanSupplier cancelled,
+			ProcessingMetrics metrics) {
 		long start = System.nanoTime();
 
 		Path output = conversionFileNaming.temporaryFor(request.source(), request.options());
 
-		return encodeAndValidate(request, output, onFilePercent, cancelled, start);
+		return encodeAndValidate(request, output, onFilePercent, cancelled, start, metrics);
 	}
 
 	private TranscodeResult encodeAndValidate(TranscodeRequest request, Path output, IntConsumer onFilePercent,
-			BooleanSupplier cancelled, long start) {
+			BooleanSupplier cancelled, long start, ProcessingMetrics metrics) {
 		CommandOptions options = new CommandOptions(request.options().quality(), request.sourceIsHevc(),
 				streamCompatibilityPolicy.encodesAacUpFront(request.options().audio()), true, true);
 
-		TranscodeExecution execution = run(request, output, options, onFilePercent, cancelled);
+		TranscodeExecution execution = run(request, output, options, onFilePercent, cancelled, metrics);
 
 		if (retriesWithAac(request, execution, cancelled)) {
 			log.info("Retrying {} with AAC audio: MP4 does not accept the original audio stream", request.source());
@@ -87,7 +89,7 @@ public class VideoTranscoder {
 			options = new CommandOptions(options.quality(), options.copyVideo(), true, options.includeSubtitles(),
 					options.includeData());
 
-			execution = run(request, output, options, onFilePercent, cancelled);
+			execution = run(request, output, options, onFilePercent, cancelled, metrics);
 		}
 
 		if (retriesWithoutData(execution, cancelled)) {
@@ -99,7 +101,7 @@ public class VideoTranscoder {
 			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(),
 					options.includeSubtitles(), false);
 
-			execution = run(request, output, options, onFilePercent, cancelled);
+			execution = run(request, output, options, onFilePercent, cancelled, metrics);
 		}
 
 		if (retriesOnSoftware(options, execution, cancelled)) {
@@ -112,7 +114,7 @@ public class VideoTranscoder {
 			options = new CommandOptions(options.quality().softwareEquivalent(), options.copyVideo(),
 					options.encodeAudioAsAac(), options.includeSubtitles(), options.includeData());
 
-			execution = run(request, output, options, onFilePercent, cancelled);
+			execution = run(request, output, options, onFilePercent, cancelled, metrics);
 		}
 
 		if (retriesWithoutSubtitles(execution, cancelled)) {
@@ -122,7 +124,7 @@ public class VideoTranscoder {
 			options = new CommandOptions(options.quality(), options.copyVideo(), options.encodeAudioAsAac(), false,
 					options.includeData());
 
-			execution = run(request, output, options, onFilePercent, cancelled);
+			execution = run(request, output, options, onFilePercent, cancelled, metrics);
 		}
 
 		if (cancelled.getAsBoolean()) {
@@ -132,7 +134,7 @@ public class VideoTranscoder {
 			return TranscodeResult.failed(ConversionFailure.CANCELLED, false, false, false, elapsedMillis(start));
 		}
 
-		return validate(request, output, options, execution, start);
+		return validate(request, output, options, metrics, execution, start);
 	}
 
 	/** A cancelled batch never spends another full encode on a retry. */
@@ -159,7 +161,7 @@ public class VideoTranscoder {
 	}
 
 	private TranscodeResult validate(TranscodeRequest request, Path output, CommandOptions options,
-			TranscodeExecution execution, long start) {
+			ProcessingMetrics metrics, TranscodeExecution execution, long start) {
 		boolean audioFallback = options.encodeAudioAsAac()
 				&& !streamCompatibilityPolicy.encodesAacUpFront(request.options().audio());
 
@@ -177,7 +179,7 @@ public class VideoTranscoder {
 					dataDropped, elapsedMillis(start));
 		}
 
-		Optional<ConversionFailure> rejected = validator.validate(output, request.sourceDurationSeconds());
+		Optional<ConversionFailure> rejected = validator.validate(output, request.sourceDurationSeconds(), metrics);
 
 		if (rejected.isPresent()) {
 			// ffmpeg reported success and the result still could not be trusted, so what
@@ -198,14 +200,14 @@ public class VideoTranscoder {
 	}
 
 	private TranscodeExecution run(TranscodeRequest request, Path output, CommandOptions options,
-			IntConsumer onFilePercent, BooleanSupplier cancelled) {
+			IntConsumer onFilePercent, BooleanSupplier cancelled, ProcessingMetrics metrics) {
 		List<String> command = commandBuilder.build(request.source(), output, options);
 
 		try {
 			// The gate is what keeps a transcode - minutes of saturated CPU - from
 			// running alongside another one or piling on top of an inventory's own ffmpeg
 			// work.
-			return externalToolGate.run(ExternalToolCategory.FFMPEG_TRANSCODE,
+			return externalToolGate.run(ExternalToolCategory.FFMPEG_TRANSCODE, metrics,
 					() -> transcodeRunner.run(command, line -> report(line, request, onFilePercent), cancelled));
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();

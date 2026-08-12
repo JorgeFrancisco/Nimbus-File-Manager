@@ -31,7 +31,8 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 			  AND TRIM(m.sha256) <> ''
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
 			  AND m.fileType IN :types
-			  AND NOT EXISTS (SELECT 1 FROM DuplicateFileExclusion fe WHERE fe.publicId = m.publicId)
+			  AND NOT EXISTS (SELECT 1 FROM DuplicateExclusionFile fe
+			                  WHERE fe.catalogFile = m AND fe.contentRevision = m.contentRevision)
 			  AND NOT EXISTS (SELECT 1 FROM DuplicateFolderExclusion fo
 			                  WHERE REPLACE(l.currentFolder, '\\', '/') = fo.folderPath
 			                     OR REPLACE(l.currentFolder, '\\', '/') LIKE CONCAT(REPLACE(REPLACE(fo.folderPath, '%', '\\%'), '_', '\\_'), '/%') ESCAPE '\\')
@@ -43,8 +44,8 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileRawResponse(
-				m.publicId,
-				m.fileName,
+				m.catalogFilePublicId,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)),
 				m.extension,
 				CAST(m.fileType AS string),
 				m.sizeBytes,
@@ -56,11 +57,12 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 			LEFT JOIN m.location l
 			WHERE m.sha256 = :sha256
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND NOT EXISTS (SELECT 1 FROM DuplicateFileExclusion fe WHERE fe.publicId = m.publicId)
+			  AND NOT EXISTS (SELECT 1 FROM DuplicateExclusionFile fe
+			                  WHERE fe.catalogFile = m AND fe.contentRevision = m.contentRevision)
 			  AND NOT EXISTS (SELECT 1 FROM DuplicateFolderExclusion fo
 			                  WHERE REPLACE(l.currentFolder, '\\', '/') = fo.folderPath
 			                     OR REPLACE(l.currentFolder, '\\', '/') LIKE CONCAT(REPLACE(REPLACE(fo.folderPath, '%', '\\%'), '_', '\\_'), '/%') ESCAPE '\\')
-			ORDER BY l.currentFolder ASC, m.fileName ASC, m.id ASC
+			ORDER BY l.currentFolder ASC, catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)) ASC, m.id ASC
 			""")
 	List<DuplicateFileRawResponse> findDuplicateFiles(String sha256);
 
@@ -71,8 +73,8 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileWithShaRawResponse(
 				m.sha256,
-				m.publicId,
-				m.fileName,
+				m.catalogFilePublicId,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)),
 				m.extension,
 				CAST(m.fileType AS string),
 				m.sizeBytes,
@@ -85,11 +87,13 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 			WHERE m.sha256 IN :sha256List
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
 			  AND m.fileType IN :types
-			  AND NOT EXISTS (SELECT 1 FROM DuplicateFileExclusion fe WHERE fe.publicId = m.publicId)
+			  AND NOT EXISTS (SELECT 1 FROM DuplicateExclusionFile fe
+			                  WHERE fe.catalogFile = m AND fe.contentRevision = m.contentRevision)
 			  AND NOT EXISTS (SELECT 1 FROM DuplicateFolderExclusion fo
 			                  WHERE REPLACE(l.currentFolder, '\\', '/') = fo.folderPath
 			                     OR REPLACE(l.currentFolder, '\\', '/') LIKE CONCAT(REPLACE(REPLACE(fo.folderPath, '%', '\\%'), '_', '\\_'), '/%') ESCAPE '\\')
-			ORDER BY m.sha256 ASC, l.currentFolder ASC, m.fileName ASC, m.id ASC
+			ORDER BY m.sha256 ASC, l.currentFolder ASC,
+			         catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)) ASC, m.id ASC
 			""")
 	List<DuplicateFileWithShaRawResponse> findDuplicateFilesForShas(@Param("sha256List") List<String> sha256List,
 			@Param("types") Collection<FileType> types);
@@ -111,7 +115,8 @@ public interface DuplicateRepository extends JpaRepository<CatalogFile, Long> {
 				WHERE mf.sha256 IS NOT NULL
 				  AND TRIM(mf.sha256) <> ''
 				  AND mf.lifecycle_status = 'ACTIVE'
-				  AND NOT EXISTS (SELECT 1 FROM duplicate_file_exclusion fe WHERE fe.public_id = mf.public_id)
+				  AND NOT EXISTS (SELECT 1 FROM duplicate_exclusion_file fe
+								  WHERE fe.catalog_file_id = mf.id AND fe.content_revision = mf.content_revision)
 				  AND NOT EXISTS (SELECT 1 FROM duplicate_folder_exclusion fo
 				                  WHERE REPLACE(l.current_folder, '\\', '/') = fo.folder_path
 				                     OR REPLACE(l.current_folder, '\\', '/') LIKE REPLACE(REPLACE(fo.folder_path, '%', '\\%'), '_', '\\_') || '/%' ESCAPE '\\')

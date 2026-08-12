@@ -1,7 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
 import java.io.File;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -15,24 +15,26 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFileExclusion;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateExclusionFile;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.DuplicateFolderExclusion;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFileExclusionRepository;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateExclusionFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateFolderExclusionRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.DuplicateRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateFileWithShaRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateGroupRawResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateSummaryProjection;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 
 /**
  * Runtime checks that {@link DuplicateRepository}'s always-on exclusion filters
  * behave against a real PostgreSQL instance: a byte-identical group is hidden
- * file-by-file (own {@code public_id}) and folder-by-folder (recursive path
+ * file-by-file (by the file's own identity) and folder-by-folder (recursive path
  * prefix), and a group that drops below two comparable files disappears from
  * both the group listing and the summary - all without touching the files
  * themselves.
@@ -47,10 +49,13 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 	private CatalogFileRepository catalogFileRepository;
 
 	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
 	private DuplicateRepository duplicateRepository;
 
 	@Autowired
-	private DuplicateFileExclusionRepository fileExclusionRepository;
+	private DuplicateExclusionFileRepository fileExclusionRepository;
 
 	@Autowired
 	private DuplicateFolderExclusionRepository folderExclusionRepository;
@@ -88,7 +93,8 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 
 	@Test
 	void excludingOneFileDropsOnlyThatCopyAndKeepsTheGroup() {
-		fileExclusionRepository.save(DuplicateFileExclusion.builder().publicId(folderA1.getPublicId()).build());
+		fileExclusionRepository.save(DuplicateExclusionFile.builder().catalogFile(folderA1)
+				.contentRevision(folderA1.getContentRevision()).build());
 
 		Page<DuplicateGroupRawResponse> groups = duplicateRepository.findDuplicateGroups(PHOTOS, PAGE);
 
@@ -96,10 +102,10 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 				.satisfies(group -> Assertions.assertThat(group.files()).isEqualTo(2));
 
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
-				.containsExactlyInAnyOrder(folderA2.getPublicId(), folderB1.getPublicId());
+				.containsExactlyInAnyOrder(folderA2.getCatalogFilePublicId(), folderB1.getCatalogFilePublicId());
 
 		Assertions.assertThat(duplicateRepository.findDuplicateFilesForShas(List.of(SHA), PHOTOS))
-				.extracting(DuplicateFileWithShaRawResponse::id).doesNotContain(folderA1.getPublicId());
+				.extracting(DuplicateFileWithShaRawResponse::id).doesNotContain(folderA1.getCatalogFilePublicId());
 	}
 
 	@Test
@@ -111,7 +117,7 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 		Assertions.assertThat(duplicateRepository.findDuplicateGroups(PHOTOS, PAGE).getContent()).isEmpty();
 
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
-				.containsExactly(folderB1.getPublicId());
+				.containsExactly(folderB1.getCatalogFilePublicId());
 
 		DuplicateSummaryProjection summary = duplicateRepository.summary();
 
@@ -128,8 +134,8 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 		// "C:/Media/a" and "C:/Media/a/sub" are excluded; "C:/Media/ab" only shares a
 		// textual prefix and must stay comparable.
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
-				.containsExactlyInAnyOrder(folderB1.getPublicId(), sibling.getPublicId())
-				.doesNotContain(nested.getPublicId());
+				.containsExactlyInAnyOrder(folderB1.getCatalogFilePublicId(), sibling.getCatalogFilePublicId())
+				.doesNotContain(nested.getCatalogFilePublicId());
 	}
 
 	@Test
@@ -144,15 +150,16 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 		// while the "C:/Media/aXb/sub" sibling (which a wildcard '_' would have
 		// swallowed) stays.
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
-				.contains(sibling.getPublicId()).doesNotContain(underExcluded.getPublicId());
+				.contains(sibling.getCatalogFilePublicId()).doesNotContain(underExcluded.getCatalogFilePublicId());
 	}
 
 	@Test
 	void fileExclusionViewJoinsTheCurrentPathForTheManagementList() {
-		fileExclusionRepository.save(DuplicateFileExclusion.builder().publicId(folderA1.getPublicId()).build());
+		fileExclusionRepository.save(DuplicateExclusionFile.builder().catalogFile(folderA1)
+				.contentRevision(folderA1.getContentRevision()).build());
 
 		Assertions.assertThat(duplicateExclusionService.fileExclusions()).singleElement().satisfies(view -> {
-			Assertions.assertThat(view.publicId()).isEqualTo(folderA1.getPublicId());
+			Assertions.assertThat(view.catalogFilePublicId()).isEqualTo(folderA1.getCatalogFilePublicId());
 			Assertions.assertThat(view.currentPath()).startsWith("C:/Media/a/");
 			Assertions.assertThat(view.id()).isNotNull();
 		});
@@ -175,19 +182,20 @@ class DuplicateExclusionRepositoryIntegrationTest extends SharedPostgresIntegrat
 
 		Assertions.assertThat(created).isTrue();
 		Assertions.assertThat(duplicateRepository.findDuplicateFiles(SHA)).extracting(DuplicateFileRawResponse::id)
-				.doesNotContain(windowsFolder.getPublicId(), windowsSub.getPublicId()).contains(folderB1.getPublicId());
+				.doesNotContain(windowsFolder.getCatalogFilePublicId(), windowsSub.getCatalogFilePublicId())
+				.contains(folderB1.getCatalogFilePublicId());
 	}
 
 	private CatalogFile persist(String folder) {
 		String key = "dup-excl-it-" + System.nanoTime();
 		String path = folder + "/" + key + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1024L)
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).sha256(SHA).build();
+		CatalogFile file = CatalogFile.builder().extension("jpg").sizeBytes(1024L)
+				.modifiedAt(Instant.now()).fileType(FileType.PHOTO).sha256(SHA).build();
 
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder(folder)
-				.originalPath(path).originalFolder(folder).build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file);
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 	}
 }

@@ -78,7 +78,8 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN catalog_file_location l ON l.catalog_file_id = m.id
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycle_status = 'ACTIVE'
-			  AND NOT EXISTS (SELECT 1 FROM duplicate_file_exclusion fe WHERE fe.public_id = m.public_id)
+			  AND NOT EXISTS (SELECT 1 FROM duplicate_exclusion_file fe
+			                  WHERE fe.catalog_file_id = m.id AND fe.content_revision = m.content_revision)
 			  AND NOT EXISTS (SELECT 1 FROM duplicate_folder_exclusion fo
 			                  WHERE REPLACE(l.current_folder, chr(92), '/') = fo.folder_path
 			                     OR REPLACE(l.current_folder, chr(92), '/')
@@ -128,7 +129,8 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN catalog_file_location l ON l.catalog_file_id = m.id
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycle_status = 'ACTIVE'
-			  AND NOT EXISTS (SELECT 1 FROM duplicate_file_exclusion fe WHERE fe.public_id = m.public_id)
+			  AND NOT EXISTS (SELECT 1 FROM duplicate_exclusion_file fe
+			                  WHERE fe.catalog_file_id = m.id AND fe.content_revision = m.content_revision)
 			  AND NOT EXISTS (SELECT 1 FROM duplicate_folder_exclusion fo
 			                  WHERE REPLACE(l.current_folder, chr(92), '/') = fo.folder_path
 			                     OR REPLACE(l.current_folder, chr(92), '/')
@@ -158,12 +160,12 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 * <p>
 	 * The ids arrive as one array parameter rather than as an {@code IN} list -
 	 * here and in the three queries below - for the reason and the measurements
-	 * on the {@code ArrayMembershipFunctionContributor} that renders it. A library names
-	 * more files than the wire protocol has bind parameters.
+	 * on the {@code ArrayMembershipFunctionContributor} that renders it. A library
+	 * names more files than the wire protocol has bind parameters.
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow(
-				m.publicId, l.currentFolder)
+				m.catalogFilePublicId, l.currentFolder)
 			FROM MediaFingerprint f
 			JOIN CatalogFile m ON m.id = f.catalogFileId
 			LEFT JOIN m.location l
@@ -187,7 +189,7 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow(
-				m.publicId, l.currentFolder)
+				m.catalogFilePublicId, l.currentFolder)
 			FROM MediaFingerprint f
 			JOIN CatalogFile m ON m.id = f.catalogFileId
 			JOIN m.video v
@@ -215,13 +217,14 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile(
-				m.publicId, m.fileName, m.extension, CAST(m.fileType AS string), m.sizeBytes,
+				m.catalogFilePublicId, catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)), m.extension,
+				CAST(m.fileType AS string), m.sizeBytes,
 				l.currentPath, l.currentFolder, m.modifiedAt, md.displayWidth, md.displayHeight,
 				md.captureDate, md.dateSource, m.lifecycleStatus)
 			FROM CatalogFile m
 			LEFT JOIN m.location l
 			LEFT JOIN m.metadata md
-			WHERE inArray(m.publicId, :publicIds)
+			WHERE inArray(m.catalogFilePublicId, :publicIds)
 			""")
 	List<SimilarityMemberFile> findSimilarityMembers(@Param("publicIds") UUID[] publicIds);
 
@@ -265,7 +268,8 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PhotoHashRawResponse(
-				m.id, m.publicId, f.hashBytes, f.sampleBytes, m.fileName, m.extension, m.sizeBytes,
+				m.id, m.catalogFilePublicId, f.hashBytes, f.sampleBytes,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)), m.extension, m.sizeBytes,
 				l.currentPath, l.currentFolder, m.modifiedAt)
 			FROM MediaFingerprint f
 			JOIN CatalogFile m ON m.id = f.catalogFileId
@@ -328,7 +332,7 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 * processed items leave the set.
 	 */
 	@Query("""
-			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto(m.id, l.currentPath)
+			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto(m.id, l.currentPath, m.contentRevision)
 			FROM CatalogFile m
 			JOIN m.location l
 			WHERE m.fileType = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType.PHOTO
@@ -367,8 +371,9 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.VideoFrameRawResponse(
-				m.id, m.publicId, f.sampleIndex, f.positionMs, f.hashBytes, f.sampleBytes,
-				m.fileName, m.extension, m.sizeBytes, l.currentPath, l.currentFolder, m.modifiedAt,
+				m.id, m.catalogFilePublicId, f.sampleIndex, f.positionMs, f.hashBytes, f.sampleBytes,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)), m.extension, m.sizeBytes,
+				l.currentPath, l.currentFolder, m.modifiedAt,
 				v.durationSeconds, md.displayWidth, md.displayHeight)
 			FROM MediaFingerprint f
 			JOIN CatalogFile m ON m.id = f.catalogFileId
@@ -431,7 +436,7 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo(
-				m.id, l.currentPath, v.durationSeconds)
+				m.id, l.currentPath, v.durationSeconds, m.contentRevision)
 			FROM CatalogFile m
 			JOIN m.location l
 			JOIN m.video v

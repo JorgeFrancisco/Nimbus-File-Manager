@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
@@ -15,7 +15,7 @@ public record MediaSearchRawResponse(
 
 		String currentPath, String currentFolder,
 
-		LocalDateTime createdAt, LocalDateTime modifiedAt,
+		Instant createdAt, Instant modifiedAt,
 
 		Integer year, Integer month, Integer day, String yearMonth,
 
@@ -26,7 +26,7 @@ public record MediaSearchRawResponse(
 		String manufacturer, String model) {
 
 	public MediaSearchRawResponse(Long id, String fileName, String extension, String fileType, long sizeBytes,
-			String currentPath, String currentFolder, LocalDateTime createdAt, LocalDateTime modifiedAt, Integer year,
+			String currentPath, String currentFolder, Instant createdAt, Instant modifiedAt, Integer year,
 			Integer month, Integer day, String yearMonth, String videoCodec, String audioCodec, Double durationSeconds,
 			Integer width, Integer height, String manufacturer, String model) {
 		this(UuidV7.fromLegacy(id), fileName, extension, fileType, sizeBytes, currentPath, currentFolder, createdAt,

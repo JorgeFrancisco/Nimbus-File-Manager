@@ -25,7 +25,6 @@
 						<dt th:text="#{common.errors}">Erros</dt><dd th:text="${exec.errors()}">0</dd>
 						<dt th:text="#{statistics.workersChunk}">Workers / chunk</dt><dd th:text="(${exec.workers() != null ? exec.workers() : '—'}) + ' / ' + (${exec.chunkSize() != null ? exec.chunkSize() : '—'})">—</dd>
 						<dt>ffmpeg / ffprobe</dt><dd th:text="(${exec.ffmpegPhotoHashLimit() != null ? exec.ffmpegPhotoHashLimit() : '—'}) + ' / ' + (${exec.ffprobeVideoLimit() != null ? exec.ffprobeVideoLimit() : '—'})">—</dd>
-						<dt th:text="#{statistics.photoHashCombo}">Foto-hash JVM / ffmpeg / falhos</dt><dd th:text="(${exec.photoHashJvmDecodable() != null ? exec.photoHashJvmDecodable() : '—'}) + ' / ' + (${exec.photoHashFfmpegOnly() != null ? exec.photoHashFfmpegOnly() : '—'}) + ' / ' + (${exec.photoHashFailures() != null ? exec.photoHashFailures() : '—'})">—</dd>
 					</dl>
 				</div>
 			</div>

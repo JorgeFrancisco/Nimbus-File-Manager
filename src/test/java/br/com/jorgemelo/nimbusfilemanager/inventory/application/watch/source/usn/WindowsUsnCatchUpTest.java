@@ -11,6 +11,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.constants.UsnReason;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
@@ -21,12 +22,14 @@ class WindowsUsnCatchUpTest {
 	private static final int BUFFER = 65_536;
 	private static final long JOURNAL = 7L;
 	private static final long SUB = 10L;
+	/** What a file reference number is unique within; the next volume reuses them. */
+	private static final String VOLUME = "volume-under-test";
 
 	private final UsnCursorStore cursorStore = mock(UsnCursorStore.class);
 	private final UsnPathResolver resolver = frn -> frn == SUB ? Optional.of(ROOT.resolve("sub")) : Optional.empty();
 
 	private UsnCatchUpResult catchUp(UsnVolume volume) {
-		return WindowsUsnCatchUp.catchUp(ROOT, volume, resolver, cursorStore, KEY, BUFFER);
+		return WindowsUsnCatchUp.catchUp(ROOT, volume, resolver, cursorStore, KEY, VOLUME, BUFFER);
 	}
 
 	@Test
@@ -40,7 +43,8 @@ class WindowsUsnCatchUpTest {
 
 		UsnCatchUpResult result = catchUp(volume);
 
-		Assertions.assertThat(result.offlineChanges()).containsExactly(ROOT.resolve("sub").resolve("offline.jpg"));
+		Assertions.assertThat(result.offlineChanges()).extracting(FileSystemChange::path)
+				.containsExactly(ROOT.resolve("sub").resolve("offline.jpg"));
 		Assertions.assertThat(result.recoveryReason()).as("the replay covered its whole window").isNull();
 		Assertions.assertThat(volume.firstReadFrom()).isEqualTo(100L);
 		verify(cursorStore).save(KEY, JOURNAL, 180L);

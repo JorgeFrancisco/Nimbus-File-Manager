@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionStepResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.model.ExecutionStep;
@@ -28,10 +29,15 @@ public class ExecutionMapper extends LocalizedComponent {
 
 	private final ExecutionMessageCodec codec;
 	private final ExecutionLabels executionLabels;
+	private final ExecutionProgressReader progress;
+	private final EtaEstimator etaEstimator;
 
-	public ExecutionMapper(ExecutionMessageCodec codec, ExecutionLabels executionLabels) {
+	public ExecutionMapper(ExecutionMessageCodec codec, ExecutionLabels executionLabels,
+			ExecutionProgressReader progress, EtaEstimator etaEstimator) {
 		this.codec = codec;
 		this.executionLabels = executionLabels;
+		this.progress = progress;
+		this.etaEstimator = etaEstimator;
 	}
 
 	public ExecutionResponse toResponse(Execution execution) {
@@ -41,13 +47,14 @@ public class ExecutionMapper extends LocalizedComponent {
 
 		ExecutionStatus status = execution.getStatus();
 
-		return new ExecutionResponse(UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+		return new ExecutionResponse(UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()),
 				execution.getExecutionType().name(), status.name(), phaseName(execution.getPhase()),
 				execution.getStartedAt(), execution.getFinishedAt(),
 				execution.getSourcePath(), execution.getTargetPath(), execution.getFilesFound(),
 				execution.getFilesAnalyzed(), execution.getCacheHits(), execution.getFilesMoved(),
 				execution.getSimulatedFiles(), execution.getErrors(), execution.getTotalExpected(),
-				percentComplete(execution), currentItemPercent(execution), resolve(execution.getStatusMessage()),
+				percentComplete(execution), currentItemPercent(execution), eta(execution),
+				resolve(execution.getStatusMessage()),
 				execution.getExecuteFlag(),
 				executionLabels.status(status), status.isTerminal(), executionLabels.type(execution.getExecutionType()),
 				triggerLabel(execution.getTriggerEvent()), DateTimeFormatUtils.human(execution.getStartedAt()),
@@ -55,8 +62,8 @@ public class ExecutionMapper extends LocalizedComponent {
 	}
 
 	ExecutionStepResponse toStepResponse(ExecutionStep step) {
-		return new ExecutionStepResponse(UuidV7.orLegacy(step.getPublicId(), step.getId()),
-				UuidV7.orLegacy(step.getExecution().getPublicId(), step.getExecution().getId()),
+		return new ExecutionStepResponse(UuidV7.orLegacy(step.getExecutionStepPublicId(), step.getId()),
+				UuidV7.orLegacy(step.getExecution().getExecutionPublicId(), step.getExecution().getId()),
 				step.getStepType().name(), step.getPath(), resolve(step.getStatusMessage()), step.getFilesFound(),
 				step.getFilesAnalyzed(), step.getCacheHits(), step.getErrors(), step.getCreatedAt());
 	}
@@ -122,15 +129,20 @@ public class ExecutionMapper extends LocalizedComponent {
 	 * where the user happened to look.
 	 */
 	Double percentComplete(Execution execution) {
-		Integer total = execution.getTotalExpected();
-		Integer processed = execution.getFilesFound();
+		return progress.percent(execution);
+	}
 
-		if (total == null || total <= 0 || processed == null) {
-			return null;
-		}
-
-		double percent = (processed * 100.0) / total;
-
-		return Math.round(Math.min(percent, 100.0) * 10.0) / 10.0;
+	/**
+	 * How much longer, as a fact rather than a sentence.
+	 *
+	 * <p>
+	 * Only while the row is RUNNING, for the same reason the item percentage is:
+	 * a worker that died leaves its row RUNNING until the reclaim finds it, but a
+	 * row in any other state is not being measured by anybody, and an estimate
+	 * nobody is producing is a stale number wearing a live one's clothes.
+	 */
+	EtaEstimate eta(Execution execution) {
+		return execution.getStatus() == ExecutionStatus.RUNNING ? etaEstimator.estimate(execution)
+				: EtaEstimate.notApplicable();
 	}
 }

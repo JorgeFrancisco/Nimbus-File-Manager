@@ -1,7 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -58,7 +59,12 @@ public class CatalogPurgeLauncherService {
 			return Optional.empty();
 		}
 
-		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(retentionDays);
+		// The same instant the pass itself computes, and the same type the column is
+		// mapped to. It was a LocalDateTime here while catalog_file.lifecycleChangedAt
+		// had already become an Instant: the derived query still compiled, and every
+		// scheduled purge died in Hibernate on the argument type - so nothing missing
+		// was ever aged out, and the only trace was one line in the log.
+		Instant cutoff = Instant.now(clock).minus(Duration.ofDays(retentionDays));
 
 		if (!catalogFileRepository.existsByLifecycleStatusAndLifecycleChangedAtBefore(LifecycleStatus.MISSING,
 				cutoff)) {

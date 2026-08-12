@@ -333,6 +333,7 @@ Estas propriedades não são convenção: são teste, e quebram o build.
 | `ExecutionEnqueueRaceIntegrationTest` | dois pedidos idênticos simultâneos, em transações reais, deixarem de virar uma execução só que ambos recebem |
 | `FingerprintBacklogEndToEndIntegrationTest` | um tipo voltar a ter teste, histórico e build verde sem nunca ter atravessado o dispatcher |
 | `SimilarityCancellationIntegrationTest` | um cancelamento publicar resultado parcial, aposentar a resposta vigente ou terminar como erro |
+| `EligibilityAnnouncementArchitectureTest` | uma terceira classe construir `EligibilityChanged`; um segundo consumidor do evento; uma classe chamada uma vez por arquivo deter o anunciador e pedir um reagrupamento por item |
 | `OperationLockServiceIntegrationTest`, `OwnershipLossIntegrationTest` | os advisory locks e a reconfirmação de posse regredirem |
 
 ---

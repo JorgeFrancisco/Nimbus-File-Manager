@@ -1,14 +1,15 @@
 package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.OptionalInt;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogCollectionMutations;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,10 +30,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 class CatalogFileRetentionService {
 
-	private final CatalogMutations catalogMutations;
+	private final CatalogCollectionMutations catalogMutations;
 	private final Clock clock;
 
-	CatalogFileRetentionService(CatalogMutations catalogMutations, Clock clock) {
+	CatalogFileRetentionService(CatalogCollectionMutations catalogMutations, Clock clock) {
 		this.catalogMutations = catalogMutations;
 		this.clock = clock;
 	}
@@ -68,7 +69,7 @@ class CatalogFileRetentionService {
 			return OptionalInt.empty();
 		}
 
-		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
+		Instant cutoff = Instant.now(clock).minus(Duration.ofDays(days));
 
 		int purged = catalogMutations.purgeMissingBefore(cutoff);
 

@@ -8,12 +8,15 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.CatalogTimestamp;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScanOptions;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.FolderMatcher;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
@@ -49,7 +52,7 @@ public class FileScanner {
 
 		ScanOptions effectiveOptions = options != null ? options : ScanOptions.defaultOptions();
 
-		try (Stream<Path> stream = createStream(sourcePath, effectiveOptions)) {
+		try (Stream<ScannedFile> stream = createStream(sourcePath, effectiveOptions)) {
 			return filteredFiles(stream, sourcePath, effectiveOptions).count();
 		} catch (IOException e) {
 			throw new IllegalStateException("Could not scan path: " + sourcePath, e);
@@ -66,7 +69,7 @@ public class FileScanner {
 	 * concurrently against a stream still open from this method for the same
 	 * instance, though in practice each call opens an independent underlying walk.
 	 */
-	public Stream<Path> stream(Path sourcePath, ScanOptions options) {
+	public Stream<ScannedFile> stream(Path sourcePath, ScanOptions options) {
 		validateSourcePath(sourcePath);
 
 		ScanOptions effectiveOptions = options != null ? options : ScanOptions.defaultOptions();
@@ -78,19 +81,24 @@ public class FileScanner {
 		}
 	}
 
-	private Stream<Path> filteredFiles(Stream<Path> stream, Path sourcePath, ScanOptions options) {
+	private Stream<ScannedFile> filteredFiles(Stream<ScannedFile> stream, Path sourcePath,
+			ScanOptions options) {
 		// PhysicalFilePolicy drops symbolic links and .lnk shortcuts so they are
 		// never inventoried. Directory symlinks are never descended into because the
 		// walk below never uses FileVisitOption.FOLLOW_LINKS.
-		return stream.filter(Files::isRegularFile).filter(PhysicalFilePolicy::isProcessable)
-				.filter(path -> options.includeHidden() || !isHidden(path)).filter(path -> !isWithinQuarantine(path))
-				.filter(path -> !matchesExcludedFolder(sourcePath, path, options))
-				.filter(path -> matchesExtension(path, options));
+		return stream.filter(scanned -> Files.isRegularFile(scanned.path()))
+				.filter(scanned -> PhysicalFilePolicy.isProcessable(scanned.path()))
+				.filter(scanned -> options.includeHidden() || !isHidden(scanned.path()))
+				.filter(scanned -> !isWithinQuarantine(scanned.path()))
+				.filter(scanned -> !matchesExcludedFolder(sourcePath, scanned.path(), options))
+				.filter(scanned -> matchesExtension(scanned.path(), options));
 	}
 
-	private Stream<Path> createStream(Path sourcePath, ScanOptions options) throws IOException {
+	private Stream<ScannedFile> createStream(Path sourcePath, ScanOptions options) throws IOException {
 		if (!options.recursive()) {
-			return Files.list(sourcePath);
+			// A single level has no walk to be told anything by, so the attributes are
+			// asked for here - one stat for a file this is about to consider anyway.
+			return Files.list(sourcePath).map(FileScanner::scannedOf).filter(Objects::nonNull);
 		}
 
 		return walkPhysicalTree(sourcePath, options.includeHidden());
@@ -109,8 +117,8 @@ public class FileScanner {
 	 * on the first such directory and lose the entire tree. This mirrors the
 	 * directory pruning the reconcile walk already performs, so both stay in sync.
 	 */
-	private Stream<Path> walkPhysicalTree(Path sourcePath, boolean includeHidden) throws IOException {
-		List<Path> files = new ArrayList<>();
+	private Stream<ScannedFile> walkPhysicalTree(Path sourcePath, boolean includeHidden) throws IOException {
+		List<ScannedFile> files = new ArrayList<>();
 
 		Files.walkFileTree(sourcePath, new SimpleFileVisitor<Path>() {
 
@@ -130,7 +138,10 @@ public class FileScanner {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-				files.add(file);
+				// The attributes travel with the path. The walk was given them to decide
+				// whether to descend; throwing them away is what made a later pass unable
+				// to tell a catalogued file from the file it catalogued without opening it.
+				files.add(new ScannedFile(file, attrs.size(), CatalogTimestamp.observed(attrs.lastModifiedTime())));
 
 				return FileVisitResult.CONTINUE;
 			}
@@ -143,6 +154,17 @@ public class FileScanner {
 		});
 
 		return files.stream();
+	}
+
+	private static ScannedFile scannedOf(Path path) {
+		try {
+			BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+
+			return new ScannedFile(path, attributes.size(), CatalogTimestamp.observed(attributes.lastModifiedTime()));
+		} catch (IOException _) {
+			// Unreadable entries are skipped, exactly as the recursive walk skips them.
+			return null;
+		}
 	}
 
 	private boolean isWithinQuarantine(Path path) {

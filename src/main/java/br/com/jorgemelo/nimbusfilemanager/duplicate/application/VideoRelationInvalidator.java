@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoComparisonInputs;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -35,15 +34,27 @@ import lombok.extern.slf4j.Slf4j;
  * photo relations of the same row with it, and a still exported beside a clip
  * shares nothing with it but an id. The scope is the algorithm, which is what
  * {@link SimilarityRelationWriter#forget} takes.
+ *
+ * <p>
+ * And it is the algorithm <em>in use</em>, asked of the bean rather than named
+ * here. Naming it cost exactly what naming it always costs: when the video
+ * fingerprint moved to reaching its frames by seeking - a new identifier, as any
+ * change of pipeline must be - this went on forgetting relations of the previous
+ * one, which nothing produces any more, and left the current ones in place. A
+ * video whose duration or shape had changed would have kept being compared using
+ * what was measured before it changed.
  */
 @Slf4j
 @Service
 public class VideoRelationInvalidator {
 
 	private final SimilarityRelationWriter similarityRelationWriter;
+	private final VideoSimilarityAlgorithm algorithm;
 
-	public VideoRelationInvalidator(SimilarityRelationWriter similarityRelationWriter) {
+	public VideoRelationInvalidator(SimilarityRelationWriter similarityRelationWriter,
+			VideoSimilarityAlgorithm algorithm) {
 		this.similarityRelationWriter = similarityRelationWriter;
+		this.algorithm = algorithm;
 	}
 
 	/**
@@ -62,8 +73,7 @@ public class VideoRelationInvalidator {
 			return false;
 		}
 
-		int forgotten = similarityRelationWriter
-				.forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1, catalogFile.getId());
+		int forgotten = similarityRelationWriter.forget(algorithm.algorithm(), catalogFile.getId());
 
 		log.info("Video {} changed the inputs its similarity was decided by ({} -> {}); {} relation(s) and its"
 				+ " coverage were forgotten, so the next incremental run compares it again", catalogFile.getId(),

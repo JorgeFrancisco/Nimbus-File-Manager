@@ -4,17 +4,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 
 class DefaultFileDateReader implements FileDateReader {
 
 	@Override
 	public BasicFileAttributes readAttributes(Path file) throws IOException {
 		return Files.readAttributes(file, BasicFileAttributes.class);
-	}
-
-	@Override
-	public FileTime getLastModifiedTime(Path file) throws IOException {
-		return Files.getLastModifiedTime(file);
 	}
 }

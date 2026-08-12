@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.catalog.domain.repository.projection;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -15,9 +15,15 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
  * The internal {@code id} is present only to drive keyset pagination during the
  * export; it is {@link JsonIgnore}d and omitted from the CSV so the public
  * identity stays {@code publicId}.
+ *
+ * <p>
+ * The three timestamps are instants, because that is what the catalog holds:
+ * when a file was written to and when it entered the catalog are moments, not
+ * readings on somebody's wall clock. The export renders them with their offset
+ * rather than dropping it - a row exported in one time zone and read in another
+ * used to be off by hours with nothing in the file to say so.
  */
-public record CatalogExportRow(@JsonIgnore Long id, UUID publicId, String fileKey, String fileName, String extension,
-		Long sizeBytes, String sha256, String md5, String mimeType, String fileType, String lifecycleStatus,
-		LocalDateTime createdAt, LocalDateTime modifiedAt, LocalDateTime importedAt, String currentPath,
-		String originalPath) {
+public record CatalogExportRow(@JsonIgnore Long id, UUID publicId, String fileName, String extension,
+		Long sizeBytes, String sha256, String mimeType, String fileType, String lifecycleStatus,
+		Instant createdAt, Instant modifiedAt, Instant importedAt, String currentPath) {
 }

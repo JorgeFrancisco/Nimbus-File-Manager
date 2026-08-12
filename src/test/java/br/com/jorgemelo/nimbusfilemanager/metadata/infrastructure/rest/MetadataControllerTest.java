@@ -36,7 +36,7 @@ class MetadataControllerTest {
 	@Test
 	void aQueuedRebuildAnswersWithTheExecutionToFollow() {
 		when(metadataRebuildLauncher.launch(any(), any(), anyBoolean(), any()))
-				.thenReturn(Optional.of(Execution.builder().id(1L).publicId(PUBLIC_ID).build()));
+				.thenReturn(Optional.of(Execution.builder().id(1L).executionPublicId(PUBLIC_ID).build()));
 
 		ResponseEntity<Void> response = controller.rebuild(request());
 

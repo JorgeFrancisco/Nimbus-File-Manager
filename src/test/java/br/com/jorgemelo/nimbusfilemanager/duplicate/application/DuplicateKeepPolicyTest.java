@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -25,27 +26,27 @@ class DuplicateKeepPolicyTest {
 
 	private Signals original(UUID id, int w, int h) {
 		return new Signals(id, true, MediaSubcategory.CAMERA, w, h, DateSource.EXIF,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 	}
 
 	private Signals whatsapp(UUID id, int w, int h) {
 		return new Signals(id, false, MediaSubcategory.WHATSAPP, w, h, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0), Instant.parse("2021-06-01T08:00:00Z"));
 	}
 
 	private Signals edited(UUID id, int w, int h) {
 		return new Signals(id, false, MediaSubcategory.AIRBRUSH, w, h, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), Instant.parse("2021-06-01T08:00:00Z"));
 	}
 
 	private Signals photoGrid(UUID id, int w, int h) {
 		return new Signals(id, false, MediaSubcategory.PHOTOGRID, w, h, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), Instant.parse("2021-06-01T08:00:00Z"));
 	}
 
 	private Signals screenshot(UUID id, int w, int h) {
 		return new Signals(id, false, MediaSubcategory.SCREENSHOT, w, h, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 2, 0, 0), Instant.parse("2021-06-01T08:00:00Z"));
 	}
 
 	@Test
@@ -131,10 +132,10 @@ class DuplicateKeepPolicyTest {
 		// timestamp. Without the derivative penalty the copy would win the "oldest"
 		// tiebreak.
 		Signals source = new Signals(A, false, MediaSubcategory.OTHER, null, null, DateSource.FILE_NAME_CONFIRMED,
-				LocalDateTime.of(2026, Month.JULY, 4, 14, 35, 46), LocalDateTime.of(2026, Month.JULY, 4, 14, 36, 14));
+				LocalDateTime.of(2026, Month.JULY, 4, 14, 35, 46), Instant.parse("2026-07-04T14:36:14Z"));
 
 		Signals copy = new Signals(B, false, MediaSubcategory.WHATSAPP, null, null, DateSource.FILE_NAME,
-				LocalDateTime.of(2026, Month.JULY, 4, 0, 0, 0), LocalDateTime.of(2026, Month.JULY, 4, 14, 37, 51));
+				LocalDateTime.of(2026, Month.JULY, 4, 0, 0, 0), Instant.parse("2026-07-04T14:37:51Z"));
 
 		Map<UUID, Decision> d = policy.decide(List.of(copy, source), true);
 
@@ -144,7 +145,7 @@ class DuplicateKeepPolicyTest {
 
 	private Signals signal(UUID id, boolean camera, MediaSubcategory subcategory, DateSource dateSource) {
 		return new Signals(id, camera, subcategory, 4000, 3000, dateSource,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 	}
 
 	@Test
@@ -208,7 +209,7 @@ class DuplicateKeepPolicyTest {
 		// resolution wins as BEST_IN_GROUP and the sibling is an IDENTICAL_COPY.
 		Signals high = signal(A, false, MediaSubcategory.OTHER, DateSource.FILE_NAME);
 		Signals low = new Signals(B, false, MediaSubcategory.OTHER, 800, 600, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 
 		Map<UUID, Decision> d = policy.decide(List.of(high, low), true);
 
@@ -226,7 +227,7 @@ class DuplicateKeepPolicyTest {
 	void aDerivativeMarkerBeatsCameraExifSoTheFileIsNotOriginal() {
 		// Camera EXIF present, but the WhatsApp derivative marker wins: not "original".
 		Signals cameraWhatsApp = new Signals(A, true, MediaSubcategory.WHATSAPP, 4000, 3000, DateSource.EXIF,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 
 		Map<UUID, Decision> d = policy.decide(List.of(cameraWhatsApp, original(B, 4000, 3000)), false);
 
@@ -254,9 +255,9 @@ class DuplicateKeepPolicyTest {
 	@Test
 	void aMissingDimensionCountsAsZeroPixels() {
 		Signals noHeight = new Signals(A, false, MediaSubcategory.OTHER, 4000, null, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 		Signals withDimensions = new Signals(B, false, MediaSubcategory.OTHER, 800, 600, DateSource.FILE_NAME,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 
 		Map<UUID, Decision> d = policy.decide(List.of(noHeight, withDimensions), true);
 
@@ -266,7 +267,7 @@ class DuplicateKeepPolicyTest {
 
 	private Signals tiebreak(UUID id, DateSource dateSource) {
 		return new Signals(id, false, MediaSubcategory.OTHER, 1000, 1000, dateSource,
-				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0));
+				LocalDateTime.of(2020, Month.JANUARY, 1, 10, 0), Instant.parse("2020-01-01T10:00:00Z"));
 	}
 
 	/**
@@ -277,9 +278,9 @@ class DuplicateKeepPolicyTest {
 	@Test
 	void keepsTheCopyWhoseNameCarriedTheTimeOfDay() {
 		Signals comHora = new Signals(A, false, MediaSubcategory.CAMERA, 4000, 3000, DateSource.FILE_NAME,
-				LocalDateTime.of(2017, Month.OCTOBER, 6, 20, 27, 56), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2017, Month.OCTOBER, 6, 20, 27, 56), Instant.parse("2021-06-01T08:00:00Z"));
 		Signals soODia = new Signals(B, false, MediaSubcategory.CAMERA, 4000, 3000, DateSource.FILE_NAME,
-				LocalDateTime.of(2017, Month.OCTOBER, 6, 0, 0), LocalDateTime.of(2021, Month.JUNE, 1, 8, 0));
+				LocalDateTime.of(2017, Month.OCTOBER, 6, 0, 0), Instant.parse("2021-06-01T08:00:00Z"));
 
 		Map<UUID, Decision> decisoes = policy.decide(List.of(soODia, comHora), true);
 

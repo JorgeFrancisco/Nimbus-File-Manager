@@ -14,7 +14,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,7 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
@@ -188,11 +190,12 @@ class QuarantinePurgeServiceTest {
 
 		UUID publicId = UUID.randomUUID();
 
-		Movement movement = Movement.builder().id(1L).publicId(publicId).targetPath(PathUtils.normalize(file))
-				.sourcePath("ignored").status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now()).build();
+		Movement movement = Movement.builder().id(1L).movementPublicId(publicId)
+				.requestedTargetPath(PathUtils.normalize(file)).requestedSourcePath("ignored")
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(Instant.now()).build();
 
-		when(movementRepository.findByPublicId(publicId)).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(publicId)).thenReturn(Optional.of(movement));
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
 		when(purgePersistence.deleteCatalogFileIfOrphan(9L)).thenReturn(true);
 
@@ -207,7 +210,7 @@ class QuarantinePurgeServiceTest {
 	void purgeSelectedSkipsUnknownOrRestoredItems() {
 		UUID publicId = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(publicId)).thenReturn(Optional.empty());
 
 		QuarantinePurgeResult result = service.purgeSelected(List.of(publicId), execution(), owning());
 
@@ -231,7 +234,7 @@ class QuarantinePurgeServiceTest {
 
 		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.removed(9L));
 
-		int removed = service.cleanupAbsent(List.of(presentMovement.getPublicId(), absentMovement.getPublicId()),
+		int removed = service.cleanupAbsent(List.of(presentMovement.getMovementPublicId(), absentMovement.getMovementPublicId()),
 				execution(), owning());
 
 		Assertions.assertThat(removed).isEqualTo(1);
@@ -246,18 +249,19 @@ class QuarantinePurgeServiceTest {
 		Assertions.assertThat(service.purgeSelected(null, execution(), owning()).scanned()).isZero();
 		Assertions.assertThat(service.purgeSelected(List.of(), execution(), owning()).scanned()).isZero();
 
-		verify(movementRepository, never()).findByPublicId(any());
+		verify(movementRepository, never()).findByMovementPublicId(any());
 	}
 
 	@Test
 	void purgeSelectedSkipsAMovementThatIsNoLongerQuarantined() {
 		UUID publicId = UUID.randomUUID();
 
-		Movement restored = Movement.builder().id(1L).publicId(publicId).targetPath("ignored").sourcePath("ignored")
+		Movement restored = Movement.builder().id(1L).movementPublicId(publicId).requestedTargetPath("ignored")
+				.requestedSourcePath("ignored")
 				.status(MovementStatus.SKIPPED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now()).build();
+				.movedAt(Instant.now()).build();
 
-		when(movementRepository.findByPublicId(publicId)).thenReturn(Optional.of(restored));
+		when(movementRepository.findByMovementPublicId(publicId)).thenReturn(Optional.of(restored));
 
 		QuarantinePurgeResult result = service.purgeSelected(List.of(publicId), execution(), owning());
 
@@ -316,7 +320,7 @@ class QuarantinePurgeServiceTest {
 		QuarantinePurgeService locked = new QuarantinePurgeService(movementRepository, purgePersistence, lockService,
 				executionStopReason, purgeLog, libraryFiles(), Clock.systemDefaultZone());
 
-		Assertions.assertThat(locked.cleanupAbsent(List.of(movement.getPublicId()), execution(), owning())).isZero();
+		Assertions.assertThat(locked.cleanupAbsent(List.of(movement.getMovementPublicId()), execution(), owning())).isZero();
 
 		verify(purgePersistence, never()).deleteMovement(anyLong());
 	}
@@ -336,13 +340,13 @@ class QuarantinePurgeServiceTest {
 		Movement first = quarantined(1L, withCatalog);
 		Movement second = quarantined(2L, raced);
 
-		when(movementRepository.findByPublicId(first.getPublicId())).thenReturn(Optional.of(first));
-		when(movementRepository.findByPublicId(second.getPublicId())).thenReturn(Optional.of(second));
+		when(movementRepository.findByMovementPublicId(first.getMovementPublicId())).thenReturn(Optional.of(first));
+		when(movementRepository.findByMovementPublicId(second.getMovementPublicId())).thenReturn(Optional.of(second));
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
 		when(purgePersistence.deleteMovement(2L)).thenReturn(MovementPurgeResult.notRemoved());
 		when(purgePersistence.deleteCatalogFileIfOrphan(9L)).thenReturn(true);
 
-		QuarantinePurgeResult result = service.purgeSelected(List.of(first.getPublicId(), second.getPublicId()),
+		QuarantinePurgeResult result = service.purgeSelected(List.of(first.getMovementPublicId(), second.getMovementPublicId()),
 				execution(), owning());
 
 		Assertions.assertThat(result.scanned()).isEqualTo(2);
@@ -363,7 +367,7 @@ class QuarantinePurgeServiceTest {
 
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.notRemoved());
 
-		Assertions.assertThat(service.cleanupAbsent(List.of(movement.getPublicId()), execution(), owning())).isZero();
+		Assertions.assertThat(service.cleanupAbsent(List.of(movement.getMovementPublicId()), execution(), owning())).isZero();
 	}
 
 	/**
@@ -527,7 +531,7 @@ class QuarantinePurgeServiceTest {
 
 		UUID gone = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(gone)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(gone)).thenReturn(Optional.empty());
 
 		QuarantinePurgeResult result = service.purgeSelected(List.of(gone), purgeExecution, owning());
 
@@ -579,7 +583,7 @@ class QuarantinePurgeServiceTest {
 
 		when(purgePersistence.deleteMovement(1L)).thenReturn(MovementPurgeResult.removed(9L));
 
-		Assertions.assertThat(service.cleanupAbsent(List.of(movement.getPublicId()), cleanupExecution, owning()))
+		Assertions.assertThat(service.cleanupAbsent(List.of(movement.getMovementPublicId()), cleanupExecution, owning()))
 				.isEqualTo(1);
 
 		verify(purgeLog).finish(eq(ownership), eq(1), eq(1), eq(0), eq(0), any());
@@ -595,7 +599,7 @@ class QuarantinePurgeServiceTest {
 
 		UUID movementId = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(movementId)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(movementId)).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service.cleanupAbsent(List.of(movementId), cleanupExecution, owning())).isZero();
 
@@ -619,16 +623,16 @@ class QuarantinePurgeServiceTest {
 
 		Execution cleanupExecution = execution();
 
-		Assertions.assertThat(locked.cleanupAbsent(List.of(movement.getPublicId()), cleanupExecution, owning()))
+		Assertions.assertThat(locked.cleanupAbsent(List.of(movement.getMovementPublicId()), cleanupExecution, owning()))
 				.isZero();
 
 		verify(purgeLog).finish(eq(ownership), eq(1), eq(0), eq(1), eq(0), any());
 	}
 
 	private Movement quarantined(long id, Path target) {
-		return Movement.builder().id(id).publicId(UUID.randomUUID()).targetPath(PathUtils.normalize(target))
-				.sourcePath("ignored").status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now()).build();
+		return Movement.builder().id(id).movementPublicId(UUID.randomUUID()).requestedTargetPath(PathUtils.normalize(target))
+				.requestedSourcePath("ignored").status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
+				.movedAt(Instant.now()).build();
 	}
 
 	private void overdueReturns(Movement... movements) {
@@ -638,9 +642,9 @@ class QuarantinePurgeServiceTest {
 	}
 
 	private Movement overdueMovement(long id, Path target) {
-		return Movement.builder().id(id).targetPath(PathUtils.normalize(target)).sourcePath("ignored")
+		return Movement.builder().id(id).requestedTargetPath(PathUtils.normalize(target)).requestedSourcePath("ignored")
 				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED)
-				.movedAt(LocalDateTime.now().minusDays(200)).build();
+				.movedAt(Instant.now().minus(Duration.ofDays(200))).build();
 	}
 
 	/**
@@ -649,11 +653,11 @@ class QuarantinePurgeServiceTest {
 	 * is also where "is it still quarantined?" is asked again.
 	 */
 	private Movement shortlisted(long id, Path target) {
-		Movement movement = Movement.builder().id(id).publicId(UUID.randomUUID())
-				.targetPath(PathUtils.normalize(target)).sourcePath("ignored").status(MovementStatus.MOVED)
-				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
+		Movement movement = Movement.builder().id(id).movementPublicId(UUID.randomUUID())
+				.requestedTargetPath(PathUtils.normalize(target)).requestedSourcePath("ignored").status(MovementStatus.MOVED)
+				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(Instant.now()).build();
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
 		return movement;
 	}
@@ -671,7 +675,7 @@ class QuarantinePurgeServiceTest {
 
 		Execution cleanupExecution = execution();
 
-		List<UUID> shortlist = List.of(movement.getPublicId());
+		List<UUID> shortlist = List.of(movement.getMovementPublicId());
 
 		when(purgePersistence.deleteMovement(1L)).thenThrow(new IllegalStateException("the database went away"));
 
@@ -705,8 +709,7 @@ class QuarantinePurgeServiceTest {
 	 * announce it, and both are what the assertions below look at.
 	 */
 	private static SecureLibraryFiles libraryFiles() {
-		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-				Clock.systemUTC());
+		SelfWrittenPathRegistry registry = new SelfWriteOff();
 
 		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 				registry), registry);

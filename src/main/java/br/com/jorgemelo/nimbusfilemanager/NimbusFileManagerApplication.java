@@ -11,24 +11,27 @@ import br.com.jorgemelo.nimbusfilemanager.shared.application.StartupArguments;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.StartupRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceBootstrapListener;
-import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.OrganizationPlanProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.EtaProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.InventoryWatchProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.LocationRebuildProperties;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.OrganizationPlanProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UpdateProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.UsnJournalProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.desktop.ApplicationTray;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.infrastructure.config.ExecutionMetricsProperties;
 import br.com.jorgemelo.nimbusfilemanager.worker.application.WorkerProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties({ NimbusFileManagerProperties.class, BoundaryDatasetProperties.class,
+		ExecutionMetricsProperties.class,
 		ProcessingProperties.class, InventoryWatchProperties.class, LocationRebuildProperties.class,
 		UsnJournalProperties.class, VideoSimilarityProperties.class, UpdateProperties.class,
 		OrganizationPlanProperties.class,
-		WorkerProperties.class })
+		WorkerProperties.class, EtaProperties.class })
 public class NimbusFileManagerApplication {
 
 	public static void main(String[] args) {

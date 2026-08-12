@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -13,7 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -31,15 +36,19 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.S
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnershipGuard;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 
 /**
  * One file changing hands, and what has to change with it.
@@ -71,7 +80,7 @@ class FingerprintReplacementIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private FingerprintBacklogEngine engine;
@@ -90,6 +99,12 @@ class FingerprintReplacementIntegrationTest {
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
 	@Autowired
 	private ExecutionRepository executionRepository;
@@ -433,7 +448,7 @@ class FingerprintReplacementIntegrationTest {
 
 	private DrainResult drain(ExecutionOwnership ownership, ReplaceableChunk producer) {
 		return engine.drain(producer, () -> false, (_, _) -> {
-		}, ownership);
+		}, ownership, new ExecutionMetricsContext());
 	}
 
 	private ReplaceableChunk chunk() {
@@ -518,13 +533,14 @@ class FingerprintReplacementIntegrationTest {
 
 		String path = "C:/test/" + key + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
+		CatalogFile file = CatalogFile.builder().extension("jpg").sizeBytes(1L)
+				.modifiedAt(Instant.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
 				.build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
-				.originalPath(path).originalFolder("C:/test").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file).getId();
+		return CatalogFiles.catalogued(new TransactionTemplate(transactionManager),
+				catalogFileRepository, catalogFileLocationRepository, file).getId();
 	}
 
 	private void fingerprinted(long catalogFileId, int samples) {

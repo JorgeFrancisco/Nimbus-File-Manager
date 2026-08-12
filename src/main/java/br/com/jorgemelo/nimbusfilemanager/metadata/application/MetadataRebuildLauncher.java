@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,7 +48,7 @@ public class MetadataRebuildLauncher {
 	 * it: the folder is still there to be asked about
 	 */
 	public Optional<Execution> launch(String sourcePath, List<MetadataRebuildField> refresh, boolean dryRun,
-			LocalDateTime notAnalysedSince) {
+			Instant notAnalysedSince) {
 		if (backgroundWorkGate.standDown()) {
 			return Optional.empty();
 		}

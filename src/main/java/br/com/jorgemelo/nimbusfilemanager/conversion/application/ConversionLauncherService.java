@@ -17,7 +17,6 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayload
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
@@ -91,7 +90,8 @@ public class ConversionLauncherService extends LocalizedComponent {
 	 * itself used to work out once it had loaded them.
 	 */
 	private String folderOf(List<UUID> publicIds) {
-		return catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new)).stream().findFirst().map(CatalogFile::getFileKey)
+		return catalogFileRepository.findByCatalogFilePublicIdIn(publicIds.toArray(UUID[]::new)).stream().findFirst()
+				.map(f -> f.getLocation().getCurrentPath())
 				.map(PathUtils::normalizePath).map(Path::getParent).map(Path::toString).orElse(null);
 	}
 

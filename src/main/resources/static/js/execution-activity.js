@@ -68,10 +68,12 @@
 	 * already knows: these arrive in the order the worker would take them.
 	 */
 	function renderOthers(snapshot) {
-		const remaining = snapshot.totalActive - 1;
-
-		others.hidden = remaining < 1;
-		others.textContent = remaining < 1 ? "" : i18n.t("js.activity.others", remaining);
+		// The sentence arrives written. Running and queued are different states of
+		// an execution, and deciding which is which - or adding them up, as this did
+		// by subtracting one from a single total - is a reading of the domain that
+		// belongs to the back-end.
+		others.hidden = !snapshot.othersLabel;
+		others.textContent = snapshot.othersLabel || "";
 		others.title = (snapshot.others || []).map(function (activity) {
 			return activity.typeLabel + " - " + activity.statusLabel;
 		}).join("\n");
@@ -154,6 +156,11 @@
 					return response.json();
 				})
 				.then(function (snapshot) {
+					// One poll, any number of readers. A page that needs to know what is
+					// running listens to this instead of asking again - or, as the Duplicates
+					// screen used to, re-fetching itself whole every few seconds.
+					document.dispatchEvent(new CustomEvent("nimbus-file-manager:activity", { detail: snapshot }));
+
 					schedule(render(snapshot));
 				})
 				.catch(function () {

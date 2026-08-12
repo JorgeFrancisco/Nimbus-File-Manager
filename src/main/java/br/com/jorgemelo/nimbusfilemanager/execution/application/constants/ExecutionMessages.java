@@ -17,6 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMes
 public final class ExecutionMessages {
 
 	public static final String INVENTORY_STARTED = "backend.execution.inventoryStarted";
+	public static final String VERIFYING_CONTENT = "backend.execution.verifyingContent";
 	public static final String COUNTING_FILES = "backend.execution.countingFiles";
 	public static final String PROCESSING_FILES = "backend.execution.processingFiles";
 	public static final String EXTRACTING_METADATA = "backend.execution.extractingMetadata";
@@ -24,6 +25,7 @@ public final class ExecutionMessages {
 	public static final String INVENTORY_CANCELLED = "backend.execution.inventoryCancelled";
 	public static final String INVENTORY_REJECTED = "backend.execution.inventoryRejected";
 	public static final String INVENTORY_FAILED = "backend.execution.inventoryFailed";
+	public static final String FAILED = "backend.execution.failed";
 	public static final String INVENTORY_START_FAILED = "backend.execution.inventoryStartFailed";
 	public static final String PROGRESS_UPDATED = "backend.execution.progressUpdated";
 	public static final String PROCESSING_FILE = "backend.execution.processingFile";
@@ -82,6 +84,21 @@ public final class ExecutionMessages {
 
 	public static ExecutionMessage inventoryFailed(String detail) {
 		return of(INVENTORY_FAILED, detail);
+	}
+
+	/**
+	 * The failure of an execution whose type the reporter does not know - the
+	 * dispatcher's, which runs every type there is.
+	 *
+	 * <p>
+	 * It used to report {@link #inventoryFailed}, so a geographic dataset, a
+	 * fingerprint, a conversion and an organization all announced themselves on
+	 * the executions screen as a failed inventory. The type is already on the row
+	 * and already rendered beside the message; what the message owes is the
+	 * reason, not a guess at the operation.
+	 */
+	public static ExecutionMessage failed(String detail) {
+		return of(FAILED, detail);
 	}
 
 	public static ExecutionMessage inventoryStartFailed(String detail) {

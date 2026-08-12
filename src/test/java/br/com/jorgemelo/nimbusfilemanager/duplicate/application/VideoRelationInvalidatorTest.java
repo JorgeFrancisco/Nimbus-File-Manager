@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoPerceptualHashService;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoComparisonInputs;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
@@ -41,6 +44,16 @@ class VideoRelationInvalidatorTest {
 	@Mock
 	private SimilarityRelationWriter similarityRelationWriter;
 
+	/**
+	 * The real algorithm bean rather than a stub, because what is asserted is that
+	 * the identifier forgotten by is the one actually in use. A test naming the
+	 * string itself would have gone on passing while production forgot relations of
+	 * an algorithm nothing produces any more - which is exactly what happened.
+	 */
+	private final VideoSimilarityAlgorithm videoAlgorithm = new FfmpegLanczosFramesPhashAlgorithm(
+			mock(VideoPerceptualHashService.class), mock(LuminanceSsimService.class),
+			new VideoSimilarityProperties(null, null, null, null, null));
+
 	@Test
 	void forgetsNothingWhenTheDurationCameBackTheSame() {
 		CatalogFile file = video(30.0, 1920, 1080);
@@ -62,7 +75,7 @@ class VideoRelationInvalidatorTest {
 
 		assertThat(invalidator().invalidateIfChanged(file, before)).isTrue();
 
-		verify(similarityRelationWriter).forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1,
+		verify(similarityRelationWriter).forget(videoAlgorithm.algorithm(),
 				CATALOG_FILE_ID);
 	}
 
@@ -95,7 +108,7 @@ class VideoRelationInvalidatorTest {
 
 		assertThat(invalidator().invalidateIfChanged(file, before)).isTrue();
 
-		verify(similarityRelationWriter).forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1,
+		verify(similarityRelationWriter).forget(videoAlgorithm.algorithm(),
 				CATALOG_FILE_ID);
 	}
 
@@ -114,7 +127,7 @@ class VideoRelationInvalidatorTest {
 
 		invalidator().invalidateIfChanged(file, before);
 
-		verify(similarityRelationWriter).forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1,
+		verify(similarityRelationWriter).forget(videoAlgorithm.algorithm(),
 				CATALOG_FILE_ID);
 		verify(similarityRelationWriter, never()).forget(eq(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1),
 				any(Long[].class));
@@ -165,7 +178,7 @@ class VideoRelationInvalidatorTest {
 	}
 
 	private VideoRelationInvalidator invalidator() {
-		return new VideoRelationInvalidator(similarityRelationWriter);
+		return new VideoRelationInvalidator(similarityRelationWriter, videoAlgorithm);
 	}
 
 	private CatalogFile video(Double durationSeconds, Integer width, Integer height) {

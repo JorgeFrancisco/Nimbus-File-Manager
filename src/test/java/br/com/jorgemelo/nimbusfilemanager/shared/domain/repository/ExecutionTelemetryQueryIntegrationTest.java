@@ -80,8 +80,11 @@ class ExecutionTelemetryQueryIntegrationTest extends SharedPostgresIntegrationTe
 	private Execution measured(String version, LocalDateTime startedAt, long durationMillis, int workers) {
 		Execution execution = execution(version, startedAt);
 
+		// Every aggregate names the attempt that produced it, so a fixture without
+		// one is a row the schema refuses - which is the point of the column.
 		executionMetricsRepository.saveAndFlush(ExecutionMetrics.builder().execution(execution)
-				.durationMillis(durationMillis).filesPerSecond(10.0).workers(workers).chunkSize(200).build());
+				.attemptClaimCount(1).durationMillis(durationMillis).filesPerSecond(10.0).workers(workers)
+				.chunkSize(200).build());
 
 		return execution;
 	}

@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.CatalogTimestamp;
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.ContentReconciliation;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancelledException;
@@ -24,22 +26,30 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostExc
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationMessages;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.UndoResult;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.UndoStatus;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.MovementRecovery;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventEvidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.AppliedLocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.CatalogFactProvenance;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.LocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.MovementRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLocationWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.NumberUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -48,10 +58,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class OrganizationUndoService extends LocalizedComponent {
 
-
 	private final ExecutionRepository executionRepository;
 	private final CatalogFileRepository catalogFileRepository;
-	private final CatalogFileLocationRepository catalogFileLocationRepository;
+	private final CatalogLocationWriter catalogLocationWriter;
+	private final ContentReconciliation contentReconciliation;
 	private final OrganizationMovementLog organizationMovementLog;
 	private final OperationLockService operationLockService;
 	private final OrganizationPathValidator organizationPathValidator;
@@ -63,14 +73,15 @@ public class OrganizationUndoService extends LocalizedComponent {
 	private final Clock clock;
 
 	public OrganizationUndoService(ExecutionRepository executionRepository, CatalogFileRepository catalogFileRepository,
-			CatalogFileLocationRepository catalogFileLocationRepository,
+			CatalogLocationWriter catalogLocationWriter, ContentReconciliation contentReconciliation,
 			OrganizationMovementLog organizationMovementLog, OperationLockService operationLockService,
 			OrganizationPathValidator organizationPathValidator, ExecutionProgressService executionProgressService,
 			ExecutionCancellationService executionCancellationService, LibraryFileMutations libraryFileMutations,
 			EligibilityAnnouncer eligibilityAnnouncer, PlatformTransactionManager transactionManager, Clock clock) {
 		this.executionRepository = executionRepository;
 		this.catalogFileRepository = catalogFileRepository;
-		this.catalogFileLocationRepository = catalogFileLocationRepository;
+		this.catalogLocationWriter = catalogLocationWriter;
+		this.contentReconciliation = contentReconciliation;
 		this.organizationMovementLog = organizationMovementLog;
 		this.operationLockService = operationLockService;
 		this.organizationPathValidator = organizationPathValidator;
@@ -129,12 +140,15 @@ public class OrganizationUndoService extends LocalizedComponent {
 
 			validateAllowed(movements);
 
+			Map<Long, PreparedMovement> reversals = organizationMovementLog.prepare(undoExecution,
+					plannedReversals(movements), false);
+
 			for (Movement movement : movements) {
 				ensureNotCancelled(undoExecution);
 
 				ownership.assertMayGoOnWorking();
 
-				switch (undoOne(movement, undoExecution).status()) {
+				switch (undoOne(movement, undoExecution, reversals.get(catalogFileIdOf(movement))).status()) {
 				case UNDONE -> undone++;
 				case SKIPPED -> skipped++;
 				case ERROR -> errors++;
@@ -207,8 +221,8 @@ public class OrganizationUndoService extends LocalizedComponent {
 				PathUtils.normalizePath(execution.getTargetPath()));
 
 		Stream<Path> movementPaths = movements.stream()
-				.flatMap(movement -> Stream.of(PathUtils.normalizePath(movement.getSourcePath()),
-						PathUtils.normalizePath(movement.getTargetPath())));
+				.flatMap(movement -> Stream.of(PathUtils.normalizePath(movement.getRequestedSourcePath()),
+						PathUtils.normalizePath(movement.getRequestedTargetPath())));
 
 		return Stream.concat(executionPaths, movementPaths).distinct().toArray(Path[]::new);
 	}
@@ -220,8 +234,10 @@ public class OrganizationUndoService extends LocalizedComponent {
 	 */
 	private void validateAllowed(List<Movement> movements) {
 		for (Movement movement : movements) {
-			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getSourcePath()), "undo source");
-			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getTargetPath()), "undo target");
+			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getRequestedSourcePath()),
+					"undo source");
+			organizationPathValidator.validateAllowed(PathUtils.normalizePath(movement.getRequestedTargetPath()),
+					"undo target");
 		}
 	}
 
@@ -237,22 +253,54 @@ public class OrganizationUndoService extends LocalizedComponent {
 				ExecutionMessages.progressUpdated());
 	}
 
-	private UndoResult undoOne(Movement movement, Execution undoExecution) {
+	/**
+	 * One reversing operation per file being put back. Each is a new operation with
+	 * its own identity and its own reserved fact: undoing a move is a move, not an
+	 * edit of the one being reversed.
+	 */
+	private List<MovementRequest> plannedReversals(List<Movement> movements) {
+		return movements.stream().filter(movement -> movement.getCatalogFile() != null)
+				.map(movement -> new MovementRequest(movement.getCatalogFile().getId(),
+						PathUtils.normalizePath(movement.getRequestedTargetPath()),
+						PathUtils.normalizePath(movement.getRequestedSourcePath()), MovementReason.UNDONE_BY_USER))
+				.toList();
+	}
+
+	private Long catalogFileIdOf(Movement movement) {
+		return movement.getCatalogFile() == null ? null : movement.getCatalogFile().getId();
+	}
+
+	private UndoResult undoOne(Movement movement, Execution undoExecution, PreparedMovement reversal) {
 		if (movement.getStatus() == MovementStatus.UNDONE) {
 			return new UndoResult(UndoStatus.SKIPPED, "Movement was already undone.");
 		}
 
-		Path source = PathUtils.normalizePath(movement.getSourcePath());
-		Path target = PathUtils.normalizePath(movement.getTargetPath());
+		Path source = PathUtils.normalizePath(movement.getRequestedSourcePath());
+		Path target = PathUtils.normalizePath(movement.getRequestedTargetPath());
 
-		if (!Files.exists(target)) {
-			markUndoError(movement, undoExecution, MovementReason.SOURCE_NOT_FOUND, "Target file does not exist.");
-
-			return new UndoResult(UndoStatus.ERROR, "Target file does not exist.");
+		// The reversal runs the other way round: out of the target and back to the
+		// source. Read against its own record rather than against the disk alone,
+		// because the disk cannot tell an undo that has not started from one whose
+		// worker died between putting the file back and saying so - and the second,
+		// judged by the file system, looks exactly like a file that vanished.
+		switch (MovementRecovery.progressOf(reversal, target, source)) {
+		case ALREADY_DONE -> {
+			return new UndoResult(UndoStatus.SKIPPED, "Movement was already undone.");
+		}
+		case RESUME -> {
+			return finishInterruptedUndo(movement, undoExecution, reversal, source, target);
+		}
+		case REFUSE -> {
+			return refuseUndo(movement, undoExecution, reversal, target);
+		}
+		case EXECUTE -> {
+			// The file is where the undo expects it; carry on below.
+		}
 		}
 
 		if (Files.exists(source)) {
-			markUndoError(movement, undoExecution, MovementReason.TARGET_EXISTS, "Original path already exists.");
+			markUndoError(undoExecution, reversal, target, MovementReason.TARGET_EXISTS,
+					"Original path already exists.");
 
 			return new UndoResult(UndoStatus.ERROR, "Original path already exists.");
 		}
@@ -261,14 +309,21 @@ public class OrganizationUndoService extends LocalizedComponent {
 			// Same secure move as the forward path: SHA-256 baseline + byte-for-byte
 			// verify. Named for this execution so the watcher goes on recognising the
 			// move as this product's own for as long as the undo holds its paths.
-			libraryFileMutations.move(target, source, false, undoExecution.getId());
+			MoveBaseline moved = libraryFileMutations.move(target, source, false, undoExecution.getId());
 
 			// All catalog writes (location, media file and the movement row) commit
 			// together
 			// or not at all. Without this, a failure after the location save left the
 			// catalog
 			// pointing at the now-missing source while the file was rolled back to target.
-			transactionTemplate.executeWithoutResult(_ -> applyUndoToDatabase(movement, undoExecution, source, target));
+			transactionTemplate.executeWithoutResult(_ -> {
+				applyUndoToDatabase(movement, reversal, undoExecution, source, target);
+
+				// The digest the undo's own secure move already proved, in the same
+				// transaction as the catalog write. Nothing is read again.
+				contentReconciliation.reconcileFromDigest(movement.getCatalogFile(), moved.sha256(),
+						moved.sizeBytes(), CatalogEventSources.ORGANIZATION, Instant.now(clock));
+			});
 
 			return new UndoResult(UndoStatus.UNDONE, "Movement undone.");
 		} catch (Exception e) {
@@ -286,41 +341,81 @@ public class OrganizationUndoService extends LocalizedComponent {
 			log.error("Could not undo movement. executionId={} movementId={} source={} target={}",
 					movement.getExecution().getId(), movement.getId(), source, target, e);
 
-			markUndoError(movement, undoExecution, reason, e.getMessage());
+			markUndoError(undoExecution, reversal, target, reason, e.getMessage());
 
 			return new UndoResult(UndoStatus.ERROR, e.getMessage());
 		}
 	}
 
-	private void applyUndoToDatabase(Movement movement, Execution undoExecution, Path source, Path target) {
+	/**
+	 * The file is already back and nobody wrote it down.
+	 *
+	 * <p>
+	 * Finished rather than repeated: moving it again would be moving whatever is
+	 * at the target now, and there is nothing there. The fact is recorded under
+	 * the identity this reversal reserved before any of it happened, so the
+	 * history reads as one undo that took two attempts rather than as two undos.
+	 *
+	 * <p>
+	 * With no digest, deliberately: this attempt moved nothing, so it proved
+	 * nothing about the bytes, and offering the previous attempt's proof would be
+	 * claiming a reading nobody took.
+	 */
+	private UndoResult finishInterruptedUndo(Movement movement, Execution undoExecution, PreparedMovement reversal,
+			Path source, Path target) {
+		log.warn("Resuming an undo whose file had already gone back. movementId={} source={} target={}",
+				movement.getId(), source, target);
+
+		transactionTemplate
+				.executeWithoutResult(_ -> applyUndoToDatabase(movement, reversal, undoExecution, source, target));
+
+		return new UndoResult(UndoStatus.UNDONE, "Movement undone.");
+	}
+
+	/**
+	 * Neither end of the reversal is on disk, or the operation was settled as
+	 * something this is not entitled to overrule. Reported rather than guessed at.
+	 */
+	private UndoResult refuseUndo(Movement movement, Execution undoExecution, PreparedMovement reversal, Path target) {
+		String message = Files.exists(target) ? "The reversal is not an operation this undo may carry out."
+				: "Target file does not exist.";
+
+		log.warn("Refusing to undo movement {}: {}", movement.getId(), message);
+
+		markUndoError(undoExecution, reversal, target, MovementReason.SOURCE_NOT_FOUND, message);
+
+		return new UndoResult(UndoStatus.ERROR, message);
+	}
+
+	private void applyUndoToDatabase(Movement movement, PreparedMovement reversal, Execution undoExecution,
+			Path source, Path target) {
 		CatalogFile catalogFile = movement.getCatalogFile();
 
 		if (catalogFile == null) {
 			throw new IllegalStateException("Movement has no media file: " + movement.getId());
 		}
 
-		CatalogFileLocation location = catalogFileLocationRepository
-				.findByCatalogFileIdAndCurrentPath(catalogFile.getId(), PathUtils.normalize(target))
-				.orElseThrow(() -> new IllegalStateException("CatalogFileLocation not found for catalogFileId="
-						+ catalogFile.getId() + " and path=" + target));
-		Path parent = requireParent(source, "organization source");
+		// The reversal is a location change like any other, recorded under the identity
+		// its own operation reserved - the fact the original produced is untouched and
+		// stays true.
+		AppliedLocationChange applied = catalogLocationWriter.relocate(new LocationChange(catalogFile.getId(),
+				reversal.catalogFileEventPublicId(), target, source,
+				new CatalogFactProvenance(Instant.now(clock), CatalogEventSources.ORGANIZATION,
+						CatalogEventEvidence.NIMBUS_OPERATION, null)));
 
-		catalogFile.setFileKey(PathUtils.normalize(source));
-		catalogFile.setFileName(source.getFileName().toString());
+		// The entry still names where the file was before the reversal, and the save
+		// below is a merge that cascades to the placement.
+		catalogFile.getLocation().placedAt(applied.currentPath(), applied.pathKey(), applied.currentFolder());
+
 		catalogFile.setModifiedAt(readLastModifiedTime(source, catalogFile.getModifiedAt()));
 
 		// Restores a quarantined duplicate to ACTIVE; a no-op for an already-active
 		// organization file.
 		catalogFile.markActive();
 
-		location.setCurrentPath(PathUtils.normalize(source));
-		location.setCurrentFolder(PathUtils.normalize(parent));
-		location.setUpdatedAt(LocalDateTime.now(clock));
-
-		catalogFileLocationRepository.save(location);
 		catalogFileRepository.save(catalogFile);
 
-		organizationMovementLog.recordUndone(movement, undoExecution);
+		organizationMovementLog.recordUndone(undoExecution, reversal, movement);
 	}
 
 	/**
@@ -335,26 +430,21 @@ public class OrganizationUndoService extends LocalizedComponent {
 		executionProgressService.finishCommand(ownership, status, counts, messageKey.apply(undone, skipped, errors));
 	}
 
-	private Path requireParent(Path path, String description) {
-		Path parent = path.getParent();
-
-		if (parent == null) {
-			throw new IllegalStateException("A " + description + " path must have a parent directory: " + path);
-		}
-
-		return parent;
-	}
-
-	private LocalDateTime readLastModifiedTime(Path file, LocalDateTime fallback) {
+	private Instant readLastModifiedTime(Path file, Instant fallback) {
 		try {
-			return LocalDateTime.ofInstant(Files.getLastModifiedTime(file).toInstant(), ZoneId.systemDefault());
+			return CatalogTimestamp.observed(Files.getLastModifiedTime(file));
 		} catch (IOException _) {
 			return fallback;
 		}
 	}
 
-	private void markUndoError(Movement movement, Execution undoExecution, MovementReason reason, String message) {
-		organizationMovementLog.recordUndoFailure(movement, undoExecution, reason, message);
+	/**
+	 * The reversing operation failed. The one it was reversing is left as it was:
+	 * it did move the file, which is still true, and an undo that could not run is
+	 * the undo's failure and not a correction of history.
+	 */
+	private void markUndoError(Execution undoExecution, PreparedMovement reversal, Path source, MovementReason reason,
+			String message) {
+		organizationMovementLog.recordUndoFailure(undoExecution, reversal, source, reason, message);
 	}
-
 }

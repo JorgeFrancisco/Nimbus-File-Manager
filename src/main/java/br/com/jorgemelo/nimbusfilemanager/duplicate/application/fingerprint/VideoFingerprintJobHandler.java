@@ -9,6 +9,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnersh
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryConsolidation;
 
 /**
  * The video backlog, off the queue.
@@ -27,8 +28,9 @@ public class VideoFingerprintJobHandler extends FingerprintBacklogJobHandler {
 	public VideoFingerprintJobHandler(VideoFingerprintBacklogService backlogService,
 			ExecutionProgressService executionProgressService,
 			ExecutionCancellationService executionCancellationService, ExecutionPayloadCodec executionPayloadCodec,
-			SimilarityLauncher similarityLauncher) {
-		super(backlogService, executionProgressService, executionCancellationService, executionPayloadCodec);
+			ExecutionTelemetryConsolidation telemetryConsolidation, SimilarityLauncher similarityLauncher) {
+		super(backlogService, executionProgressService, executionCancellationService, executionPayloadCodec,
+				telemetryConsolidation);
 		this.similarityLauncher = similarityLauncher;
 	}
 

@@ -11,6 +11,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
@@ -46,11 +47,13 @@ public class MetadataRebuildSettingsAdvice {
 			.filter(field -> field != MetadataRebuildField.ALL).toList();
 
 	private final MetadataRunReader metadataRunReader;
+	private final EtaLabels etaLabels;
 	private final UserPagePreferenceService userPagePreferenceService;
 
-	public MetadataRebuildSettingsAdvice(MetadataRunReader metadataRunReader,
+	public MetadataRebuildSettingsAdvice(EtaLabels etaLabels, MetadataRunReader metadataRunReader,
 			UserPagePreferenceService userPagePreferenceService) {
 		this.metadataRunReader = metadataRunReader;
+		this.etaLabels = etaLabels;
 		this.userPagePreferenceService = userPagePreferenceService;
 	}
 
@@ -60,7 +63,7 @@ public class MetadataRebuildSettingsAdvice {
 		model.addAttribute("metadataRebuildProcessed", metadataRunReader.processed());
 		model.addAttribute("metadataRebuildTotal", metadataRunReader.total());
 		model.addAttribute("metadataRebuildPercent", metadataRunReader.percent());
-		model.addAttribute("metadataRebuildEta", metadataRunReader.etaSeconds());
+		model.addAttribute("metadataRebuildEta", etaLabels.label(metadataRunReader.eta()));
 		model.addAttribute("metadataRebuildError", metadataRunReader.lastError());
 		model.addAttribute("metadataRebuildResult", metadataRunReader.lastResult());
 		model.addAttribute("metadataRebuildFields", SELECTABLE_FIELDS);

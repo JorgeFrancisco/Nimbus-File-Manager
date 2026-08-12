@@ -14,6 +14,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
 
 /**
@@ -32,7 +33,7 @@ class ExternalToolInstallerTest {
 	private ExternalToolInstaller installer(Path tools, ExternalToolArchiveSource source) {
 		ExternalToolPaths paths = new ExternalToolPaths(tools);
 
-		return new ExternalToolInstaller(paths, source, this::runsWhenOnDisk, new ExternalToolInstallProgress());
+		return new ExternalToolInstaller(paths, source, this::runsWhenOnDisk, new ExternalToolInstallProgress(Progress.estimator()));
 	}
 
 	/** Answers a version for any file that is really there, as the probe does. */

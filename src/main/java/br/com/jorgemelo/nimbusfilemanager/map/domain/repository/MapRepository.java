@@ -30,11 +30,13 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			       COUNT(*) FILTER (WHERE mf.file_type = 'VIDEO') AS videos,
 			       MAX(g.city_name) AS city, MAX(g.state_name) AS state, MAX(g.country_name) AS country,
 			       BOOL_OR(g.open_sea) AS openSea,
-			       (array_agg(mf.public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
+			       (array_agg(mf.catalog_file_public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
 			       (array_agg(mf.file_type ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileType,
-			       (array_agg(mf.file_name ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
+			       (array_agg(catalog_file_name(l.current_path, l.path_flavor)
+			                  ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
 			FROM catalog_file mf
 			JOIN media_metadata m ON m.catalog_file_id = mf.id
+			LEFT JOIN catalog_file_location l ON l.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location g ON g.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE' AND m.latitude IS NOT NULL AND m.longitude IS NOT NULL
 			GROUP BY 1, 2
@@ -49,11 +51,13 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			       COUNT(*) FILTER (WHERE mf.file_type = 'VIDEO') AS videos,
 			       MAX(g.city_name) AS city, MAX(g.state_name) AS state, MAX(g.country_name) AS country,
 			       BOOL_OR(g.open_sea) AS openSea,
-			       (array_agg(mf.public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
+			       (array_agg(mf.catalog_file_public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
 			       (array_agg(mf.file_type ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileType,
-			       (array_agg(mf.file_name ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
+			       (array_agg(catalog_file_name(l.current_path, l.path_flavor)
+			                  ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
 			FROM catalog_file mf
 			JOIN media_metadata m ON m.catalog_file_id = mf.id
+			LEFT JOIN catalog_file_location l ON l.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location g ON g.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
 			  AND m.latitude BETWEEN :minLat AND :maxLat AND m.longitude BETWEEN :minLon AND :maxLon
@@ -70,11 +74,13 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			       COUNT(*) AS total,
 			       COUNT(*) FILTER (WHERE mf.file_type = 'PHOTO') AS photos,
 			       COUNT(*) FILTER (WHERE mf.file_type = 'VIDEO') AS videos,
-			       (array_agg(mf.public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
+			       (array_agg(mf.catalog_file_public_id ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverId,
 			       (array_agg(mf.file_type ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileType,
-			       (array_agg(mf.file_name ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
+			       (array_agg(catalog_file_name(l.current_path, l.path_flavor)
+			                  ORDER BY m.capture_date DESC NULLS LAST, mf.id DESC))[1] AS coverFileName
 			FROM catalog_file mf
 			JOIN media_metadata m ON m.catalog_file_id = mf.id
+			LEFT JOIN catalog_file_location l ON l.catalog_file_id = mf.id
 			JOIN media_geo_location g ON g.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE' AND m.latitude IS NULL
 			GROUP BY g.country_code, g.state_name, g.city_name
@@ -82,9 +88,11 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 	List<MapAdministrativePinProjection> administrativePins();
 
 	@Query(value = """
-			SELECT mf.public_id AS publicId, mf.file_type AS fileType, mf.file_name AS fileName,
+			SELECT mf.catalog_file_public_id AS publicId, mf.file_type AS fileType,
+			       catalog_file_name(l.current_path, l.path_flavor) AS fileName,
 			       m.capture_date AS captureDate
 			FROM catalog_file mf
+			JOIN catalog_file_location l ON l.catalog_file_id = mf.id
 			JOIN media_metadata m ON m.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE'
 			  AND m.latitude >= :minLat AND m.latitude < :maxLat
@@ -100,9 +108,11 @@ public interface MapRepository extends Repository<CatalogFile, Long> {
 			@Param("minLon") double minLon, @Param("maxLon") double maxLon, Pageable pageable);
 
 	@Query(value = """
-			SELECT mf.public_id AS publicId, mf.file_type AS fileType, mf.file_name AS fileName,
+			SELECT mf.catalog_file_public_id AS publicId, mf.file_type AS fileType,
+			       catalog_file_name(l.current_path, l.path_flavor) AS fileName,
 			       m.capture_date AS captureDate
 			FROM catalog_file mf
+			JOIN catalog_file_location l ON l.catalog_file_id = mf.id
 			JOIN media_metadata m ON m.catalog_file_id = mf.id
 			JOIN media_geo_location g ON g.catalog_file_id = mf.id
 			WHERE mf.lifecycle_status = 'ACTIVE' AND m.latitude IS NULL

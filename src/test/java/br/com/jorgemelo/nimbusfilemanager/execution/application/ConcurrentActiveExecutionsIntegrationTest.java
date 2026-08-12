@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -37,7 +39,7 @@ class ConcurrentActiveExecutionsIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private ExecutionRepository executionRepository;
@@ -65,7 +67,7 @@ class ConcurrentActiveExecutionsIntegrationTest {
 		// newest active execution really is the conversion, and reading only that row
 		// is what made the guard answer no.
 		assertThat(executionQueryService.active()).get()
-				.extracting(ExecutionResponse::executionId).isEqualTo(conversion.getPublicId());
+				.extracting(ExecutionResponse::executionId).isEqualTo(conversion.getExecutionPublicId());
 
 		finish(inventory);
 		finish(conversion);

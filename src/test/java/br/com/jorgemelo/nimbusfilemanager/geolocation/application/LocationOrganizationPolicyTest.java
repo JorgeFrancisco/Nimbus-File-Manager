@@ -84,16 +84,6 @@ class LocationOrganizationPolicyTest {
 	}
 
 	@Test
-	void manualLocationQualifiesRegardlessOfConfidence() {
-		MediaGeoLocation manual = MediaGeoLocation.builder().manual(true)
-				.place(ResolvedPlace.builder().countryName("Brasil").confidence(LocationConfidence.VERY_LOW).build())
-				.build();
-
-		Assertions.assertThat(policy.subdivisionSegments(manual, LocationSubdivision.COUNTRY,
-				LocationConfidence.VERY_HIGH, LocationFallbackMode.IGNORE)).containsExactly("Brasil");
-	}
-
-	@Test
 	void qualifyingButEmptyNamesFallBackWhenConfigured() {
 		MediaGeoLocation location = MediaGeoLocation.builder()
 				.place(ResolvedPlace.builder().confidence(LocationConfidence.HIGH).build()).build();

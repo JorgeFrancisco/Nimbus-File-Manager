@@ -1,47 +1,50 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.BoundaryMetadata;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoAdminBoundaryRepository;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetProgress;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.AcquiredBoundaries;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 
 /**
- * Lifecycle orchestration of the boundary dataset: status reporting, the
- * download/import happy path (including territory gap-filling), error recording
- * and removal.
+ * When an update does the work, and when it has nothing to do.
+ *
+ * <p>
+ * The dataset used to be rebuilt on every pass whether or not anything had
+ * changed: the source knew the server had answered "not modified", the manager
+ * received a list of paths, and the two facts never met. That cost a full delete
+ * and reinsert of every boundary in the library, the write-ahead log that comes
+ * with it, and checkpoints heavy enough to stall unrelated work for a minute at
+ * a time.
+ *
+ * <p>
+ * These hold both halves of the condition that replaced it. Unchanged bytes are
+ * not enough on their own - a reset database, a removed dataset and a run that
+ * died mid-installation all leave files whose ETags still match - so every test
+ * that expects the short path also has an installation behind it, and every test
+ * that takes one of those away expects the work to happen.
  */
 class BoundaryDatasetManagerTest {
 
 	private final WorkspaceManager workspaceManager = mock(WorkspaceManager.class);
 	private final BoundarySource boundarySource = mock(BoundarySource.class);
-	private final GeoJsonBoundaryImporter importer = mock(GeoJsonBoundaryImporter.class);
-	private final BoundaryMetadataStore metadataStore = mock(BoundaryMetadataStore.class);
-	private final GeoAdminBoundaryRepository repository = mock(GeoAdminBoundaryRepository.class);
-	private final BoundaryGeometryCache geometryCache = mock(BoundaryGeometryCache.class);
-	private final BoundaryTerritoryCompletion territoryCompletion = mock(BoundaryTerritoryCompletion.class);
+	private final InstalledGeoDataset installedGeoDataset = mock(InstalledGeoDataset.class);
+	private final GeoDatasetInstallation installation = mock(GeoDatasetInstallation.class);
+	private final GeoDatasetRemoval removal = mock(GeoDatasetRemoval.class);
+	private final GeoDatasetProgress progress = mock(GeoDatasetProgress.class);
 
 	private BoundaryDatasetManager manager;
 
@@ -51,210 +54,119 @@ class BoundaryDatasetManagerTest {
 	@BeforeEach
 	void setUp() {
 		when(workspaceManager.geodata()).thenReturn(geodata);
-		when(boundarySource.sourceTag()).thenReturn("geoBoundaries");
-		when(boundarySource.version()).thenReturn("v1");
-		when(boundarySource.providerLabel()).thenReturn("geoBoundaries");
-		when(boundarySource.license()).thenReturn("ODbL");
 
-		manager = new BoundaryDatasetManager(workspaceManager, boundarySource, importer, metadataStore, repository,
-				geometryCache, territoryCompletion, Clock.systemDefaultZone());
-	}
-
-	@Test
-	void statusIsUnavailableWhenNoMetadataExists() {
-		when(metadataStore.read()).thenReturn(Optional.empty());
-
-		OfflineGeoDatasetStatus status = manager.status();
-
-		Assertions.assertThat(status.available()).isFalse();
-		Assertions.assertThat(status.directory()).isNotBlank();
-	}
-
-	@Test
-	void statusIsUnavailableWhenMetadataExistsButNothingImported() {
-		when(metadataStore.read()).thenReturn(Optional.of(BoundaryMetadata.builder().lastError("half done").build()));
-		when(repository.count()).thenReturn(0L);
-
-		OfflineGeoDatasetStatus status = manager.status();
-
-		Assertions.assertThat(status.available()).isFalse();
-		Assertions.assertThat(status.lastError()).isEqualTo("half done");
-	}
-
-	@Test
-	void statusIsAvailableWhenDatasetIsImported() {
-		LocalDateTime now = LocalDateTime.parse("2026-07-12T10:00:00");
-		when(metadataStore.read()).thenReturn(Optional.of(BoundaryMetadata.builder().provider("geoBoundaries")
-				.license("ODbL").version("v1").importedRecords(10).sizeBytes(2048).importedAt(now).build()));
-		when(repository.count()).thenReturn(10L);
-
-		OfflineGeoDatasetStatus status = manager.status();
-
-		Assertions.assertThat(status.available()).isTrue();
-		Assertions.assertThat(status.version()).isEqualTo("v1");
-		Assertions.assertThat(status.importedRecords()).isEqualTo(10);
-		Assertions.assertThat(status.provider()).isEqualTo("geoBoundaries");
+		manager = new BoundaryDatasetManager(workspaceManager, boundarySource, installedGeoDataset, installation,
+				removal, progress);
 	}
 
 	/**
-	 * The transaction the whole automatic update rests on: the files are published
-	 * only after the import went through, so disk and database always describe the
-	 * same version.
+	 * The case the whole change exists for: nothing moved at the source and what is
+	 * installed is usable, so not one boundary is touched.
 	 */
 	@Test
-	void publishesTheDownloadedFilesOnlyAfterTheImportSucceeded() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(metadataStore.read()).thenReturn(Optional.of(
-				BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).version("v1").build()));
-		when(repository.count()).thenReturn(100L);
+	void importsNothingWhenEveryLevelIsUnchangedAndTheInstalledDatasetIsUsable() {
+		unchanged();
 
-		manager.downloadAndImport();
+		when(installedGeoDataset.isUsable()).thenReturn(true);
 
-		InOrder order = inOrder(importer, boundarySource);
+		Assertions.assertThat(manager.bringUpToDate()).as("nothing was installed").isFalse();
 
-		order.verify(importer).importDataset(any(), any(), any());
-		order.verify(boundarySource).commit(any());
+		verifyNoInteractions(installation);
+	}
 
+	/**
+	 * A migration that reset the dataset, or a removal, leaves the downloaded files
+	 * and their ETags exactly as they were. The server says unchanged and it is
+	 * telling the truth - about bytes that have nothing behind them any more.
+	 */
+	@Test
+	void rebuildsWhenNothingChangedButThereIsNoUsableDatasetInstalled() {
+		unchanged();
+
+		when(installedGeoDataset.isUsable()).thenReturn(false);
+
+		Assertions.assertThat(manager.bringUpToDate()).isTrue();
+
+		verify(installation).install(any());
+	}
+
+	/** And when the source did bring something new, it is installed. */
+	@Test
+	void installsWhenTheSourceReportsAChange() {
+		when(boundarySource.fetch(any())).thenReturn(new AcquiredBoundaries(List.of(), true));
+
+		Assertions.assertThat(manager.bringUpToDate()).isTrue();
+
+		verify(installation).install(any());
+	}
+
+	/**
+	 * A changed source is installed even over a dataset that is perfectly usable -
+	 * usable is not the same as current, and this is the direction that would
+	 * silently freeze the library on an old version if it were confused.
+	 */
+	@Test
+	void neverSkipsAChangeBecauseSomethingUsableIsAlreadyInstalled() {
+		when(boundarySource.fetch(any())).thenReturn(new AcquiredBoundaries(List.of(), true));
+		when(installedGeoDataset.isUsable()).thenReturn(true);
+
+		manager.bringUpToDate();
+
+		verify(installation).install(any());
+	}
+
+	/**
+	 * The short path publishes nothing and undoes nothing: there was never anything
+	 * staged, and the files on disk are the ones the installation was built from.
+	 */
+	@Test
+	void neitherPublishesNorDiscardsWhenThereWasNothingToInstall() {
+		unchanged();
+
+		when(installedGeoDataset.isUsable()).thenReturn(true);
+
+		manager.bringUpToDate();
+
+		verify(boundarySource, never()).commit(any());
 		verify(boundarySource, never()).discard(any());
 	}
 
 	/**
-	 * And a failed import drops them instead, which is what leaves the previous
-	 * dataset working: the rows rolled back with the transaction, the files never
-	 * left staging.
+	 * A failed acquisition drops what it staged, which is what leaves the previous
+	 * dataset working - and it must not be mistaken for a run that had nothing to
+	 * do.
 	 */
 	@Test
-	void discardsTheDownloadedFilesWhenTheImportFails() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenThrow(new IllegalStateException("broken geojson"));
+	void discardsWhatItStagedWhenTheAcquisitionFails() {
+		when(boundarySource.fetch(any())).thenThrow(new IllegalStateException("network down"));
 
-		Assertions.assertThatIllegalStateException().isThrownBy(() -> manager.downloadAndImport());
+		Assertions.assertThatIllegalStateException().isThrownBy(() -> manager.bringUpToDate())
+				.withMessage("network down");
 
 		verify(boundarySource).discard(any());
 		verify(boundarySource, never()).commit(any());
-		verify(geometryCache, never()).invalidate();
+		verifyNoInteractions(installation);
+	}
+
+	/** The same for a failure that happens once the installation is under way. */
+	@Test
+	void discardsWhatItStagedWhenTheInstallationFails() {
+		when(boundarySource.fetch(any())).thenReturn(new AcquiredBoundaries(List.of(), true));
+		when(installation.install(any())).thenThrow(new IllegalStateException("broken geojson"));
+
+		Assertions.assertThatIllegalStateException().isThrownBy(() -> manager.bringUpToDate());
+
+		verify(boundarySource).discard(any());
 	}
 
 	@Test
-	void downloadAndImportWritesTheMetadataOfWhatItImported() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), eq("geoBoundaries"), eq("v1"))).thenReturn(100L);
-		when(metadataStore.read()).thenReturn(Optional.of(
-				BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).version("v1").build()));
-		when(repository.count()).thenReturn(100L);
-
-		OfflineGeoDatasetStatus status = manager.downloadAndImport();
-
-		Assertions.assertThat(status.available()).isTrue();
-
-		BoundaryMetadata written = captureWrittenMetadata();
-		Assertions.assertThat(written.getImportedRecords()).isEqualTo(100);
-		Assertions.assertThat(written.getProvider()).isEqualTo("geoBoundaries");
-		Assertions.assertThat(written.getVersion()).isEqualTo("v1");
-		Assertions.assertThat(written.getDownloadedAt()).isNotNull();
-		Assertions.assertThat(written.getImportedAt()).isNotNull();
-		verify(geometryCache).invalidate();
-	}
-
-	@Test
-	void downloadAndImportCountsWhatTheTerritoryStageAddedOnTopOfTheMainImport() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(territoryCompletion.complete(any())).thenReturn(5L);
-		when(metadataStore.read()).thenReturn(
-				Optional.of(BoundaryMetadata.builder().importedRecords(105).importedAt(LocalDateTime.now()).build()));
-		when(repository.count()).thenReturn(105L);
-
-		manager.downloadAndImport();
-
-		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(105);
-	}
-
-	/**
-	 * Metadata left by an interrupted import can carry a record count with no
-	 * import timestamp; both have to be present before the dataset counts as
-	 * usable.
-	 */
-	@Test
-	void statusIsUnavailableWhenMetadataHasRecordsButNoImportTimestamp() {
-		when(metadataStore.read())
-				.thenReturn(Optional.of(BoundaryMetadata.builder().importedRecords(10).version("v1").build()));
-		when(repository.count()).thenReturn(10L);
-
-		Assertions.assertThat(manager.status().available()).isFalse();
-	}
-
-
-
-	@Test
-	void removeShouldSucceedWhenThereIsNoDownloadsFolderToClean() {
+	void removalIsDelegatedWhole() {
 		manager.remove();
 
-		verify(repository).deleteAllRows();
-		verify(geometryCache).invalidate();
-		verify(metadataStore).delete();
+		verify(removal).remove();
 	}
 
-	@Test
-	void downloadAndImportShouldReportZeroSizeWhenTheDatasetFolderDoesNotExist() {
-		when(workspaceManager.geodata()).thenReturn(geodata.resolve("absent"));
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenReturn(1L);
-		when(metadataStore.read()).thenReturn(
-				Optional.of(BoundaryMetadata.builder().importedRecords(1).importedAt(LocalDateTime.now()).build()));
-		when(repository.count()).thenReturn(1L);
-
-		manager.downloadAndImport();
-
-		Assertions.assertThat(captureWrittenMetadata().getSizeBytes()).isZero();
-	}
-
-	@Test
-	void downloadAndImportRecordsLastErrorAndRethrowsWhenNoPreviousMetadata() {
-		when(boundarySource.fetch(any())).thenThrow(new IllegalStateException("boom"));
-		when(metadataStore.read()).thenReturn(Optional.empty());
-
-		Assertions.assertThatThrownBy(() -> manager.downloadAndImport()).isInstanceOf(IllegalStateException.class)
-				.hasMessage("boom");
-
-		Assertions.assertThat(captureWrittenMetadata().getLastError()).isEqualTo("boom");
-	}
-
-	@Test
-	void downloadAndImportUpdatesLastErrorOnExistingMetadata() {
-		BoundaryMetadata existing = BoundaryMetadata.builder().provider("geoBoundaries").importedRecords(50).build();
-
-		when(boundarySource.fetch(any())).thenThrow(new IllegalStateException("network down"));
-		when(metadataStore.read()).thenReturn(Optional.of(existing));
-
-		Assertions.assertThatThrownBy(() -> manager.downloadAndImport()).hasMessage("network down");
-
-		Assertions.assertThat(existing.getLastError()).isEqualTo("network down");
-		verify(metadataStore).write(existing);
-	}
-
-	@Test
-	void removeDeletesRowsDownloadsFolderAndMetadata() throws IOException {
-		Path downloads = geodata.resolve("downloads");
-
-		Files.createDirectories(downloads);
-		Files.writeString(downloads.resolve("adm0.geojson"), "{}");
-
-		manager.remove();
-
-		verify(repository).deleteAllRows();
-		verify(geometryCache).invalidate();
-		verify(metadataStore).delete();
-
-		Assertions.assertThat(downloads).doesNotExist();
-	}
-
-	private BoundaryMetadata captureWrittenMetadata() {
-		ArgumentCaptor<BoundaryMetadata> captor = ArgumentCaptor.forClass(BoundaryMetadata.class);
-
-		verify(metadataStore).write(captor.capture());
-
-		return captor.getValue();
+	private void unchanged() {
+		when(boundarySource.fetch(any())).thenReturn(new AcquiredBoundaries(List.of(), false));
 	}
 }

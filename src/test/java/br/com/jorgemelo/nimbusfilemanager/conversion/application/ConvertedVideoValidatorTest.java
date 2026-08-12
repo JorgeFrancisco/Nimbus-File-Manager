@@ -1,6 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,8 +16,13 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFail
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class ConvertedVideoValidatorTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	private final MediaInfoService mediaInfoService = mock(MediaInfoService.class);
 	private final ConvertedVideoValidator validator = new ConvertedVideoValidator(mediaInfoService);
@@ -25,23 +31,23 @@ class ConvertedVideoValidatorTest {
 	void acceptsAnHevcFileOfTheSameLength(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("hevc", 120.0));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("hevc", 120.0));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).isEmpty();
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).isEmpty();
 	}
 
 	@Test
 	void acceptsTheRoundingDriftAContainerRewriteIntroduces(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("HEVC", 120.4));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("HEVC", 120.4));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).isEmpty();
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).isEmpty();
 	}
 
 	@Test
 	void rejectsAFileTheEncoderNeverWrote(@TempDir Path folder) {
-		Assertions.assertThat(validator.validate(folder.resolve("missing.mp4"), 120.0))
+		Assertions.assertThat(validator.validate(folder.resolve("missing.mp4"), 120.0, metrics))
 				.contains(ConversionFailure.OUTPUT_MISSING);
 	}
 
@@ -49,62 +55,64 @@ class ConvertedVideoValidatorTest {
 	void rejectsAnEmptyFile(@TempDir Path folder) throws Exception {
 		Path converted = Files.createFile(folder.resolve("clip.mp4"));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.OUTPUT_MISSING);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).contains(ConversionFailure.OUTPUT_MISSING);
 	}
 
 	@Test
 	void rejectsAFileThatIsNotHevcEvenThoughFfmpegReportedSuccess(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("h264", 120.0));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("h264", 120.0));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.NOT_HEVC);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).contains(ConversionFailure.NOT_HEVC);
 	}
 
 	@Test
 	void rejectsATruncatedFile(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("hevc", 40.0));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("hevc", 40.0));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.DURATION_MISMATCH);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics))
+				.contains(ConversionFailure.DURATION_MISMATCH);
 	}
 
 	@Test
 	void rejectsAFileWhoseDurationCannotBeRead(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("hevc", null));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("hevc", null));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.DURATION_MISMATCH);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics))
+				.contains(ConversionFailure.DURATION_MISMATCH);
 	}
 
 	@Test
 	void skipsTheLengthCheckWhenTheSourceDurationIsUnknown(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata("hevc", 12.0));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata("hevc", 12.0));
 
-		Assertions.assertThat(validator.validate(converted, null)).isEmpty();
-		Assertions.assertThat(validator.validate(converted, 0.0)).isEmpty();
+		Assertions.assertThat(validator.validate(converted, null, metrics)).isEmpty();
+		Assertions.assertThat(validator.validate(converted, 0.0, metrics)).isEmpty();
 	}
 
 	@Test
 	void rejectsAFileFfprobeCannotRead(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(any())).thenThrow(new IllegalStateException("ffprobe failed"));
+		when(mediaInfoService.extract(any(), any())).thenThrow(new IllegalStateException("ffprobe failed"));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.NOT_PROBEABLE);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).contains(ConversionFailure.NOT_PROBEABLE);
 	}
 
 	@Test
 	void rejectsAFileWithoutAVideoCodecAtAll(@TempDir Path folder) throws Exception {
 		Path converted = Files.writeString(folder.resolve("clip.mp4"), "data");
 
-		when(mediaInfoService.extract(converted)).thenReturn(metadata(null, 120.0));
+		when(mediaInfoService.extract(eq(converted), any())).thenReturn(metadata(null, 120.0));
 
-		Assertions.assertThat(validator.validate(converted, 120.0)).contains(ConversionFailure.NOT_HEVC);
+		Assertions.assertThat(validator.validate(converted, 120.0, metrics)).contains(ConversionFailure.NOT_HEVC);
 	}
 
 	private VideoMetadata metadata(String videoCodec, Double durationSeconds) {

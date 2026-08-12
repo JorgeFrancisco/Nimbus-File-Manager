@@ -187,7 +187,7 @@ class OrganizationPlanRepositoryIntegrationTest extends SharedPostgresIntegratio
 
 	private Long execution() {
 		return executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.ORGANIZATION_PREVIEW)
-				.status(ExecutionStatus.FINISHED).publicId(UUID.randomUUID()).sourcePath("C:/input")
+				.status(ExecutionStatus.FINISHED).executionPublicId(UUID.randomUUID()).sourcePath("C:/input")
 				.targetPath("C:/target").recursive(true).executeFlag(false).build()).getId();
 	}
 

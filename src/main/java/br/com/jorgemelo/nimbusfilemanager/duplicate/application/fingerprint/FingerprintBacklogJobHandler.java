@@ -12,10 +12,14 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionJobHand
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryConsolidation;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -42,15 +46,18 @@ abstract class FingerprintBacklogJobHandler implements ExecutionJobHandler {
 	private final ExecutionProgressService executionProgressService;
 	private final ExecutionCancellationService executionCancellationService;
 	private final ExecutionPayloadCodec executionPayloadCodec;
+	private final ExecutionTelemetryConsolidation telemetryConsolidation;
 
 	protected FingerprintBacklogJobHandler(FingerprintBacklog backlog,
 			ExecutionProgressService executionProgressService,
 			ExecutionCancellationService executionCancellationService,
-			ExecutionPayloadCodec executionPayloadCodec) {
+			ExecutionPayloadCodec executionPayloadCodec,
+			ExecutionTelemetryConsolidation telemetryConsolidation) {
 		this.backlog = backlog;
 		this.executionProgressService = executionProgressService;
 		this.executionCancellationService = executionCancellationService;
 		this.executionPayloadCodec = executionPayloadCodec;
+		this.telemetryConsolidation = telemetryConsolidation;
 	}
 
 	/**
@@ -76,8 +83,50 @@ abstract class FingerprintBacklogJobHandler implements ExecutionJobHandler {
 	 */
 	@Override
 	public void handle(Execution execution, ClaimedExecution claimed, ExecutionOwnership ownership) {
+		// Read before anything else and deliberately outside the try: a payload this
+		// version cannot read is a refusal to start, not a run that failed, and it
+		// must reach the dispatcher intact rather than become an outcome written by a
+		// handler that never began.
 		FingerprintBacklogPayload payload = payloadOf(claimed);
 
+		// Born here and nowhere else: this drain's own accumulators, which the photo
+		// and video runs cannot reach even while both are crossing the same pool and
+		// the same gate.
+		ExecutionMetricsContext metricsContext = new ExecutionMetricsContext();
+
+		try {
+			drainUnderTheTaking(execution, payload, ownership, metricsContext);
+		} catch (OwnershipLostException | OperationLockException handedBack) {
+			// Neither is this run failing: the locks went, or a path it needed was busy.
+			// The dispatcher decides what those mean, and it is not an error.
+			throw handedBack;
+		} catch (RuntimeException failure) {
+			// Written here rather than left to the dispatcher, because the outcome has to
+			// exist before the measurements are: the aggregate records how long the run
+			// took, and that comes from finished_at.
+			log.error("Fingerprint backlog for {}/{} failed", backlog.kind(), backlog.algorithm(), failure);
+
+			executionProgressService.fail(ownership, FingerprintMessages.failed(failure.getMessage()));
+		} finally {
+			consolidate(ownership, metricsContext);
+		}
+	}
+
+	/**
+	 * Writes down what this drain measured, once its outcome is committed.
+	 *
+	 * <p>
+	 * A run that never started measuring anything - stood aside, or lost its
+	 * taking before seeding - still passes through here, and the consolidation
+	 * refuses it on the fence or writes an empty aggregate. Both are correct: what
+	 * must not happen is a run that did work leaving no trace of what it cost.
+	 */
+	private void consolidate(ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		telemetryConsolidation.consolidate(ownership, type(), metricsContext, null);
+	}
+
+	private void drainUnderTheTaking(Execution execution, FingerprintBacklogPayload payload,
+			ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
 		// An inventory is adding the very files this would hash, and a conversion is
 		// using the ffmpeg this needs. Stepping aside is the behaviour that already
 		// existed; what changed is that stepping aside now ends a row instead of
@@ -106,7 +155,7 @@ abstract class FingerprintBacklogJobHandler implements ExecutionJobHandler {
 				// the bar full before the first hash was written.
 				(done, failures) -> executionProgressService.updateLiveProgress(ownership, (int) done, (int) done, 0,
 						(int) failures, FingerprintMessages.started(before.pending())),
-				ownership);
+				ownership, metricsContext);
 
 		afterDrain(result, ownership);
 
@@ -187,20 +236,42 @@ abstract class FingerprintBacklogJobHandler implements ExecutionJobHandler {
 	}
 
 	private void finish(Execution execution, ExecutionOwnership ownership, DrainResult result) {
-		ExecutionStatus status = outcome(execution, result);
+		boolean cancelled = executionCancellationService.isCancelled(execution.getId());
 
-		executionProgressService.finishCommand(ownership, status,
+		boolean stoodDown = !cancelled && backlog.pausedByActiveExecution();
+
+		executionProgressService.finishCommand(ownership, outcome(result, cancelled, stoodDown),
 				new ExecutionCounts((int) (result.processed() + result.failed()), (int) result.processed(), 0,
 						(int) result.failed()),
-				FingerprintMessages.completed(result.processed(), result.failed()));
+				stoodDown ? FingerprintMessages.deferred()
+						: FingerprintMessages.completed(result.processed(), result.failed()));
 	}
 
 	/**
-	 * Stopping wins over failing: a drain that was told to stand down did not fail,
-	 * it was interrupted, and whatever it had already written stays written.
+	 * Why it stopped, said in the status - and standing aside is not being
+	 * cancelled.
+	 *
+	 * <p>
+	 * Nobody asked a run that stood aside to stop: an inventory or a conversion
+	 * needs what it was using, everything it computed is written, and the next run
+	 * carries on from what the database says is still missing. Reported as
+	 * {@code CANCELLED} it read as a run that had gone wrong, in red, and a run
+	 * that stood aside before touching anything said "cancelled", "completed" and
+	 * zero all at once - three things that cannot all be true. It is the same
+	 * standing aside the queue already reports as {@code REJECTED} when it happens
+	 * before the run starts, so it is reported the same way here, with the count of
+	 * what it did get done.
+	 *
+	 * <p>
+	 * Stopping still wins over failing: a run told to stand down did not fail, and
+	 * whatever it had already written stays written.
 	 */
-	private ExecutionStatus outcome(Execution execution, DrainResult result) {
-		if (shouldStop(execution.getId())) {
+	private ExecutionStatus outcome(DrainResult result, boolean cancelled, boolean stoodDown) {
+		if (stoodDown) {
+			return ExecutionStatus.REJECTED;
+		}
+
+		if (cancelled) {
 			return ExecutionStatus.CANCELLED;
 		}
 

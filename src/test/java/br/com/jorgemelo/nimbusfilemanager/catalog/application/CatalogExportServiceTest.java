@@ -8,8 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,7 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
 @ExtendWith(MockitoExtension.class)
 class CatalogExportServiceTest {
 
-	private static final LocalDateTime NOW = LocalDateTime.of(2026, Month.JULY, 13, 10, 0);
+	private static final Instant NOW = Instant.parse("2026-07-13T10:00:00Z");
 
 	@Mock
 	private CatalogFileRepository catalogFileRepository;
@@ -54,8 +53,8 @@ class CatalogExportServiceTest {
 		String[] lines = csv.split("\r\n");
 		Assertions.assertThat(lines).hasSize(4);
 		Assertions.assertThat(lines[0])
-				.isEqualTo("publicId,fileKey,fileName,extension,sizeBytes,sha256,md5,mimeType,fileType,"
-						+ "lifecycleStatus,createdAt,modifiedAt,importedAt,currentPath,originalPath");
+				.isEqualTo("publicId,fileName,extension,sizeBytes,sha256,mimeType,fileType,"
+						+ "lifecycleStatus,createdAt,modifiedAt,importedAt,currentPath");
 		// Comma-bearing values are quoted; the internal id never appears.
 		Assertions.assertThat(lines[1]).contains("\"D:/a,b.jpg\"", "\"photo,1.jpg\"");
 		Assertions.assertThat(lines[2]).contains("D:/plain.jpg", "photo2.jpg");
@@ -65,8 +64,8 @@ class CatalogExportServiceTest {
 	@Test
 	void csvExportShouldEscapeQuotesAndLeaveNullFieldsEmpty() throws Exception {
 		CatalogExportRow quoted = new CatalogExportRow(1L, UUID.fromString("00000000-0000-0000-0000-000000000001"),
-				"D:/say \"hi\".jpg", "hi.jpg", "jpg", 10L, null, null, "image/jpeg", "PHOTO", "ACTIVE", NOW, NOW, NOW,
-				"D:/say \"hi\".jpg", "D:/orig.jpg");
+				"D:/say \"hi\".jpg", "jpg", 10L, null, "image/jpeg", "PHOTO", "ACTIVE", NOW, NOW, NOW,
+				"D:/say \"hi\".jpg");
 
 		when(catalogFileRepository.findCatalogExportRows(eq(0L), any())).thenReturn(List.of(quoted));
 		when(catalogFileRepository.findCatalogExportRows(eq(1L), any())).thenReturn(List.of());
@@ -74,7 +73,7 @@ class CatalogExportServiceTest {
 		String csv = consume(service().export(CatalogExportFormat.CSV).body());
 
 		String dataLine = csv.split("\r\n")[1];
-		// Internal quotes doubled and the value wrapped; null sha256/md5 become empty
+		// Internal quotes doubled and the value wrapped; a null sha256 becomes empty
 		// fields.
 
 		Assertions.assertThat(dataLine).contains("\"D:/say \"\"hi\"\".jpg\"").contains(",,image/jpeg");
@@ -92,8 +91,8 @@ class CatalogExportServiceTest {
 				objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
 
 		Assertions.assertThat(parsed).hasSize(2);
-		Assertions.assertThat(parsed.get(0)).containsKey("publicId").containsKey("fileKey").doesNotContainKey("id");
-		Assertions.assertThat(parsed.get(0)).containsEntry("fileKey", "D:/a.jpg");
+		Assertions.assertThat(parsed.get(0)).containsKey("publicId").containsKey("currentPath").doesNotContainKey("id");
+		Assertions.assertThat(parsed.get(0)).containsEntry("currentPath", "D:/a.jpg");
 	}
 
 	@Test
@@ -107,10 +106,9 @@ class CatalogExportServiceTest {
 		return new CatalogExportService(catalogFileRepository, objectMapper, Clock.systemDefaultZone());
 	}
 
-	private CatalogExportRow row(Long id, String fileKey, String fileName) {
-		return new CatalogExportRow(id, UUID.fromString("00000000-0000-0000-0000-00000000000" + id), fileKey, fileName,
-				"jpg", 100L, "sha" + id, "md" + id, "image/jpeg", "PHOTO", "ACTIVE", NOW, NOW, NOW, fileKey,
-				"D:/orig.jpg");
+	private CatalogExportRow row(Long id, String currentPath, String fileName) {
+		return new CatalogExportRow(id, UUID.fromString("00000000-0000-0000-0000-00000000000" + id), fileName, "jpg",
+				100L, "sha" + id, "image/jpeg", "PHOTO", "ACTIVE", NOW, NOW, NOW, currentPath);
 	}
 
 	private String consume(StreamingResponseBody body) throws IOException {

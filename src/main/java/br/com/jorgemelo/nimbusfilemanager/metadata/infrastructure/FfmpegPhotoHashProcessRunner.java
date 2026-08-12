@@ -6,10 +6,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoHashFilterGraph;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataConstants;
 
@@ -27,16 +30,58 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.Metadat
 @Component
 public class FfmpegPhotoHashProcessRunner {
 
+	private static final int TIMEOUT_SECONDS = 30;
+	/**
+	 * A group is given the single-file budget plus a share per photo, rather than
+	 * the single-file budget multiplied: the whole point of the group is that the
+	 * per-photo cost drops, and a bound that grew with it would take minutes to
+	 * notice a decoder that hung on the first one.
+	 */
+	private static final int TIMEOUT_PER_PHOTO_SECONDS = 2;
+
 	public byte[] run(String ffmpegPath, Path file) throws InterruptedException {
 		ProcessBuilder builder = new ProcessBuilder(ffmpegPath, "-v", "error", "-y", "-i",
-				file.toAbsolutePath().normalize().toString(), "-vframes", "1", "-vf",
-				"scale=" + MetadataConstants.SAMPLE_SIDE + ":" + MetadataConstants.SAMPLE_SIDE
-						+ ":flags=lanczos,format=gray",
+				file.toAbsolutePath().normalize().toString(), "-vframes", "1", "-vf", PhotoHashFilterGraph.scale(),
 				"-f", "rawvideo", "-pix_fmt", "gray", "pipe:1");
 
+		return decode(builder, ffmpegPath, "file: " + file, MetadataConstants.SAMPLE_BYTES, TIMEOUT_SECONDS);
+	}
+
+	/**
+	 * One invocation for a whole group of photos, each one its own input. The
+	 * samples come back to back, in the order the files were given.
+	 *
+	 * <p>
+	 * The bytes are returned exactly as ffmpeg wrote them, with no attempt to say
+	 * which photo each sample belongs to: nothing in the stream identifies one, so
+	 * the only thing that pairs a sample with its photo is the position, and the
+	 * only thing that makes the position trustworthy is the total being what the
+	 * caller asked for. Checking that is the caller's - it is the one that knows
+	 * what to fall back to, and it is where a test can reach.
+	 */
+	public byte[] runGroup(String ffmpegPath, List<Path> files) throws InterruptedException {
+		List<String> command = new ArrayList<>(List.of(ffmpegPath, "-v", "error", "-y"));
+
+		// One input per photo, so each keeps its own decoder: see PhotoHashFilterGraph
+		// for what sharing one costs.
+		for (Path file : files) {
+			command.add("-i");
+			command.add(file.toAbsolutePath().normalize().toString());
+		}
+
+		command.addAll(List.of("-filter_complex", PhotoHashFilterGraph.forPhotos(files.size()), "-map", "[out]",
+				"-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1"));
+
+		return decode(new ProcessBuilder(command), ffmpegPath, "group of " + files.size() + " photos",
+				MetadataConstants.SAMPLE_BYTES * files.size(),
+				TIMEOUT_SECONDS + TIMEOUT_PER_PHOTO_SECONDS * files.size());
+	}
+
+	private static byte[] decode(ProcessBuilder builder, String ffmpegPath, String subject, int expectedBytes,
+			int timeoutSeconds) throws InterruptedException {
 		Process process = ExternalToolProcess.start(builder, ffmpegPath);
 
-		ByteArrayOutputStream output = new ByteArrayOutputStream(MetadataConstants.SAMPLE_BYTES);
+		ByteArrayOutputStream output = new ByteArrayOutputStream(expectedBytes);
 
 		StringBuilder errorOutput = new StringBuilder();
 
@@ -45,18 +90,18 @@ public class FfmpegPhotoHashProcessRunner {
 		Thread errorReader = drainTextAsync(process.getErrorStream(), errorOutput);
 
 		try {
-			boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+			boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
 
 			outputReader.join(TimeUnit.SECONDS.toMillis(2));
 			errorReader.join(TimeUnit.SECONDS.toMillis(2));
 
 			if (!finished) {
-				throw new IllegalStateException("ffmpeg timed out for file: " + file);
+				throw new IllegalStateException("ffmpeg timed out for " + subject);
 			}
 
 			if (process.exitValue() != 0) {
-				throw new IllegalStateException("ffmpeg failed for file: " + file + ". Exit code: "
-						+ process.exitValue() + (errorOutput.isEmpty() ? "" : ". Error: " + errorOutput));
+				throw new IllegalStateException("ffmpeg failed for " + subject + ". Exit code: " + process.exitValue()
+						+ (errorOutput.isEmpty() ? "" : ". Error: " + errorOutput));
 			}
 
 			return output.toByteArray();

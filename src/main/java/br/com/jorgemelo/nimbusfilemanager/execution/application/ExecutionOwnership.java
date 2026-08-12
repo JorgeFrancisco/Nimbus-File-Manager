@@ -102,6 +102,22 @@ public final class ExecutionOwnership implements AutoCloseable {
 		return executionOwnershipGuard.pin(executionId, claimCount());
 	}
 
+	/**
+	 * Holds this taking in force for a write that happens <em>after</em> the run
+	 * ended - the telemetry consolidation, and nothing else so far.
+	 *
+	 * <p>
+	 * Separate from {@link #pin()} because the two are asking different things.
+	 * That one guards work in progress, so it demands the row still be RUNNING
+	 * under a live lease; by the time the measurements are written the outcome is
+	 * committed and every one of those conditions is false. What still has to hold
+	 * is that no later attempt has taken the row: being finished does not make an
+	 * attempt stale, being replaced does.
+	 */
+	public boolean pinAttempt() {
+		return executionOwnershipGuard.pinAttempt(executionId, claimCount());
+	}
+
 	public long executionId() {
 		return executionId;
 	}

@@ -7,5 +7,5 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums;
  */
 public enum LocationProvider {
 
-	ADMIN_BOUNDARIES, GOOGLE_MAPS, OPENSTREETMAP, MANUAL, UNKNOWN;
+	ADMIN_BOUNDARIES, GOOGLE_MAPS, OPENSTREETMAP, UNKNOWN;
 }

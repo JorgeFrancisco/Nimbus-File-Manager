@@ -2,8 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -114,7 +113,7 @@ class PhotoRelationBuilderTest {
 
 	private PhotoHashRawResponse photo(Long id, byte[] luminance) {
 		return new PhotoHashRawResponse(id, new byte[32], luminance, id + ".jpg", "jpg", 100L,
-				"C:/Fotos/" + id + ".jpg", "C:/Fotos", LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0));
+				"C:/Fotos/" + id + ".jpg", "C:/Fotos", Instant.parse("2024-01-01T10:00:00Z"));
 	}
 
 	private byte[] sample() {

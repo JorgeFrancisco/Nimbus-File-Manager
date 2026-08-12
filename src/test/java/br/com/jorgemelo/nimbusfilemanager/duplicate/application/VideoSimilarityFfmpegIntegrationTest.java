@@ -28,13 +28,14 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptu
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegPhotoHashProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ToolsLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.WorkspaceLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * End-to-end validation of video similarity against the real ffmpeg binary: it
@@ -56,6 +57,9 @@ class VideoSimilarityFfmpegIntegrationTest {
 			.resolve("ffmpeg.exe");
 	private static final int THRESHOLD = 70;
 
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
 	@TempDir
 	Path tempDir;
 
@@ -68,8 +72,7 @@ class VideoSimilarityFfmpegIntegrationTest {
 
 		when(externalToolPaths.ffmpeg()).thenReturn(FFMPEG_EXECUTABLE.toString());
 
-		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1),
-				new ProcessingMetrics());
+		ExternalToolGate gate = new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1));
 
 		return new VideoPerceptualHashService(externalToolPaths, new VideoFrameSampler(), gate,
 				new FfmpegVideoFrameProcessRunner(), new PhotoPerceptualHashService(externalToolPaths, gate,
@@ -96,7 +99,7 @@ class VideoSimilarityFfmpegIntegrationTest {
 				"-crf", "18", "-pix_fmt", "yuv420p");
 
 		VideoPerceptualFingerprint fingerprint = hashService().compute(clip, 10.0,
-				FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES);
+				FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES, metrics);
 
 		assertThat(fingerprint.frames()).hasSize(5);
 		assertThat(fingerprint.frames()).extracting("positionMs").containsExactly(1000L, 3000L, 5000L, 7000L, 9000L);
@@ -164,7 +167,7 @@ class VideoSimilarityFfmpegIntegrationTest {
 
 		VideoSimilarityAlgorithm algorithm = algorithm();
 
-		assertThatThrownBy(() -> algorithm.fingerprint(corrupted, 10.0)).isInstanceOf(RuntimeException.class);
+		assertThatThrownBy(() -> algorithm.fingerprint(corrupted, 10.0, metrics)).isInstanceOf(RuntimeException.class);
 	}
 
 	/**
@@ -190,7 +193,7 @@ class VideoSimilarityFfmpegIntegrationTest {
 
 	private VideoSignature signatureOf(Path video, double duration, int width, int height) {
 		VideoPerceptualFingerprint fingerprint = hashService().compute(video, duration,
-				FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES);
+				FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES, metrics);
 
 		List<VideoFrameHash> frames = fingerprint.frames().stream()
 				.map(frame -> new VideoFrameHash(frame.sampleIndex(), frame.hash(), frame.luminance())).toList();

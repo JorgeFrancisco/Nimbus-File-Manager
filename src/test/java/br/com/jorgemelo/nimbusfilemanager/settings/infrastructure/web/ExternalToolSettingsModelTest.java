@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
@@ -27,11 +29,11 @@ class ExternalToolSettingsModelTest {
 	private final ExternalToolInstaller installer = mock(ExternalToolInstaller.class);
 	private final ExternalToolInstallAsyncRunner runner = mock(ExternalToolInstallAsyncRunner.class);
 
-	private final ExternalToolSettingsModel model = new ExternalToolSettingsModel(installer, runner);
+	private final ExternalToolSettingsModel model = new ExternalToolSettingsModel(installer, runner, mock(EtaLabels.class));
 
 	@Test
 	void publishesTheStatusAndTheProgressOfTheInstallation() {
-		ToolInstallSnapshot snapshot = new ToolInstallSnapshot(ToolInstallPhase.DOWNLOADING, 10, 100, 10D, 5);
+		ToolInstallSnapshot snapshot = new ToolInstallSnapshot(ToolInstallPhase.DOWNLOADING, 10, 100, 10D, EtaEstimate.of(300));
 
 		when(installer.status()).thenReturn(STATUS);
 		when(runner.isRunning()).thenReturn(true);
@@ -54,6 +56,8 @@ class ExternalToolSettingsModelTest {
 		when(installer.status()).thenReturn(STATUS);
 		when(runner.lastError()).thenReturn("Download failed with HTTP 404");
 		when(runner.lastResult()).thenReturn(STATUS);
+		when(runner.progress()).thenReturn(new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1,
+				EtaEstimate.notApplicable()));
 
 		Model attributes = new ExtendedModelMap();
 

@@ -14,7 +14,7 @@ import br.com.jorgemelo.nimbusfilemanager.thumbnail.application.dto.VideoThumbna
 public class VideoThumbnailRepository {
 
 	private static final String SELECT_SOURCE = """
-			SELECT mf.public_id, location.current_path, mf.modified_at, v.duration_seconds
+			SELECT mf.catalog_file_public_id, location.current_path, mf.content_revision, v.duration_seconds
 			FROM catalog_file mf
 			JOIN video v ON v.catalog_file_id = mf.id
 			JOIN LATERAL (
@@ -22,7 +22,7 @@ public class VideoThumbnailRepository {
 			    WHERE ml.catalog_file_id = mf.id
 			    ORDER BY ml.updated_at DESC, ml.catalog_file_id DESC LIMIT 1
 			) location ON TRUE
-			WHERE mf.public_id = :publicId AND mf.file_type = 'VIDEO'
+			WHERE mf.catalog_file_public_id = :publicId AND mf.file_type = 'VIDEO'
 			  AND mf.lifecycle_status IN ('ACTIVE', 'DELETED')
 			""";
 
@@ -36,8 +36,8 @@ public class VideoThumbnailRepository {
 		List<VideoThumbnailSource> sources = jdbcTemplate.query(SELECT_SOURCE,
 				new MapSqlParameterSource("publicId", publicId), (rs, _) -> {
 					Number duration = (Number) rs.getObject("duration_seconds");
-					return new VideoThumbnailSource(rs.getObject("public_id", UUID.class), rs.getString("current_path"),
-							rs.getTimestamp("modified_at").toLocalDateTime(),
+					return new VideoThumbnailSource(rs.getObject("catalog_file_public_id", UUID.class),
+							rs.getString("current_path"), rs.getLong("content_revision"),
 							duration == null ? null : duration.doubleValue());
 				});
 

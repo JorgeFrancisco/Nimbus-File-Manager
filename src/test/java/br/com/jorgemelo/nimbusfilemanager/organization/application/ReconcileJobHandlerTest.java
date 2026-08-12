@@ -103,8 +103,8 @@ class ReconcileJobHandlerTest {
 	}
 
 	private OrganizationReconcileResponse response(long filesOnDisk, long repairedItems) {
-		return new OrganizationReconcileResponse("D:\fotos", true, false, filesOnDisk, filesOnDisk, 0, 0, 0,
-				List.of(), List.of(), List.of(), 0, 0, 0, repairedItems);
+		return new OrganizationReconcileResponse("D:\fotos", true, false, filesOnDisk, filesOnDisk, 0, 0,
+				List.of(), List.of(), 0, 0, 0, repairedItems);
 	}
 
 	private ClaimedExecution claimed(Path folder) {

@@ -18,6 +18,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -30,7 +32,8 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.LibraryCatalogCleanupService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.timeline.domain.repository.projection.TimelineFilter;
 import br.com.jorgemelo.nimbusfilemanager.timeline.infrastructure.persistence.TimelineQueryRepository;
@@ -47,7 +50,7 @@ class InventoryOrganizationReinventoryTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	private static final Path WORKSPACE = createWorkspace();
 
@@ -64,7 +67,7 @@ class InventoryOrganizationReinventoryTest {
 	private LibraryCatalogCleanupService libraryCatalogCleanupService;
 
 	@Autowired
-	private CatalogFileRepository catalogFileRepository;
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private CatalogExportService catalogExportService;
@@ -168,7 +171,10 @@ class InventoryOrganizationReinventoryTest {
 
 		// Validates the real keyset/LEFT JOIN/CAST query and that the inventoried file
 		// is present with its placement.
-		Assertions.assertThat(csv).startsWith("publicId,fileKey,fileName").contains(PathUtils.normalize(file))
+		// The identity the export leads with is the file's own; where it is comes last
+		// and as a path, because a key nobody outside the database can read was of no
+		// use to anyone reading this file.
+		Assertions.assertThat(csv).startsWith("publicId,fileName").contains(PathUtils.normalize(file))
 				.contains("exported.txt");
 	}
 
@@ -197,8 +203,8 @@ class InventoryOrganizationReinventoryTest {
 		int removed = libraryCatalogCleanupService.clear(oldLibrary.toString());
 
 		Assertions.assertThat(removed).isEqualTo(1);
-		Assertions.assertThat(catalogFileRepository.findByFileKey(PathUtils.normalize(oldFile))).isEmpty();
-		Assertions.assertThat(catalogFileRepository.findByFileKey(PathUtils.normalize(retainedFile))).isPresent();
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(oldFile), PathFlavor.current().name())).isEmpty();
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(retainedFile), PathFlavor.current().name())).isPresent();
 	}
 
 	private static long countFiles(Path folder) throws IOException {

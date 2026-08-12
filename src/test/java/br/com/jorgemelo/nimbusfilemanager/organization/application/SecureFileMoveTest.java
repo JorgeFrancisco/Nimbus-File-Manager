@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.organization.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -14,7 +16,6 @@ import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
 
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -38,8 +39,7 @@ import ch.qos.logback.core.read.ListAppender;
  */
 class SecureFileMoveTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
 	private final OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
 	private final SecureFileMove secureFileMove = new SecureFileMove(verifier, pathRegistry);
 
@@ -70,11 +70,16 @@ class SecureFileMoveTest {
 		Path source = Files.writeString(dir.resolve("source.txt"), "payload");
 		Path target = dir.resolve("target.txt");
 
+		SelfWrittenPathRegistry announcing = mock(SelfWrittenPathRegistry.class);
+
 		when(verifier.capture(source)).thenReturn(new MoveBaseline(7L, "sha"));
 
-		secureFileMove.move(source, target, false);
+		new SecureFileMove(verifier, announcing).move(source, target, false);
 
-		assertThat(pathRegistry.announcedAmong(List.of(source, target))).containsExactlyInAnyOrder(source, target);
+		// Through the door and not around it: the move is announced as a move, which
+		// is what tells the two ends apart - the path being emptied explains a file
+		// going quiet, and says nothing about one appearing there afterwards.
+		verify(announcing).move(isNull(), any(), eq(source), eq(target));
 	}
 
 	/**

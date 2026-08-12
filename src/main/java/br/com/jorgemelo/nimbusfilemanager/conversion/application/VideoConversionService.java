@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionMessages;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCommitRequest;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionAdjustments;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionFileResult;
@@ -36,10 +37,10 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnou
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -52,6 +53,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SizeFormatter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -127,7 +129,7 @@ public class VideoConversionService extends LocalizedComponent {
 			quarantineRoot = configured.get();
 		}
 
-		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new));
+		List<CatalogFile> files = catalogFileRepository.findByCatalogFilePublicIdIn(publicIds.toArray(UUID[]::new));
 
 		executionProgressService.updateTotal(ownership, publicIds.size());
 
@@ -165,7 +167,11 @@ public class VideoConversionService extends LocalizedComponent {
 
 	private ConversionResult convertRegistered(Execution execution, Collection<UUID> publicIds, List<CatalogFile> files,
 			ConversionOptions options, Path quarantineRoot, ExecutionOwnership ownership, BooleanSupplier cancelled) {
-		ConversionRun run = new ConversionRun(execution, ownership, cancelled, quarantineRoot, options);
+		// One context for the whole conversion, carried by the run that already stands
+		// for this execution - so every encode and probe below counts into the same
+		// place, and no other execution can reach it.
+		ConversionRun run = new ConversionRun(execution, ownership, cancelled, quarantineRoot, options,
+				new ExecutionMetricsContext());
 
 		int total = publicIds.size();
 
@@ -191,9 +197,9 @@ public class VideoConversionService extends LocalizedComponent {
 				break;
 			}
 
-			reportFileStarted(ownership, processed, converted, skipped, errors, file.getFileName());
+			reportFileStarted(ownership, processed, converted, skipped, errors, file.getLocation().fileName());
 
-			ConversionFileResult item = convertOne(run, file, sources.get(file.getPublicId()),
+			ConversionFileResult item = convertOne(run, file, sources.get(file.getCatalogFilePublicId()),
 					percent -> executionProgressService.updateCurrentItem(ownership, percent));
 
 			items.add(item);
@@ -210,10 +216,11 @@ public class VideoConversionService extends LocalizedComponent {
 			case FAILED -> {
 				errors++;
 
-				conversionExecutionRecorder.recordFailure(execution, PathUtils.normalizePath(file.getFileKey()),
+				conversionExecutionRecorder.recordFailure(execution,
+						PathUtils.normalizePath(file.getLocation().getCurrentPath()),
 						item.message());
 			}
-			case CANCELLED -> log.info("Conversion cancelled while converting {}", file.getFileName());
+			case CANCELLED -> log.info("Conversion cancelled while converting {}", file.getLocation().fileName());
 			}
 
 			processed++;
@@ -225,7 +232,7 @@ public class VideoConversionService extends LocalizedComponent {
 			// reportFileStarted, because one execution cannot have two opinions about
 			// how far along it is.
 			executionProgressService.updateLiveProgress(ownership, converted + skipped + errors, processed, skipped,
-					errors, ExecutionMessages.processing(file.getFileName()));
+					errors, ExecutionMessages.processing(file.getLocation().fileName()));
 		}
 
 		// Once for the batch, whatever it did and however many files it did it to. Two
@@ -259,7 +266,7 @@ public class VideoConversionService extends LocalizedComponent {
 
 		return new ConversionResult(true, total, converted, skipped, errors, originalBytes, convertedBytes, savedBytes,
 				SizeFormatter.format(Math.max(0, savedBytes)), savedPercent(originalBytes, savedBytes),
-				UuidV7.orLegacy(execution.getPublicId(), execution.getId()), message, List.copyOf(items));
+				UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()), message, List.copyOf(items));
 	}
 
 	/**
@@ -282,12 +289,13 @@ public class VideoConversionService extends LocalizedComponent {
 			return skipped(file, ineligible.get());
 		}
 
-		Path path = PathUtils.normalizePath(file.getFileKey());
+		Path path = PathUtils.normalizePath(file.getLocation().getCurrentPath());
 
 		Double duration = source == null ? null : source.durationSeconds();
 
 		TranscodeResult transcode = videoTranscoder.transcode(
-				new TranscodeRequest(path, duration, run.options(), isHevc(source)), onFilePercent, run.cancelled());
+				new TranscodeRequest(path, duration, run.options(), isHevc(source)), onFilePercent, run.cancelled(),
+				run.metricsContext().processing());
 
 		if (transcode.failure() == ConversionFailure.CANCELLED) {
 			return cancelledItem(file);
@@ -297,8 +305,10 @@ public class VideoConversionService extends LocalizedComponent {
 			return failed(file, transcode);
 		}
 
-		CommitResult commit = conversionCommitService.commit(run.execution(), file, transcode.output(),
-				run.quarantineRoot(), run.options(), resolvedDateOf(source), run.ownership());
+		CommitResult commit = conversionCommitService.commit(
+				new ConversionCommitRequest(run.execution(), file, transcode.output(), run.quarantineRoot(),
+						run.options(), resolvedDateOf(source)),
+				run.ownership(), run.metricsContext().processing());
 
 		if (!commit.successful()) {
 			return failed(file, TranscodeResult.failed(commit.failure(), transcode.audioFallback(),
@@ -332,7 +342,7 @@ public class VideoConversionService extends LocalizedComponent {
 			return Optional.of("backend.conversion.skipped.notVideo");
 		}
 
-		Path path = PathUtils.normalizePath(file.getFileKey());
+		Path path = PathUtils.normalizePath(file.getLocation().getCurrentPath());
 
 		if (isHevc(source) && isMp4(file)) {
 			return Optional.of("backend.conversion.skipped.alreadyConverted");
@@ -374,15 +384,16 @@ public class VideoConversionService extends LocalizedComponent {
 				? message("backend.conversion.converted", SizeFormatter.format(Math.max(0, savedBytes)))
 				: failureMessage(commit.failure());
 
-		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.CONVERTED,
+		return new ConversionFileResult(file.getCatalogFilePublicId(), file.getLocation().fileName(),
+				ConversionOutcome.CONVERTED,
 				originalBytes, convertedBytes, savedBytes, SizeFormatter.format(Math.max(0, savedBytes)),
 				transcode.elapsedMillis(), adjustmentsOf(transcode), commit.originalQuarantined(),
 				commit.revivedCatalogEntry(), message);
 	}
 
 	private ConversionFileResult failed(CatalogFile file, TranscodeResult transcode) {
-		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.FAILED, sizeOf(file),
-				0, 0, SizeFormatter.format(0), transcode.elapsedMillis(), adjustmentsOf(transcode), false, false,
+		return new ConversionFileResult(file.getCatalogFilePublicId(), file.getLocation().fileName(),
+				ConversionOutcome.FAILED, sizeOf(file), 0, 0, SizeFormatter.format(0), transcode.elapsedMillis(), adjustmentsOf(transcode), false, false,
 				failureMessage(transcode.failure()));
 	}
 
@@ -392,14 +403,14 @@ public class VideoConversionService extends LocalizedComponent {
 	}
 
 	private ConversionFileResult cancelledItem(CatalogFile file) {
-		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.CANCELLED,
-				sizeOf(file), 0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false, false,
+		return new ConversionFileResult(file.getCatalogFilePublicId(), file.getLocation().fileName(),
+				ConversionOutcome.CANCELLED, sizeOf(file), 0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false, false,
 				message("backend.conversion.cancelled"));
 	}
 
 	private ConversionFileResult skipped(CatalogFile file, String messageKey) {
-		return new ConversionFileResult(file.getPublicId(), file.getFileName(), ConversionOutcome.SKIPPED, sizeOf(file),
-				0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false, false, message(messageKey));
+		return new ConversionFileResult(file.getCatalogFilePublicId(), file.getLocation().fileName(),
+				ConversionOutcome.SKIPPED, sizeOf(file), 0, 0, SizeFormatter.format(0), 0, ConversionAdjustments.none(), false, false, message(messageKey));
 	}
 
 	/**
@@ -423,7 +434,8 @@ public class VideoConversionService extends LocalizedComponent {
 	private Map<UUID, ConversionSource> sourcesById(Collection<UUID> publicIds) {
 		Map<UUID, ConversionSource> sources = new HashMap<>();
 
-		for (ConversionSource source : conversionCandidateRepository.findSourcesByPublicIdIn(publicIds.toArray(UUID[]::new))) {
+		for (ConversionSource source : conversionCandidateRepository
+				.findSourcesByPublicIdIn(publicIds.toArray(UUID[]::new))) {
 			sources.put(source.publicId(), source);
 		}
 
@@ -461,7 +473,7 @@ public class VideoConversionService extends LocalizedComponent {
 	}
 
 	private Path[] lockedPaths(List<CatalogFile> files, Path quarantineRoot) {
-		Stream<Path> paths = files.stream().map(file -> PathUtils.normalizePath(file.getFileKey()));
+		Stream<Path> paths = files.stream().map(file -> PathUtils.normalizePath(file.getLocation().getCurrentPath()));
 
 		return (quarantineRoot == null ? paths : Stream.concat(Stream.of(quarantineRoot), paths)).distinct()
 				.toArray(Path[]::new);

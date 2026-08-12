@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionPossession;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 
 /**
  * The work queue, as rows of {@code execution}.
@@ -70,6 +71,35 @@ public class ExecutionQueue {
 	 * round and logs it again, for as long as the running row stays running. It
 	 * is stated here because it is a thing the query can see; the index goes on
 	 * being what makes it true.
+	 *
+	 * <p>
+	 * <b>The two fingerprints exclude each other, and photos have the right of
+	 * way.</b> Measured on a real library, a photo cost 49 ms alone and 732 ms with
+	 * a video fingerprint running beside it - fourteen times more - while the video
+	 * lost 10% to the photos in return. One decodes whole files and leaves nothing
+	 * of the machine over; the other barely touches it. Run one after the other,
+	 * the same library finishes in a fraction of the time it takes running both.
+	 *
+	 * <p>
+	 * So the second {@code NOT EXISTS} keeps either from starting while the other
+	 * runs, and the third gives photos precedence: a video waits while any photo
+	 * run is admissible. Neither cancels anything. This decides admission, and work
+	 * already running is left to finish - which is why a photo arriving mid-video
+	 * waits, and then goes ahead of the next video.
+	 *
+	 * <p>
+	 * The waiting photo is recognised by the same conditions that would let it be
+	 * claimed - pending, due, attempts left - and not by asking the fingerprint
+	 * backlog whether it has anything to do. A photo run with an empty backlog
+	 * should start, discover that, and end, which costs seconds; a queue that
+	 * reached into another domain to predict it would pay for that answer on every
+	 * single reservation.
+	 *
+	 * <p>
+	 * Ageing does not lift this. The precedence is a {@code WHERE}, not a term in
+	 * the ordering, so a video that has waited hours still waits - the point is to
+	 * finish the photos, and a rule that inverted itself after five hours would
+	 * restore the very competition it exists to prevent.
 	 */
 	private static final String RESERVE = """
 			UPDATE execution
@@ -86,6 +116,17 @@ public class ExecutionQueue {
 			                                   AND running.dedup_key IS NOT NULL
 			                                   AND running.dedup_key = queued.dedup_key
 			                                   AND running.execution_type = queued.execution_type)
+			                AND NOT EXISTS (SELECT 1 FROM execution rival
+			                                 WHERE rival.status = 'RUNNING'
+			                                   AND queued.execution_type IN (:photoType, :videoType)
+			                                   AND rival.execution_type IN (:photoType, :videoType)
+			                                   AND rival.execution_type <> queued.execution_type)
+			                AND NOT EXISTS (SELECT 1 FROM execution photo
+			                                 WHERE queued.execution_type = :videoType
+			                                   AND photo.execution_type = :photoType
+			                                   AND photo.status = 'PENDING'
+			                                   AND photo.available_at <= :now
+			                                   AND photo.claim_count < :maxClaims)
 			              ORDER BY queued.priority
 			                     + LEAST(EXTRACT(EPOCH FROM (CAST(:now AS timestamp) - queued.created_at))
 			                             / 3600, 5) DESC, queued.id
@@ -123,7 +164,9 @@ public class ExecutionQueue {
 	private static final String RELEASE = """
 			UPDATE execution
 			   SET status = 'PENDING', claimed_by = NULL, claimed_at = NULL, lease_until = NULL,
-			       started_at = NULL, available_at = :availableAt
+			       started_at = NULL, available_at = :availableAt,
+			       rate_window_from_at = NULL, rate_window_from_done = NULL,
+			       rate_window_mark_at = NULL, rate_window_mark_done = NULL
 			 WHERE id = :id AND claimed_by = :workerId AND status = 'RUNNING'
 			   AND (CAST(:claimCount AS INTEGER) IS NULL OR claim_count = :claimCount)
 			   AND NOT EXISTS (SELECT 1 FROM execution waiting
@@ -149,7 +192,9 @@ public class ExecutionQueue {
 	private static final String REQUEUE = """
 			UPDATE execution
 			   SET status = 'PENDING', claimed_by = NULL, claimed_at = NULL, lease_until = NULL,
-			       started_at = NULL, available_at = :availableAt
+			       started_at = NULL, available_at = :availableAt,
+			       rate_window_from_at = NULL, rate_window_from_done = NULL,
+			       rate_window_mark_at = NULL, rate_window_mark_done = NULL
 			 WHERE id = :id AND status = 'RUNNING' AND lease_until < :now
 			   AND NOT EXISTS (SELECT 1 FROM execution waiting
 			                    WHERE waiting.status = 'PENDING' AND waiting.dedup_key IS NOT NULL
@@ -266,6 +311,31 @@ public class ExecutionQueue {
 			""";
 
 	/**
+	 * The same question a consolidation of telemetry has to ask, and deliberately
+	 * not the same predicate.
+	 *
+	 * <p>
+	 * {@link #PIN} demands RUNNING and a live lease, which is right for a write
+	 * about work still in progress. Telemetry is written after the outcome is
+	 * committed - that is where the duration comes from - so by then the row is
+	 * FINISHED, CANCELLED or ERROR and every one of those would be refused. Using
+	 * it here would silently discard the measurements of every execution that
+	 * actually completed.
+	 *
+	 * <p>
+	 * What still has to hold is the attempt: being terminal does not invalidate
+	 * the taking that measured the run, but being <em>superseded</em> does. So the
+	 * fence is the attempt number alone, held for the caller's transaction, and a
+	 * taking that was recovered and reclaimed finds its number gone.
+	 */
+	private static final String PIN_ATTEMPT = """
+			SELECT 1 FROM execution
+			 WHERE id = :id
+			   AND claim_count = :claimCount
+			 FOR SHARE
+			""";
+
+	/**
 	 * Asking a running execution to stop. Only RUNNING rows: a PENDING one nobody
 	 * took is cancelled by finishing it outright, and a finished one has nothing
 	 * left to interrupt.
@@ -304,6 +374,7 @@ public class ExecutionQueue {
 			""";
 
 	private static final String WORKER_ID = "workerId";
+	private static final String CLAIM_COUNT = "claimCount";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 	private final Clock clock;
@@ -321,9 +392,14 @@ public class ExecutionQueue {
 	public Optional<ClaimedExecution> reserve(String workerId, List<String> types, int maxClaims, int leaseSeconds) {
 		LocalDateTime now = LocalDateTime.now(clock);
 
+		// The two fingerprint types are bound rather than spelled into the statement,
+		// so renaming either enum constant breaks the build instead of quietly
+		// turning the exclusion into a comparison that never matches.
 		MapSqlParameterSource parameters = new MapSqlParameterSource().addValue(WORKER_ID, workerId)
 				.addValue("now", now).addValue("leaseUntil", now.plusSeconds(leaseSeconds))
-				.addValue("maxClaims", maxClaims).addValue("types", types.toArray(String[]::new));
+				.addValue("maxClaims", maxClaims).addValue("types", types.toArray(String[]::new))
+				.addValue("photoType", ExecutionType.FINGERPRINT_PHOTO.name())
+				.addValue("videoType", ExecutionType.FINGERPRINT_VIDEO.name());
 
 		List<ClaimedExecution> claimed = jdbcTemplate.query(RESERVE, parameters,
 				(rs, _) -> new ClaimedExecution(rs.getLong("id"), rs.getString("execution_type"),
@@ -362,7 +438,7 @@ public class ExecutionQueue {
 	public boolean release(long executionId, String workerId, OptionalInt claimCount, int backoffSeconds) {
 		MapSqlParameterSource parameters = new MapSqlParameterSource().addValue("id", executionId)
 				.addValue(WORKER_ID, workerId)
-				.addValue("claimCount", claimCount.isPresent() ? claimCount.getAsInt() : null, Types.INTEGER)
+				.addValue(CLAIM_COUNT, claimCount.isPresent() ? claimCount.getAsInt() : null, Types.INTEGER)
 				.addValue("availableAt", LocalDateTime.now(clock).plusSeconds(backoffSeconds));
 
 		return jdbcTemplate.update(RELEASE, parameters) == 1;
@@ -404,10 +480,25 @@ public class ExecutionQueue {
 	 */
 	public boolean pin(long executionId, String workerId, int claimCount) {
 		MapSqlParameterSource parameters = new MapSqlParameterSource().addValue("id", executionId)
-				.addValue(WORKER_ID, workerId).addValue("claimCount", claimCount)
+				.addValue(WORKER_ID, workerId).addValue(CLAIM_COUNT, claimCount)
 				.addValue("now", LocalDateTime.now(clock));
 
 		return !jdbcTemplate.queryForList(PIN, parameters, Integer.class).isEmpty();
+	}
+
+	/**
+	 * Holds an attempt in force for the rest of the caller's transaction, without
+	 * requiring the execution to still be running.
+	 *
+	 * @return false when a later attempt has taken the row, in which case whatever
+	 * this caller measured belongs to a taking that is over and must not be
+	 * written
+	 */
+	public boolean pinAttempt(long executionId, int claimCount) {
+		MapSqlParameterSource parameters = new MapSqlParameterSource().addValue("id", executionId)
+				.addValue(CLAIM_COUNT, claimCount);
+
+		return !jdbcTemplate.queryForList(PIN_ATTEMPT, parameters, Integer.class).isEmpty();
 	}
 
 

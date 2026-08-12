@@ -35,7 +35,9 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockExc
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionPossession;
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
@@ -276,6 +278,36 @@ class ExecutionDispatcherTest {
 		dispatcher.dispatchOne();
 
 		verify(executionProgressService).fail(eq(ownership), any());
+	}
+
+	/**
+	 * And the outcome it writes does not name an operation.
+	 *
+	 * <p>
+	 * This dispatcher runs every execution type there is, so the one thing it
+	 * cannot know is which one just died. It reported {@code inventoryFailed}
+	 * regardless, and a geographic dataset that failed three minutes into its
+	 * import was listed on the executions screen as a failed inventory - a screen
+	 * that already renders the type beside the message, and so contradicted
+	 * itself. The type is the row's to state; the message owes the reason.
+	 */
+	@Test
+	void namesTheReasonRatherThanGuessingWhichOperationFailed(@TempDir Path folder) {
+		reserved(folder);
+
+		when(executionQueue.countAttempt(eq(7L), anyString(), anyInt())).thenReturn(OptionalInt.of(1));
+
+		doThrow(new IllegalStateException("boom")).when(handler).handle(any(), any(), any());
+
+		dispatcher.dispatchOne();
+
+		ArgumentCaptor<ExecutionMessage> message = ArgumentCaptor.forClass(ExecutionMessage.class);
+
+		verify(executionProgressService).fail(eq(ownership), message.capture());
+
+		assertThat(message.getValue().code()).isEqualTo(ExecutionMessages.FAILED)
+				.isNotEqualTo(ExecutionMessages.INVENTORY_FAILED);
+		assertThat(message.getValue().args()).containsExactly("boom");
 	}
 
 	/**

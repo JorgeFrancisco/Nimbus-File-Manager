@@ -10,8 +10,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.Month;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +44,7 @@ class SettingsMetadataWebControllerTest {
 
 	private static final String FOLDER = "D:\\photos";
 
-	private static final LocalDateTime PREVIOUS_RUN = LocalDateTime.of(2026, Month.JULY, 26, 11, 16);
+	private static final Instant PREVIOUS_RUN = Instant.parse("2026-07-26T11:16:00Z");
 
 	private final MetadataRebuildLauncher launcher = mock(MetadataRebuildLauncher.class);
 	private final UserPagePreferenceService preferences = mock(UserPagePreferenceService.class);
@@ -176,8 +174,11 @@ class SettingsMetadataWebControllerTest {
 				new RedirectAttributesModelMap());
 
 		// Three posts, one mark: the simulation and the rejected one left it alone.
+		// The moment a run began is a point on the timeline, and the next run reads it
+		// back as its cutoff - so it is stamped as an instant, not as a wall clock
+		// reading whose meaning depends on where it is read.
 		verify(preferences, times(1)).save("admin@x", MetadataRebuildPreferences.PAGE_KEY,
-				MetadataRebuildPreferences.LAST_RUN_KEY, LocalDateTime.of(2026, Month.JULY, 26, 14, 0).toString());
+				MetadataRebuildPreferences.LAST_RUN_KEY, clock.instant().toString());
 	}
 
 	@Test

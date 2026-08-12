@@ -10,10 +10,11 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryBootstrapState;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.BoundaryDatasetProperties;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,9 @@ import lombok.extern.slf4j.Slf4j;
  * Keeps the offline geographic dataset current without asking anyone. Whoever
  * runs this application has no way to know whether they will need a boundary
  * file, so the dataset is acquired when the feature is on and missing, and
- * checked once a day after that.
+ * checked once a day after that - once the library has been catalogued for the
+ * first time, which is the one thing it waits for. The reason is in
+ * {@link #shouldRun()}, beside the condition.
  *
  * <p>
  * The daily pass is "after the configured time, if it has not run today" rather
@@ -32,10 +35,15 @@ import lombok.extern.slf4j.Slf4j;
  * that is up, and at the first opportunity of the day on one that is not.
  *
  * <p>
- * The marker of "already ran today" is deliberately in memory: after a restart
- * the pass runs once more, which costs three conditional requests and no bytes
- * when the server has nothing new. Persisting it would buy nothing and add a
- * file to keep consistent.
+ * The marker of "already ran today" is in memory, and it is a cache rather than
+ * the answer. A restart empties it, and for a while that was taken to mean the
+ * pass should simply run again - which was defended as costing three conditional
+ * requests and no bytes. It did not: the update reimported every boundary
+ * whether or not anything had changed, so a restart bought a second full rebuild
+ * of the dataset minutes after the first. The durable answer to "has today's
+ * check happened?" is the execution history, and it is asked whenever the cache
+ * cannot answer - see {@link #dueToday()}. Nothing new is persisted for this: a
+ * finished run already records that it finished, and when.
  */
 @Slf4j
 @Service
@@ -52,6 +60,7 @@ public class GeoDatasetAutoUpdateScheduler {
 	private final GeoLauncher geoLauncher;
 	private final GeoRunReader geoRunReader;
 	private final InventoryRunningState inventoryRunningState;
+	private final InventoryBootstrapState inventoryBootstrapState;
 	private final Clock clock;
 
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -66,12 +75,14 @@ public class GeoDatasetAutoUpdateScheduler {
 
 	public GeoDatasetAutoUpdateScheduler(AppSettingService appSettingService, OfflineGeoDataset offlineGeoDataset,
 			GeoLauncher geoLauncher, GeoRunReader geoRunReader, InventoryRunningState inventoryRunningState,
-			Clock clock, BoundaryDatasetProperties properties) {
+			InventoryBootstrapState inventoryBootstrapState, Clock clock,
+			BoundaryDatasetProperties properties) {
 		this.appSettingService = appSettingService;
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.geoLauncher = geoLauncher;
 		this.geoRunReader = geoRunReader;
 		this.inventoryRunningState = inventoryRunningState;
+		this.inventoryBootstrapState = inventoryBootstrapState;
 		this.clock = clock;
 
 		if (properties.isAutoUpdate()) {
@@ -141,14 +152,34 @@ public class GeoDatasetAutoUpdateScheduler {
 		}
 
 		// Nothing installed while the feature is on: acquire it now, whatever the
-		// hour. This is the case that removes the download from the operator's lap.
+		// hour - but not before the library has been catalogued once. On a fresh
+		// installation this timer fires a minute after boot, when no inventory exists
+		// yet for the guard above to yield to, and it would spend the first minutes
+		// downloading and importing two hundred thousand polygons to resolve the
+		// coordinates of nothing - while the user starts the first walk on top of it.
+		// Afterwards the ordinary policy resumes, and the operator still never has to
+		// ask for the download. Asking explicitly on the settings screen is not this
+		// path and is never held back.
 		if (!offlineGeoDataset.status().available()) {
-			return true;
+			return inventoryBootstrapState.hasCompletedAtLeastOnce();
 		}
 
 		return dueToday();
 	}
 
+	/**
+	 * <b>Memory first, history when memory is cold.</b> The field answers every
+	 * ordinary tick without touching the database, which is what keeps a check
+	 * running once a minute from costing a query a minute. What it cannot answer is
+	 * the first tick after a restart, and that is the case this exists for: the
+	 * field is empty then, while the obligation may well have been discharged an
+	 * hour ago by a run this process never saw.
+	 *
+	 * <p>
+	 * So the history is consulted exactly there, and its answer is written back
+	 * into the field - not as a shortcut, but because the two now agree and there
+	 * is no reason to ask again today.
+	 */
 	private boolean dueToday() {
 		if (!appSettingService.booleanValue(SettingsConstants.BOUNDARY_AUTO_UPDATE_ENABLED, true)) {
 			return false;
@@ -157,6 +188,12 @@ public class GeoDatasetAutoUpdateScheduler {
 		LocalDate today = LocalDate.now(clock);
 
 		if (today.equals(lastCheckedOn)) {
+			return false;
+		}
+
+		if (geoRunReader.completedToday()) {
+			lastCheckedOn = today;
+
 			return false;
 		}
 

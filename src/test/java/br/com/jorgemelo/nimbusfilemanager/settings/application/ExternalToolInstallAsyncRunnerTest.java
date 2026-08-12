@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ExternalToolStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase;
 
@@ -16,7 +17,7 @@ class ExternalToolInstallAsyncRunnerTest {
 			true, "tools/ffmpeg/bin/ffprobe.exe", "ffmpeg version 8.0", true, true, "C:/app/tools/ffmpeg/bin");
 
 	private final ExternalToolInstaller installer = mock(ExternalToolInstaller.class);
-	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress();
+	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress(Progress.estimator());
 	private final ExternalToolInstallAsyncRunner runner = new ExternalToolInstallAsyncRunner(installer, progress);
 
 	@Test

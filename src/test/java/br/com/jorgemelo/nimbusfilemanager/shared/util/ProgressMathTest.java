@@ -38,18 +38,4 @@ class ProgressMathTest {
 		Assertions.assertThat(ProgressMath.percent(50, 0)).isEqualTo(-1);
 		Assertions.assertThat(ProgressMath.percent(50, -1)).isEqualTo(-1);
 	}
-
-	@Test
-	void etaShouldProjectRemainingTimeFromAverageRate() {
-		// 10s elapsed for 25 of 100: 75 remaining at 2.5/s -> 30s.
-		Assertions.assertThat(ProgressMath.etaSeconds(10_000, 25, 100)).isEqualTo(30);
-	}
-
-	@Test
-	void etaShouldBeUnknownWhenRateIsMeaninglessOrNoisy() {
-		Assertions.assertThat(ProgressMath.etaSeconds(10_000, 0, 100)).isEqualTo(-1);
-		Assertions.assertThat(ProgressMath.etaSeconds(10_000, 50, 0)).isEqualTo(-1);
-		Assertions.assertThat(ProgressMath.etaSeconds(10_000, 150, 100)).isEqualTo(-1);
-		Assertions.assertThat(ProgressMath.etaSeconds(500, 25, 100)).isEqualTo(-1);
-	}
 }

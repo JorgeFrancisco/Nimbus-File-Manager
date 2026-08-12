@@ -33,7 +33,27 @@ public record ProcessingProperties(Integer workers, Integer queueCapacity, Integ
 	public static final int MIN_QUEUE_CAPACITY = 1;
 	public static final int MAX_QUEUE_CAPACITY = 100_000;
 
-	public static final int DEFAULT_FFMPEG_PHOTO_HASH_LIMIT = 4;
+	/**
+	 * Three, and not one per core.
+	 *
+	 * <p>
+	 * The photo hash is CPU-bound and the machines this runs on are laptops, where
+	 * sustained multi-core load exhausts the chip's power budget and the clock
+	 * settles well below nominal. Measured over eighteen cold runs of 300 photos on
+	 * an i7-11390H: at four concurrent processes the machine sat at 92% CPU and the
+	 * processor delivered 47% of its nominal performance; at three it sat at 79%
+	 * and delivered 53%. The higher clock pays most of the difference back - the
+	 * batch takes about 9% longer in wall time while spending 11% less CPU per
+	 * photo.
+	 *
+	 * <p>
+	 * The 9% is what buys the machine back. A fingerprint pass over a large library
+	 * runs for hours, and at four the computer is unusable for anything else
+	 * throughout. Somebody who wants the last of the throughput and does not need
+	 * the machine meanwhile raises this; the default belongs to the common case,
+	 * which is a person waiting on their own computer.
+	 */
+	public static final int DEFAULT_FFMPEG_PHOTO_HASH_LIMIT = 3;
 	public static final int DEFAULT_FFMPEG_VIDEO_FRAME_LIMIT = 4;
 	public static final int DEFAULT_FFPROBE_VIDEO_LIMIT = 2;
 	public static final int DEFAULT_FFMPEG_TRANSCODE_LIMIT = 1;

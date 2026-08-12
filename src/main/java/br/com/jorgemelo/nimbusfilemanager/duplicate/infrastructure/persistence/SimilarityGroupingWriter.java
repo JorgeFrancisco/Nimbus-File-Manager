@@ -77,7 +77,7 @@ public class SimilarityGroupingWriter {
 			""";
 
 	private static final String INSERT_MEMBER = """
-			INSERT INTO similarity_group_member (group_id, media_public_id, verdict, reason, position)
+			INSERT INTO similarity_group_member (group_id, catalog_file_public_id, verdict, reason, position)
 			VALUES (?, ?, ?, ?, ?)
 			""";
 

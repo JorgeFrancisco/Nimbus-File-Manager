@@ -60,7 +60,7 @@ class SimilarityPublisherTest {
 		when(groupingRepository.saveAndFlush(any())).thenAnswer(call -> {
 			SimilarityGrouping grouping = call.getArgument(0);
 			grouping.setId(1L);
-			grouping.setPublicId(UUID.randomUUID());
+			grouping.setSimilarityGroupingPublicId(UUID.randomUUID());
 			return grouping;
 		});
 	}
@@ -124,7 +124,7 @@ class SimilarityPublisherTest {
 	}
 
 	private SimilarityGrouping built() {
-		return SimilarityGrouping.builder().id(1L).publicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
+		return SimilarityGrouping.builder().id(1L).similarityGroupingPublicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
 				.algorithmId(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(PARAMETERS)
 				.compositionDigest(COMPOSITION).eligibleCount(120).analyzedCount(120).candidateLimit(8000)

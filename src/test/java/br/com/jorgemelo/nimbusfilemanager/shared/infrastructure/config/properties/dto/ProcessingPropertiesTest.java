@@ -12,7 +12,7 @@ class ProcessingPropertiesTest {
 
 		assertThat(properties.workersOrDefault()).isEqualTo(4);
 		assertThat(properties.queueCapacityOrDefault()).isEqualTo(ProcessingProperties.DEFAULT_QUEUE_CAPACITY);
-		assertThat(properties.ffmpegPhotoHashLimitOrDefault()).isEqualTo(4);
+		assertThat(properties.ffmpegPhotoHashLimitOrDefault()).isEqualTo(3);
 		assertThat(properties.ffmpegVideoFrameLimitOrDefault())
 				.isEqualTo(ProcessingProperties.DEFAULT_FFMPEG_VIDEO_FRAME_LIMIT);
 		assertThat(properties.ffprobeVideoLimitOrDefault()).isEqualTo(ProcessingProperties.DEFAULT_FFPROBE_VIDEO_LIMIT);

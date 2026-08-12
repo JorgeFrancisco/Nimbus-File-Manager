@@ -27,6 +27,7 @@ import org.springframework.context.support.ResourceBundleMessageSource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCompletionWait;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
@@ -75,7 +76,8 @@ class ExplorerCommandLauncherTest {
 
 		labels.setMessageSource(messages);
 
-		ExecutionMapper mapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), labels);
+		ExecutionMapper mapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), labels,
+				Progress.reader(), Progress.estimator());
 
 		mapper.setMessageSource(messages);
 
@@ -339,14 +341,14 @@ class ExplorerCommandLauncherTest {
 	/** What the enqueue gives back: the same request, now a row with an id. */
 	private Execution queued(Execution request) {
 		request.setId(1L);
-		request.setPublicId(UUID.randomUUID());
+		request.setExecutionPublicId(UUID.randomUUID());
 		request.setStatus(ExecutionStatus.PENDING);
 
 		return request;
 	}
 
 	private Execution finished(ExecutionStatus status) {
-		return Execution.builder().id(1L).publicId(UUID.randomUUID()).executionType(ExecutionType.EXPLORER_RENAME)
+		return Execution.builder().id(1L).executionPublicId(UUID.randomUUID()).executionType(ExecutionType.EXPLORER_RENAME)
 				.status(status).filesFound(1).filesAnalyzed(1).cacheHits(0).filesMoved(1).errors(0)
 				.statusMessage(StatusMessage.coded("backend.files.renameDone", "[\"holiday.jpg\"]")).build();
 	}

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.DosFileAttributeView;
-import java.time.Clock;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -16,7 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationMoveVerifier;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMove;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 
 /**
@@ -100,8 +99,7 @@ class DefaultExplorerFileSystemTest {
 	 * assert that a method was called rather than that a file went away.
 	 */
 	private static SecureLibraryFiles libraryFiles() {
-		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-				Clock.systemUTC());
+		SelfWrittenPathRegistry registry = new SelfWriteOff();
 
 		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 				registry), registry);

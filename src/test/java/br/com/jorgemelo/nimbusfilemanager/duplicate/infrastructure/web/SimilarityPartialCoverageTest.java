@@ -35,10 +35,27 @@ class SimilarityPartialCoverageTest {
 	void theEmptyVerdictIsScopedToWhatWasExaminedWheneverCoverageIsIncomplete() throws Exception {
 		String screen = Files.readString(SCREEN);
 
-		assertThat(screen).contains("similarityPublished and similarityCoverageComplete")
-				.contains("similarityPublished and !similarityCoverageComplete")
+		assertThat(screen).contains("similarityPublished and similarityCoverageComplete and similarityLibraryComplete")
+				.contains("(!similarityCoverageComplete or !similarityLibraryComplete)")
 				.contains("#{duplicates.empty.similarPartial(${similarityAnalyzed})}")
 				.contains("#{duplicates.empty.videosPartial(${similarityAnalyzed})}");
+	}
+
+	/**
+	 * The second half of the condition, and the one that was missing: an analysis
+	 * can have compared everything it was able to compare while the library has no
+	 * fingerprint for most of its files. The final verdict needs both, and the
+	 * partial wording needs only one of them to be false.
+	 */
+	@Test
+	void theFinalVerdictRequiresTheLibraryToHaveBeenFingerprintedInFull() throws Exception {
+		String screen = Files.readString(SCREEN);
+
+		for (String tab : new String[] { "similar", "videos" }) {
+			assertThat(screen).as("final verdict on the %s tab", tab)
+					.contains("activeTab == '" + tab + "' and similarityPublished and similarityCoverageComplete"
+							+ " and similarityLibraryComplete");
+		}
 	}
 
 	/** The three numbers are all shown, so none of them can be inferred wrongly. */

@@ -20,6 +20,7 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
@@ -55,6 +56,13 @@ class FileExplorerTilesFragmentTest {
 
 	// Wired into every web slice by WebMvcConfig: the interceptor that holds the
 	// screens off while a restore is replacing the catalog.
+	/**
+	 * The one formatter for a remaining time. A web slice does not load it, and
+	 * the panels these pages render reach it through the progress reader.
+	 */
+	@MockitoBean
+	private EtaLabels etaLabels;
+
 	@MockitoBean
 	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
 

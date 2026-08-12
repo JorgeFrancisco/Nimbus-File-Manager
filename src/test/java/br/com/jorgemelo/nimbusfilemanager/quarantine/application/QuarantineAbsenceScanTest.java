@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,7 +48,7 @@ class QuarantineAbsenceScanTest {
 				eq(QuarantineConstants.QUARANTINED_REASONS), any()))
 						.thenReturn(new PageImpl<>(List.of(kept, absent)));
 
-		Assertions.assertThat(scan.absent()).containsExactly(absent.getPublicId());
+		Assertions.assertThat(scan.absent()).containsExactly(absent.getMovementPublicId());
 	}
 
 	/**
@@ -71,8 +71,8 @@ class QuarantineAbsenceScanTest {
 	}
 
 	private Movement quarantined(Path quarantine) {
-		return Movement.builder().publicId(UUID.randomUUID()).sourcePath("ignored")
-				.targetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
-				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
+		return Movement.builder().movementPublicId(UUID.randomUUID()).requestedSourcePath("ignored")
+				.requestedTargetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
+				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(Instant.now()).build();
 	}
 }

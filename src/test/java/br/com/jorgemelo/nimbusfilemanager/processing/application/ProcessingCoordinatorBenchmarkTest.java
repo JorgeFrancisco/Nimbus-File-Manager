@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Result;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Benchmark comparing the current sequential extraction against the new
@@ -82,10 +84,10 @@ class ProcessingCoordinatorBenchmarkTest {
 	}
 
 	private Result timeParallel(List<Integer> items, int workers) {
-		ProcessingMetrics metrics = new ProcessingMetrics();
+		ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 		ProcessingCoordinator coordinator = new ProcessingCoordinator(
-				new ProcessingProperties(workers, ITEMS, 2, 2, 2, 1), metrics);
+				new ProcessingProperties(workers, ITEMS, 2, 2, 2, 1));
 
 		try {
 			long start = System.nanoTime();
@@ -94,7 +96,7 @@ class ProcessingCoordinatorBenchmarkTest {
 				sleep();
 
 				return item;
-			});
+			}, metrics);
 
 			long wall = System.nanoTime() - start;
 

@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.media.application.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
@@ -15,7 +15,7 @@ public record MediaSearchResponse(
 
 		String currentPath, String currentFolder,
 
-		LocalDateTime createdAt, LocalDateTime modifiedAt,
+		Instant createdAt, Instant modifiedAt,
 
 		Integer year, Integer month, Integer day, String yearMonth,
 

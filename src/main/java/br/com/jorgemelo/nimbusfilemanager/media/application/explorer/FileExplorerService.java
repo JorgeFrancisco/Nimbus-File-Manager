@@ -312,7 +312,7 @@ public class FileExplorerService {
 				if (added.add(normalizedPath)) {
 					missingEntries.add(new FileExplorerEntry(fileName(currentPath), normalizedPath, false, true, true,
 							location.getFileType().name(), false, false, false, false, false, null,
-							location.getSizeBytes(), null, DateTimeFormatUtils.human(null), location.getCatalogFileId(),
+							location.getSizeBytes(), null, DateTimeFormatUtils.absent(), location.getCatalogFileId(),
 							publicId(location)));
 				}
 			}

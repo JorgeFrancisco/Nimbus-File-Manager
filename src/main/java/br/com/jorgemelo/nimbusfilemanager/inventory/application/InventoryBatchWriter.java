@@ -13,9 +13,12 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgres
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryBatchItemResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryScanRequest;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFacade;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Catalogues one batch of files and reports what it did.
@@ -48,19 +51,21 @@ public class InventoryBatchWriter {
 		this.executionCancellationService = executionCancellationService;
 	}
 
-	public void write(Execution execution, InventoryScanRequest request, List<Path> files,
-			InventoryCounters counters, ExecutionOwnership ownership) {
+	public void write(Execution execution, InventoryScanRequest request, List<ScannedFile> scanned,
+			InventoryCounters counters, ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		ProcessingMetrics metrics = metricsContext.processing();
+
 		Long executionId = execution.getId();
 
-		int baseFound = counters.addFound(files.size());
+		int baseFound = counters.addFound(scanned.size());
 
 		IntConsumer onExtractionProgress = done -> executionProgressService.updateLiveProgress(ownership,
 				baseFound + done, counters.analyzed(), counters.cacheHits(), counters.errors(),
 				ExecutionMessages.extractingMetadata());
 
-		List<InventoryBatchItemResult> results = inventoryPersistenceService.saveOrCacheBatch(files,
-				request.sourcePath(), request.metadataOptions(),
-				file -> metadataFacade.extract(file, request.metadataOptions()),
+		List<InventoryBatchItemResult> results = inventoryPersistenceService.saveOrCacheBatch(scanned,
+				request.metadataOptions(),
+				file -> metadataFacade.extract(file, request.metadataOptions(), metrics), metricsContext,
 				() -> executionCancellationService.isCancelled(executionId), onExtractionProgress);
 
 		Path lastFile = null;

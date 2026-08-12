@@ -10,11 +10,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionPossession;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
@@ -47,7 +51,7 @@ class ExecutionLivenessIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	/**
 	 * The clock the application writes with, so what this test compares against is
@@ -163,6 +167,72 @@ class ExecutionLivenessIntegrationTest {
 		Assertions.assertThat(waiting.getStatus()).isEqualTo(ExecutionStatus.PENDING);
 		Assertions.assertThat(waiting.getClaimedBy()).isNull();
 		Assertions.assertThat(waiting.getLeaseUntil()).isNull();
+	}
+
+	/**
+	 * The same lease answers "is anything running?", and it has to - because the
+	 * row outlives its owner, and everything that asks does so before recovery has
+	 * got round to it.
+	 *
+	 * <p>
+	 * A lapsed row used to answer yes for as long as it sat there, which at
+	 * start-up is until the recovery listener runs: long enough for the folder
+	 * monitor to be adopted, read "something is running", and queue a full pass
+	 * instead of launching one. That pass could then only fire once the queue went
+	 * quiet - after a real inventory had walked the same tree - so it walked the
+	 * whole library to catalogue nothing.
+	 */
+	@Test
+	void whatIsUnderWayIsWhatStillHoldsALeaseAndNotWhateverTheRowSays() {
+		Execution held = enqueue(ExecutionType.INVENTORY, "D:\\under-way");
+		Execution lapsed = enqueue(ExecutionType.RECONCILE, "D:\\lapsed-but-running");
+
+		reserve("worker-a").orElseThrow();
+		reserve("worker-a").orElseThrow();
+
+		expireTheLeaseOf(lapsed);
+
+		Assertions.assertThat(underWay()).extracting(Execution::getId).containsExactly(held.getId());
+
+		expireTheLeaseOf(held);
+
+		Assertions.assertThat(underWay()).isEmpty();
+	}
+
+	/**
+	 * A request nobody has claimed has no lease to hold, and it is still work that
+	 * is going to run - so it counts, exactly as it did before the lease came into
+	 * the question. Reading "no lease" as "not under way" would let a second pass be
+	 * queued on top of one already waiting.
+	 */
+	@Test
+	void aRequestNobodyHasClaimedYetCountsAsUnderWay() {
+		Execution waiting = enqueue(ExecutionType.INVENTORY, "D:\\queued");
+
+		Assertions.assertThat(underWay()).extracting(Execution::getId).containsExactly(waiting.getId());
+	}
+
+	/** A run that ended is not under way, whatever its lease says. */
+	@Test
+	void aFinishedRunIsNotUnderWayEvenWhileItsLeaseWouldStillHold() {
+		Execution queued = enqueue(ExecutionType.INVENTORY, "D:\\finished");
+
+		reserve("worker-a").orElseThrow();
+
+		Execution running = executionRepository.findById(queued.getId()).orElseThrow();
+
+		running.setStatus(ExecutionStatus.FINISHED);
+		running.setFinishedAt(LocalDateTime.now(clock));
+
+		executionRepository.save(running);
+
+		Assertions.assertThat(running.getLeaseUntil()).isAfter(LocalDateTime.now(clock));
+		Assertions.assertThat(underWay()).isEmpty();
+	}
+
+	private List<Execution> underWay() {
+		return executionRepository.findUnderWay(ExecutionStatusNames.ACTIVE, ExecutionStatus.RUNNING,
+				LocalDateTime.now(clock), PageRequest.of(0, 10));
 	}
 
 	/**

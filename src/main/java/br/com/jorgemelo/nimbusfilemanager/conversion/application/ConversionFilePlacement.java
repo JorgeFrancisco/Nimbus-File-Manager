@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.PlacedConversion;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.FileNames;
@@ -40,14 +42,17 @@ public class ConversionFilePlacement {
 	 * set - the "(H.265)" suffix keeps the two apart instead of overwriting
 	 * anything.
 	 */
-	public Path place(Path converted, Path source, ConversionOptions options, Long executionId) throws IOException {
+	public PlacedConversion place(Path converted, Path source, ConversionOptions options, Long executionId)
+			throws IOException {
 		Path desired = conversionFileNaming.finalName(source, options);
 
 		Path target = Files.exists(desired)
 				? FileNames.nextAvailable(FileNames.withSuffix(desired, ConversionConstants.CONVERTED_SUFFIX))
 				: desired;
 
-		libraryFileMutations.move(converted, target, false, executionId);
+		// Kept rather than dropped. The move proves the digest by reading the file
+		// twice, and the catalog needs exactly that digest a moment later.
+		MoveBaseline proven = libraryFileMutations.move(converted, target, false, executionId);
 
 		// The move says it verified the file byte for byte, so this can only fail if
 		// something outside the application took the file away in between. It happened
@@ -58,7 +63,7 @@ public class ConversionFilePlacement {
 			throw new IOException("The converted file is not at " + target + " after the move");
 		}
 
-		return target;
+		return new PlacedConversion(target, proven);
 	}
 
 	/**
@@ -66,22 +71,28 @@ public class ConversionFilePlacement {
 	 * left the folder (it went to quarantine), so the library keeps the name the
 	 * user knows. Purely cosmetic: if the name is somehow taken or the rename
 	 * fails, the file stays where it is and the conversion still counts as done.
+	 *
+	 * <p>
+	 * The move proves the file again on the way, and what it proves replaces what
+	 * the placement proved - the same digest, established of the name the library
+	 * will actually keep. A rename that does not happen leaves the earlier proof
+	 * standing, which is still true of the file where it stayed.
 	 */
-	public Path renameToOriginalName(Path converted, Path source, Long executionId) {
+	public PlacedConversion renameToOriginalName(PlacedConversion placed, Path source, Long executionId) {
+		Path converted = placed.path();
+
 		Path desired = FileNames.withExtension(source, ExtensionUtils.fromPath(converted));
 
 		if (desired.equals(converted) || Files.exists(desired)) {
-			return converted;
+			return placed;
 		}
 
 		try {
-			libraryFileMutations.move(converted, desired, false, executionId);
-
-			return desired;
+			return new PlacedConversion(desired, libraryFileMutations.move(converted, desired, false, executionId));
 		} catch (Exception e) {
 			log.warn("Could not rename the converted file {} to {}; keeping the suffixed name", converted, desired, e);
 
-			return converted;
+			return placed;
 		}
 	}
 }

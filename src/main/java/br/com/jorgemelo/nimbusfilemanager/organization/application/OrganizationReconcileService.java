@@ -7,15 +7,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.CatalogTimestamp;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileResponse;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Scan;
@@ -28,11 +32,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Diagnostic half of reconciliation: compares what's on disk against what's
- * registered in the database (missing on disk, missing in database,
- * file_key/current_path mismatches). The auto-repair half (pairing
- * disappearances with new files to detect renames) lives in the separate
- * {@link OrganizationRenameDetectionService}.
+ * Diagnostic half of reconciliation: compares what is on disk against what the
+ * catalog holds - files it cannot find, files nobody catalogued, and files whose
+ * cheap facts moved under it. It writes nothing. Recognising a file by its
+ * content and converging the catalog on what was found are the other halves,
+ * and they live in {@code RelocationByContent} and {@code ReconcileConvergence}.
  */
 @Slf4j
 @Service
@@ -68,25 +72,25 @@ public class OrganizationReconcileService {
 
 		validateSourcePath(source);
 
-		Set<String> diskPaths = scanDisk(source, request.recursiveValue(), request.includeHiddenValue());
+		Map<String, ScannedFile> disk = scanDisk(source, request.recursiveValue(), request.includeHiddenValue());
 
 		ReconcileAccumulator accumulator = new ReconcileAccumulator(request.safeSampleLimit());
 
-		readDatabasePaths(source, request.recursiveValue(), accumulator, diskPaths);
+		readDatabasePaths(source, request.recursiveValue(), accumulator, disk);
 
-		for (String diskPath : diskPaths) {
+		for (String diskPath : disk.keySet()) {
 			if (!accumulator.dbPaths().contains(diskPath)) {
 				accumulator.addMissingInDatabase(diskPath);
 			}
 		}
 
 		OrganizationReconcileResponse response = new OrganizationReconcileResponse(PathUtils.normalize(source),
-				request.recursiveValue(), request.includeHiddenValue(), diskPaths.size(), accumulator.filesInDatabase(),
-				accumulator.missingOnDisk(), accumulator.missingInDatabase(), accumulator.pathMismatches(),
-				accumulator.missingOnDiskSamples(), accumulator.missingInDatabaseSamples(),
-				accumulator.pathMismatchSamples(), 0, 0, 0, 0);
+				request.recursiveValue(), request.includeHiddenValue(), disk.size(), accumulator.filesInDatabase(),
+				accumulator.missingOnDisk(), accumulator.missingInDatabase(), accumulator.missingOnDiskSamples(),
+				accumulator.missingInDatabaseSamples(), 0, 0, 0, 0);
 
-		return new Scan(response, accumulator.pathSyncs());
+		return new Scan(response, accumulator.missingFiles(), accumulator.physicalOnly(),
+				accumulator.contentSuspects());
 	}
 
 	/**
@@ -103,7 +107,7 @@ public class OrganizationReconcileService {
 	 * repairs is doing exactly what it is supposed to be doing.
 	 */
 	private void readDatabasePaths(Path source, boolean recursive, ReconcileAccumulator accumulator,
-			Set<String> diskPaths) {
+			Map<String, ScannedFile> disk) {
 		String sourcePath = PathUtils.normalize(source);
 
 		String descendantPattern = PathUtils.descendantLikePattern(sourcePath, source.getFileSystem().getSeparator());
@@ -121,18 +125,16 @@ public class OrganizationReconcileService {
 			}
 
 			for (MediaLocationReconcileProjection row : rows) {
-				processReconcileRow(source, accumulator, diskPaths, row);
+				processReconcileRow(source, accumulator, disk, row);
 			}
 
 			afterId = rows.getLast().getCatalogFileId();
 		}
 	}
 
-	private void processReconcileRow(Path source, ReconcileAccumulator accumulator, Set<String> diskPaths,
+	private void processReconcileRow(Path source, ReconcileAccumulator accumulator, Map<String, ScannedFile> disk,
 			MediaLocationReconcileProjection row) {
 		String currentPath = PathUtils.normalize(row.getCurrentPath());
-
-		String fileKey = PathUtils.normalize(row.getFileKey());
 
 		if (isExcluded(source, PathUtils.normalizePath(currentPath))) {
 			return;
@@ -140,23 +142,29 @@ public class OrganizationReconcileService {
 
 		accumulator.addDatabasePath(currentPath);
 
-		if (!diskPaths.contains(currentPath)) {
+		ScannedFile observed = disk.get(currentPath);
+
+		if (observed == null) {
 			accumulator.addMissingOnDisk(row.getCatalogFileId(), currentPath);
+
+			return;
 		}
 
-		if (!fileKey.equals(currentPath)) {
-			accumulator.addPathMismatch(row.getCatalogFileId(), fileKey, currentPath);
-
-			// Auto-repairable straggler: the catalog's file_key already points to a real
-			// file on disk while the stale current_path does not (a move updated file_key
-			// but current_path lagged). Queue a sync so current_path catches up.
-			if (diskPaths.contains(fileKey) && !diskPaths.contains(currentPath)) {
-				accumulator.addPathSync(row.getCatalogFileId(), fileKey);
-			}
+		// Still there, but is it still the same file? The walk was handed its size and
+		// its timestamp, so asking costs nothing - and neither proves anything, which
+		// is why a divergence asks for a reading rather than concluding one.
+		if (!Objects.equals(row.getSizeBytes(), observed.sizeBytes())
+				|| !observed.modifiedAt().equals(row.getModifiedAt())) {
+			accumulator.addContentSuspect(row.getCatalogFileId(), currentPath);
 		}
+
+		// A mismatch between file_key and current_path used to be detected and repaired
+		// here. There is one column now, so the two cannot disagree - and a check that
+		// compares a value with itself is worse than no check, because it reads like
+		// one.
 	}
 
-	private Set<String> scanDisk(Path source, boolean recursive, boolean includeHidden) {
+	private Map<String, ScannedFile> scanDisk(Path source, boolean recursive, boolean includeHidden) {
 		if (recursive) {
 			return walkDisk(source, includeHidden);
 		}
@@ -164,12 +172,16 @@ public class OrganizationReconcileService {
 		return listDisk(source, includeHidden);
 	}
 
-	private Set<String> listDisk(Path source, boolean includeHidden) {
+	private Map<String, ScannedFile> listDisk(Path source, boolean includeHidden) {
 		try (Stream<Path> stream = Files.list(source)) {
-			Set<String> paths = new HashSet<>();
+			Map<String, ScannedFile> paths = new HashMap<>();
 
 			stream.filter(Files::isRegularFile).filter(path -> includeHidden || !isHidden(path))
-					.filter(path -> !isExcluded(source, path)).map(PathUtils::normalize).forEach(paths::add);
+					.filter(path -> !isExcluded(source, path))
+					// A single level has no walk to be told anything by, so the attributes
+					// are read here - one stat for a file the pass is about to consider.
+					.forEach(path -> scannedOf(path).ifPresent(scanned -> paths.put(PathUtils.normalize(path),
+							scanned)));
 
 			return paths;
 		} catch (IOException e) {
@@ -186,8 +198,8 @@ public class OrganizationReconcileService {
 	 * whole reconcile. The visitor instead skips whatever it cannot read and keeps
 	 * going.
 	 */
-	private Set<String> walkDisk(Path source, boolean includeHidden) {
-		Set<String> paths = new HashSet<>();
+	private Map<String, ScannedFile> walkDisk(Path source, boolean includeHidden) {
+		Map<String, ScannedFile> paths = new HashMap<>();
 
 		try {
 			Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
@@ -247,10 +259,26 @@ public class OrganizationReconcileService {
 	}
 
 	private void indexIfEligible(Path file, BasicFileAttributes attrs, Path source, boolean includeHidden,
-			Set<String> paths) {
+			Map<String, ScannedFile> paths) {
 		if (attrs.isRegularFile() && PhysicalFilePolicy.isProcessable(file) && (includeHidden || !isHidden(file))
 				&& !isExcluded(source, file)) {
-			paths.add(PathUtils.normalize(file));
+			// The attributes the visitor was given, kept rather than dropped: they are
+			// what lets the pass notice that a file it found is not the file it
+			// catalogued.
+			paths.put(PathUtils.normalize(file),
+					new ScannedFile(file, attrs.size(), CatalogTimestamp.observed(attrs.lastModifiedTime())));
+		}
+	}
+
+	private Optional<ScannedFile> scannedOf(Path path) {
+		try {
+			BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+
+			return Optional.of(
+					new ScannedFile(path, attributes.size(), CatalogTimestamp.observed(attributes.lastModifiedTime())));
+		} catch (IOException _) {
+			// Unreadable entries are skipped, exactly as the recursive walk skips them.
+			return Optional.empty();
 		}
 	}
 

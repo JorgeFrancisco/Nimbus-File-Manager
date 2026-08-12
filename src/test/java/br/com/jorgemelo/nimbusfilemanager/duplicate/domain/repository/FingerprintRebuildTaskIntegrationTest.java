@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,11 +15,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintRebuildTask;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -47,6 +51,9 @@ class FingerprintRebuildTaskIntegrationTest extends SharedPostgresIntegrationTes
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -178,12 +185,12 @@ class FingerprintRebuildTaskIntegrationTest extends SharedPostgresIntegrationTes
 
 		String path = "C:/test/" + key + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
+		CatalogFile file = CatalogFile.builder().extension("jpg").sizeBytes(1L)
+				.modifiedAt(Instant.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
 				.build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
-				.originalPath(path).originalFolder("C:/test").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file).getId();
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file).getId();
 	}
 }

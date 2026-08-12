@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaEstimator;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ToolInstallSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
@@ -21,6 +23,11 @@ public class ExternalToolInstallProgress {
 	private volatile long stepStartedAtMillis;
 	private volatile long bytesTotal = -1;
 	private final AtomicLong bytesDone = new AtomicLong();
+	private final EtaEstimator etaEstimator;
+
+	public ExternalToolInstallProgress(EtaEstimator etaEstimator) {
+		this.etaEstimator = etaEstimator;
+	}
 
 	/** Clears any progress left over from a previous installation. */
 	public synchronized void reset() {
@@ -62,13 +69,18 @@ public class ExternalToolInstallProgress {
 		long total = bytesTotal;
 
 		double percent = -1;
-		long etaSeconds = -1;
+		EtaEstimate eta = EtaEstimate.notApplicable();
 
 		if (currentPhase != ToolInstallPhase.IDLE) {
 			percent = ProgressMath.percent(done, total);
-			etaSeconds = ProgressMath.etaSeconds(System.currentTimeMillis() - stepStartedAtMillis, done, total);
+
+			// The window is the step itself: a download starts at zero and only goes up,
+			// so everything since it began is the recent measurement. Same arithmetic as
+			// every other estimate in the application, over a window kept here rather
+			// than on a row, because a step of a few seconds in one process has none.
+			eta = etaEstimator.estimate(done, total, done, System.currentTimeMillis() - stepStartedAtMillis);
 		}
 
-		return new ToolInstallSnapshot(currentPhase, done, total, percent, etaSeconds);
+		return new ToolInstallSnapshot(currentPhase, done, total, percent, eta);
 	}
 }

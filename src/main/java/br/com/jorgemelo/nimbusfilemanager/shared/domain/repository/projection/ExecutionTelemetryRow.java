@@ -14,6 +14,5 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 public record ExecutionTelemetryRow(Long id, UUID publicId, ExecutionType executionType, ExecutionStatus status,
 		LocalDateTime startedAt, LocalDateTime finishedAt, Long durationMillis, Double filesPerSecond,
 		Integer filesFound, Integer errors, String applicationVersion, Integer workers, Integer chunkSize,
-		Integer ffmpegPhotoHashLimit, Integer ffprobeVideoLimit, Long photoHashJvmDecodable, Long photoHashFfmpegOnly,
-		Long photoHashFailures) {
+		Integer ffmpegPhotoHashLimit, Integer ffprobeVideoLimit) {
 }

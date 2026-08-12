@@ -19,11 +19,15 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.GeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class MediaInfoServiceTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	@TempDir
 	Path tempDir;
@@ -101,7 +105,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.container()).isEqualTo("mov,mp4");
 		Assertions.assertThat(metadata.videoCodec()).isEqualTo("hevc");
@@ -148,7 +152,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.fps()).isEqualTo(25.0);
 		Assertions.assertThat(metadata.rotation()).isEqualTo(180);
@@ -160,15 +164,17 @@ class MediaInfoServiceTest {
 	@Test
 	void extractShouldHandleAlternativeLocationsMissingStreamsAndOrientationBranches() {
 		var locationEng = service(new FfprobeResult(true, 0, locationJson("location-eng")))
-				.extract(Path.of("C:/video.mp4"));
+				.extract(Path.of("C:/video.mp4"), metrics);
 		var quickTimeLocation = service(
 				new FfprobeResult(true, 0, locationJson("com.apple.quicktime.location.ISO6709")))
-						.extract(Path.of("C:/video.mp4"));
+						.extract(Path.of("C:/video.mp4"), metrics);
 		var noStreams = service(new FfprobeResult(true, 0, """
 				{ "format": { "tags": {} }, "streams": {} }
-				""")).extract(Path.of("C:/video.mp4"));
-		var landscape = service(new FfprobeResult(true, 0, dimensionsJson(200, 100))).extract(Path.of("C:/video.mp4"));
-		var portrait = service(new FfprobeResult(true, 0, dimensionsJson(100, 200))).extract(Path.of("C:/video.mp4"));
+				""")).extract(Path.of("C:/video.mp4"), metrics);
+		var landscape = service(new FfprobeResult(true, 0, dimensionsJson(200, 100)))
+				.extract(Path.of("C:/video.mp4"), metrics);
+		var portrait = service(new FfprobeResult(true, 0, dimensionsJson(100, 200)))
+				.extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(locationEng.latitude()).isEqualTo(10.0);
 		Assertions.assertThat(quickTimeLocation.longitude()).isEqualTo(20.0);
@@ -185,7 +191,7 @@ class MediaInfoServiceTest {
 	void extractShouldSurviveOutputWithoutAFormatBlock() {
 		var metadata = service(new FfprobeResult(true, 0, """
 				{ "streams": [] }
-				""")).extract(Path.of("C:/video.mp4"));
+				""")).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.latitude()).isNull();
 		Assertions.assertThat(metadata.longitude()).isNull();
@@ -196,7 +202,7 @@ class MediaInfoServiceTest {
 	void extractShouldTreatABlankLocationTagAsMissing() {
 		var metadata = service(new FfprobeResult(true, 0, """
 				{ "format": { "tags": { "location": "   " } }, "streams": [] }
-				""")).extract(Path.of("C:/video.mp4"));
+				""")).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.latitude()).isNull();
 	}
@@ -206,7 +212,7 @@ class MediaInfoServiceTest {
 	void extractShouldRejectAnOutOfBoundsLocation() {
 		var metadata = service(new FfprobeResult(true, 0, """
 				{ "format": { "tags": { "location": "+99.0000+200.0000/" } }, "streams": [] }
-				""")).extract(Path.of("C:/video.mp4"));
+				""")).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.latitude()).isNull();
 		Assertions.assertThat(metadata.longitude()).isNull();
@@ -214,8 +220,9 @@ class MediaInfoServiceTest {
 
 	@Test
 	void extractShouldReturnEmptyForInvalidJsonAndInvalidNumbers() {
-		var invalidJson = service(new FfprobeResult(true, 0, "{")).extract(Path.of("C:/video.mp4"));
-		var invalidValues = service(new FfprobeResult(true, 0, invalidValuesJson())).extract(Path.of("C:/video.mp4"));
+		var invalidJson = service(new FfprobeResult(true, 0, "{")).extract(Path.of("C:/video.mp4"), metrics);
+		var invalidValues = service(new FfprobeResult(true, 0, invalidValuesJson()))
+				.extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(invalidJson.orientationType()).isEqualTo(MediaOrientation.UNKNOWN);
 		Assertions.assertThat(invalidValues.width()).isNull();
@@ -237,7 +244,7 @@ class MediaInfoServiceTest {
 
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> service.extract(file, metrics)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("timed out");
 	}
 
@@ -247,7 +254,7 @@ class MediaInfoServiceTest {
 
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> service.extract(file, metrics)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Exit code: 1").hasMessageContaining("Unsupported codec");
 	}
 
@@ -257,7 +264,7 @@ class MediaInfoServiceTest {
 
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> service.extract(file, metrics)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("DLL not found");
 	}
 
@@ -270,13 +277,13 @@ class MediaInfoServiceTest {
 	void extractShouldDescribeEveryKnownWindowsStartupFailureCode() {
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000139, "", "")).extract(file))
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000139, "", "")).extract(file, metrics))
 				.hasMessageContaining("Entry point not found");
-		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000142, "", "")).extract(file))
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000142, "", "")).extract(file, metrics))
 				.hasMessageContaining("DLL initialization failed");
-		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC000007B, "", "")).extract(file))
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC000007B, "", "")).extract(file, metrics))
 				.hasMessageContaining("32/64-bit architecture mismatch");
-		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000005, "", "")).extract(file))
+		Assertions.assertThatThrownBy(() -> service(new FfprobeResult(true, 0xC0000005, "", "")).extract(file, metrics))
 				.hasMessageContaining("Access violation");
 	}
 
@@ -286,13 +293,13 @@ class MediaInfoServiceTest {
 	 */
 	@Test
 	void extractShouldWrapAFailureToRunFfprobe() {
-		MediaInfoService service = new MediaInfoService(new ObjectMapper(), (_, _) -> {
+		MediaInfoService service = new MediaInfoService(new ObjectMapper(), (_, _, _) -> {
 			throw new IllegalStateException("ffprobe binary is missing");
 		}, externalToolPaths("ffprobe"));
 
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> service.extract(file, metrics)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Could not run ffprobe").hasMessageContaining("ffprobe binary is missing");
 	}
 
@@ -302,7 +309,7 @@ class MediaInfoServiceTest {
 
 		Path file = Path.of("C:/video.mp4");
 
-		Assertions.assertThatThrownBy(() -> service.extract(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> service.extract(file, metrics)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Exit code: 42").hasMessageNotContaining("DLL");
 	}
 
@@ -323,7 +330,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.videoBitrate()).isNull();
 		Assertions.assertThat(metadata.totalBitrate()).isNull();
@@ -351,7 +358,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.rotation()).isNull();
 		Assertions.assertThat(metadata.orientationType()).isEqualTo(MediaOrientation.PORTRAIT);
@@ -373,7 +380,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.rotation()).isEqualTo(90);
 		Assertions.assertThat(metadata.orientationType()).isEqualTo(MediaOrientation.PORTRAIT);
@@ -397,7 +404,7 @@ class MediaInfoServiceTest {
 				}
 				""";
 
-		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"));
+		var metadata = service(new FfprobeResult(true, 0, json)).extract(Path.of("C:/video.mp4"), metrics);
 
 		Assertions.assertThat(metadata.hdr()).isFalse();
 		Assertions.assertThat(metadata.orientationType()).isEqualTo(MediaOrientation.LANDSCAPE);
@@ -414,7 +421,7 @@ class MediaInfoServiceTest {
 		Path ffprobe = writeFakeFfprobe(json);
 
 		var metadata = new MediaInfoService(new ObjectMapper(), externalToolPaths(ffprobe.toString()), gate(),
-				new FfprobeProcessRunner()).extract(video);
+				new FfprobeProcessRunner()).extract(video, metrics);
 
 		Assertions.assertThat(metadata.container()).isEqualTo("mp4");
 		Assertions.assertThat(metadata.mediaInfoJson()).contains("\"format_name\": \"mp4\"");
@@ -445,7 +452,7 @@ class MediaInfoServiceTest {
 	}
 
 	private MediaInfoService service(FfprobeResult result) {
-		return new MediaInfoService(new ObjectMapper(), (_, _) -> result, externalToolPaths("ffprobe"));
+		return new MediaInfoService(new ObjectMapper(), (_, _, _) -> result, externalToolPaths("ffprobe"));
 	}
 
 	/**
@@ -461,7 +468,7 @@ class MediaInfoServiceTest {
 	}
 
 	private ExternalToolGate gate() {
-		return new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1), new ProcessingMetrics());
+		return new ExternalToolGate(new ProcessingProperties(2, 8, 2, 2, 2, 1));
 	}
 
 	private String invalidValuesJson() {

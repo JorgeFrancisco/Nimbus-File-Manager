@@ -186,7 +186,8 @@ public class ExplorerCommandLauncher extends LocalizedComponent {
 		ExecutionMessage message = workerAvailability.current().available() ? ExplorerMessages.stillProcessing()
 				: ExplorerMessages.waitingForWorker();
 
-		return ExplorerActionResult.pending(text(message), UuidV7.orLegacy(queued.getPublicId(), queued.getId()));
+		return ExplorerActionResult.pending(text(message),
+				UuidV7.orLegacy(queued.getExecutionPublicId(), queued.getId()));
 	}
 
 	private ExplorerActionResult refused(ExecutionMessage message) {

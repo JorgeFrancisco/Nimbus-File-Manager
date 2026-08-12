@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -8,9 +9,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SelfWrittenPath;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.SelfWriteRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.SelfWrittenPathRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
@@ -34,17 +39,18 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * Announcements are <em>looked at</em>, not taken. That is a deliberate change
  * from the single-use behaviour this class had, and the reason is in the
  * watcher: one write produces several notifications - the name, the size and the
- * last write are reported separately, and the parser keeps only the path - and a
- * write that goes on for minutes spreads them over successive polls. Taking the
- * first one left every later notification looking foreign, which is the burst
- * this exists to prevent.
+ * last write are reported separately - and a write that goes on for minutes
+ * spreads them over successive polls. Taking the first one left every later
+ * notification looking foreign, which is the burst this exists to prevent.
  *
  * <p>
- * What that trades away, said plainly: an <em>external</em> change to a file
- * while this product is writing that same file is suppressed. It needs somebody
- * to edit exactly the file being written at that moment, and the reconcile that
- * follows finds it anyway. On the other side of the scale is the measured
- * defect. Outside the window nothing is hidden.
+ * <b>The effect is run here.</b> Announcing is not something a caller does
+ * before doing something else: an announcement whose write never happened
+ * silences the next real change to those paths, and one whose write finished
+ * long ago keeps silencing them for as long as its batch runs. Both were
+ * possible while the two halves were separate calls, so there is now one call
+ * that does both, and nothing outside this class can announce without saying
+ * what for.
  */
 @Component
 public class SelfWrittenPathRegistry {
@@ -66,72 +72,120 @@ public class SelfWrittenPathRegistry {
 	}
 
 	/**
-	 * Announces a path this product is placing on disk, or taking off it. Called
-	 * before the change lands, because the watcher can poll the event within
-	 * milliseconds of the write - announcing afterwards would lose the race.
+	 * A file this product is taking from one path and putting at another.
 	 *
-	 * <p>
-	 * The expired are swept here, on the way past, which is where the map did it
-	 * too. What makes an old entry harmless is the age filter on the question;
-	 * this only keeps the table from growing.
+	 * @param executionId the execution this write belongs to, or {@code null} for
+	 * a write nobody queued - an Explorer rename, a folder swept after organising.
+	 * Naming it is what lets a write that outlasts the ceiling - a very large file
+	 * crossing volumes - go on being recognised for as long as the execution
+	 * demonstrably still holds its paths
 	 */
-	public void announce(Path path) {
-		announce(path, null);
+	public void move(Long executionId, SelfWriteAction effect, Path from, Path to) throws IOException {
+		perform(executionId, effect, List.of(new SelfWrittenPath(from, SelfWriteRole.VACATING),
+				new SelfWrittenPath(to, SelfWriteRole.OCCUPYING)));
+	}
+
+	/** A path this product is emptying: a file or an empty folder being removed. */
+	public void vacate(Long executionId, SelfWriteAction effect, Path path) throws IOException {
+		perform(executionId, effect, List.of(new SelfWrittenPath(path, SelfWriteRole.VACATING)));
+	}
+
+	/** A path this product is writing at without taking anything away from it. */
+	public void occupy(Long executionId, SelfWriteAction effect, Path path) throws IOException {
+		perform(executionId, effect, List.of(new SelfWrittenPath(path, SelfWriteRole.OCCUPYING)));
 	}
 
 	/**
-	 * Announces a path being written on behalf of an execution.
-	 *
-	 * <p>
-	 * The execution is what lets a write outlive the ceiling. A single move of a
-	 * very large file across volumes can take longer than five minutes on its own,
-	 * and the notifications for it keep arriving the whole time; an entry that
-	 * expired underneath would turn the second half of one file's own write into a
-	 * foreign change. So an entry that belongs to an execution still holding a live
-	 * lease keeps answering, and the ceiling applies again the moment that stops
-	 * being true - which is the existing possession, not a second clock invented to
-	 * track the same thing.
-	 *
-	 * @param executionId the execution this write belongs to, or {@code null} for a
-	 * write nobody queued - an Explorer rename, a folder swept after organising
-	 */
-	public void announce(Path path, Long executionId) {
-		if (path == null) {
-			return;
-		}
-
-		LocalDateTime now = LocalDateTime.now(clock);
-
-		selfWrittenPathRepository.deleteExpired(now.minus(ENTRY_TTL), now);
-
-		selfWrittenPathRepository.announce(key(path), executionId, now);
-	}
-
-	/**
-	 * Which of these changes this product made itself.
+	 * Which of these this product announced and is accountable for.
 	 *
 	 * <p>
 	 * Asked about a whole poll at once rather than one path at a time: the watcher
 	 * hands over everything it saw this round, and one question costs one round
 	 * trip whatever the answer is.
 	 */
-	public Set<Path> announcedAmong(Collection<Path> paths) {
-		if (paths.isEmpty()) {
+	public Set<SelfWrittenPath> announcedAmong(Collection<SelfWrittenPath> claims) {
+		if (claims.isEmpty()) {
 			return Set.of();
 		}
 
-		List<Path> candidates = List.copyOf(paths);
+		List<SelfWrittenPath> candidates = List.copyOf(claims);
 
 		LocalDateTime now = LocalDateTime.now(clock);
 
-		Set<String> announced = selfWrittenPathRepository.announcedAmong(candidates.stream().map(this::key).toList(),
-				now.minus(ENTRY_TTL), now);
+		Set<Integer> announced = selfWrittenPathRepository.announcedAmong(spellings(candidates), flavors(candidates),
+				roles(candidates), now.minus(ENTRY_TTL), now);
 
-		return candidates.stream().filter(path -> announced.contains(key(path)))
-				.collect(Collectors.toUnmodifiableSet());
+		return IntStream.range(0, candidates.size()).filter(index -> announced.contains(index + 1))
+				.mapToObj(candidates::get).collect(Collectors.toUnmodifiableSet());
 	}
 
-	private String key(Path path) {
-		return PathUtils.normalizeLower(path.toString());
+	/**
+	 * Announces, makes the change, and closes the announcement according to what
+	 * happened.
+	 *
+	 * <p>
+	 * Announced before the change lands, because the watcher can poll the event
+	 * within milliseconds of the write - announcing afterwards loses the race. The
+	 * expired are swept on the way past, which is where the map did it too; what
+	 * makes an old entry harmless is the age filter on the question, and this only
+	 * keeps the table from growing.
+	 */
+	private void perform(Long executionId, SelfWriteAction effect, List<SelfWrittenPath> claims) throws IOException {
+		LocalDateTime announcedAt = LocalDateTime.now(clock);
+
+		selfWrittenPathRepository.deleteExpired(announcedAt.minus(ENTRY_TTL), announcedAt);
+
+		selfWrittenPathRepository.announce(spellings(claims), flavors(claims), roles(claims), executionId,
+				announcedAt);
+
+		try {
+			effect.run();
+		} catch (IOException | RuntimeException failure) {
+			// Nothing landed, so nothing of ours is on its way. An announcement left
+			// standing here is a window in which the user doing this very move by hand
+			// goes unreported - and the paths a batch failed on are the ones somebody is
+			// most likely to touch next.
+			selfWrittenPathRepository.revoke(spellings(claims), flavors(claims), roles(claims), announcedAt);
+
+			throw failure;
+		}
+
+		settle(claims, announcedAt);
+	}
+
+	/**
+	 * The write happened, so the entry stops belonging to the execution and starts
+	 * counting its ceiling from now.
+	 *
+	 * <p>
+	 * Both halves matter and they are the same fix. The notifications still on
+	 * their way are ours - including any a caller's rollback produces - so the
+	 * entry cannot simply go; but a batch that moves ten thousand files runs for
+	 * hours, and an entry held alive by its execution silences those paths for the
+	 * whole of it. The end of the write is the honest anchor for the ceiling:
+	 * after it, what is left to arrive is a tail, not a write.
+	 */
+	private void settle(List<SelfWrittenPath> claims, LocalDateTime announcedAt) {
+		selfWrittenPathRepository.settle(spellings(claims), flavors(claims), roles(claims), announcedAt,
+				LocalDateTime.now(clock));
+	}
+
+	/**
+	 * The paths as this process reads them, absolute and resolved but otherwise
+	 * spelled as they are. Folding case or separators is the database's job and is
+	 * done there by the function the catalog itself is keyed by - doing any of it
+	 * here would be a second authority on when two paths are one, which on POSIX
+	 * gets a different answer.
+	 */
+	private static String[] spellings(List<SelfWrittenPath> claims) {
+		return claims.stream().map(claim -> PathUtils.normalize(claim.path())).toArray(String[]::new);
+	}
+
+	private static String[] flavors(List<SelfWrittenPath> claims) {
+		return claims.stream().map(claim -> PathFlavor.of(claim.path()).name()).toArray(String[]::new);
+	}
+
+	private static String[] roles(List<SelfWrittenPath> claims) {
+		return claims.stream().map(claim -> claim.role().name()).toArray(String[]::new);
 	}
 }

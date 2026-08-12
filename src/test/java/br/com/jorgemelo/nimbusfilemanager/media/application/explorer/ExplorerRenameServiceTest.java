@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.media.application.explorer;
 import static br.com.jorgemelo.nimbusfilemanager.media.application.explorer.CarriedMessages.carrying;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -16,7 +18,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -27,10 +31,15 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnersh
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.media.application.constants.ExplorerMessages;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogConvergenceMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
@@ -43,18 +52,22 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 class ExplorerRenameServiceTest {
 
 	private static final long EXECUTION_ID = 42L;
+	/** The run that ordered the rename, which is not what any fact is named after. */
+	private static final UUID EXECUTION_PUBLIC_ID = UUID.fromString("0199c0de-0000-7000-8000-000000000042");
 
 	private final ExplorerDeletionGuard guard = mock(ExplorerDeletionGuard.class);
 	private final LibraryFileMutations libraryFileMutations = mock(LibraryFileMutations.class);
 	private final ExplorerRenamePersistence explorerRenamePersistence = mock(ExplorerRenamePersistence.class);
-	private final CatalogMutations catalogMutations = mock(CatalogMutations.class);
+	private final CatalogConvergenceMutations catalogMutations = mock(CatalogConvergenceMutations.class);
 	private final ExecutionProgressService executionProgressService = mock(ExecutionProgressService.class);
 	private final ExecutionOwnership ownership = mock(ExecutionOwnership.class);
 	private final EligibilityAnnouncer eligibilityAnnouncer = mock(EligibilityAnnouncer.class);
+	private final ExplorerRelocationPlan explorerRelocationPlan = mock(ExplorerRelocationPlan.class);
 
 	private ExplorerRenameService service() {
-		return new ExplorerRenameService(guard, libraryFileMutations, explorerRenamePersistence, catalogMutations,
-				executionProgressService, eligibilityAnnouncer, Clock.systemUTC());
+		return new ExplorerRenameService(guard, libraryFileMutations, explorerRenamePersistence,
+				explorerRelocationPlan, catalogMutations, executionProgressService, eligibilityAnnouncer,
+				Clock.systemUTC());
 	}
 
 	@Test
@@ -62,12 +75,65 @@ class ExplorerRenameServiceTest {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 		Path renamed = folder.resolve("holiday.jpg");
 
+		PreparedMovement prepared = PreparedMovements.pending(1L, 7L, file, renamed);
+
+		MoveBaseline proven = new MoveBaseline(1024L, "digest-proved-by-the-move");
+
 		when(guard.refusal(any())).thenReturn(Optional.empty());
+		when(explorerRelocationPlan.reserve(any(), eq(file), eq(renamed), eq(false))).thenReturn(List.of(prepared));
+		when(libraryFileMutations.move(file, renamed, false, EXECUTION_ID)).thenReturn(proven);
 
 		service().execute(rename(file, renamed), ownership);
 
 		verify(libraryFileMutations).move(file, renamed, false, EXECUTION_ID);
-		verify(explorerRenamePersistence).rename(file, renamed);
+		verify(explorerRenamePersistence).rename(file, renamed, prepared.catalogFileEventPublicId(), proven);
+		verify(explorerRelocationPlan).settle(any(), eq(List.of(prepared)));
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), eq(ExecutionCounts.one()),
+				carrying("backend.files.renameDone", "holiday.jpg"));
+	}
+
+	/**
+	 * One file renamed is one operation and one fact, and the fact is not named
+	 * after the run. A run may order many operations - the folder rename below
+	 * orders one per file - so an identity taken from the execution would be one
+	 * identity for many facts, and every fact after the first would be refused.
+	 */
+	@Test
+	void namesTheFactAfterTheOperationAndNeverAfterTheExecution(@TempDir Path folder) throws IOException {
+		Path file = Files.createFile(folder.resolve("photo.jpg"));
+		Path renamed = folder.resolve("holiday.jpg");
+
+		PreparedMovement prepared = PreparedMovements.pending(1L, 7L, file, renamed);
+
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+		when(explorerRelocationPlan.reserve(any(), eq(file), eq(renamed), eq(false))).thenReturn(List.of(prepared));
+
+		service().execute(rename(file, renamed), ownership);
+
+		Assertions.assertThat(prepared.catalogFileEventPublicId()).isNotEqualTo(EXECUTION_PUBLIC_ID)
+				.isNotEqualTo(prepared.movementPublicId());
+
+		verify(explorerRenamePersistence).rename(eq(file), eq(renamed), eq(prepared.catalogFileEventPublicId()),
+				any());
+	}
+
+	/**
+	 * A file the catalog has never known is renamed on disk and nothing is written
+	 * about it. There is no entry to correct, and inventing one would be inventing
+	 * history for a file the product has no opinion on.
+	 */
+	@Test
+	void renamingAFileNobodyCataloguedWritesNoFact(@TempDir Path folder) throws IOException {
+		Path file = Files.createFile(folder.resolve("photo.jpg"));
+		Path renamed = folder.resolve("holiday.jpg");
+
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+		when(explorerRelocationPlan.reserve(any(), eq(file), eq(renamed), eq(false))).thenReturn(List.of());
+
+		service().execute(rename(file, renamed), ownership);
+
+		verify(libraryFileMutations).move(file, renamed, false, EXECUTION_ID);
+		verify(explorerRenamePersistence, never()).rename(any(), any(), any(), any());
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), eq(ExecutionCounts.one()),
 				carrying("backend.files.renameDone", "holiday.jpg"));
 	}
@@ -101,7 +167,39 @@ class ExplorerRenameServiceTest {
 		verify(libraryFileMutations).renameDirectory(folder, renamed, EXECUTION_ID);
 		verify(libraryFileMutations, never()).move(any(), any(), anyBoolean(), any());
 		verify(catalogMutations).repointFolder(eq(PathUtils.normalize(folder)), eq(PathUtils.normalize(renamed)),
-				any());
+				anyList(), anyList(), argThat(provenance -> CatalogEventSources.EXPLORER.equals(provenance.source())));
+	}
+
+	/**
+	 * The shape of a folder rename, which is the whole reason the identities are
+	 * reserved before anything moves: one run, one operation per catalogued file
+	 * under it, and one fact per operation - all decided while walking away is
+	 * still free. An execution cannot supply that on its own, having exactly one
+	 * identity for however many files the folder holds.
+	 */
+	@Test
+	void aFolderRenameIsOneRunWithOneOperationAndOneFactPerCataloguedFile(@TempDir Path parent) throws IOException {
+		Path folder = Files.createDirectory(parent.resolve("album"));
+		Path renamed = parent.resolve("viagem");
+
+		PreparedMovement first = PreparedMovements.pending(1L, 11L, folder.resolve("a.jpg"), renamed.resolve("a.jpg"));
+		PreparedMovement second = PreparedMovements.pending(2L, 22L, folder.resolve("b.jpg"), renamed.resolve("b.jpg"));
+
+		when(guard.refusal(any())).thenReturn(Optional.empty());
+		when(explorerRelocationPlan.reserve(any(), eq(folder), eq(renamed), eq(true)))
+				.thenReturn(List.of(first, second));
+
+		service().execute(rename(folder, renamed), ownership);
+
+		Assertions.assertThat(List.of(first.catalogFileEventPublicId(), second.catalogFileEventPublicId()))
+				.as("a fact each, and neither of them the run that ordered both")
+				.doesNotHaveDuplicates().doesNotContain(EXECUTION_PUBLIC_ID);
+
+		verify(catalogMutations).repointFolder(eq(PathUtils.normalize(folder)), eq(PathUtils.normalize(renamed)),
+				eq(List.of(11L, 22L)),
+				eq(List.of(first.catalogFileEventPublicId(), second.catalogFileEventPublicId())), any());
+
+		verify(explorerRelocationPlan).settle(any(), eq(List.of(first, second)));
 	}
 
 	/**
@@ -131,7 +229,7 @@ class ExplorerRenameServiceTest {
 		Path renamed = parent.resolve("viagem");
 
 		when(guard.refusal(any())).thenReturn(Optional.empty());
-		when(catalogMutations.repointFolder(any(), any(), any())).thenReturn(12);
+		when(catalogMutations.repointFolder(any(), any(), anyList(), anyList(), any())).thenReturn(12);
 		when(eligibilityAnnouncer.repointCanChangeEligibility(PathUtils.normalize(folder),
 				PathUtils.normalize(renamed))).thenReturn(true);
 
@@ -156,7 +254,7 @@ class ExplorerRenameServiceTest {
 		Path renamed = parent.resolve("viagem");
 
 		when(guard.refusal(any())).thenReturn(Optional.empty());
-		when(catalogMutations.repointFolder(any(), any(), any())).thenReturn(12);
+		when(catalogMutations.repointFolder(any(), any(), anyList(), anyList(), any())).thenReturn(12);
 
 		doAnswer(invocation -> {
 			Files.move(invocation.getArgument(0), invocation.getArgument(1));
@@ -210,14 +308,23 @@ class ExplorerRenameServiceTest {
 	@Test
 	void reportsAFailedMoveInsteadOfClaimingSuccess(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
+		Path renamed = folder.resolve("holiday.jpg");
+
+		PreparedMovement prepared = PreparedMovements.pending(1L, 7L, file, renamed);
 
 		when(guard.refusal(any())).thenReturn(Optional.empty());
+		when(explorerRelocationPlan.reserve(any(), eq(file), eq(renamed), eq(false))).thenReturn(List.of(prepared));
 		doThrow(new IOException("disk full")).when(libraryFileMutations).move(any(), any(), anyBoolean(), any());
 
-		service().execute(rename(file, folder.resolve("holiday.jpg")), ownership);
+		service().execute(rename(file, renamed), ownership);
 
-		verify(explorerRenamePersistence, never()).rename(any(), any());
+		verify(explorerRenamePersistence, never()).rename(any(), any(), any(), any());
 		verify(executionProgressService).fail(any(), carrying("backend.files.renameFailed", "disk full"));
+
+		// The operation is closed as failed rather than left pending, which is what
+		// would let a later reader believe the file had moved.
+		verify(explorerRelocationPlan).abandon(any(), eq(List.of(prepared)), eq(MovementReason.IO_ERROR));
+		verify(explorerRelocationPlan, never()).settle(any(), any());
 	}
 
 	/**
@@ -236,8 +343,8 @@ class ExplorerRenameServiceTest {
 	}
 
 	private Execution rename(Path source, Path target) {
-		return Execution.builder().id(EXECUTION_ID).executionType(ExecutionType.EXPLORER_RENAME)
+		return Execution.builder().id(EXECUTION_ID).executionPublicId(EXECUTION_PUBLIC_ID)
+				.executionType(ExecutionType.EXPLORER_RENAME)
 				.sourcePath(PathUtils.normalize(source)).targetPath(PathUtils.normalize(target)).build();
 	}
-
 }

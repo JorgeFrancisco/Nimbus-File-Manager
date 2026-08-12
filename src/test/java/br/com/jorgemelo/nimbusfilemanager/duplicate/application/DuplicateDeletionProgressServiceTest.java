@@ -91,7 +91,7 @@ class DuplicateDeletionProgressServiceTest {
 	 */
 	@Test
 	void fallsBackToWhatWasAskedForWhileNoTotalHasBeenCounted() {
-		Execution queued = Execution.builder().id(5L).publicId(UUID.randomUUID())
+		Execution queued = Execution.builder().id(5L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.DEDUP_DELETE).status(ExecutionStatus.RUNNING).filesFound(6)
 				.filesAnalyzed(3).build();
 
@@ -118,7 +118,7 @@ class DuplicateDeletionProgressServiceTest {
 	}
 
 	private Execution latest(ExecutionStatus status, int total, int processed) {
-		Execution execution = Execution.builder().id(5L).publicId(UUID.randomUUID())
+		Execution execution = Execution.builder().id(5L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.DEDUP_DELETE).status(status).totalExpected(total).filesAnalyzed(processed)
 				.statusMessage(StatusMessage.raw("done")).build();
 

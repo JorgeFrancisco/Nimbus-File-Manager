@@ -1,15 +1,15 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaEstimator;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildPreview;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildResponse;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildSimulation;
@@ -46,22 +46,22 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 public class MetadataRunReader extends LocalizedComponent {
 
 	private final ExecutionRepository executionRepository;
+	private final EtaEstimator etaEstimator;
 	private final MetadataRebuildPreviewRepository metadataRebuildPreviewRepository;
 	private final MetadataRebuildPreviewItemRepository metadataRebuildPreviewItemRepository;
 	private final ExecutionMessageCodec executionMessageCodec;
 	private final DateSourceLabels dateSourceLabels;
-	private final Clock clock;
 
-	public MetadataRunReader(ExecutionRepository executionRepository,
+	public MetadataRunReader(ExecutionRepository executionRepository, EtaEstimator etaEstimator,
 			MetadataRebuildPreviewRepository metadataRebuildPreviewRepository,
 			MetadataRebuildPreviewItemRepository metadataRebuildPreviewItemRepository,
-			ExecutionMessageCodec executionMessageCodec, DateSourceLabels dateSourceLabels, Clock clock) {
+			ExecutionMessageCodec executionMessageCodec, DateSourceLabels dateSourceLabels) {
 		this.executionRepository = executionRepository;
+		this.etaEstimator = etaEstimator;
 		this.metadataRebuildPreviewRepository = metadataRebuildPreviewRepository;
 		this.metadataRebuildPreviewItemRepository = metadataRebuildPreviewItemRepository;
 		this.executionMessageCodec = executionMessageCodec;
 		this.dateSourceLabels = dateSourceLabels;
-		this.clock = clock;
 	}
 
 	public boolean isRunning() {
@@ -81,9 +81,9 @@ public class MetadataRunReader extends LocalizedComponent {
 		return ProgressMath.percent(processed(), total());
 	}
 
-	/** Estimated seconds remaining by average rate, or -1 when unknown. */
-	public long etaSeconds() {
-		return latest().map(this::etaSeconds).orElse(-1L);
+	/** How much longer, from the one estimator the application has. */
+	public EtaEstimate eta() {
+		return latest().map(etaEstimator::estimate).orElse(EtaEstimate.notApplicable());
 	}
 
 	/**
@@ -160,18 +160,6 @@ public class MetadataRunReader extends LocalizedComponent {
 
 		return message(execution.getStatusMessage().getCode(),
 				executionMessageCodec.decode(execution.getStatusMessage().getArgs()));
-	}
-
-	private long etaSeconds(Execution execution) {
-		if (execution.getStartedAt() == null || execution.getFinishedAt() != null) {
-			return -1;
-		}
-
-		long elapsed = Duration.between(execution.getStartedAt().atZone(clock.getZone()).toInstant(), clock.instant())
-				.toMillis();
-
-		return ProgressMath.etaSeconds(elapsed, value(execution.getFilesAnalyzed()),
-				value(execution.getTotalExpected()));
 	}
 
 	private long value(Integer count) {

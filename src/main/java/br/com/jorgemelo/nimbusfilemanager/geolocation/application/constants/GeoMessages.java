@@ -121,6 +121,16 @@ public final class GeoMessages {
 	}
 
 	/**
+	 * The source confirmed every level unchanged and the installed dataset is
+	 * complete, so nothing was imported. A success with its own sentence: reusing
+	 * the one that counts imported records would report zero and read as a run that
+	 * failed to do anything.
+	 */
+	public static ExecutionMessage alreadyUpToDate() {
+		return of("backend.geodata.alreadyUpToDate");
+	}
+
+	/**
 	 * Stopped before the acquisition began, which is the only point at which it
 	 * can be stopped: once files are being staged and rows imported, the protocol
 	 * that keeps the previous dataset intact is the one that finishes or fails,

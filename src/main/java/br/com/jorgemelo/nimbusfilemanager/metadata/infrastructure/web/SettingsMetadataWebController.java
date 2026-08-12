@@ -1,7 +1,9 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.web;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -63,7 +65,7 @@ public class SettingsMetadataWebController extends LocalizedComponent {
 			RedirectAttributes redirectAttributes) {
 		String username = SecurityUtils.usernameOr(authentication, "system");
 
-		LocalDateTime startedAt = LocalDateTime.now(clock);
+		Instant startedAt = Instant.now(clock);
 
 		MetadataRebuildRequest request = MetadataRebuildRequest.forFolder(sourcePath, refresh, dryRun,
 				cutoff(scope, username));
@@ -130,7 +132,7 @@ public class SettingsMetadataWebController extends LocalizedComponent {
 	 * With nothing recorded yet there is nothing to continue from, so the first run
 	 * covers the folder either way.
 	 */
-	private LocalDateTime cutoff(MetadataRebuildScope scope, String username) {
+	private Instant cutoff(MetadataRebuildScope scope, String username) {
 		if (scope == MetadataRebuildScope.ALL) {
 			return null;
 		}
@@ -138,7 +140,26 @@ public class SettingsMetadataWebController extends LocalizedComponent {
 		String lastRun = userPagePreferenceService.find(username, MetadataRebuildPreferences.PAGE_KEY)
 				.get(MetadataRebuildPreferences.LAST_RUN_KEY);
 
-		return lastRun == null || lastRun.isBlank() ? null : LocalDateTime.parse(lastRun);
+		return lastRun == null || lastRun.isBlank() ? null : startOfLastRun(lastRun);
+	}
+
+	/**
+	 * When the previous run started, read back from what it wrote.
+	 *
+	 * <p>
+	 * A run before this one recorded a local date-time, because that is what the
+	 * mark used to be; it is compared against {@code last_analysis}, which the
+	 * application stamps as a moment. The two spellings are told apart by the
+	 * offset the newer one carries, and the older is crossed in the zone of the
+	 * clock that wrote it - not an invented one. A person who has already used the
+	 * rebuild keeps continuing where they stopped instead of meeting a parse error.
+	 */
+	private Instant startOfLastRun(String lastRun) {
+		try {
+			return Instant.parse(lastRun);
+		} catch (DateTimeParseException _) {
+			return LocalDateTime.parse(lastRun).atZone(clock.getZone()).toInstant();
+		}
 	}
 
 	private void remember(MetadataRebuildRequest request, MetadataRebuildScope scope, String username) {

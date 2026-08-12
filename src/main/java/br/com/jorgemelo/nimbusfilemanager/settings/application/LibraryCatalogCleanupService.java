@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.database.application.ClusterProtection;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogCollectionMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,11 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class LibraryCatalogCleanupService {
 
-	private final CatalogMutations catalogMutations;
+	private final CatalogCollectionMutations catalogMutations;
 	private final WorkspaceManager workspaceManager;
 	private final EligibilityAnnouncer eligibilityAnnouncer;
 
-	public LibraryCatalogCleanupService(CatalogMutations catalogMutations, WorkspaceManager workspaceManager,
+	public LibraryCatalogCleanupService(CatalogCollectionMutations catalogMutations, WorkspaceManager workspaceManager,
 			EligibilityAnnouncer eligibilityAnnouncer) {
 		this.catalogMutations = catalogMutations;
 		this.workspaceManager = workspaceManager;

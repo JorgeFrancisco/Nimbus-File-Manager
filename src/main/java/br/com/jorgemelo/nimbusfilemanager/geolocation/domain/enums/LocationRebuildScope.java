@@ -11,6 +11,6 @@ public enum LocationRebuildScope {
 	/** Media whose automatic resolution has LOW or VERY_LOW confidence. */
 	LOW_CONFIDENCE,
 
-	/** Every media with GPS (manual locations always preserved). */
+	/** Every media with GPS. */
 	ALL
 }

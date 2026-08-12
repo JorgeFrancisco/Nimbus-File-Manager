@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MetadataRunReader;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.constants.MetadataRebuildPreferences;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataRebuildRequest;
@@ -28,7 +30,9 @@ class MetadataRebuildSettingsAdviceTest {
 
 	private final MetadataRunReader runner = mock(MetadataRunReader.class);
 	private final UserPagePreferenceService userPagePreferenceService = mock(UserPagePreferenceService.class);
-	private final MetadataRebuildSettingsAdvice advice = new MetadataRebuildSettingsAdvice(runner,
+	private final EtaLabels etaLabels = mock(EtaLabels.class);
+
+	private final MetadataRebuildSettingsAdvice advice = new MetadataRebuildSettingsAdvice(etaLabels, runner,
 			userPagePreferenceService);
 
 	@Test
@@ -37,7 +41,8 @@ class MetadataRebuildSettingsAdviceTest {
 		when(runner.processed()).thenReturn(30L);
 		when(runner.total()).thenReturn(100L);
 		when(runner.percent()).thenReturn(30d);
-		when(runner.etaSeconds()).thenReturn(90L);
+		when(runner.eta()).thenReturn(EtaEstimate.of(90));
+		when(etaLabels.label(EtaEstimate.of(90))).thenReturn("aprox. 2 min restantes");
 
 		Model model = new ConcurrentModel();
 
@@ -47,7 +52,9 @@ class MetadataRebuildSettingsAdviceTest {
 		Assertions.assertThat(model.getAttribute("metadataRebuildProcessed")).isEqualTo(30L);
 		Assertions.assertThat(model.getAttribute("metadataRebuildTotal")).isEqualTo(100L);
 		Assertions.assertThat(model.getAttribute("metadataRebuildPercent")).isEqualTo(30.0);
-		Assertions.assertThat(model.getAttribute("metadataRebuildEta")).isEqualTo(90L);
+		Assertions.assertThat(model.getAttribute("metadataRebuildEta"))
+				.as("the fact comes from the estimator and the wording from the one formatter")
+				.isEqualTo("aprox. 2 min restantes");
 	}
 
 	/**

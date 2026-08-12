@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
@@ -29,10 +29,10 @@ public record PhotoHashRawResponse(
 
 		String currentPath, String currentFolder,
 
-		LocalDateTime modifiedAt) {
+		Instant modifiedAt) {
 
 	public PhotoHashRawResponse(Long id, byte[] phash, byte[] luminance, String fileName, String extension,
-			long sizeBytes, String currentPath, String currentFolder, LocalDateTime modifiedAt) {
+			long sizeBytes, String currentPath, String currentFolder, Instant modifiedAt) {
 		this(id, UuidV7.fromLegacy(id), phash, luminance, fileName, extension, sizeBytes, currentPath, currentFolder,
 				modifiedAt);
 	}

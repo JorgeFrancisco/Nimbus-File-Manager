@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -23,7 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
  * but it is not something the user can act on any more.
  */
 public record SimilarityMemberFile(UUID publicId, String fileName, String extension, String fileType, Long sizeBytes,
-		String currentPath, String currentFolder, LocalDateTime modifiedAt, Integer width, Integer height,
+		String currentPath, String currentFolder, Instant modifiedAt, Integer width, Integer height,
 		LocalDateTime captureDate, DateSource dateSource, LifecycleStatus lifecycleStatus) {
 
 	/**

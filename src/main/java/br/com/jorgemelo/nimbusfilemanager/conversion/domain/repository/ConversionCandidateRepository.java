@@ -28,8 +28,8 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionCandidate(
-				m.publicId,
-				m.fileName,
+				m.catalogFilePublicId,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)),
 				l.currentPath,
 				l.currentFolder,
 				m.sizeBytes,
@@ -64,10 +64,10 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 	 * share a where clause, so the two must be changed together.
 	 */
 	@Query("""
-			SELECT m.publicId
+			SELECT m.catalogFilePublicId
 			FROM CatalogFile m
 			LEFT JOIN m.video v
-			WHERE inArray(m.publicId, :publicIds)
+			WHERE inArray(m.catalogFilePublicId, :publicIds)
 			  AND m.fileType = :videoType
 			  AND m.lifecycleStatus = :active
 			  AND (LOWER(m.extension) <> :outputExtension
@@ -79,7 +79,7 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource(
-				m.publicId,
+				m.catalogFilePublicId,
 				v.videoCodec,
 				v.durationSeconds,
 				md.captureDate,
@@ -88,7 +88,7 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 			FROM CatalogFile m
 			LEFT JOIN m.video v
 			LEFT JOIN m.metadata md
-			WHERE inArray(m.publicId, :publicIds)
+			WHERE inArray(m.catalogFilePublicId, :publicIds)
 			""")
 	List<ConversionSource> findSourcesByPublicIdIn(@Param("publicIds") UUID[] publicIds);
 }

@@ -19,6 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import com.sun.net.httpserver.HttpServer;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallProgress;
 
 /**
@@ -33,7 +34,7 @@ class FfmpegBuildSourceTest {
 
 	private HttpServer server;
 
-	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress();
+	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress(Progress.estimator());
 
 	@TempDir
 	Path target;

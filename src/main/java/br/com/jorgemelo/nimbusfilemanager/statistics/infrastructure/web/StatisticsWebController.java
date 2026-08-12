@@ -62,6 +62,7 @@ public class StatisticsWebController {
 		model.addAttribute("executionTypeLabels", executionLabels.types());
 		model.addAttribute("executionStatusLabels", executionLabels.statuses());
 		model.addAttribute("phaseLabels", executionLabels.phases());
+		model.addAttribute("categoryLabels", executionLabels.externalToolCategories());
 	}
 
 	@GetMapping("/app/statistics")
@@ -139,6 +140,11 @@ public class StatisticsWebController {
 			model.addAttribute("phases", phases);
 			model.addAttribute("maxPhaseMillis",
 					phases.stream().mapToLong(ExecutionPhase::getDurationMillis).max().orElse(0L));
+
+			// Null for a run nobody measured - an execution from before this was
+			// recorded, or a type that is not persisted. The screen shows what it has.
+			model.addAttribute("aggregate", executionTelemetryQueryService.aggregate(id).orElse(null));
+			model.addAttribute("categories", executionTelemetryQueryService.categories(id));
 
 			addExecutionLabels(model);
 

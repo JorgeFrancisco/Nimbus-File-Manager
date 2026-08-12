@@ -5,5 +5,5 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projectio
  * derived pending query and consumed by the backlog worker; it carries no
  * state, so a crash just re-derives it.
  */
-public record PendingPhoto(Long catalogFileId, String path) {
+public record PendingPhoto(Long catalogFileId, String path, Long contentRevision) {
 }

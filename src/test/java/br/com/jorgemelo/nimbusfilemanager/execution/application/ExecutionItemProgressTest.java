@@ -230,6 +230,6 @@ class ExecutionItemProgressTest {
 
 		return new ExecutionProgressService(mock(ExecutionQueue.class), executionRepository,
 				new ExecutionItemProgressWriter(executionRepository), steps,
-				new ExecutionMessageCodec(new ObjectMapper()), clock);
+				new ExecutionMessageCodec(new ObjectMapper()), Progress.window(clock), clock);
 	}
 }

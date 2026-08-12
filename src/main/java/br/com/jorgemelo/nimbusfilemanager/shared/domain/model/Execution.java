@@ -49,8 +49,8 @@ public class Execution {
 	@EqualsAndHashCode.Include
 	private Long id;
 
-	@Column(name = "public_id", nullable = false, unique = true, updatable = false)
-	private UUID publicId;
+	@Column(name = "execution_public_id", nullable = false, unique = true, updatable = false)
+	private UUID executionPublicId;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "execution_type", nullable = false, length = 30)
@@ -205,6 +205,34 @@ public class Execution {
 	@Column(name = "current_item_percent")
 	private Integer currentItemPercent;
 
+	/**
+	 * The older end of the window the remaining time is measured over, and the
+	 * count reached at that moment.
+	 *
+	 * <p>
+	 * On the row rather than in the worker's memory because the estimate is read in
+	 * the application process and produced in the worker, and because a reclaim has
+	 * to be able to throw the measurement away - a new attempt is a new
+	 * measurement, and carrying the old one forward would describe work that is
+	 * being done again.
+	 */
+	@Column(name = "rate_window_from_at")
+	private LocalDateTime rateWindowFromAt;
+
+	@Column(name = "rate_window_from_done")
+	private Integer rateWindowFromDone;
+
+	/**
+	 * The younger mark, promoted to {@link #rateWindowFromAt} once it is older than
+	 * the configured window. Keeping two is what stops the span collapsing to zero
+	 * every time the window rolls.
+	 */
+	@Column(name = "rate_window_mark_at")
+	private LocalDateTime rateWindowMarkAt;
+
+	@Column(name = "rate_window_mark_done")
+	private Integer rateWindowMarkDone;
+
 	@OneToMany(mappedBy = "execution", cascade = CascadeType.ALL, orphanRemoval = true)
 	@Builder.Default
 	@ToString.Exclude
@@ -212,8 +240,8 @@ public class Execution {
 
 	@PrePersist
 	void prePersist() {
-		if (publicId == null) {
-			publicId = UuidV7.generate();
+		if (executionPublicId == null) {
+			executionPublicId = UuidV7.generate();
 		}
 
 		if (createdAt == null) {

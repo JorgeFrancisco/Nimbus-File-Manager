@@ -1,16 +1,17 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.util;
 
 /**
- * Progress arithmetic shared by every long-running operation the UI tracks
- * (dataset download and import, location rebuild, ...): percentage complete and
- * estimated time remaining from the average rate so far. Project standard:
- * visible progress always offers bar + percentage + time remaining whenever a
- * total is known; only the counter is shown when it is not.
+ * How far along something is, as a percentage, for every long-running operation
+ * the interface tracks.
+ *
+ * <p>
+ * It used to work out the time remaining as well, from the average rate since
+ * the start. That answer now belongs to {@code EtaEstimator}, which measures
+ * over a recent window instead - a cumulative average never forgets, so an
+ * interference at the beginning of a five-hour run was still inflating the
+ * estimate hours after it had passed.
  */
 public final class ProgressMath {
-
-	/** Below this elapsed time the average rate is too noisy for an estimate. */
-	static final long MIN_ELAPSED_FOR_ETA_MILLIS = 2_000;
 
 	private ProgressMath() {
 	}
@@ -42,14 +43,5 @@ public final class ProgressMath {
 	/** Two decimals, the precision every progress reading in the UI carries. */
 	public static double round(double percent) {
 		return Math.round(percent * 100.0) / 100.0;
-	}
-
-	/** Seconds remaining by average rate, or -1 when it cannot be estimated. */
-	public static long etaSeconds(long elapsedMillis, long done, long total) {
-		if (total <= 0 || done <= 0 || done > total || elapsedMillis < MIN_ELAPSED_FOR_ETA_MILLIS) {
-			return -1;
-		}
-
-		return Math.max(0, elapsedMillis * (total - done) / done / 1000);
 	}
 }

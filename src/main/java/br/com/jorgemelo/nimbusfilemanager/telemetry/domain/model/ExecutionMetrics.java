@@ -70,12 +70,41 @@ public class ExecutionMetrics {
 	@Column(name = "ffprobe_video_limit")
 	private Integer ffprobeVideoLimit;
 
-	@Column(name = "photo_hash_jvm_decodable")
-	private Long photoHashJvmDecodable;
+	/**
+	 * Which attempt of the execution produced these numbers. The row is one per
+	 * execution and a reclaim overwrites it, so this is what says whose the
+	 * current contents are - and what a consolidation compares against the row
+	 * before it is allowed to write.
+	 */
+	@Column(name = "attempt_claim_count", nullable = false)
+	private int attemptClaimCount;
 
-	@Column(name = "photo_hash_ffmpeg_only")
-	private Long photoHashFfmpegOnly;
+	@Column(name = "tasks_executed", nullable = false)
+	private long tasksExecuted;
 
-	@Column(name = "photo_hash_failures")
-	private Long photoHashFailures;
+	@Column(name = "tasks_cache_avoided", nullable = false)
+	private long tasksCacheAvoided;
+
+	@Column(name = "tasks_cancelled", nullable = false)
+	private long tasksCancelled;
+
+	@Column(name = "tasks_error", nullable = false)
+	private long tasksError;
+
+	@Column(name = "queue_wait_millis", nullable = false)
+	private long queueWaitMillis;
+
+	@Column(name = "task_total_millis", nullable = false)
+	private long taskTotalMillis;
+
+	/**
+	 * Time inside the batches that wrote the catalog, summed. Not the run's
+	 * elapsed time - that is {@code durationMillis} - and not comparable to it:
+	 * batches overlap, so this can exceed the wall clock and is meant to.
+	 */
+	@Column(name = "batch_wall_clock_millis", nullable = false)
+	private long batchWallClockMillis;
+
+	@Column(name = "max_concurrency", nullable = false)
+	private int maxConcurrency;
 }

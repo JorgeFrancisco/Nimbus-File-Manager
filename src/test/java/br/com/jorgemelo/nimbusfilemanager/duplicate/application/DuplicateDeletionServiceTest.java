@@ -1,6 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -14,7 +16,6 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -44,27 +45,30 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMov
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantinePersistence;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.QuarantineFolderPolicy;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 class DuplicateDeletionServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
 	private final QuarantineFolderPolicy quarantineFolderPolicy = mock(QuarantineFolderPolicy.class);
-	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
+	private final QuarantinePersistence persistence = mock(QuarantinePersistence.class);
 	private final OperationLockService operationLockService = mock(OperationLockService.class);
 	private final OperationLock operationLock = mock(OperationLock.class);
+	private final MovementWriter movementWriter = mock(MovementWriter.class);
+
 	private final QuarantineIntakeService quarantineIntakeService = new QuarantineIntakeService(persistence,
-			new SecureLibraryFiles(
+			movementWriter, new SecureLibraryFiles(
 					new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
 					pathRegistry), quarantineFolderPolicy);
 	private final ExecutionErrorService executionErrorService = mock(ExecutionErrorService.class);
@@ -94,7 +98,7 @@ class DuplicateDeletionServiceTest {
 
 		Assertions.assertThat(result.configured()).isFalse();
 
-		verify(catalogFileRepository, never()).findByPublicIdIn(any());
+		verify(catalogFileRepository, never()).findByCatalogFilePublicIdIn(any());
 	}
 
 	/**
@@ -111,11 +115,11 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile first = stubFile(10L, Files.writeString(library.resolve("a.jpg"), "a"), "a.jpg");
-		CatalogFile second = stubFile(11L, Files.writeString(library.resolve("b.jpg"), "b"), "b.jpg");
-		CatalogFile third = stubFile(12L, Files.writeString(library.resolve("c.jpg"), "c"), "c.jpg");
+		CatalogFile first = stubFile(10L, Files.writeString(library.resolve("a.jpg"), "a"));
+		CatalogFile second = stubFile(11L, Files.writeString(library.resolve("b.jpg"), "b"));
+		CatalogFile third = stubFile(12L, Files.writeString(library.resolve("c.jpg"), "c"));
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(first, second, third));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(first, second, third));
 
 		DuplicateDeletionResult result = delete(service,
 				List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
@@ -135,7 +139,7 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
@@ -154,9 +158,9 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(10L, original, "a.jpg");
+		CatalogFile file = stubFile(10L, original);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
@@ -176,7 +180,7 @@ class DuplicateDeletionServiceTest {
 				original);
 
 		verify(operationLock).close();
-		verify(persistence).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -187,7 +191,6 @@ class DuplicateDeletionServiceTest {
 
 		Assertions.assertThat(result.configured()).isTrue();
 		Assertions.assertThat(result.moved()).isZero();
-
 	}
 
 	@Test
@@ -200,10 +203,10 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(12L, original, "b.jpg");
+		CatalogFile file = stubFile(12L, original);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
-		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(any(), any(), any(), any(),
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
+		doThrow(new IllegalStateException("db down")).when(persistence).persistQuarantine(anyLong(), any(), any(), any(), any(),
 				any());
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
@@ -233,7 +236,7 @@ class DuplicateDeletionServiceTest {
 		doThrow(new MoveIntegrityException("sha mismatch")).when(verifier).verify(any(), any(), any());
 
 		DuplicateDeletionService integrityFailingService = new DuplicateDeletionService(catalogFileRepository,
-				new QuarantineIntakeService(persistence,
+				new QuarantineIntakeService(persistence, movementWriter,
 						new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
 						quarantineFolderPolicy),
 				operationLockService, executionProgressService, executionCancellationService, executionErrorService,
@@ -243,9 +246,9 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(13L, original, "c.jpg");
+		CatalogFile file = stubFile(13L, original);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		DuplicateDeletionResult result = delete(integrityFailingService, List.of(UUID.randomUUID()));
 
@@ -255,7 +258,7 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(original).hasContent("payload");
 		Assertions.assertThat(trash.resolve("exec-1").resolve("13__c.jpg")).doesNotExist();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -268,16 +271,16 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(14L, original, "d.jpg");
+		CatalogFile file = stubFile(14L, original);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 		// The catalog update fails AND re-creates the original path, so the physical
 		// roll-back (which never overwrites) cannot move the file back.
 		doAnswer(_ -> {
 			Files.writeString(original, "blocker");
 
 			throw new IllegalStateException("db down");
-		}).when(persistence).persistQuarantine(any(), any(), any(), any(), any());
+		}).when(persistence).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
@@ -301,10 +304,10 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(15L, original, "e.jpg");
+		CatalogFile file = stubFile(15L, original);
 
 		// Two ids requested, but only one resolves to an active catalog entry.
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID(), UUID.randomUUID()));
 
@@ -325,16 +328,16 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(11L, missing, "gone.jpg");
+		CatalogFile file = stubFile(11L, missing);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		DuplicateDeletionResult result = delete(service, List.of(UUID.randomUUID()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -348,20 +351,19 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(10L, alreadyQuarantined, "10__document.pdf");
+		CatalogFile file = stubFile(10L, alreadyQuarantined);
 
-		when(file.isActive()).thenReturn(false);
-		when(file.getLifecycleStatus()).thenReturn(LifecycleStatus.DELETED);
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		file.markDeleted();
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = delete(service, List.of(file.getPublicId()));
+		DuplicateDeletionResult result = delete(service, List.of(file.getCatalogFilePublicId()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(alreadyQuarantined)).isTrue();
 		Assertions.assertThat(trash.resolve("exec-1").resolve("10__10__document.pdf")).doesNotExist();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -375,17 +377,17 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile file = stubFile(10L, alreadyQuarantined, "10__document.pdf");
+		CatalogFile file = stubFile(10L, alreadyQuarantined);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
-		DuplicateDeletionResult result = delete(service, List.of(file.getPublicId()));
+		DuplicateDeletionResult result = delete(service, List.of(file.getCatalogFilePublicId()));
 
 		Assertions.assertThat(result.moved()).isZero();
 		Assertions.assertThat(result.skipped()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(alreadyQuarantined)).isTrue();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -399,10 +401,10 @@ class DuplicateDeletionServiceTest {
 
 		stubExecution();
 
-		CatalogFile firstFile = stubFile(20L, first, "a.jpg");
-		CatalogFile secondFile = stubFile(21L, second, "b.jpg");
+		CatalogFile firstFile = stubFile(20L, first);
+		CatalogFile secondFile = stubFile(21L, second);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(firstFile, secondFile));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(firstFile, secondFile));
 
 		delete(service, List.of(UUID.randomUUID(), UUID.randomUUID()));
 
@@ -425,10 +427,10 @@ class DuplicateDeletionServiceTest {
 
 		configureTrash(trash);
 
-		CatalogFile file = stubFile(30L, original, "locked.jpg");
+		CatalogFile file = stubFile(30L, original);
 
-		when(file.getPublicId()).thenReturn(publicId);
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		file.setCatalogFilePublicId(publicId);
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 		when(operationLockService.acquire(eq(ExecutionType.DEDUP_DELETE), any(Path[].class)))
 				.thenThrow(new OperationLockException("busy"));
 
@@ -438,28 +440,44 @@ class DuplicateDeletionServiceTest {
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(original)).isTrue();
 
-		verify(persistence, never()).persistQuarantine(any(), any(), any(), any(), any());
+		verify(persistence, never()).persistQuarantine(anyLong(), any(), any(), any(), any(), any());
 	}
 	private void configureTrash(Path trash) {
 		when(quarantineFolderPolicy.root()).thenReturn(Optional.of(trash.toAbsolutePath().normalize()));
 	}
 
 	private Execution stubExecution() {
-		lenient().when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+		lenient().when(execution.getExecutionPublicId()).thenReturn(UUID.randomUUID());
+
+		preparing();
 
 		return execution;
 	}
 
-	private CatalogFile stubFile(long id, Path currentPath, String name) {
-		CatalogFile file = mock(CatalogFile.class);
+	/**
+	 * The operations the run reserves before it touches a file.
+	 *
+	 * <p>
+	 * Nothing moves without one: the intake reads where to take the file from and
+	 * where to put it off the movement it prepared, so a writer that prepares
+	 * nothing is a run that quarantines nothing. Minted from the requests
+	 * themselves, so the paths a test asserts on are the ones the run decided.
+	 */
+	private void preparing() {
+		lenient().when(movementWriter.prepare(anyLong(), anyList()))
+				.thenAnswer(invocation -> PreparedMovements.pendingFor(invocation.getArgument(1)));
+	}
 
-		when(file.getId()).thenReturn(id);
-		when(file.getPublicId()).thenReturn(UUID.randomUUID());
-		when(file.getFileKey()).thenReturn(PathUtils.normalize(currentPath));
-		when(file.getFileName()).thenReturn(name);
-		when(file.isActive()).thenReturn(true);
-
-		return file;
+	/**
+	 * A catalogued file at a real place.
+	 *
+	 * <p>
+	 * Built rather than mocked: where a file is is a row of its own now, and a
+	 * mock of the entity would have to stub the location and everything read
+	 * through it - which is how this fixture came to ask a null for its path.
+	 */
+	private CatalogFile stubFile(long id, Path currentPath) {
+		return CatalogFiles.at(id, currentPath);
 	}
 	/**
 	 * A deletion can run for minutes in another process, so it has to be stoppable.
@@ -475,9 +493,9 @@ class DuplicateDeletionServiceTest {
 		stubExecution();
 		configureTrash(quarantine);
 
-		CatalogFile file = stubFile(1L, first, "first.jpg");
+		CatalogFile file = stubFile(1L, first);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		executionCancellationService.requestCancellation(1L);
 
@@ -501,9 +519,9 @@ class DuplicateDeletionServiceTest {
 		stubExecution();
 		configureTrash(quarantine);
 
-		CatalogFile file = stubFile(1L, first, "first.jpg");
+		CatalogFile file = stubFile(1L, first);
 
-		when(catalogFileRepository.findByPublicIdIn(any())).thenReturn(List.of(file));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(file));
 
 		ExecutionOwnership lost = mock(ExecutionOwnership.class);
 

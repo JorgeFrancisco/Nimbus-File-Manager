@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
-import org.springframework.stereotype.Component;
-
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhaseSnapshot;
 
@@ -22,16 +20,10 @@ import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhaseSnapsho
  * are serialized by the operation lock / single active execution), so a shared
  * singleton is safe; all counters are {@link LongAdder}s regardless.
  */
-@Component
 public class ExecutionPhaseTimings {
 
 	private final Map<ExecutionPhaseType, LongAdder> durationNanos = newMap();
 	private final Map<ExecutionPhaseType, LongAdder> items = newMap();
-
-	public void reset() {
-		durationNanos.values().forEach(LongAdder::reset);
-		items.values().forEach(LongAdder::reset);
-	}
 
 	public void addNanos(ExecutionPhaseType phase, long nanos) {
 		durationNanos.get(phase).add(nanos);

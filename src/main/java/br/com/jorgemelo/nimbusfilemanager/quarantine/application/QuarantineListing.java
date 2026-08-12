@@ -3,6 +3,8 @@ package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -39,9 +41,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.enums.Kind;
 public class QuarantineListing {
 
 	private final MovementRepository movementRepository;
+	private final Clock clock;
 
-	public QuarantineListing(MovementRepository movementRepository) {
+	public QuarantineListing(MovementRepository movementRepository, Clock clock) {
 		this.movementRepository = movementRepository;
+		this.clock = clock;
 	}
 
 	/** One page of files currently held in quarantine, newest deletion first. */
@@ -52,8 +56,8 @@ public class QuarantineListing {
 	}
 
 	private QuarantineItemResponse toItem(Movement movement) {
-		Path original = PathUtils.normalizePath(movement.getSourcePath());
-		Path quarantine = PathUtils.normalizePath(movement.getTargetPath());
+		Path original = PathUtils.normalizePath(movement.getRequestedSourcePath());
+		Path quarantine = PathUtils.normalizePath(movement.getRequestedTargetPath());
 		Path originFolder = original.getParent();
 
 		CatalogFile catalogFile = movement.getCatalogFile();
@@ -64,7 +68,7 @@ public class QuarantineListing {
 
 		Long sizeBytes = sizeOf(catalogFile, quarantine);
 
-		UUID mediaPublicId = catalogFile == null ? null : catalogFile.getPublicId();
+		UUID mediaPublicId = catalogFile == null ? null : catalogFile.getCatalogFilePublicId();
 
 		boolean present = Files.exists(quarantine);
 
@@ -79,11 +83,12 @@ public class QuarantineListing {
 
 		Path quarantineFolder = quarantine.getParent();
 
-		return new QuarantineItemResponse(movement.getPublicId(), movement.getExecution().getPublicId(), mediaPublicId,
+		return new QuarantineItemResponse(movement.getMovementPublicId(),
+				movement.getExecution().getExecutionPublicId(), mediaPublicId,
 				original.getFileName().toString(), PathUtils.normalize(original),
 				originFolder == null ? null : PathUtils.normalize(originFolder), PathUtils.normalize(quarantine),
 				quarantineFolder == null ? null : PathUtils.normalize(quarantineFolder), sizeBytes,
-				sizeBytes == null ? "—" : SizeFormatter.format(sizeBytes), movement.getMovedAt(), present,
+				sizeBytes == null ? "—" : SizeFormatter.format(sizeBytes), quarantinedAt(movement), present,
 				originFolder != null && Files.isDirectory(originFolder), Files.exists(original), typeName,
 				FileTypeIcon.iconClass(typeName), FileTypeIcon.iconLabelKey(typeName), kind == Kind.IMAGE,
 				kind == Kind.VIDEO, kind == Kind.PDF, kind == Kind.TEXT, kind == Kind.AUDIO, previewUrl);
@@ -107,5 +112,14 @@ public class QuarantineListing {
 		} catch (IOException _) {
 			return null;
 		}
+	}
+
+	/**
+	 * The screen shows a date, and the row stores an instant. Converted here, in
+	 * the application's configured zone, because that is what the reader is asking
+	 * - not what the database recorded.
+	 */
+	private LocalDateTime quarantinedAt(Movement movement) {
+		return movement.getMovedAt() == null ? null : LocalDateTime.ofInstant(movement.getMovedAt(), clock.getZone());
 	}
 }

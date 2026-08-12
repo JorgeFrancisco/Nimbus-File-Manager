@@ -50,8 +50,8 @@ public class SimilarityGroupMember {
 	@Column(name = "group_id", nullable = false)
 	private Long groupId;
 
-	@Column(name = "media_public_id", nullable = false)
-	private UUID mediaPublicId;
+	@Column(name = "catalog_file_public_id", nullable = false)
+	private UUID catalogFilePublicId;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "verdict", nullable = false, length = 20)

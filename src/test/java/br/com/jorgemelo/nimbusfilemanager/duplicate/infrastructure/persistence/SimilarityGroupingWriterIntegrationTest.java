@@ -17,6 +17,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -48,7 +50,7 @@ class SimilarityGroupingWriterIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private SimilarityGroupingWriter writer;
@@ -66,7 +68,7 @@ class SimilarityGroupingWriterIntegrationTest {
 	@BeforeEach
 	void header() {
 		grouping = jdbcTemplate.queryForObject("""
-				INSERT INTO similarity_grouping (public_id, media_type, algorithm_id, grouping_version,
+				INSERT INTO similarity_grouping (similarity_grouping_public_id, media_type, algorithm_id, grouping_version,
 					parameters_digest, composition_digest, eligible_count, analyzed_count, candidate_limit,
 					selection_policy, status, computed_at, group_count, member_count)
 				VALUES (?, 'PHOTO', 'FFMPEG_LANCZOS_PHASH_256_V1', 1, ?, ?, 120, 120, 8000,
@@ -204,7 +206,7 @@ class SimilarityGroupingWriterIntegrationTest {
 
 	private List<UUID> publicIdsOf(int groupPosition) {
 		return jdbcTemplate.queryForList("""
-				SELECT m.media_public_id
+				SELECT m.catalog_file_public_id
 				FROM similarity_group_member m
 				JOIN similarity_group g ON g.id = m.group_id
 				WHERE g.position = ?

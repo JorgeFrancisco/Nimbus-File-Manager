@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +18,12 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMes
 import br.com.jorgemelo.nimbusfilemanager.media.application.constants.ExplorerMessages;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,10 +55,11 @@ public class ExplorerDeletionService {
 
 	private final ExplorerDeletionGuard guard;
 	private final QuarantineIntakeService quarantineIntakeService;
-	private final CatalogFileRepository catalogFileRepository;
+	private final CatalogFileLocationRepository catalogFileLocationRepository;
 	private final ExecutionProgressService executionProgressService;
 	private final ExplorerFileSystem fileSystem;
 	private final EligibilityAnnouncer eligibilityAnnouncer;
+	private final ExplorerDeletionPersistence explorerDeletionPersistence;
 
 	/**
 	 * Takes the filesystem as a collaborator for two reasons: the real one
@@ -67,14 +70,16 @@ public class ExplorerDeletionService {
 	 */
 	@Autowired
 	ExplorerDeletionService(ExplorerDeletionGuard guard, QuarantineIntakeService quarantineIntakeService,
-			CatalogFileRepository catalogFileRepository, ExecutionProgressService executionProgressService,
-			ExplorerFileSystem fileSystem, EligibilityAnnouncer eligibilityAnnouncer) {
+			CatalogFileLocationRepository catalogFileLocationRepository,
+			ExecutionProgressService executionProgressService, ExplorerFileSystem fileSystem,
+			EligibilityAnnouncer eligibilityAnnouncer, ExplorerDeletionPersistence explorerDeletionPersistence) {
 		this.guard = guard;
 		this.quarantineIntakeService = quarantineIntakeService;
-		this.catalogFileRepository = catalogFileRepository;
+		this.catalogFileLocationRepository = catalogFileLocationRepository;
 		this.executionProgressService = executionProgressService;
 		this.fileSystem = fileSystem;
 		this.eligibilityAnnouncer = eligibilityAnnouncer;
+		this.explorerDeletionPersistence = explorerDeletionPersistence;
 	}
 
 	/**
@@ -142,10 +147,13 @@ public class ExplorerDeletionService {
 		int moved = 0;
 		int failed = 0;
 
+		Map<Long, PreparedMovement> operations = quarantineIntakeService.prepare(execution, files, quarantineRoot,
+				MovementReason.USER_QUARANTINED);
+
 		for (CatalogFile file : files) {
 			ownership.assertMayGoOnWorking();
 
-			switch (quarantineIntakeService.intake(execution, file, quarantineRoot, MovementReason.USER_QUARANTINED,
+			switch (quarantineIntakeService.intake(execution, file, quarantineRoot, operations.get(file.getId()),
 					execution.getId())) {
 			case MOVED -> moved++;
 			case SKIPPED -> log.warn("Explorer quarantine skipped catalog file {}", file.getId());
@@ -204,9 +212,10 @@ public class ExplorerDeletionService {
 			return;
 		}
 
-		cataloged.forEach(file -> file.setLifecycleStatus(LifecycleStatus.DELETED));
-
-		catalogFileRepository.saveAll(cataloged);
+		// Through the door, so the removal is a fact and not only a column. A file the
+		// user deleted months ago is asked about exactly like one that went missing:
+		// when it happened, and at whose request - which a status alone cannot answer.
+		explorerDeletionPersistence.removed(cataloged);
 
 		// Everything in the list was ACTIVE when it was read - that is what
 		// catalogedUnder selects - so a non-empty list is exactly "files left the
@@ -227,13 +236,18 @@ public class ExplorerDeletionService {
 		String key = PathUtils.normalize(target);
 
 		if (!fileSystem.isDirectory(target)) {
-			return catalogFileRepository.findByFileKey(key).filter(CatalogFile::isActive).stream().toList();
+			// Present, not merely known: only a file actually sitting there is the one
+			// the user asked to remove.
+			return catalogFileLocationRepository.findPresentByPath(key, PathFlavor.of(target).name()).stream()
+					.toList();
 		}
 
 		String prefix = key.endsWith(File.separator) ? key : key + File.separator;
 
+		String flavor = PathFlavor.of(target).name();
+
 		return listFiles(target).stream().map(PathUtils::normalize).filter(path -> path.startsWith(prefix))
-				.map(catalogFileRepository::findByFileKey).flatMap(Optional::stream).filter(CatalogFile::isActive)
+				.map(path -> catalogFileLocationRepository.findPresentByPath(path, flavor)).flatMap(Optional::stream)
 				.toList();
 	}
 

@@ -4,8 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +72,7 @@ final class PhotoSimilarityLibrary {
 		wireReads();
 
 		when(exclusions.signature()).thenReturn("none");
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
 
 		service = new PhotoSimilarityService(fingerprints,
 				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository), new LuminanceSsimService(),
@@ -100,7 +99,7 @@ final class PhotoSimilarityLibrary {
 	void photo(long catalogFileId, byte[] hash, byte[] sample) {
 		photos.put(catalogFileId, new PhotoHashRawResponse(catalogFileId, hash, sample, catalogFileId + ".jpg", "jpg",
 				100L, "C:/Fotos/" + catalogFileId + ".jpg", "C:/Fotos",
-				LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0)));
+				Instant.parse("2024-01-01T10:00:00Z")));
 
 		eligible.add(catalogFileId);
 	}

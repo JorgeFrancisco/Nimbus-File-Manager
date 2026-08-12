@@ -40,6 +40,7 @@ public final class UsnRecordParser {
 	private static final int OFF_FILE_REFERENCE = 8;
 	private static final int OFF_PARENT_REFERENCE = 16;
 	private static final int OFF_USN = 24;
+	private static final int OFF_TIMESTAMP = 32;
 	private static final int OFF_REASON = 40;
 	private static final int OFF_FILE_ATTRIBUTES = 52;
 	private static final int OFF_FILE_NAME_LENGTH = 56;
@@ -88,6 +89,7 @@ public final class UsnRecordParser {
 		long fileReference = buffer.getLong(offset + OFF_FILE_REFERENCE);
 		long parentReference = buffer.getLong(offset + OFF_PARENT_REFERENCE);
 		long usn = buffer.getLong(offset + OFF_USN);
+		long timestamp = buffer.getLong(offset + OFF_TIMESTAMP);
 		int reason = buffer.getInt(offset + OFF_REASON);
 		long attributes = Integer.toUnsignedLong(buffer.getInt(offset + OFF_FILE_ATTRIBUTES));
 		int nameLength = Short.toUnsignedInt(buffer.getShort(offset + OFF_FILE_NAME_LENGTH));
@@ -95,7 +97,7 @@ public final class UsnRecordParser {
 
 		String fileName = readName(records, offset + nameOffset, nameLength);
 
-		return new UsnRecord(usn, fileReference, parentReference, reason, attributes, fileName);
+		return new UsnRecord(usn, fileReference, parentReference, reason, attributes, fileName, timestamp);
 	}
 
 	private static String readName(byte[] records, int start, int length) {

@@ -270,7 +270,7 @@ class OrganizationPlannerTest {
 
 		MediaLocationService mediaLocationService = mock(MediaLocationService.class);
 
-		MediaGeoLocation location = MediaGeoLocation.builder().manual(false)
+		MediaGeoLocation location = MediaGeoLocation.builder()
 				.place(ResolvedPlace.builder().countryName("Brasil").stateName("Rio de Janeiro").cityName("Niterói")
 						.confidence(LocationConfidence.HIGH).build())
 				.build();

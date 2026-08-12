@@ -163,8 +163,8 @@ class OrganizationServiceTest {
 
 		StoredPlanPage page = page();
 
-		when(executionRepository.findByPublicId(publicId))
-				.thenReturn(Optional.of(Execution.builder().id(9L).publicId(publicId).build()));
+		when(executionRepository.findByExecutionPublicId(publicId))
+				.thenReturn(Optional.of(Execution.builder().id(9L).executionPublicId(publicId).build()));
 		when(organizationPlanReader.page(9L, 1, 20, true)).thenReturn(Optional.of(page));
 
 		Assertions.assertThat(service().planPagePublic(publicId, 1, 20, true)).containsSame(page);
@@ -179,7 +179,7 @@ class OrganizationServiceTest {
 	void anUnknownExecutionHasNoPlan() {
 		UUID publicId = UUID.randomUUID();
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service().planPagePublic(publicId, 0, 50, false)).isEmpty();
 
@@ -190,11 +190,11 @@ class OrganizationServiceTest {
 	void undoTranslatesThePublicIdBeforeQueueingTheReversal() {
 		UUID publicId = UUID.randomUUID();
 
-		Execution undone = Execution.builder().id(4L).publicId(publicId).build();
+		Execution undone = Execution.builder().id(4L).executionPublicId(publicId).build();
 
 		ExecutionResponse queued = response("UNDO");
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(undone));
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.of(undone));
 		when(organizationUndoLauncherService.launch(undone)).thenReturn(queued);
 
 		Assertions.assertThat(service().undoPublic(publicId)).isSameAs(queued);
@@ -204,7 +204,7 @@ class OrganizationServiceTest {
 	void undoRefusesAnUnknownExecutionIdSayingWhichOne() {
 		UUID publicId = UUID.randomUUID();
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.empty());
 
 		OrganizationService service = service();
 
@@ -217,7 +217,7 @@ class OrganizationServiceTest {
 		OrganizationReconcileRequest request = new OrganizationReconcileRequest("C:/input", true, false, 10);
 
 		OrganizationReconcileResponse response = new OrganizationReconcileResponse("C:/input", true, false, 1, 1, 0, 0,
-				0, List.of(), List.of(), List.of(), 0, 0, 0, 0);
+				List.of(), List.of(), 0, 0, 0, 0);
 
 		when(organizationReconcileService.reconcile(request)).thenReturn(response);
 

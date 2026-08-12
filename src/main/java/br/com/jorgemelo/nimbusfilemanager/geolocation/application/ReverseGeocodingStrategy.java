@@ -9,8 +9,8 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvi
 /**
  * Strategy for turning coordinates into a location. Implementations must be
  * pure resolvers: they never know about timeline, organization, screens or
- * interface DTOs. New providers (Google Maps, OpenStreetMap, Photon, manual)
- * are added by implementing this interface and registering as a Spring bean -
+ * interface DTOs. New providers (Google Maps, OpenStreetMap, Photon) are added
+ * by implementing this interface and registering as a Spring bean -
  * nothing else in the application changes.
  */
 public interface ReverseGeocodingStrategy {

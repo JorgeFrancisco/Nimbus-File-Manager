@@ -2,80 +2,62 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application;
 
 import org.springframework.stereotype.Component;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.constants.InventoryConstants;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Snapshot;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhaseType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
-import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionPhaseTimings;
-import br.com.jorgemelo.nimbusfilemanager.telemetry.application.PerformanceTelemetryService;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryConsolidation;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.ConfigSnapshot;
-import br.com.jorgemelo.nimbusfilemanager.telemetry.application.dto.PhotoHashCounters;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Owns the inventory scan's performance instrumentation, so whoever drives the
  * {@link br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution}
- * status keeps a single responsibility. Groups the processing metrics,
- * per-phase timings and the telemetry persistence that only make sense
- * together.
+ * status keeps a single responsibility.
+ *
+ * <p>
+ * It holds no accumulator of its own any more. It used to be handed the two
+ * Spring-managed ones, which is what let a scan clear numbers another execution
+ * was still adding to; now the scan brings its own context and this only reads
+ * from whichever one it is given.
  */
-@Slf4j
 @Component
 public class InventoryTelemetryRecorder {
 
-	private final ProcessingMetrics processingMetrics;
-	private final ExecutionPhaseTimings executionPhaseTimings;
-	private final PerformanceTelemetryService performanceTelemetryService;
 	private final ProcessingProperties processingProperties;
+	private final ExecutionTelemetryConsolidation telemetryConsolidation;
 
-	public InventoryTelemetryRecorder(ProcessingMetrics processingMetrics, ExecutionPhaseTimings executionPhaseTimings,
-			PerformanceTelemetryService performanceTelemetryService, ProcessingProperties processingProperties) {
-		this.processingMetrics = processingMetrics;
-		this.executionPhaseTimings = executionPhaseTimings;
-		this.performanceTelemetryService = performanceTelemetryService;
+	public InventoryTelemetryRecorder(ProcessingProperties processingProperties,
+			ExecutionTelemetryConsolidation telemetryConsolidation) {
 		this.processingProperties = processingProperties;
+		this.telemetryConsolidation = telemetryConsolidation;
 	}
 
 	/**
-	 * Isolate this inventory's processing metrics and phase timings from any
-	 * previous run.
+	 * Isolation is no longer something this has to arrange. The accumulators used
+	 * to be shared and were cleared before each run, which only worked while one
+	 * execution existed at a time; the scan now brings the context it accumulated
+	 * into, and two of them cannot see each other.
 	 */
-	public void reset() {
-		processingMetrics.reset();
+	void recordScanCount(ExecutionMetricsContext context, long nanos, long items) {
+		context.phases().addNanos(ExecutionPhaseType.SCAN_COUNT, nanos);
 
-		executionPhaseTimings.reset();
-	}
-
-	void recordScanCount(long nanos, long items) {
-		executionPhaseTimings.addNanos(ExecutionPhaseType.SCAN_COUNT, nanos);
-
-		executionPhaseTimings.addItems(ExecutionPhaseType.SCAN_COUNT, items);
-	}
-
-	public Snapshot snapshot() {
-		return processingMetrics.snapshot();
+		context.phases().addItems(ExecutionPhaseType.SCAN_COUNT, items);
 	}
 
 	/**
-	 * Persists the performance telemetry of this execution (duration, files/s,
-	 * config snapshot, per-phase timings and the photo-hash format counters). Runs
-	 * after the final status is set and the {@code finished_at} is committed, so
-	 * the duration is available. Never lets a telemetry failure affect the job's
-	 * outcome.
+	 * Writes down what the scan measured, after its outcome is committed.
+	 *
+	 * <p>
+	 * The configuration goes with the numbers because the same measurements mean
+	 * different things at four workers and at twelve.
 	 */
-	public void persist(Long executionId, Snapshot metrics) {
-		try {
-			ConfigSnapshot config = new ConfigSnapshot(processingProperties.workersOrDefault(),
-					InventoryConstants.BATCH_SIZE, processingProperties.ffmpegPhotoHashLimitOrDefault(),
-					processingProperties.ffprobeVideoLimitOrDefault());
+	void consolidate(ExecutionOwnership ownership, ExecutionMetricsContext context) {
+		ConfigSnapshot config = new ConfigSnapshot(processingProperties.workersOrDefault(),
+				InventoryConstants.BATCH_SIZE, processingProperties.ffmpegPhotoHashLimitOrDefault(),
+				processingProperties.ffprobeVideoLimitOrDefault());
 
-			PhotoHashCounters counters = new PhotoHashCounters(metrics.photoHashJvmDecodable(),
-					metrics.photoHashFfmpegOnly(), metrics.photoHashFailures());
-
-			performanceTelemetryService.recordMetrics(executionId, config, executionPhaseTimings.snapshot(), counters);
-		} catch (Exception exception) {
-			log.warn("Could not record performance telemetry for execution {}", executionId, exception);
-		}
+		telemetryConsolidation.consolidate(ownership, ExecutionType.INVENTORY, context, config);
 	}
 }

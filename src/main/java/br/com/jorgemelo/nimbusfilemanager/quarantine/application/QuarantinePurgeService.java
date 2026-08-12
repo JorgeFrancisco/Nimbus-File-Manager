@@ -5,7 +5,8 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -82,13 +83,11 @@ class QuarantinePurgeService extends LocalizedComponent {
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
 
-		LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
+		Instant cutoff = Instant.now(clock).minus(Duration.ofDays(days));
 
-		List<Movement> overdue = movementRepository
-				.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(MovementStatus.MOVED,
-						QuarantineConstants.QUARANTINED_REASONS, cutoff,
-						PageRequest.of(0, QuarantineConstants.MAX_PER_RUN))
-				.getContent();
+		List<Movement> overdue = movementRepository.findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(
+				MovementStatus.MOVED, QuarantineConstants.QUARANTINED_REASONS, cutoff,
+				PageRequest.of(0, QuarantineConstants.MAX_PER_RUN)).getContent();
 
 		// Nothing overdue is asked before this pass is queued, so getting here means
 		// the last item was expunged in between; the row exists either way and says
@@ -109,8 +108,7 @@ class QuarantinePurgeService extends LocalizedComponent {
 	 * disk are reconciled (record cleaned). Ids that are not/no longer quarantined
 	 * are skipped.
 	 */
-	QuarantinePurgeResult purgeSelected(List<UUID> movementIds, Execution execution,
-			ExecutionOwnership ownership) {
+	QuarantinePurgeResult purgeSelected(List<UUID> movementIds, Execution execution, ExecutionOwnership ownership) {
 		if (movementIds == null || movementIds.isEmpty()) {
 			return new QuarantinePurgeResult(0, 0, 0, 0, 0, 0);
 		}
@@ -137,7 +135,7 @@ class QuarantinePurgeService extends LocalizedComponent {
 		List<Movement> selected = new ArrayList<>();
 
 		for (UUID movementId : movementIds) {
-			Movement movement = movementRepository.findByPublicId(movementId).orElse(null);
+			Movement movement = movementRepository.findByMovementPublicId(movementId).orElse(null);
 
 			if (movement != null && movement.getStatus() == MovementStatus.MOVED
 					&& QuarantineConstants.QUARANTINED_REASONS.contains(movement.getReason())) {
@@ -221,10 +219,10 @@ class QuarantinePurgeService extends LocalizedComponent {
 	}
 
 	/**
-	 * What the screen shows when the purge ends. A pass that deleted nothing is
-	 * the one the person has to be told about in words - "0 apagados" reads as
-	 * success - so it says which of the three reasons stopped it and what to do
-	 * about it, instead of the four counters that describe a pass that worked.
+	 * What the screen shows when the purge ends. A pass that deleted nothing is the
+	 * one the person has to be told about in words - "0 apagados" reads as success
+	 * - so it says which of the three reasons stopped it and what to do about it,
+	 * instead of the four counters that describe a pass that worked.
 	 */
 	private ExecutionMessage outcome(int purged, int skipped, int busy, int errors) {
 		if (purged == 0 && busy > 0) {
@@ -276,7 +274,7 @@ class QuarantinePurgeService extends LocalizedComponent {
 				break;
 			}
 
-			Path quarantine = PathUtils.normalizePath(movement.getTargetPath());
+			Path quarantine = PathUtils.normalizePath(movement.getRequestedTargetPath());
 
 			try (var _ = operationLockService.acquire(ExecutionType.QUARANTINE_PURGE, quarantine)) {
 				// Re-check under the lock: never clean a record whose file is actually there.
@@ -300,8 +298,7 @@ class QuarantinePurgeService extends LocalizedComponent {
 
 		// No errors to count: an item held by another operation, or whose file came
 		// back under the lock, was kept on purpose - the next pass looks again.
-		purgeLog.finish(ownership, absent.size(), removed, kept, 0,
-				QuarantineMessages.cleanupCompleted(removed, kept));
+		purgeLog.finish(ownership, absent.size(), removed, kept, 0, QuarantineMessages.cleanupCompleted(removed, kept));
 
 		return removed;
 	}
@@ -326,7 +323,7 @@ class QuarantinePurgeService extends LocalizedComponent {
 	}
 
 	private Outcome purgeOne(Execution execution, Movement movement) {
-		Path quarantine = PathUtils.normalizePath(movement.getTargetPath());
+		Path quarantine = PathUtils.normalizePath(movement.getRequestedTargetPath());
 
 		try (var _ = operationLockService.acquire(ExecutionType.QUARANTINE_PURGE, quarantine)) {
 			boolean fileWasPresent = Files.exists(quarantine);

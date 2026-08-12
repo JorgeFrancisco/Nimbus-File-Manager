@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -14,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueueNotifier;
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.QueueAdmissionLockRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
@@ -30,45 +32,62 @@ import lombok.extern.slf4j.Slf4j;
  * another.
  *
  * <p>
- * Duplicate requests are refused by the database rather than by a look-then-act
- * check: two clicks arriving together would both find nothing and both insert.
- * A violation of the partial unique index means an identical request is already
- * waiting or running, and the honest answer to "please scan this folder again"
- * is the scan that is already coming.
+ * <b>Admission is what makes this safe inside somebody else's transaction.</b>
+ * The template below propagates as {@code REQUIRED}, so a caller already in a
+ * transaction is joined rather than wrapped - and a refusal there marks
+ * <em>that</em> transaction rollback-only. The caller learns of it at its own
+ * commit, far from any {@code catch}: an {@code UnexpectedRollbackException}
+ * that broke the Files screen on a second listing, and an inventory batch that
+ * lost every write it had made, in silence. Both were measured against a real
+ * PostgreSQL before they were fixed.
  *
  * <p>
- * The row and the wake-up share one transaction, in that order, and the
- * transaction is explicit here rather than declarative because the duplicate
- * has to be caught outside it: a violation leaves the transaction unable to
- * commit, so catching it inside an {@code @Transactional} method would swap one
- * exception for another instead of answering "already queued".
+ * So a refusal is no longer part of the ordinary path. Every admission takes a
+ * transaction advisory lock on the identity first, then looks, then writes. A
+ * second caller waits rather than races, and by the time it looks the first has
+ * committed and there is something to find - which is the honest answer to
+ * "please scan this folder again": the scan that is already coming.
  *
  * <p>
- * <strong>A refusal is logged by the persistence layer before it can get
- * here.</strong> Hibernate reports every {@code SQLException} at error level on
- * its way out, so a duplicate that was refused exactly as designed still leaves
- * an error in the log. Nothing in this class can precede that: the writing
- * happens below the level any {@code catch} reaches.
+ * <b>Three policies, one mechanism.</b> All that differs between them is which
+ * statuses already represent the intention. {@link #enqueue} and
+ * {@link #enqueueAll} yield to one that is waiting; {@link #enqueueOrExisting}
+ * answers with it; and {@link #enqueueUnlessAlreadyActive} counts a running one
+ * as representing it too. The locking, the ordering and the writing are
+ * identical for all of them and live here - never in a caller, which is what
+ * keeps the protocol in one place.
  *
  * <p>
- * So the answer is to ask before inserting, rather than to insert and be
- * refused. That removes the case which is not a race at all - the request that
- * was already on the queue, committed long before anybody asked again, which is
- * what every boot looks like once recovery has put the previous one back. What
- * it cannot remove is the genuine race, where two callers both find nothing and
- * both insert; there the index refuses one of them, and the error it writes
- * stays. That is known noise, and the alternative is worse than the noise.
+ * <b>Only a caller that repeats itself may treat a running execution as its
+ * answer</b>, and that is one caller: the timer. Everyone else is reacting to
+ * something observed - a walk that found a divergence, a screen showing an entry
+ * the disk no longer has - and a running execution has already looked at what it
+ * looked at. It cannot take in a fact that arrived afterwards, and the caller
+ * cannot hand one to work in progress. The waiting successor is what carries
+ * that fact, which is the whole of the 1 + 1 rule: refusing it drops an
+ * observation nothing makes again on its own, and no later pass is owed for it.
  *
  * <p>
- * The alternative would be {@code INSERT ... ON CONFLICT DO NOTHING}, which has
- * to be written by hand - and the insert it would replace is generated from the
- * entity: thirty-odd columns, the defaults its {@code @PrePersist} fills in, an
- * embedded status message, a JSON column and a generated key. Hand-writing it
- * would put a second description of how an execution is stored beside the first,
- * whose way of going wrong is a column added to the entity and forgotten in the
- * SQL - data silently not saved, on the one primitive every request in the
- * product goes through. Suppressing the logger instead would hide integrity
- * violations that are real. Neither trade is worth a log line.
+ * <b>The unique indexes remain the authority.</b> Nothing here defines what
+ * makes two requests equivalent; the partial indexes do, and the catch below
+ * stays for any path that somehow reaches them without having taken the lock.
+ * What changed is that reaching them is no longer how deduplication works.
+ *
+ * <p>
+ * That is also why the insert is still the entity's own. {@code INSERT ... ON
+ * CONFLICT DO NOTHING} would have to be written by hand, and the insert it
+ * replaces is generated from a mapping with thirty-odd columns, the defaults its
+ * {@code @PrePersist} fills in, an embedded status message, a JSON column and a
+ * generated key. A second description of how an execution is stored fails by a
+ * column added to the entity and forgotten in the SQL - data silently not saved,
+ * on the one primitive every request in the product goes through.
+ *
+ * <p>
+ * <strong>A refusal, when one does happen, is logged by the persistence layer
+ * before it can get here.</strong> Hibernate reports every {@code SQLException}
+ * at error level on its way out, so nothing in this class can precede it: the
+ * writing happens below the level any {@code catch} reaches. That is now a rare
+ * event rather than the routine one it used to be.
  */
 @Slf4j
 @Service
@@ -87,6 +106,17 @@ public class ExecutionEnqueueService {
 	private static final Set<ExecutionStatus> WAITING = Set.of(ExecutionStatus.PENDING);
 
 	/**
+	 * What already represents a standing intention, for the callers that have one.
+	 *
+	 * <p>
+	 * Both statuses, which is exactly what {@link #WAITING} may not be. The 1 + 1
+	 * rule exists so a person's second request is never dropped on the floor; a
+	 * timer has no second request to lose - it has the same one, again - so for it
+	 * anything active already says what the tick was going to say.
+	 */
+	private static final Set<ExecutionStatus> ACTIVE = Set.of(ExecutionStatus.PENDING, ExecutionStatus.RUNNING);
+
+	/**
 	 * The indexes whose violation is a deduplication answer rather than a fault,
 	 * named in {@code V16__execution_becomes_the_work_queue.sql}. Any other
 	 * integrity violation is somebody else's problem and is not to be reported as
@@ -100,23 +130,95 @@ public class ExecutionEnqueueService {
 
 	private final ExecutionRepository executionRepository;
 	private final ExecutionQueueNotifier executionQueueNotifier;
+	private final QueueAdmissionLockRepository queueAdmissionLockRepository;
 	private final TransactionTemplate writeTransaction;
 	private final Clock clock;
 
 	public ExecutionEnqueueService(ExecutionRepository executionRepository,
-			ExecutionQueueNotifier executionQueueNotifier, PlatformTransactionManager transactionManager,
-			Clock clock) {
+			ExecutionQueueNotifier executionQueueNotifier,
+			QueueAdmissionLockRepository queueAdmissionLockRepository,
+			PlatformTransactionManager transactionManager, Clock clock) {
 		this.executionRepository = executionRepository;
 		this.executionQueueNotifier = executionQueueNotifier;
+		this.queueAdmissionLockRepository = queueAdmissionLockRepository;
 		this.writeTransaction = new TransactionTemplate(transactionManager);
 		this.clock = clock;
 	}
 
 	/**
 	 * @return the queued execution, or the empty optional when an identical
-	 * request is already pending or running
+	 * request is already waiting
 	 */
 	public Optional<Execution> enqueue(Execution request) {
+		return admitAll(List.of(request), WAITING).getFirst();
+	}
+
+	/**
+	 * Every request of one transaction, admitted together, under the same rule
+	 * {@link #enqueue} applies: a waiting request refuses a second one, a running
+	 * one does not.
+	 *
+	 * <p>
+	 * <b>One call per transaction, and that is a rule rather than a convenience.</b>
+	 * Admission takes an advisory lock per identity and holds it until the caller
+	 * commits, so a transaction admitting several requests holds several locks. Two
+	 * transactions taking the same pair in opposite orders would deadlock - the
+	 * 23505 traded for a 40P01 - and the only thing that rules that out is a total
+	 * order over the keys, which can only be imposed by whoever sees the whole set.
+	 * Splitting one transaction's admissions across two calls gives two ordered
+	 * sets with no order between them, and the cycle is back.
+	 *
+	 * @return one answer per request, in the order given: the queued execution, or
+	 * empty where an equivalent one was already waiting
+	 */
+	public List<Optional<Execution>> enqueueAll(List<Execution> requests) {
+		return admitAll(requests, WAITING);
+	}
+
+	/**
+	 * Takes the locks for the whole set, in ascending key order, and only then
+	 * looks and writes. Nothing here decides what equivalence means - the statuses
+	 * passed in say which admission this is, and the unique indexes remain the last
+	 * word.
+	 */
+	private List<Optional<Execution>> admitAll(List<Execution> requests, Set<ExecutionStatus> blocking) {
+		queueAdmissionLockRepository.take(admissionKeysOf(requests));
+
+		return requests.stream().map(request -> admitOne(request, blocking)).toList();
+	}
+
+	/**
+	 * The identities this set needs held, deduplicated and sorted by the very
+	 * number the lock is taken on. A request without a deduplication key has no
+	 * identity to serialise on and takes no lock: nothing can be equivalent to it,
+	 * so nothing can race it.
+	 */
+	private Long[] admissionKeysOf(List<Execution> requests) {
+		return requests.stream().filter(request -> request.getDedupKey() != null)
+				.map(request -> QueueAdmissionKey.of(request.getExecutionType(), request.getDedupKey())).distinct()
+				.sorted().toArray(Long[]::new);
+	}
+
+	private Optional<Execution> admitOne(Execution request, Set<ExecutionStatus> blocking) {
+		if (equivalent(request, blocking).isPresent()) {
+			log.debug("A {} for {} is already represented; the request it would repeat was not queued again",
+					request.getExecutionType(), request.getDedupKey());
+
+			return Optional.empty();
+		}
+
+		return insert(request);
+	}
+
+	/**
+	 * The insert itself, with the refusal still caught.
+	 *
+	 * <p>
+	 * Unreachable in the ordinary case now, and kept anyway: the indexes are the
+	 * authority, and a path that somehow reaches one without having taken the lock
+	 * must still be answered rather than thrown.
+	 */
+	private Optional<Execution> insert(Execution request) {
 		request.setStatus(ExecutionStatus.PENDING);
 		request.setCreatedAt(LocalDateTime.now(clock));
 		request.setAvailableAt(request.getCreatedAt());
@@ -168,6 +270,39 @@ public class ExecutionEnqueueService {
 	}
 
 	/**
+	 * The same request, for a caller that will make it again on its own - and
+	 * therefore has nothing to gain from a successor.
+	 *
+	 * <p>
+	 * A timer asks the same question on every tick. When the work takes longer than
+	 * the interval - a reconcile of a hundred and forty thousand files against a
+	 * five minute tick - the 1 + 1 rule leaves one running and one always waiting,
+	 * and the queue never drains: every pass is immediately followed by the
+	 * successor the previous tick left, while the tick after that leaves another.
+	 * Observed as five reconciles in fifteen minutes over one library, two of them
+	 * ending in error having examined nothing.
+	 *
+	 * <p>
+	 * So a periodic request is admitted only while nothing equivalent is active.
+	 * Nothing is lost by refusing it: the intention is already represented, and the
+	 * next tick comes anyway.
+	 *
+	 * <p>
+	 * <b>This is admission, not a second deduplication.</b> The unique indexes stay
+	 * the authority - two ticks that somehow read "nothing active" together still
+	 * meet the same refusal every other caller meets, and one of them is answered
+	 * with the row the other wrote. What this adds is the question asked before the
+	 * insert, so the ordinary case is a decision rather than an integrity violation
+	 * in the log.
+	 *
+	 * @return the queued execution, or empty when one was already active - which is
+	 * an answer rather than a failure
+	 */
+	public Optional<Execution> enqueueUnlessAlreadyActive(Execution request) {
+		return admitAll(List.of(request), ACTIVE).getFirst();
+	}
+
+	/**
 	 * The request already on the queue, asked before inserting rather than after
 	 * being refused.
 	 *
@@ -188,12 +323,22 @@ public class ExecutionEnqueueService {
 	 * being queued.
 	 */
 	private Optional<Execution> alreadyWaiting(Execution request) {
+		return equivalent(request, WAITING);
+	}
+
+	/**
+	 * Whether something equivalent is already there, over whichever statuses the
+	 * admission in hand treats as blocking. One predicate for all three policies,
+	 * because the question never changes - only the answer's scope does. Without a
+	 * key there is nothing to be equivalent to, so nothing is refused.
+	 */
+	private Optional<Execution> equivalent(Execution request, Set<ExecutionStatus> blocking) {
 		if (request.getDedupKey() == null) {
 			return Optional.empty();
 		}
 
 		return executionRepository.findFirstByExecutionTypeAndDedupKeyAndStatusInOrderByCreatedAtDesc(
-				request.getExecutionType(), request.getDedupKey(), WAITING);
+				request.getExecutionType(), request.getDedupKey(), blocking);
 	}
 
 	/**

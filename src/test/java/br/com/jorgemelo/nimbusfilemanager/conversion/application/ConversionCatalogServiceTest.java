@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.PlacedConversion;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryPersistenceService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryPersistenceResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.InventoryPersistenceAction;
@@ -24,19 +25,26 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptio
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFacade;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class ConversionCatalogServiceTest {
 
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
 	private final InventoryPersistenceService inventoryPersistenceService = mock(InventoryPersistenceService.class);
 	private final MetadataFacade metadataFacade = mock(MetadataFacade.class);
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final ConversionCatalogService service = new ConversionCatalogService(inventoryPersistenceService,
-			metadataFacade, appSettingService);
+			metadataFacade);
 
-	private final MetadataResult metadata = mock(MetadataResult.class);
+	/**
+	 * A real result rather than a mock: what the service saves is this one rebuilt
+	 * with the digest the move already proved, and a mock cannot be rebuilt.
+	 */
+	private final MetadataResult metadata = MetadataResult.builder().build();
 
 	private Path library;
 	private Path converted;
@@ -52,7 +60,7 @@ class ConversionCatalogServiceTest {
 		// The ordinary answer: a converted file the catalog had never heard of. The
 		// tests below are about where and with what it is catalogued, so they all get
 		// this and only the revival test says otherwise.
-		when(inventoryPersistenceService.save(any(), any(), any(), any()))
+		when(inventoryPersistenceService.save(any(), any(), any()))
 				.thenReturn(new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.CREATED));
 	}
 
@@ -65,51 +73,45 @@ class ConversionCatalogServiceTest {
 	 */
 	@Test
 	void saysWhenCataloguingBroughtAMissingEntryBackToLife() {
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(metadata);
 
-		Assertions.assertThat(service.catalog(converted, null)).as("an entry the catalog had never lost").isFalse();
+		Assertions.assertThat(service.catalog(placement(converted), null, metrics))
+				.as("an entry the catalog had never lost").isFalse();
 
-		when(inventoryPersistenceService.save(any(), any(), any(), any())).thenReturn(
+		when(inventoryPersistenceService.save(any(), any(), any())).thenReturn(
 				new InventoryPersistenceResult(ProcessResult.ANALYZED, InventoryPersistenceAction.REACTIVATED));
 
-		Assertions.assertThat(service.catalog(converted, null)).isTrue();
+		Assertions.assertThat(service.catalog(placement(converted), null, metrics)).isTrue();
 	}
 
 	@Test
 	void catalogsTheConvertedFileUnderTheConfiguredLibraryRoot() {
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(metadata);
 
-		service.catalog(converted, null);
+		service.catalog(placement(converted), null, metrics);
 
-		verify(inventoryPersistenceService).save(eq(converted), eq(library), eq(metadata), any());
+		verify(inventoryPersistenceService).save(eq(converted), savedMetadata.capture(), any());
+
+		Assertions.assertThat(savedMetadata.getValue().getSha256()).isEqualTo("digest-proved-by-the-move");
 	}
 
 	@Test
 	void forcesTheAnalysisSoAStaleRowAtTheSamePathIsRewrittenNotCached() {
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(appSettingService.booleanValue(SettingsConstants.WATCH_CALCULATE_HASHES, false)).thenReturn(true);
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(metadata);
 
-		service.catalog(converted, null);
+		service.catalog(placement(converted), null, metrics);
 
 		ArgumentCaptor<MetadataOptions> options = ArgumentCaptor.forClass(MetadataOptions.class);
 
-		verify(inventoryPersistenceService).save(any(), any(), any(), options.capture());
+		verify(inventoryPersistenceService).save(any(), savedMetadata.capture(), options.capture());
 
 		Assertions.assertThat(options.getValue().forceAnalysis()).isTrue();
-		Assertions.assertThat(options.getValue().calculateHashes()).isTrue();
-	}
 
-	@Test
-	void fallsBackToTheContainingFolderWhileNoLibraryIsConfigured() {
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn("");
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(metadata);
-
-		service.catalog(converted, null);
-
-		verify(inventoryPersistenceService).save(eq(converted), eq(converted.getParent()), eq(metadata), any());
+		// Not the library setting speaking: the move that placed the file read all of
+		// it to prove what it holds, so asking the extractor to hash it again would be
+		// a third full read for an answer already in hand.
+		Assertions.assertThat(options.getValue().calculateHashes()).isFalse();
+		Assertions.assertThat(savedMetadata.getValue().getSha256()).isEqualTo("digest-proved-by-the-move");
 	}
 
 	/**
@@ -121,18 +123,17 @@ class ConversionCatalogServiceTest {
 	void keepsTheDateOfTheFileItReplacesWhenTheNewOneOnlyHasAFilesystemTimestamp() {
 		LocalDateTime original = LocalDateTime.of(2011, Month.MARCH, 4, 18, 20);
 
-		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4")
+		MetadataResult extracted = MetadataResult.builder()
 				.captureDate(LocalDateTime.of(2026, Month.JULY, 28, 15, 48)).dateSource(DateSource.FILE_MODIFIED_AT)
 				.build();
 
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(extracted);
 
-		service.catalog(converted, new ResolvedMediaDate(original, DateSource.MEDIA_INFO));
+		service.catalog(placement(converted), new ResolvedMediaDate(original, DateSource.MEDIA_INFO), metrics);
 
 		ArgumentCaptor<MetadataResult> saved = ArgumentCaptor.forClass(MetadataResult.class);
 
-		verify(inventoryPersistenceService).save(any(), any(), saved.capture(), any());
+		verify(inventoryPersistenceService).save(any(), saved.capture(), any());
 
 		Assertions.assertThat(saved.getValue().getCaptureDate()).isEqualTo(original);
 		Assertions.assertThat(saved.getValue().getDateSource()).isEqualTo(DateSource.MEDIA_INFO);
@@ -146,18 +147,18 @@ class ConversionCatalogServiceTest {
 	void keepsTheExtractedDateWhenItIsAtLeastAsTrustworthyAsTheOldOne() {
 		LocalDateTime embedded = LocalDateTime.of(2011, Month.MARCH, 4, 18, 20);
 
-		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4").captureDate(embedded)
+		MetadataResult extracted = MetadataResult.builder().captureDate(embedded)
 				.dateSource(DateSource.MEDIA_INFO).build();
 
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(extracted);
 
-		service.catalog(converted,
-				new ResolvedMediaDate(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0), DateSource.FILE_NAME));
+		service.catalog(placement(converted),
+				new ResolvedMediaDate(LocalDateTime.of(2020, Month.JANUARY, 1, 0, 0), DateSource.FILE_NAME),
+				metrics);
 
 		ArgumentCaptor<MetadataResult> saved = ArgumentCaptor.forClass(MetadataResult.class);
 
-		verify(inventoryPersistenceService).save(any(), any(), saved.capture(), any());
+		verify(inventoryPersistenceService).save(any(), saved.capture(), any());
 
 		Assertions.assertThat(saved.getValue().getCaptureDate()).isEqualTo(embedded);
 		Assertions.assertThat(saved.getValue().getDateSource()).isEqualTo(DateSource.MEDIA_INFO);
@@ -166,15 +167,29 @@ class ConversionCatalogServiceTest {
 	/** A source row with no date of its own has nothing to lend. */
 	@Test
 	void aSourceWithoutADateLeavesTheExtractionAlone() {
-		MetadataResult extracted = MetadataResult.builder().fileName("clip.mp4")
+		MetadataResult extracted = MetadataResult.builder()
 				.captureDate(LocalDateTime.of(2026, Month.JULY, 28, 15, 48)).dateSource(DateSource.FILE_MODIFIED_AT)
 				.build();
 
-		when(appSettingService.stringValue(eq(SettingsConstants.WATCH_FOLDER), any())).thenReturn(library.toString());
-		when(metadataFacade.extract(eq(converted), any())).thenReturn(extracted);
+		when(metadataFacade.extract(eq(converted), any(), any())).thenReturn(extracted);
 
-		service.catalog(converted, new ResolvedMediaDate(null, DateSource.UNKNOWN));
+		service.catalog(placement(converted), new ResolvedMediaDate(null, DateSource.UNKNOWN), metrics);
 
-		verify(inventoryPersistenceService).save(any(), any(), eq(extracted), any());
+		verify(inventoryPersistenceService).save(any(), savedMetadata.capture(), any());
+
+		Assertions.assertThat(savedMetadata.getValue().getCaptureDate()).isEqualTo(extracted.getCaptureDate());
+		Assertions.assertThat(savedMetadata.getValue().getDateSource()).isEqualTo(extracted.getDateSource());
+	}
+
+	/**
+	 * The encode where the library will keep it, carrying the digest the verified
+	 * move proved of it. Never a null baseline: the placement reads the whole file
+	 * twice to establish it, and the catalog is entitled to that answer rather
+	 * than to a third reading of a multi-gigabyte encode.
+	 */
+	private final ArgumentCaptor<MetadataResult> savedMetadata = ArgumentCaptor.forClass(MetadataResult.class);
+
+	private static PlacedConversion placement(Path path) {
+		return new PlacedConversion(path, new MoveBaseline(1024L, "digest-proved-by-the-move"));
 	}
 }

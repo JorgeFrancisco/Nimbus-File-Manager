@@ -71,11 +71,24 @@ public class ExecutionActivityService {
 			return ExecutionActivitySnapshot.idle();
 		}
 
-		return new ExecutionActivitySnapshot(active.getFirst(), active.subList(1, active.size()), active.size());
+		List<ExecutionActivity> others = active.subList(1, active.size());
+
+		return new ExecutionActivitySnapshot(active.getFirst(), others, running(active),
+				active.size() - running(active),
+				executionLabels.othersInFlight(running(others), others.size() - running(others)));
+	}
+
+	/**
+	 * Being worked on, as opposed to waiting for a worker. Only these two states
+	 * are active at all, so what is not running is queued.
+	 */
+	private int running(List<ExecutionActivity> activities) {
+		return (int) activities.stream().filter(activity -> ExecutionStatus.RUNNING.name().equals(activity.status()))
+				.count();
 	}
 
 	private ExecutionActivity toActivity(Execution execution) {
-		return new ExecutionActivity(UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+		return new ExecutionActivity(UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()),
 				execution.getExecutionType().name(), executionLabels.type(execution.getExecutionType()),
 				execution.getStatus().name(), executionLabels.status(execution.getStatus()), execution.getSourcePath(),
 				executionMapper.percentComplete(execution), executionMapper.currentItemPercent(execution),
@@ -84,6 +97,6 @@ public class ExecutionActivityService {
 	}
 
 	private String href(Execution execution) {
-		return "/app/executions/" + UuidV7.orLegacy(execution.getPublicId(), execution.getId());
+		return "/app/executions/" + UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId());
 	}
 }

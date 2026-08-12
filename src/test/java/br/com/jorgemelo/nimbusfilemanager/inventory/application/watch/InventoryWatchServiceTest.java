@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -31,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -50,7 +52,7 @@ import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
@@ -69,8 +71,7 @@ import ch.qos.logback.core.read.ListAppender;
 @Isolated
 class InventoryWatchServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
 	private final ScanExclusionService exclusions = mock(ScanExclusionService.class);
 	private final ExecutionEnqueueService enqueueService = mock(ExecutionEnqueueService.class);
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
@@ -104,7 +105,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 		service.reconfigure();
 
 		Files.writeString(tempDir.resolve("new-photo.jpg"), "test");
@@ -130,7 +131,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.startConfiguredMonitor();
 
@@ -150,7 +151,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 		service.reconfigureAndInventory();
 
 		verify(launcher).launch(any(), any());
@@ -170,7 +171,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.startConfiguredMonitor();
 
@@ -196,7 +197,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.reconfigure();
 
@@ -230,7 +231,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		Method pollEvents = InventoryWatchService.class.getDeclaredMethod("pollEvents");
 
@@ -554,7 +555,7 @@ class InventoryWatchServiceTest {
 	void stopDrainsThePollExecutorGracefully() throws Exception {
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
 				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class),
-				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
+				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate(), recognisesNothing());
 
 		service.stop();
 
@@ -575,7 +576,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
 				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
-				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
+				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate(), recognisesNothing());
 
 		service.stop();
 
@@ -593,7 +594,7 @@ class InventoryWatchServiceTest {
 	void stopIsIdempotentAndSafeToCallTwice() throws Exception {
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
 				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class),
-				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+				watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		service.stop();
 		service.stop();
@@ -609,7 +610,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.stop();
 
@@ -630,7 +631,7 @@ class InventoryWatchServiceTest {
 		// cancel(true)'d poll thread carries its interrupt into a shutdown-time query.
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
 				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
-				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -666,7 +667,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), queries,
 				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
-				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate());
+				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
 
@@ -714,7 +715,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+				watchProps(true), new BackgroundWorkGate(), recognisesNothing());
 
 		await().atMost(Duration.ofSeconds(6)).until(() -> created.get() == 1);
 
@@ -747,7 +748,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
-				watchProps(true), new BackgroundWorkGate());
+				watchProps(true), new BackgroundWorkGate(), recognisesNothing());
 
 		service.startConfiguredMonitor();
 
@@ -777,7 +778,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
-				watchProps(false), new BackgroundWorkGate());
+				watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		assertThat(service.reconfigure()).isTrue();
 		assertThat(service.reconfigure()).as("the same folder is already being watched").isFalse();
@@ -798,7 +799,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, mock(InventoryLauncherService.class), idleQueries(), enqueue(),
 				executions(), mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
-				watchProps(false), new BackgroundWorkGate());
+				watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		assertThat(service.reconfigure()).isTrue();
 
@@ -857,7 +858,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class),
 				mock(ExecutionQueryService.class), enqueue(), executions(), mock(OperationLockService.class), failing,
-				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate());
+				Clock.systemDefaultZone(), watchProps(true), new BackgroundWorkGate(), recognisesNothing());
 
 		service.reconfigure();
 
@@ -884,7 +885,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(settings, mock(InventoryLauncherService.class), idleQueries(), enqueue(),
 				executions(), mock(OperationLockService.class), countingFactory(created), Clock.systemDefaultZone(),
-				watchProps(false), new BackgroundWorkGate());
+				watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		invokeNoArgs("pollSafely");
 
@@ -906,6 +907,55 @@ class InventoryWatchServiceTest {
 	}
 
 	/**
+	 * Startup has no previous library, and the line must not invent one. The
+	 * unconfigured status carries an empty folder and {@code watchedRecursive} is
+	 * a field nobody has assigned yet, so reporting the pair as a configuration
+	 * printed an empty path and {@code recursive=false} on every boot - which
+	 * reads as a library that was being followed without recursion.
+	 */
+	@Test
+	void theFirstAdoptionIsNotReportedAsAChangeFromAPreviousLibrary() throws Exception {
+		service = new InventoryWatchService(configuredSettings(), mock(InventoryLauncherService.class), idleQueries(),
+				enqueue(), executions(), mock(OperationLockService.class), watchOnlyFactory(),
+				Clock.systemDefaultZone(), watchProps(false), new BackgroundWorkGate(), recognisesNothing());
+
+		List<String> said = logOf("pollSafely");
+
+		// The first line, because adopting is announced before the watcher is built
+		// and the inventory asked for - the two lines that follow it here.
+		Assertions.assertThat(said).first(InstanceOfAssertFactories.STRING).as("it says which library it took up")
+				.contains(tempDir.toString()).contains("recursive=true").as("and claims no previous one")
+				.doesNotContain("previously").doesNotContain("recursive=false");
+	}
+
+	/**
+	 * A real change, on the other hand, is exactly when both ends are worth
+	 * saying: the library switch runs in the worker, so this is how the log of
+	 * this process explains a watcher that moved without anybody asking it here.
+	 */
+	@Test
+	void changingTheConfiguredLibraryIsReportedWithBothEnds() throws Exception {
+		Path moved = Files.createDirectory(tempDir.resolve("moved-to"));
+
+		AppSettingService settings = configuredSettings();
+
+		service = new InventoryWatchService(settings, mock(InventoryLauncherService.class), idleQueries(), enqueue(),
+				executions(), mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(),
+				watchProps(false), new BackgroundWorkGate(), recognisesNothing());
+
+		invokeNoArgs("pollSafely");
+
+		when(settings.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(moved.toString());
+		when(settings.booleanValue(SettingsConstants.WATCH_RECURSIVE, true)).thenReturn(false);
+
+		List<String> said = logOf("pollSafely");
+
+		Assertions.assertThat(said).first(InstanceOfAssertFactories.STRING).as("where it went")
+				.contains(moved.toString()).contains("recursive=false").as("and where it came from")
+				.contains("previously").contains(tempDir.toString()).contains("recursive=true");
+	}
+
+	/**
 	 * A change asked for the pass and the queue refused it, so that change is
 	 * still uncatalogued - and nothing else goes looking for it, because the
 	 * reconcile retires what left rather than cataloguing what arrived. The
@@ -920,7 +970,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.reconfigure();
 
@@ -941,7 +991,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(false),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		service.reconfigure();
 
@@ -976,7 +1026,7 @@ class InventoryWatchServiceTest {
 
 		service = new InventoryWatchService(configuredSettings(), launcher, idleQueries(), enqueue(), executions(),
 				mock(OperationLockService.class), recordingFactory(built), Clock.systemDefaultZone(),
-				watchProps(false), new BackgroundWorkGate());
+				watchProps(false), new BackgroundWorkGate(), recognisesNothing());
 
 		service.reconfigure();
 
@@ -1037,7 +1087,7 @@ class InventoryWatchServiceTest {
 			ExecutionQueryService queries) throws Exception {
 		InventoryWatchService built = new InventoryWatchService(settings, launcher, queries, enqueue(), executions(),
 				mock(OperationLockService.class), watchOnlyFactory(), Clock.systemDefaultZone(), watchProps(true),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 
 		Field executorField = InventoryWatchService.class.getDeclaredField("executor");
 
@@ -1120,6 +1170,30 @@ class InventoryWatchServiceTest {
 	}
 
 	/**
+	 * The INFO lines the service wrote while that method ran, formatted rather
+	 * than raw: the placeholders are the whole point here, since what is being
+	 * asserted is what a person reads in the log file.
+	 */
+	private List<String> logOf(String method) throws Exception {
+		Logger logger = (Logger) LoggerFactory.getLogger(InventoryWatchService.class);
+
+		ListAppender<ILoggingEvent> appender = new ListAppender<>();
+
+		appender.start();
+
+		logger.addAppender(appender);
+
+		try {
+			invokeNoArgs(method);
+		} finally {
+			logger.detachAppender(appender);
+		}
+
+		return appender.list.stream().filter(event -> event.getLevel() == Level.INFO)
+				.map(ILoggingEvent::getFormattedMessage).toList();
+	}
+
+	/**
 	 * The same mock every time, so a test can verify what was queued without
 	 * having to thread it through the constructor call it does not care about.
 	 */
@@ -1130,4 +1204,20 @@ class InventoryWatchServiceTest {
 	private ExecutionRepository executions() {
 		return executionRepository;
 	}
+
+	/**
+	 * A recognition that recognises nothing, which is what these tests are about:
+	 * they assert when the debounced pass runs and what wakes it, and a change the
+	 * catalog could account for by itself never reaches that pass. Handing over a
+	 * recognition that always declines keeps every one of them asking the question
+	 * it was written to ask.
+	 */
+	private FileChangeRecognition recognisesNothing() {
+		FileChangeRecognition recognition = mock(FileChangeRecognition.class);
+
+		lenient().when(recognition.recognise(any())).thenReturn(false);
+
+		return recognition;
+	}
+
 }

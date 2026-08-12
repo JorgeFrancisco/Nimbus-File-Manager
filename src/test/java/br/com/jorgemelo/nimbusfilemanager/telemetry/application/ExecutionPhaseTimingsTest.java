@@ -27,17 +27,18 @@ class ExecutionPhaseTimingsTest {
 		assertThat(snapshot.get(ExecutionPhaseType.EXTRACTION).items()).isEqualTo(10);
 	}
 
+	/**
+	 * What replaced the clearing: a run gets timings of its own, so what one
+	 * measured is not visible to the next.
+	 */
 	@Test
-	void resetClearsAllPhases() {
-		ExecutionPhaseTimings timings = new ExecutionPhaseTimings();
+	void aFreshSetOfTimingsStartsEmptyAndCannotSeeAnother() {
+		ExecutionPhaseTimings first = new ExecutionPhaseTimings();
 
-		timings.addNanos(ExecutionPhaseType.PERSISTENCE, TimeUnit.MILLISECONDS.toNanos(30));
-		// Populate the item counters too, so reset() must clear both maps (durations
-		// and items), not just the durations.
-		timings.addItems(ExecutionPhaseType.EXTRACTION, 7);
+		first.addNanos(ExecutionPhaseType.PERSISTENCE, TimeUnit.MILLISECONDS.toNanos(30));
+		first.addItems(ExecutionPhaseType.EXTRACTION, 7);
 
-		timings.reset();
-
-		assertThat(timings.snapshot()).isEmpty();
+		assertThat(new ExecutionPhaseTimings().snapshot()).isEmpty();
+		assertThat(first.snapshot()).as("the other one kept everything it measured").isNotEmpty();
 	}
 }

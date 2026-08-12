@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.map.domain.repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -19,15 +20,18 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.MediaGeo
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapAdministrativePinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapExifPinProjection;
 import br.com.jorgemelo.nimbusfilemanager.map.domain.repository.projection.MapMediaItemProjection;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -45,6 +49,9 @@ class MapRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private MediaGeoLocationRepository geoLocationRepository;
@@ -175,17 +182,17 @@ class MapRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 		String extension = fileType == FileType.VIDEO ? "mp4" : "jpg";
 		String path = "C:/Media/" + key + "." + extension;
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + "." + extension).extension(extension)
-				.sizeBytes(1024L).modifiedAt(LocalDateTime.now()).fileType(fileType).build();
+		CatalogFile file = CatalogFile.builder().extension(extension)
+				.sizeBytes(1024L).modifiedAt(Instant.now()).fileType(fileType).build();
 
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/Media")
-				.originalPath(path).originalFolder("C:/Media").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
 		file.setMetadata(MediaMetadata.builder().catalogFile(file).category(FileCategory.MEDIA)
 				.subcategory(MediaSubcategory.CAMERA).captureDate(captureDate).latitude(latitude).longitude(longitude)
 				.build());
 
-		return catalogFileRepository.saveAndFlush(file);
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 	}
 
 	private void resolvePlace(CatalogFile file, String countryCode, String stateName, String cityName) {
@@ -194,6 +201,6 @@ class MapRepositoryIntegrationTest extends SharedPostgresIntegrationTest {
 				.provider(LocationProvider.ADMIN_BOUNDARIES).resolvedAt(LocalDateTime.now()).build();
 
 		geoLocationRepository
-				.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).manual(false).build());
+				.saveAndFlush(MediaGeoLocation.builder().id(file.getId()).place(place).build());
 	}
 }

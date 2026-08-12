@@ -1,6 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -19,6 +18,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.Execut
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.constants.InventoryConstants;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryScanRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.scanner.FileScanner;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.JournalCheckpoint;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
@@ -26,6 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -79,7 +80,9 @@ public class InventoryScanRunner {
 	public void run(Execution execution, InventoryScanRequest request, ExecutionOwnership ownership) {
 		Long executionId = execution.getId();
 
-		telemetryRecorder.reset();
+		// Born here and nowhere else: this run's own accumulators, which no other
+		// execution can reach and which nothing has to clear beforehand.
+		ExecutionMetricsContext metricsContext = new ExecutionMetricsContext();
 
 		// Owned here rather than by the walk so that a pass which was cancelled or
 		// failed halfway still reports what it did before it stopped: the files it
@@ -96,7 +99,7 @@ public class InventoryScanRunner {
 		boolean walked = false;
 
 		try {
-			scan(execution, request, counters, ownership);
+			scan(execution, request, counters, ownership, metricsContext);
 
 			walked = true;
 		} catch (ExecutionCancelledException _) {
@@ -115,7 +118,9 @@ public class InventoryScanRunner {
 		} finally {
 			executionCancellationService.forget(executionId);
 
-			telemetryRecorder.persist(executionId, telemetryRecorder.snapshot());
+			// After the outcome, never before: the aggregate records the run's duration,
+			// and the duration only exists once finished_at is committed.
+			telemetryRecorder.consolidate(ownership, metricsContext);
 
 			// The pass just added media with no fingerprint, and both backlogs stood aside
 			// while it ran. Asking for both matters: resuming only the photo one left
@@ -142,18 +147,19 @@ public class InventoryScanRunner {
 	}
 
 	private void scan(Execution execution, InventoryScanRequest request, InventoryCounters counters,
-			ExecutionOwnership ownership) {
-		countFiles(request, ownership);
+			ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		countFiles(request, ownership, metricsContext);
 
 		try (var _ = operationLockService.acquire(ExecutionType.INVENTORY, request.sourcePath());
-				Stream<Path> files = fileScanner.stream(request.sourcePath(), request.scanOptions())) {
-			writeInBatches(execution, request, files, counters, ownership);
+				Stream<ScannedFile> files = fileScanner.stream(request.sourcePath(), request.scanOptions())) {
+			writeInBatches(execution, request, files, counters, ownership, metricsContext);
 		}
 
 		finish(counters, ownership);
 	}
 
-	private void countFiles(InventoryScanRequest request, ExecutionOwnership ownership) {
+	private void countFiles(InventoryScanRequest request, ExecutionOwnership ownership,
+			ExecutionMetricsContext metricsContext) {
 		executionProgressService.updatePhase(ownership, ExecutionPhase.SCANNING, ExecutionStepType.SCANNING_STARTED,
 				ExecutionMessages.countingFiles());
 
@@ -161,7 +167,7 @@ public class InventoryScanRunner {
 
 		long total = fileScanner.count(request.sourcePath(), request.scanOptions());
 
-		telemetryRecorder.recordScanCount(System.nanoTime() - scanStart, total);
+		telemetryRecorder.recordScanCount(metricsContext, System.nanoTime() - scanStart, total);
 
 		executionProgressService.updateTotal(ownership, (int) Math.min(total, Integer.MAX_VALUE));
 
@@ -174,24 +180,24 @@ public class InventoryScanRunner {
 	 * lazily, so a library of any size is never held in memory - the same property
 	 * the chunk-oriented step had, for the same reason.
 	 */
-	private void writeInBatches(Execution execution, InventoryScanRequest request, Stream<Path> files,
-			InventoryCounters counters, ExecutionOwnership ownership) {
-		List<Path> batch = new ArrayList<>(InventoryConstants.BATCH_SIZE);
+	private void writeInBatches(Execution execution, InventoryScanRequest request, Stream<ScannedFile> files,
+			InventoryCounters counters, ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		List<ScannedFile> batch = new ArrayList<>(InventoryConstants.BATCH_SIZE);
 
-		for (Path file : (Iterable<Path>) files::iterator) {
+		for (ScannedFile file : (Iterable<ScannedFile>) files::iterator) {
 			raiseWhenCancelled(execution.getId());
 
 			batch.add(file);
 
 			if (batch.size() == InventoryConstants.BATCH_SIZE) {
-				inventoryBatchWriter.write(execution, request, List.copyOf(batch), counters, ownership);
+				inventoryBatchWriter.write(execution, request, List.copyOf(batch), counters, ownership, metricsContext);
 
 				batch.clear();
 			}
 		}
 
 		if (!batch.isEmpty()) {
-			inventoryBatchWriter.write(execution, request, List.copyOf(batch), counters, ownership);
+			inventoryBatchWriter.write(execution, request, List.copyOf(batch), counters, ownership, metricsContext);
 		}
 	}
 
@@ -205,7 +211,7 @@ public class InventoryScanRunner {
 		ExecutionStatus status = counters.errors() > 0 ? ExecutionStatus.FINISHED_WITH_ERRORS
 				: ExecutionStatus.FINISHED;
 
-		executionProgressService.finish(ownership, status, counters.found(), counters.analyzed(),
-				counters.cacheHits(), counters.errors(), ExecutionMessages.inventoryCompleted());
+		executionProgressService.finish(ownership, status, counters.found(), counters.analyzed(), counters.cacheHits(),
+				counters.errors(), ExecutionMessages.inventoryCompleted());
 	}
 }

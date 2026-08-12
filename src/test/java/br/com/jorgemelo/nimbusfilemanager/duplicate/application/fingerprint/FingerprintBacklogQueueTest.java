@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -33,16 +34,21 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintB
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnershipGuard;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionTelemetryConsolidation;
 
 /**
  * The backlog as an intention and as a run.
@@ -71,12 +77,15 @@ class FingerprintBacklogQueueTest {
 
 	private final SimilarityLauncher similarityLauncher = mock(SimilarityLauncher.class);
 
+	private final ExecutionTelemetryConsolidation telemetryConsolidation = mock(
+			ExecutionTelemetryConsolidation.class);
+
 	private final PhotoFingerprintJobHandler photos = new PhotoFingerprintJobHandler(photoBacklog,
 			similarityLauncher, executionProgressService, executionCancellationService,
-			executionPayloadCodec);
+			executionPayloadCodec, telemetryConsolidation);
 	private final VideoFingerprintJobHandler videos = new VideoFingerprintJobHandler(videoBacklog,
 			executionProgressService, executionCancellationService, executionPayloadCodec,
-			similarityLauncher);
+			telemetryConsolidation, similarityLauncher);
 
 	@BeforeEach
 	void thereIsWorkAndTheQueueAcceptsIt() {
@@ -217,7 +226,7 @@ class FingerprintBacklogQueueTest {
 		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
 		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
 
-		verify(photoBacklog, times(2)).drainPending(any(), any(), any());
+		verify(photoBacklog, times(2)).drainPending(any(), any(), any(), any());
 		verify(photoBacklog, never()).seedRebuild(any());
 	}
 
@@ -228,7 +237,7 @@ class FingerprintBacklogQueueTest {
 		photos.handle(execution(), claimed(payload(1, true)), Takings.taking(1L, 1, guard));
 
 		verify(photoBacklog).seedRebuild(any());
-		verify(photoBacklog).drainPending(any(), any(), any());
+		verify(photoBacklog).drainPending(any(), any(), any(), any());
 	}
 
 	/**
@@ -245,7 +254,7 @@ class FingerprintBacklogQueueTest {
 		photos.handle(execution(), claimed(payload(1, true)), Takings.taking(1L, 2, guard));
 
 		verify(photoBacklog, never()).seedRebuild(any());
-		verify(photoBacklog).drainPending(any(), any(), any());
+		verify(photoBacklog).drainPending(any(), any(), any(), any());
 	}
 
 	/** And a second request is a row of its own, so it tops the list back up. */
@@ -273,7 +282,7 @@ class FingerprintBacklogQueueTest {
 
 		photos.handle(execution(), claimed(payload(1, true)), Takings.taking(1L, 1, guard));
 
-		verify(photoBacklog, never()).drainPending(any(), any(), any());
+		verify(photoBacklog, never()).drainPending(any(), any(), any(), any());
 	}
 
 	/**
@@ -384,7 +393,7 @@ class FingerprintBacklogQueueTest {
 
 		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
 
-		verify(photoBacklog, never()).drainPending(any(), any(), any());
+		verify(photoBacklog, never()).drainPending(any(), any(), any(), any());
 		verify(photoBacklog, never()).seedRebuild(any());
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.REJECTED), any(), any());
 	}
@@ -397,6 +406,32 @@ class FingerprintBacklogQueueTest {
 		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
 
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.CANCELLED), any(), any());
+	}
+
+	/**
+	 * Stepping aside part-way is the same standing aside as stepping aside at the
+	 * start, and has to say so. Reported as cancelled it accused a run that nobody
+	 * cancelled, in the styling of a failure, while its message said it had
+	 * completed - and what it did get done stays on the row either way, for the run
+	 * after it to carry on from.
+	 */
+	@Test
+	void aDrainThatStepsAsidePartWayEndsDeferredRatherThanCancelled() {
+		whenDraining(photoBacklog, new DrainResult(7, 0));
+
+		// Free to start, busy by the time it finished: an inventory began while it ran.
+		when(photoBacklog.pausedByActiveExecution()).thenReturn(false, true);
+
+		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
+
+		ArgumentCaptor<ExecutionCounts> counts = ArgumentCaptor.forClass(ExecutionCounts.class);
+		ArgumentCaptor<ExecutionMessage> message = ArgumentCaptor.forClass(ExecutionMessage.class);
+
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.REJECTED), counts.capture(),
+				message.capture());
+
+		Assertions.assertThat(counts.getValue().moved()).isEqualTo(7);
+		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.duplicates.fingerprintDeferred");
 	}
 
 	@Test
@@ -425,7 +460,7 @@ class FingerprintBacklogQueueTest {
 	@Test
 	void progressIsReportedAgainstTheRow() {
 		when(photoBacklog.status()).thenReturn(new FingerprintBacklogStatus(120, 0, 0));
-		when(photoBacklog.drainPending(any(), any(), any())).thenAnswer(call -> {
+		when(photoBacklog.drainPending(any(), any(), any(), any())).thenAnswer(call -> {
 			ProgressListener progress = call.getArgument(1);
 
 			progress.onProgress(30, 2);
@@ -453,7 +488,7 @@ class FingerprintBacklogQueueTest {
 		List<Boolean> answers = new ArrayList<>();
 
 		when(photoBacklog.status()).thenReturn(new FingerprintBacklogStatus(10, 0, 0));
-		when(photoBacklog.drainPending(any(), any(), any())).thenAnswer(call -> {
+		when(photoBacklog.drainPending(any(), any(), any(), any())).thenAnswer(call -> {
 			BooleanSupplier stop = call.getArgument(0);
 
 			answers.add(stop.getAsBoolean());
@@ -479,12 +514,12 @@ class FingerprintBacklogQueueTest {
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("schema");
 
 		verify(photoBacklog, never()).seedRebuild(any());
-		verify(photoBacklog, never()).drainPending(any(), any(), any());
+		verify(photoBacklog, never()).drainPending(any(), any(), any(), any());
 	}
 
 	private void whenDraining(FingerprintBacklog backlog, DrainResult result) {
 		when(backlog.status()).thenReturn(new FingerprintBacklogStatus(result.processed() + result.failed(), 0, 0));
-		when(backlog.drainPending(any(), any(), any())).thenReturn(result);
+		when(backlog.drainPending(any(), any(), any(), any())).thenReturn(result);
 		// A rebuild that was asked for is a rebuild that ran: what a refused one does
 		// is the subject of the fencing tests, against a real database.
 		lenient().when(backlog.seedRebuild(any())).thenReturn(OptionalLong.of(result.processed()));
@@ -498,6 +533,50 @@ class FingerprintBacklogQueueTest {
 		verify(executionEnqueueService, atLeastOnce()).enqueueOrExisting(queued.capture());
 
 		return queued.getValue();
+	}
+
+	/**
+	 * A drain that threw. The outcome is written here rather than left to the
+	 * dispatcher, because the measurements are consolidated straight afterwards
+	 * and the aggregate records how long the run took - which only exists once
+	 * the row has a finished_at.
+	 */
+	@Test
+	void aDrainThatFailedWritesItsOwnOutcomeAndStillRecordsWhatItCost() {
+		when(photoBacklog.status()).thenReturn(new FingerprintBacklogStatus(1, 0, 0));
+		when(photoBacklog.drainPending(any(), any(), any(), any()))
+				.thenThrow(new IllegalStateException("the decoder died"));
+
+		ExecutionOwnership ownership = Takings.unfenced(42L);
+
+		photos.handle(execution(), claimed(payload(1, false)), ownership);
+
+		verify(executionProgressService).fail(eq(ownership), any());
+		verify(telemetryConsolidation).consolidate(eq(ownership), eq(ExecutionType.FINGERPRINT_PHOTO), any(),
+				isNull());
+	}
+
+	/**
+	 * Losing the locks is not this run failing, so it reaches the dispatcher
+	 * untouched - and what was measured is still offered, for the fence to accept
+	 * or refuse on its own terms.
+	 */
+	@Test
+	void losingTheLocksIsHandedBackRatherThanRecordedAsAFailure() {
+		when(photoBacklog.status()).thenReturn(new FingerprintBacklogStatus(1, 0, 0));
+		when(photoBacklog.drainPending(any(), any(), any(), any()))
+				.thenThrow(new OwnershipLostException("the session went"));
+
+		ExecutionOwnership ownership = Takings.unfenced(42L);
+
+		Execution execution = execution();
+		ClaimedExecution claimed = claimed(payload(1, false));
+
+		Assertions.assertThatThrownBy(() -> photos.handle(execution, claimed, ownership))
+				.isInstanceOf(OwnershipLostException.class);
+
+		verify(executionProgressService, never()).fail(any(), any());
+		verify(telemetryConsolidation).consolidate(eq(ownership), any(), any(), isNull());
 	}
 
 	private Execution execution() {

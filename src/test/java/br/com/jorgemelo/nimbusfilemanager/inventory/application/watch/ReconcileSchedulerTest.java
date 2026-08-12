@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,11 +18,11 @@ import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationPathKey;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionTrigger;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.Inventory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.NimbusFileManagerProperties;
 
@@ -52,7 +53,12 @@ class ReconcileSchedulerTest {
 
 		ArgumentCaptor<Execution> queued = ArgumentCaptor.captor();
 
-		verify(executionEnqueueService).enqueue(queued.capture());
+		// Through the periodic door, and the distinction is the whole point: the
+		// ordinary one admits a successor beside a run, which for a tick that fires
+		// faster than the pass takes means one always waiting and a queue that never
+		// drains. Verified against the exact method so a change back is a red test.
+		verify(executionEnqueueService).enqueueUnlessAlreadyActive(queued.capture());
+		verify(executionEnqueueService, never()).enqueue(any());
 
 		Assertions.assertThat(queued.getValue().getExecutionType()).isEqualTo(ExecutionType.RECONCILE);
 		Assertions.assertThat(queued.getValue().getTriggerEvent()).isEqualTo(ExecutionTrigger.TIMER);
@@ -76,7 +82,7 @@ class ReconcileSchedulerTest {
 
 		ArgumentCaptor<Execution> queued = ArgumentCaptor.captor();
 
-		verify(executionEnqueueService).enqueue(queued.capture());
+		verify(executionEnqueueService).enqueueUnlessAlreadyActive(queued.capture());
 
 		Assertions.assertThat(queued.getValue().getRecursive()).isFalse();
 	}
@@ -90,7 +96,7 @@ class ReconcileSchedulerTest {
 		Path folder = Files.createDirectories(tempDir.resolve("library"));
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
-		when(executionEnqueueService.enqueue(any()))
+		when(executionEnqueueService.enqueueUnlessAlreadyActive(any()))
 				.thenThrow(new IllegalStateException("catalog unreachable"));
 
 		scheduler = scheduler();
@@ -107,7 +113,7 @@ class ReconcileSchedulerTest {
 		Path folder = Files.createDirectories(tempDir.resolve("library"));
 
 		when(appSettingService.stringValue(SettingsConstants.WATCH_FOLDER, "")).thenReturn(folder.toString());
-		when(executionEnqueueService.enqueue(any()))
+		when(executionEnqueueService.enqueueUnlessAlreadyActive(any()))
 				.thenThrow(new IllegalStateException("interrupted"));
 
 		scheduler = scheduler();

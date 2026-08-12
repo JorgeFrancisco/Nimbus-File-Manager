@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -31,13 +32,13 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQuerySe
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionResponse;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSourceFactory;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
@@ -69,8 +70,12 @@ class OfflineBacklogAbsorptionTest {
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final InventoryLauncherService launcher = mock(InventoryLauncherService.class);
 	private final ExecutionQueryService queries = mock(ExecutionQueryService.class);
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	/**
+	 * Asked, and answering that none of these were ours - which is what makes the
+	 * filtering visible: a source that dropped a change anyway would be dropping it
+	 * for some other reason.
+	 */
+	private final SelfWrittenPathRegistry pathRegistry = mock(SelfWrittenPathRegistry.class);
 
 	private final AtomicReference<Optional<ExecutionResponse>> active = new AtomicReference<>(Optional.empty());
 	private final AtomicReference<ExecutionStatus> launchStatus = new AtomicReference<>(ExecutionStatus.PENDING);
@@ -78,7 +83,7 @@ class OfflineBacklogAbsorptionTest {
 	private final AtomicBoolean configuredRecursive = new AtomicBoolean(true);
 	private final List<RecordingFileChangeSource> built = new ArrayList<>();
 
-	private List<Path> nextBacklog = List.of();
+	private List<FileSystemChange> nextBacklog = List.of();
 	private WatchRecoveryReason nextReason;
 	private UUID lastLaunched;
 
@@ -222,7 +227,7 @@ class OfflineBacklogAbsorptionTest {
 		inventoryIsRunning();
 		poll();
 
-		when(executionRepository.findByPublicId(lastLaunched)).thenReturn(Optional.empty());
+		when(executionRepository.findByExecutionPublicId(lastLaunched)).thenReturn(Optional.empty());
 
 		active.set(Optional.empty());
 
@@ -294,9 +299,11 @@ class OfflineBacklogAbsorptionTest {
 	 */
 	@Test
 	void aPathThatIsNoLongerOnDiskCannotBeCoveredByAWalk() throws Exception {
-		List<Path> backlog = new ArrayList<>(backlogOf("still-here.jpg"));
+		List<FileSystemChange> backlog = new ArrayList<>(backlogOf("still-here.jpg"));
 
-		backlog.add(library.resolve("deleted-while-down.jpg"));
+		// Deleted while nothing was watching: the source reports the path and nothing
+		// more, which is exactly what makes a walk unable to settle it.
+		backlog.add(Changes.deleted(library.resolve("deleted-while-down.jpg")));
 
 		startWatching(backlog);
 
@@ -436,7 +443,7 @@ class OfflineBacklogAbsorptionTest {
 	 * Builds the service, adopts the library and runs the startup inventory,
 	 * leaving the backlog in whatever state the case under test needs.
 	 */
-	private void startWatching(List<Path> backlog) {
+	private void startWatching(List<FileSystemChange> backlog) {
 		nextBacklog = backlog;
 
 		service = watchService();
@@ -452,7 +459,7 @@ class OfflineBacklogAbsorptionTest {
 
 		return new InventoryWatchService(settings(), launcher, queries, enqueueService, executionRepository,
 				mock(OperationLockService.class), sourceFactory(), Clock.systemDefaultZone(), watchProps(),
-				new BackgroundWorkGate());
+				new BackgroundWorkGate(), recognisesNothing());
 	}
 
 	/**
@@ -493,18 +500,24 @@ class OfflineBacklogAbsorptionTest {
 	}
 
 	/** Real files, because a walk can only cover a path that is there to walk. */
-	private List<Path> backlogOf(String... names) throws IOException {
+	private List<FileSystemChange> backlogOf(String... names) throws IOException {
 		return backlogIn(library, names);
 	}
 
-	private List<Path> backlogIn(Path folder, String... names) throws IOException {
-		List<Path> paths = new ArrayList<>();
+	/**
+	 * What the source reports having missed while nothing was watching. Changes
+	 * rather than paths: a backlog is a list of things that happened, and a source
+	 * that cannot say what happened to a path says so by leaving the rest of the
+	 * change empty rather than by handing back a bare path.
+	 */
+	private List<FileSystemChange> backlogIn(Path folder, String... names) throws IOException {
+		List<FileSystemChange> changes = new ArrayList<>();
 
 		for (String name : names) {
-			paths.add(Files.writeString(folder.resolve(name), name));
+			changes.add(Changes.created(Files.writeString(folder.resolve(name), name)));
 		}
 
-		return paths;
+		return changes;
 	}
 
 	private RecordingFileChangeSource lastBuilt() {
@@ -526,7 +539,7 @@ class OfflineBacklogAbsorptionTest {
 	 * the watcher, which together are what let the next cycle decide.
 	 */
 	private void inventoryEnded(ExecutionStatus status) {
-		when(executionRepository.findByPublicId(lastLaunched))
+		when(executionRepository.findByExecutionPublicId(lastLaunched))
 				.thenReturn(Optional.of(Execution.builder().status(status).build()));
 
 		active.set(Optional.empty());
@@ -562,5 +575,20 @@ class OfflineBacklogAbsorptionTest {
 
 		field.setAccessible(true);
 		field.setLong(service, 0L);
+	}
+
+	/**
+	 * A recognition that recognises nothing, which is what these tests are about:
+	 * they assert when the debounced pass runs and what wakes it, and a change the
+	 * catalog could account for by itself never reaches that pass. Handing over a
+	 * recognition that always declines keeps every one of them asking the question
+	 * it was written to ask.
+	 */
+	private FileChangeRecognition recognisesNothing() {
+		FileChangeRecognition recognition = mock(FileChangeRecognition.class);
+
+		lenient().when(recognition.recognise(any())).thenReturn(false);
+
+		return recognition;
 	}
 }

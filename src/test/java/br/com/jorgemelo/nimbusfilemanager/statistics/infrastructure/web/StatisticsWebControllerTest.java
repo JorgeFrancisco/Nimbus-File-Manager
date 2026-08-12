@@ -141,7 +141,7 @@ class StatisticsWebControllerTest {
 	void executionDetailExposesRowAndPhases() {
 		ExecutionTelemetryRow row = new ExecutionTelemetryRow(7L, UUID.randomUUID(), ExecutionType.INVENTORY,
 				ExecutionStatus.FINISHED, LocalDateTime.now(), LocalDateTime.now(), 1_000L, 10.0, 100, 0, "3.3.0.13", 3,
-				200, 2, 2, 90L, 8L, 2L);
+				200, 2, 2);
 
 		when(executionTelemetryQueryService.byId(7L)).thenReturn(Optional.of(row));
 		when(executionTelemetryQueryService.phases(7L)).thenReturn(List.of());
@@ -194,7 +194,7 @@ class StatisticsWebControllerTest {
 
 	private ExecutionTelemetryRow row(Long id) {
 		return new ExecutionTelemetryRow(id, UUID.randomUUID(), ExecutionType.INVENTORY, ExecutionStatus.FINISHED,
-				LocalDateTime.now(), LocalDateTime.now(), 1_000L, 10.0, 100, 0, "3.4.0.14", 3, 200, 2, 2, 90L, 8L, 2L);
+				LocalDateTime.now(), LocalDateTime.now(), 1_000L, 10.0, 100, 0, "3.4.0.14", 3, 200, 2, 2);
 	}
 
 	private ExecutionPhase phase(Long executionId, ExecutionPhaseType type, long durationMillis) {

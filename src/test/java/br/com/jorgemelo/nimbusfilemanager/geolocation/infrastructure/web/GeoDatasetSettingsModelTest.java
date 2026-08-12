@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.ui.ExtendedModelMap;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
@@ -29,7 +30,8 @@ class GeoDatasetSettingsModelTest {
 	private final InventoryRunningState inventoryRunningState = new InventoryRunningState(executionRepository);
 	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry = mock(
 			ReverseGeocodingStrategyRegistry.class);
-	private final GeoDatasetSettingsModel model = new GeoDatasetSettingsModel(offlineGeoDataset, mediaLocationService,
+	private final GeoDatasetSettingsModel model = new GeoDatasetSettingsModel(mock(EtaLabels.class), offlineGeoDataset,
+			mediaLocationService,
 			geoRunReader, preferences, inventoryRunningState,
 			reverseGeocodingStrategyRegistry);
 	private final TestingAuthenticationToken authentication = new TestingAuthenticationToken("Admin@Example.com", "pw");

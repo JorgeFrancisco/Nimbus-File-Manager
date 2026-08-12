@@ -23,7 +23,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionJobHandler;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogCollectionMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 
 /**
@@ -54,7 +54,6 @@ class MutationBoundaryArchitectureTest {
 			ROOT + ".organization.application.OrganizationExecutor",
 			ROOT + ".organization.application.OrganizationUndoService",
 			ROOT + ".organization.application.EmptyDirectoryCleaner",
-			ROOT + ".organization.application.ReconcileApplier",
 			ROOT + ".conversion.application.ConversionFilePlacement",
 			ROOT + ".conversion.application.ConversionCommitService",
 			ROOT + ".quarantine.application.QuarantineIntakeService",
@@ -82,8 +81,7 @@ class MutationBoundaryArchitectureTest {
 			ROOT + ".database.application.EmbeddedDatabaseInstaller",
 			ROOT + ".database.infrastructure.PostgresBuildSource",
 			ROOT + ".database.infrastructure.PostgresProcessRunner",
-			ROOT + ".geolocation.application.boundary.BoundaryDatasetManager",
-			ROOT + ".geolocation.application.boundary.BoundaryMetadataStore",
+			ROOT + ".geolocation.application.boundary.GeoDatasetRemoval",
 			ROOT + ".geolocation.infrastructure.boundary.GeoBoundariesSource",
 			ROOT + ".metadata.application.PhotoPerceptualHashService",
 			ROOT + ".security.application.FirstAccessCredential",
@@ -158,10 +156,13 @@ class MutationBoundaryArchitectureTest {
 						+ " Move the capability to the worker - there is no longer a list to add it to.")
 				.check(production);
 
-		noClasses().that().haveNameNotMatching(allowedConsumerPattern()).should().dependOnClassesThat()
-				.areAssignableTo(CatalogMutations.class)
-				.because("the same rule for the catalog of the collection: marking files missing, purging them or"
-						+ " forgetting a library is workload, not ordinary persistence.")
+		noClasses().that().haveNameNotMatching(allowedConsumerPattern()).and()
+				.areNotAssignableTo(CatalogCollectionMutations.class).should().dependOnClassesThat()
+				.areAssignableTo(CatalogCollectionMutations.class)
+				.because("the same rule for the collection itself: purging catalogued files or forgetting a library"
+						+ " destroys history, and that is workload rather than ordinary persistence. Converging what"
+						+ " the operating system already did is a different authority and has a port of its own -"
+						+ " which is why the watcher can hold that one and cannot reach this.")
 				.check(production);
 	}
 
@@ -299,12 +300,19 @@ class MutationBoundaryArchitectureTest {
 						.anyMatch(LibraryFileMutations.class.getName()::equals));
 	}
 
+	/**
+	 * Holding a port is depending on one from outside it. The adapter that
+	 * implements the port depends on it by definition, and calling that a breach
+	 * would make the rule impossible to satisfy: something has to implement it.
+	 */
 	private boolean holdsAPort(String className) {
 		return production.stream().filter(javaClass -> javaClass.getName().equals(className))
+				.filter(javaClass -> !javaClass.isAssignableTo(CatalogCollectionMutations.class))
+				.filter(javaClass -> !javaClass.isAssignableTo(LibraryFileMutations.class))
 				.anyMatch(javaClass -> javaClass.getDirectDependenciesFromSelf().stream()
 						.map(dependency -> dependency.getTargetClass().getName())
 						.anyMatch(name -> name.equals(LibraryFileMutations.class.getName())
-								|| name.equals(CatalogMutations.class.getName())));
+								|| name.equals(CatalogCollectionMutations.class.getName())));
 	}
 
 	/**
@@ -393,5 +401,4 @@ class MutationBoundaryArchitectureTest {
 
 		return allowed.stream().map(Pattern::quote).collect(Collectors.joining("|"));
 	}
-
 }

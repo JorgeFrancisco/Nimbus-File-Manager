@@ -11,7 +11,6 @@ import java.util.Optional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -19,7 +18,6 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinate
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LocationResolution;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationProvider;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.GeoResolutionCache;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.MediaGeoLocation;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.model.ResolvedPlace;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoResolutionCacheRepository;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.MediaGeoLocationRepository;
@@ -54,18 +52,6 @@ class MediaLocationServiceTest {
 				.isEqualTo("Curitiba");
 
 		verify(strategy, never()).resolve(coordinates);
-	}
-
-	@Test
-	void shouldNeverOverwriteManualLocation() {
-		MediaGeoLocation manual = MediaGeoLocation.builder().id(7L).manual(true).build();
-
-		when(locationRepository.findById(7L)).thenReturn(Optional.of(manual));
-
-		Assertions.assertThat(service().resolveAndPersist(7L, new Coordinates(1, 1))).isFalse();
-
-		verify(registry, never()).configured();
-		verify(locationRepository, never()).save(ArgumentMatchers.any());
 	}
 
 	private MediaLocationService service() {

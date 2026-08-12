@@ -42,7 +42,8 @@ public final class CalibrationHashes {
 			WHERE f.kind = 'PHOTO_PHASH' AND f.algorithm = ?
 			  AND m.lifecycle_status = 'ACTIVE'
 			  AND f.hash_bytes IS NOT NULL
-			  AND NOT EXISTS (SELECT 1 FROM duplicate_file_exclusion fe WHERE fe.public_id = m.public_id)
+			  AND NOT EXISTS (SELECT 1 FROM duplicate_exclusion_file fe
+			                  WHERE fe.catalog_file_id = m.id AND fe.content_revision = m.content_revision)
 			  AND NOT EXISTS (SELECT 1 FROM duplicate_folder_exclusion fo
 			                  WHERE REPLACE(l.current_folder, chr(92), '/') = fo.folder_path
 			                     OR REPLACE(l.current_folder, chr(92), '/')

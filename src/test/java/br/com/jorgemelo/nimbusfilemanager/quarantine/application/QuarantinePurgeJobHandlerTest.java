@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.UUID;
@@ -17,11 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityPurgeWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ClaimedExecution;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.constants.QuarantineConstants;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgePayload;
+import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantinePurgeResult;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 
@@ -32,6 +36,8 @@ class QuarantinePurgeJobHandlerTest {
 	private QuarantinePurgeService quarantinePurgeService;
 
 	private final ExecutionPayloadCodec executionPayloadCodec = new ExecutionPayloadCodec(new ObjectMapper());
+	private final SimilarityPurgeWriter similarityPurgeWriter = mock(SimilarityPurgeWriter.class);
+	private final EligibilityAnnouncer eligibilityAnnouncer = mock(EligibilityAnnouncer.class);
 
 	@Test
 	void answersForThePurgeType() {
@@ -57,6 +63,8 @@ class QuarantinePurgeJobHandlerTest {
 
 		List<UUID> ids = List.of(UUID.randomUUID());
 
+		when(quarantinePurgeService.purgeSelected(ids, execution, ownership)).thenReturn(freed(0));
+
 		handler().handle(execution, claimed(QuarantineConstants.PAYLOAD_SCHEMA_VERSION, null, ids), ownership);
 
 		verify(quarantinePurgeService).purgeSelected(ids, execution, ownership);
@@ -73,6 +81,8 @@ class QuarantinePurgeJobHandlerTest {
 		Execution execution = Execution.builder().id(3L).build();
 
 		ExecutionOwnership ownership = mock(ExecutionOwnership.class);
+
+		when(quarantinePurgeService.purgeOlderThan(anyInt(), any(), any())).thenReturn(freed(0));
 
 		handler().handle(execution, claimed(QuarantineConstants.PAYLOAD_SCHEMA_VERSION, 90, null), ownership);
 
@@ -114,7 +124,11 @@ class QuarantinePurgeJobHandlerTest {
 	}
 
 	private QuarantinePurgeJobHandler handler() {
-		return new QuarantinePurgeJobHandler(quarantinePurgeService, executionPayloadCodec);
+		return new QuarantinePurgeJobHandler(quarantinePurgeService, executionPayloadCodec, similarityPurgeWriter, eligibilityAnnouncer);
+	}
+
+	private QuarantinePurgeResult freed(int catalogsFreed) {
+		return new QuarantinePurgeResult(0, 0, catalogsFreed, 0, 0, 0);
 	}
 
 	private ClaimedExecution claimed(Integer schemaVersion, Integer retentionDays, List<UUID> movementIds) {

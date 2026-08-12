@@ -15,6 +15,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFinge
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * A producer whose compute is a decision, driving the real writes.
@@ -145,8 +146,13 @@ class ReplaceableChunk implements FingerprintProducer<Long, Integer> {
 		return pendingItem;
 	}
 
+	/**
+	 * The accumulator goes unused because nothing here runs an external tool: the
+	 * sample count is decided, not decoded, so there is no gate wait and no exec to
+	 * record.
+	 */
 	@Override
-	public Integer compute(Long pendingItem) {
+	public Integer compute(Long pendingItem, ProcessingMetrics metrics) {
 		if (failures.containsKey(pendingItem)) {
 			throw new IllegalStateException("this one does not decode");
 		}

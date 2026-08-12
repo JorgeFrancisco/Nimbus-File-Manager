@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
@@ -217,7 +218,7 @@ class QuarantineLauncherServiceTest {
 			Execution queued = invocation.getArgument(0);
 
 			queued.setStatus(ExecutionStatus.PENDING);
-			queued.setPublicId(UUID.randomUUID());
+			queued.setExecutionPublicId(UUID.randomUUID());
 
 			return Optional.of(queued);
 		});
@@ -234,6 +235,7 @@ class QuarantineLauncherServiceTest {
 	private QuarantineLauncherService launcher() {
 		return new QuarantineLauncherService(quarantineFolderPolicy, quarantineRetentionPolicy,
 				executionEnqueueService, executionPayloadCodec, new ExecutionMessageCodec(new ObjectMapper()),
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class)));
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class),
+						Progress.reader(), Progress.estimator()));
 	}
 }

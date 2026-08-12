@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -49,6 +50,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 class SimilarityResultReaderTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, Month.MAY, 1, 10, 0);
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-05-01T10:00:00Z");
 
 	private final SimilarityGroupingRepository groupingRepository = mock(SimilarityGroupingRepository.class);
 	private final SimilarityGroupRepository groupRepository = mock(SimilarityGroupRepository.class);
@@ -159,7 +162,7 @@ class SimilarityResultReaderTest {
 	}
 
 	private SimilarityGrouping grouping() {
-		return SimilarityGrouping.builder().id(1L).publicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
+		return SimilarityGrouping.builder().id(1L).similarityGroupingPublicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
 				.status(GroupingStatus.ACTIVE).build();
 	}
 
@@ -170,12 +173,13 @@ class SimilarityResultReaderTest {
 
 	private SimilarityGroupMember member(Long groupId, UUID mediaPublicId, Verdict verdict, Reason reason,
 			int position) {
-		return SimilarityGroupMember.builder().groupId(groupId).mediaPublicId(mediaPublicId).verdict(verdict)
+		return SimilarityGroupMember.builder().groupId(groupId).catalogFilePublicId(mediaPublicId).verdict(verdict)
 				.reason(reason).position(position).build();
 	}
 
 	private SimilarityMemberFile file(UUID publicId, String name, LifecycleStatus status) {
-		return new SimilarityMemberFile(publicId, name, "jpg", "PHOTO", 1024L, "C:/fotos/" + name, "C:/fotos", NOW,
+		return new SimilarityMemberFile(publicId, name, "jpg", "PHOTO", 1024L, "C:/fotos/" + name, "C:/fotos",
+				WRITTEN_AT,
 				1920, 1080, NOW, DateSource.EXIF, status);
 	}
 }

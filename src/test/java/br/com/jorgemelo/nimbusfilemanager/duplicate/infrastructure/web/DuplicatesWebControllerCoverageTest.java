@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 class DuplicatesWebControllerCoverageTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-15T12:00:00");
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-07-15T12:00:00Z");
 
 	@Test
 	void duplicatesBindsQueryParamsIncludingTheRepeatedTypesListThroughRealHttp() throws Exception {
@@ -387,7 +390,7 @@ class DuplicatesWebControllerCoverageTest {
 				List.of(member("keep.jpg", Verdict.KEEP, Reason.ORIGINAL)), 1);
 
 		when(fixture.similarityView.photos(70, PageRequest.of(0, 50)))
-				.thenReturn(new SimilarityView(new PageImpl<>(List.of(alone)), true, false, false, 1, 1, 4000, true));
+				.thenReturn(new SimilarityView(new PageImpl<>(List.of(alone)), true, false, 1, 1, 4000, true));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -497,7 +500,7 @@ class DuplicatesWebControllerCoverageTest {
 
 	private static DuplicateCandidateFileResponse file(long id, String name, String extension, String type) {
 		return new DuplicateCandidateFileResponse(UuidV7.fromLegacy(id), name, extension, type, SizeResponse.of(100),
-				"C:/" + name, "C:/", NOW);
+				"C:/" + name, "C:/", WRITTEN_AT);
 	}
 
 	/** A published pair, which is the smallest group the heading pluralises for. */
@@ -507,7 +510,7 @@ class DuplicatesWebControllerCoverageTest {
 						member("candidate.jpg", Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY)),
 				2);
 
-		return new SimilarityView(new PageImpl<>(List.of(group)), true, false, false, 2, 2, 8000, true);
+		return new SimilarityView(new PageImpl<>(List.of(group)), true, false, 2, 2, 8000, true);
 	}
 
 	/** A lone video and a pair of them: one heading of each number. */
@@ -520,12 +523,13 @@ class DuplicatesWebControllerCoverageTest {
 						member("candidate.mp4", Verdict.DELETE_CANDIDATE, Reason.IDENTICAL_COPY)),
 				2);
 
-		return new SimilarityView(new PageImpl<>(List.of(alone, pair)), true, false, false, 3, 2, 30000, true);
+		return new SimilarityView(new PageImpl<>(List.of(alone, pair)), true, false, 3, 2, 30000, true);
 	}
 
 	private static PublishedMember member(String name, Verdict verdict, Reason reason) {
 		return new PublishedMember(new AnalyzedMember(UUID.randomUUID(), verdict, reason),
-				new SimilarityMemberFile(UUID.randomUUID(), name, "jpg", "PHOTO", 100L, "C:/" + name, "C:/", NOW, 1920,
+				new SimilarityMemberFile(UUID.randomUUID(), name, "jpg", "PHOTO", 100L, "C:/" + name, "C:/", WRITTEN_AT,
+				1920,
 						1080, NOW, DateSource.EXIF, LifecycleStatus.ACTIVE),
 				true);
 	}
@@ -533,7 +537,7 @@ class DuplicatesWebControllerCoverageTest {
 	private static DuplicateCandidateFileResponse file(long id, String name, String extension, String type,
 			Verdict verdict, Reason reason, Integer width, Integer height, DateSource dateSource) {
 		return new DuplicateCandidateFileResponse(UuidV7.fromLegacy(id), name, extension, type, SizeResponse.of(100),
-				"C:/" + name, "C:/", NOW, verdict, reason, width, height, NOW.minusDays(id), dateSource);
+				"C:/" + name, "C:/", WRITTEN_AT, verdict, reason, width, height, NOW.minusDays(id), dateSource);
 	}
 
 	/**

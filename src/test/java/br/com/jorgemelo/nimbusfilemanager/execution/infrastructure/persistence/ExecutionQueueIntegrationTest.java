@@ -18,6 +18,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -49,7 +51,7 @@ class ExecutionQueueIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	/**
 	 * The clock the application writes with, so what this test compares against is
@@ -488,6 +490,173 @@ class ExecutionQueueIntegrationTest {
 				executionRepository.findById(execution.getId()).orElseThrow().getClaimCount());
 	}
 
+	// ----------------------------------------------------------------
+	// Photo and video fingerprints never run at once, and photos go first
+	// ----------------------------------------------------------------
+
+	/** Both waiting: the photo is taken and the video is not offered at all. */
+	@Test
+	void aPhotoFingerprintIsAdmittedBeforeAVideoOneWhenBothAreWaiting() {
+		enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		Assertions.assertThat(reserveFingerprints("worker-a")).get()
+				.extracting(ClaimedExecution::executionType).isEqualTo(ExecutionType.FINGERPRINT_PHOTO.name());
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).as("the video is not admissible while a photo run is")
+				.isEmpty();
+	}
+
+	/** The video keeps waiting for as long as the photo run holds the machine. */
+	@Test
+	void aVideoFingerprintWaitsWhileAPhotoOneIsRunning() {
+		Execution video = enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		reserveFingerprints("worker-a");
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).isEmpty();
+		Assertions.assertThat(executionRepository.findById(video.getId()).orElseThrow().getStatus())
+				.isEqualTo(ExecutionStatus.PENDING);
+	}
+
+	/** And is admitted as soon as the photo run ends - no restart involved. */
+	@Test
+	void aVideoFingerprintBecomesAdmissibleWhenThePhotoRunEnds() {
+		enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		Execution photo = enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		reserveFingerprints("worker-a");
+
+		finish(photo);
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).get().extracting(ClaimedExecution::executionType)
+				.isEqualTo(ExecutionType.FINGERPRINT_VIDEO.name());
+	}
+
+	/** With no photo work anywhere, a video starts immediately. */
+	@Test
+	void aVideoFingerprintStartsAtOnceWhenNoPhotoRunIsWaitingOrRunning() {
+		enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		Assertions.assertThat(reserveFingerprints("worker-a")).get().extracting(ClaimedExecution::executionType)
+				.isEqualTo(ExecutionType.FINGERPRINT_VIDEO.name());
+	}
+
+	/**
+	 * The other direction, and the reason it is exclusion rather than a one-sided
+	 * rule: a photo arriving mid-video waits instead of joining it. Nothing is
+	 * cancelled - the video that is already running keeps running.
+	 */
+	@Test
+	void aPhotoFingerprintArrivingDuringAVideoRunWaitsRatherThanJoiningIt() {
+		Execution video = enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		reserveFingerprints("worker-a");
+
+		Execution photo = enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).as("admission waits; it never preempts").isEmpty();
+
+		Assertions.assertThat(executionRepository.findById(video.getId()).orElseThrow().getStatus())
+				.as("the running video is untouched").isEqualTo(ExecutionStatus.RUNNING);
+		Assertions.assertThat(executionRepository.findById(photo.getId()).orElseThrow().getStatus())
+				.isEqualTo(ExecutionStatus.PENDING);
+	}
+
+	/** And when that video ends, the photo goes ahead of any newer video. */
+	@Test
+	void thePhotoThatWaitedGoesAheadOfTheNextVideo() {
+		Execution video = enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		reserveFingerprints("worker-a");
+
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		finish(video);
+
+		enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\other", 0, "video-2");
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).get().extracting(ClaimedExecution::executionType)
+				.isEqualTo(ExecutionType.FINGERPRINT_PHOTO.name());
+	}
+
+	/**
+	 * The policy is a property of the queue, not of a worker's memory, so a
+	 * reclaimed video - back to PENDING after its owner died - is still held while
+	 * a photo waits.
+	 */
+	@Test
+	void aReclaimedVideoIsStillHeldBehindAWaitingPhoto() {
+		enqueue(ExecutionType.FINGERPRINT_VIDEO, "d:\\library", 0, "video");
+
+		reserveFingerprints("gone", -1);
+
+		List<Long> abandoned = executionQueue.expiredLeases();
+
+		Assertions.assertThat(abandoned).as("the owner's lease had already run out").isNotEmpty();
+
+		abandoned.forEach(executionQueue::requeue);
+
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).get().extracting(ClaimedExecution::executionType)
+				.isEqualTo(ExecutionType.FINGERPRINT_PHOTO.name());
+	}
+
+	/**
+	 * The exclusion is between those two and nothing else. An unrelated type runs
+	 * beside a fingerprint exactly as it did before - this changes which work may
+	 * start, never how much of it one kind runs at a time.
+	 */
+	@Test
+	void theExclusionDoesNotReachAnyOtherKindOfWork() {
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+		enqueue(ExecutionType.INVENTORY, "d:\\library", 0, "inventory");
+
+		Assertions.assertThat(reserveFingerprints("worker-a")).get().extracting(ClaimedExecution::executionType)
+				.isEqualTo(ExecutionType.FINGERPRINT_PHOTO.name());
+
+		Assertions.assertThat(reserve("worker-b")).as("an inventory is not held back by a fingerprint")
+				.isPresent();
+	}
+
+	/**
+	 * The 1 + 1 rule is a different {@code NOT EXISTS} and keeps working: a second
+	 * photo with the same key waits for the running one, which is refused here for
+	 * that reason rather than the new one.
+	 */
+	@Test
+	void theOneAndOneRuleStillHoldsWithinEachFingerprintType() {
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		reserveFingerprints("worker-a");
+
+		enqueue(ExecutionType.FINGERPRINT_PHOTO, "d:\\library", 0, "photo");
+
+		Assertions.assertThat(reserveFingerprints("worker-b")).as("same key, already running").isEmpty();
+	}
+
+	private void finish(Execution execution) {
+		Execution stored = executionRepository.findById(execution.getId()).orElseThrow();
+
+		stored.setStatus(ExecutionStatus.FINISHED);
+
+		executionRepository.saveAndFlush(stored);
+	}
+
+	private Optional<ClaimedExecution> reserveFingerprints(String workerId) {
+		return reserveFingerprints(workerId, LEASE_SECONDS);
+	}
+
+	private Optional<ClaimedExecution> reserveFingerprints(String workerId, int leaseSeconds) {
+		return executionQueue.reserve(workerId,
+				List.of(ExecutionType.FINGERPRINT_PHOTO.name(), ExecutionType.FINGERPRINT_VIDEO.name()), MAX_CLAIMS,
+				leaseSeconds);
+	}
+
 	private Optional<ClaimedExecution> reserve(String workerId) {
 		return reserve(workerId, LEASE_SECONDS);
 	}
@@ -499,6 +668,68 @@ class ExecutionQueueIntegrationTest {
 	private Optional<ClaimedExecution> reserve(String workerId, int leaseSeconds) {
 		return executionQueue.reserve(workerId, List.of(ExecutionType.INVENTORY.name(), ExecutionType.RECONCILE.name()),
 				MAX_CLAIMS, leaseSeconds);
+	}
+
+	/**
+	 * Handing a row back throws away the window its estimate was measured over.
+	 *
+	 * <p>
+	 * The measurement belongs to the attempt that took it, and the next attempt
+	 * does the work again from wherever the drain now stands. Carrying the marks
+	 * across would divide a fresh count by an old moment - the estimate would come
+	 * out of a rate that describes work being repeated - and, worse, it would do so
+	 * silently, since the numbers stay plausible.
+	 *
+	 * <p>
+	 * Asserted against the database because the clearing is in the UPDATE and
+	 * nowhere else: the Java that opens the window never runs on this path.
+	 */
+	@Test
+	void releasingThrowsAwayTheWindowTheEstimateWasMeasuredOver() {
+		Execution pending = measured(enqueue(ExecutionType.RECONCILE, "D:\f", 0));
+
+		reserve("worker-a");
+
+		Assertions.assertThat(executionQueue.release(pending.getId(), "worker-a", OptionalInt.empty(), 10)).isTrue();
+
+		assertNoWindow(pending.getId());
+	}
+
+	/** And so does a reclaim, for the same reason and by the same statement. */
+	@Test
+	void requeuingThrowsAwayTheWindowToo() {
+		Execution queued = measured(enqueue(ExecutionType.RECONCILE, "D:\f", 0));
+
+		reserve("dead-worker", -1).orElseThrow();
+
+		Assertions.assertThat(executionQueue.requeue(queued.getId())).isTrue();
+
+		assertNoWindow(queued.getId());
+	}
+
+	/** A row that had got somewhere and had a window open over it. */
+	private Execution measured(Execution execution) {
+		execution.setFilesAnalyzed(500);
+		execution.setTotalExpected(10_000);
+		execution.setRateWindowFromAt(LocalDateTime.now(clock).minusMinutes(5));
+		execution.setRateWindowFromDone(100);
+		execution.setRateWindowMarkAt(LocalDateTime.now(clock).minusMinutes(1));
+		execution.setRateWindowMarkDone(400);
+
+		return executionRepository.saveAndFlush(execution);
+	}
+
+	private void assertNoWindow(long executionId) {
+		Execution stored = executionRepository.findById(executionId).orElseThrow();
+
+		Assertions.assertThat(stored.getStartedAt()).as("the clock is reset with the measurement").isNull();
+		Assertions.assertThat(stored.getRateWindowFromAt()).isNull();
+		Assertions.assertThat(stored.getRateWindowFromDone()).isNull();
+		Assertions.assertThat(stored.getRateWindowMarkAt()).isNull();
+		Assertions.assertThat(stored.getRateWindowMarkDone()).isNull();
+
+		Assertions.assertThat(stored.getFilesAnalyzed()).as("the counters are the next attempt's to overwrite")
+				.isEqualTo(500);
 	}
 
 	private Execution enqueue(ExecutionType type, String sourcePath, int claimCount) {

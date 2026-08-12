@@ -187,6 +187,23 @@ class CatalogBackupServiceTest {
 	}
 
 	/**
+	 * Deleting one from the screen. A name that no longer answers to a backup of
+	 * this installation is refused rather than acted on - the argument comes from a
+	 * request, and what it could otherwise reach is any file on the machine.
+	 */
+	@Test
+	void deletesABackupAndRefusesANameThatNoLongerNamesOne(@TempDir Path folder) throws IOException {
+		backup(folder, "{}");
+
+		CatalogBackupService service = service(folder);
+
+		service.delete(NAME);
+
+		Assertions.assertThat(folder.resolve(NAME)).doesNotExist();
+		Assertions.assertThatThrownBy(() -> service.delete(NAME)).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	/**
 	 * A folder that cannot be listed - removed drive, revoked permission - costs
 	 * the list, never the screen that shows it.
 	 */

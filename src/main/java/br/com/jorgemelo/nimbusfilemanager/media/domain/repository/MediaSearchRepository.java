@@ -13,8 +13,8 @@ public interface MediaSearchRepository extends JpaRepository<CatalogFile, Long> 
 
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchRawResponse(
-				m.publicId,
-				m.fileName,
+				m.catalogFilePublicId,
+				catalogFileName(l.currentPath, CAST(l.pathFlavor AS string)),
 				m.extension,
 				CAST(m.fileType AS string),
 				m.sizeBytes,

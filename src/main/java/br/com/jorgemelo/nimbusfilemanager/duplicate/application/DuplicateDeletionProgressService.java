@@ -63,7 +63,7 @@ public class DuplicateDeletionProgressService {
 	private DuplicateDeletionResult reportOf(Execution execution, int total) {
 		return new DuplicateDeletionResult(true, total, NumberUtils.toInt(execution.getFilesMoved()),
 				NumberUtils.toInt(execution.getCacheHits()), NumberUtils.toInt(execution.getErrors()),
-				UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+				UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()),
 				execution.getStatusMessage() == null ? null : execution.getStatusMessage().getText());
 	}
 }

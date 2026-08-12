@@ -5,7 +5,6 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +58,9 @@ public class VideoThumbnailService {
 
 		VideoThumbnailSource value = source.get();
 
-		long version = value.modifiedAt().toEpochSecond(ZoneOffset.UTC);
+		// The generation of the bytes, so an edit that preserved the timestamp still
+		// produces a different key and the old image is never served for it.
+		long version = value.contentRevision();
 
 		String key = publicId + "-" + version + "-video-w" + width;
 

@@ -6,5 +6,5 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projectio
  * query and consumed by the backlog worker; it carries no state, so a crash
  * just re-derives it.
  */
-public record PendingVideo(Long catalogFileId, String path, Double durationSeconds) {
+public record PendingVideo(Long catalogFileId, String path, Double durationSeconds, Long contentRevision) {
 }

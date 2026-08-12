@@ -8,8 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
@@ -79,12 +79,15 @@ class CatalogPurgeLauncherServiceTest {
 
 		launcher.launch(90);
 
-		ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.captor();
+		ArgumentCaptor<Instant> cutoff = ArgumentCaptor.captor();
 
 		verify(catalogFileRepository).existsByLifecycleStatusAndLifecycleChangedAtBefore(eq(LifecycleStatus.MISSING),
 				cutoff.capture());
 
-		Assertions.assertThat(cutoff.getValue()).isEqualTo(LocalDateTime.now(CLOCK).minusDays(90));
+		// The instant, not a local reading of it: the column is an Instant, and asking
+		// with anything else is refused by Hibernate at execution rather than by the
+		// compiler - which is how every scheduled purge came to die on its first query.
+		Assertions.assertThat(cutoff.getValue()).isEqualTo(Instant.now(CLOCK).minus(Duration.ofDays(90)));
 	}
 
 	/**

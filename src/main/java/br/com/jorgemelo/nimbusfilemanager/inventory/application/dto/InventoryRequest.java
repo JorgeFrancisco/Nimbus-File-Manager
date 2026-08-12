@@ -11,7 +11,7 @@ public record InventoryRequest(
 				example = "C:/nimbus-file-manager/workspace/temp") @NotBlank String sourcePath,
 		@Schema(description = "Scan subfolders recursively.", example = "true") boolean recursive,
 		@Schema(description = "Include hidden files and folders.", example = "false") boolean includeHidden,
-		@Schema(description = "Calculate SHA-256 and MD5 hashes.", example = "true") boolean calculateHashes,
+		@Schema(description = "Calculate the SHA-256 of each file.", example = "true") boolean calculateHashes,
 		@Schema(description = "Ignore cache and force metadata analysis.", example = "true") boolean forceAnalysis) {
 
 	public Path source() {

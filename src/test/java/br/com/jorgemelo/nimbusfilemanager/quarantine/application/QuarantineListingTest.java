@@ -7,7 +7,8 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,7 +36,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 class QuarantineListingTest {
 
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
-	private final QuarantineListing listing = new QuarantineListing(movementRepository);
+	private final QuarantineListing listing = new QuarantineListing(movementRepository, Clock.systemUTC());
 
 	@Test
 	void listsQuarantinedFilesWithLiveOriginAndConflictFlags(@TempDir Path tmp) throws Exception {
@@ -70,8 +71,8 @@ class QuarantineListingTest {
 		Movement photo = quarantineMovement(origin.resolve("a.jpg"), photoQuarantine);
 		Movement plain = quarantineMovement(origin.resolve("README"), plainQuarantine);
 
-		when(photo.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
-		when(plain.getCatalogFile().getPublicId()).thenReturn(UUID.randomUUID());
+		when(photo.getCatalogFile().getCatalogFilePublicId()).thenReturn(UUID.randomUUID());
+		when(plain.getCatalogFile().getCatalogFilePublicId()).thenReturn(UUID.randomUUID());
 
 		returns(photo, plain);
 
@@ -254,7 +255,7 @@ class QuarantineListingTest {
 
 		when(catalogFile.getFileType()).thenReturn(fileType);
 		when(catalogFile.getSizeBytes()).thenReturn(7L);
-		when(catalogFile.getPublicId()).thenReturn(mediaPublicId);
+		when(catalogFile.getCatalogFilePublicId()).thenReturn(mediaPublicId);
 
 		return movement(original, quarantine, catalogFile);
 	}
@@ -262,11 +263,31 @@ class QuarantineListingTest {
 	private Movement movement(Path original, Path quarantine, CatalogFile catalogFile) {
 		Execution execution = mock(Execution.class);
 
-		when(execution.getPublicId()).thenReturn(UUID.randomUUID());
+		when(execution.getExecutionPublicId()).thenReturn(UUID.randomUUID());
 
-		return Movement.builder().publicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
+		return Movement.builder().movementPublicId(UUID.randomUUID()).execution(execution).catalogFile(catalogFile)
+				.requestedSourcePath(PathUtils.normalize(original)).requestedTargetPath(PathUtils.normalize(quarantine))
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(Instant.now())
 				.build();
+	}
+
+	/**
+	 * A movement whose instant was never recorded shows no date rather than an
+	 * epoch. The row stores an instant and the screen wants a date in the reader's
+	 * zone; converting a missing one would print 1970 beside a file quarantined
+	 * last week.
+	 */
+	@Test
+	void showsNoDateForAMovementThatNeverRecordedWhenItHappened(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__undated.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("undated.jpg"), quarantine);
+
+		movement.setMovedAt(null);
+
+		returns(movement);
+
+		Assertions.assertThat(listing.list(PageRequest.of(0, 50)).getContent().get(0).quarantinedAt()).isNull();
 	}
 }

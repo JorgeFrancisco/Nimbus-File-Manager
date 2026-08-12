@@ -351,6 +351,29 @@ Classes fora da medição (configuradas no `pom.xml` e espelhadas nas exclusões
 
 Lógica de verdade **nunca** mora nessas classes excluídas — fica no serviço que as usa, que é testado. As metas numéricas de cobertura e o estado atual vivem no README.
 
+**Fora da métrica não é fora da prova.** Os repositórios saem do JaCoCo porque a régua percentual não diz nada sobre eles, e não porque o que declaram valha menos — o que declaram é contrato, e a seção seguinte é como ele se prova.
+
+## Cobertura de queries de repositório
+
+Toda query que a aplicação define num repositório tem prova executável de integração contra o banco real suportado — hoje, PostgreSQL.
+
+O objetivo **não** é um método de teste por método de repositório. É que **todo contrato de acesso a dados que a aplicação declara seja de fato executado e provado contra o PostgreSQL**. Uma classe de integração, um teste parametrizado ou uma matriz podem cobrir vários métodos, desde que se veja com clareza quais contratos ficam cobertos.
+
+O que conta como prova é o caminho inteiro: repositório real → Spring Data/Hibernate → query real → PostgreSQL → resultado ou efeito real → asserção sobre o contrato.
+
+**Não** contam, sozinhos: um teste de serviço com o repositório mockado; `mvn compile`; `mvn test-compile`; o `ApplicationContext` ter subido; reflection conferindo assinatura; e uma query que devolveu lista vazia quando o que se queria provar era a projeção. Todos podem existir e seguir úteis — nenhum substitui a cobertura do repositório.
+
+- **O que a regra alcança:** `@Query` JPQL, query nativa, constructor projection, projection de interface/record/DTO, `@Modifying`, derived query usada pela aplicação, método de repositório JDBC custom, e qualquer query cuja semântica o produto defina — lifecycle, `content_revision`, path/location, identidade de filesystem, posse, corte temporal, e paginação/ordenação quando forem parte do contrato.
+- **A prova executa o método real do repositório.** Mockar o repositório, compilar produção ou testes, ou subir o contexto não satisfaz esta regra.
+- **Mock de repositório continua correto** em teste unitário de quem o consome — e nunca conta como cobertura de query. As duas camadas respondem a perguntas diferentes: o unitário, o comportamento do consumidor; o de integração, o contrato de persistência.
+- **Projection prova com linha.** A cobertura de uma query de projeção devolve ao menos uma linha, para que o Hibernate de fato materialize o record/DTO. Fixture que faz a query voltar vazia não prova compatibilidade de projeção — foi exatamente assim que seis construtores incompatíveis passaram despercebidos.
+- **Parâmetro se exercita com valor que decide.** Onde inclusividade, exclusividade, ordenação, paginação, lifecycle, revisão, tempo, caminho ou identidade mudam o resultado, a fronteira é coberta.
+- **`@Modifying` prova o estado.** Quando o contrato é a mudança, o teste afirma o que ficou persistido, não só o número de linhas devolvido.
+- **Contagem e seleção da mesma população concordam.** Onde há um `count…` e um `find…` sobre o mesmo conjunto, a prova afirma que os dois respondem o mesmo — uma tela não pode contar uma população e trabalhar sobre outra.
+- **Derived query não é isenta** por ser o Spring quem a implementa: se a aplicação depende do path da propriedade, do tipo do parâmetro, da ordenação ou do filtro de lifecycle, o método real se executa.
+- **A prova é do contrato**, não do funcionamento do Hibernate ou do Spring Data: teste que só reproduz o framework, sem semântica do Nimbus, não se escreve.
+- **Mudou o modelo, revisa-se a query e a prova no mesmo trabalho.** Vale para método novo e para alteração de query, assinatura, projeção, **tipo de campo da entidade**, tipo de parâmetro, tipo de retorno ou mapeamento relevante. É a regra que faltava quando `LocalDateTime` virou `Instant` e a projeção antiga continuou compilando: os testes dos consumidores seguiram verdes, e a incompatibilidade só apareceu muito depois, no bootstrap. O mesmo vale para `String path` → `CatalogFileLocation`, `fileKey` → identidade de location, `publicId` → identidade específica, e conteúdo → `contentRevision`.
+
 ## Piso de cobertura (catraca)
 
 A cobertura **nunca regride**: o bloco de qualidade do README registra o **piso vigente** das cinco métricas JaCoCo (instrução, branch, linha, método, classe), e nenhuma tarefa pode encerrar abaixo dele. Os números moram no README — este documento fixa só a política, porque o piso muda a cada avanço e métrica não pertence a um documento permanente.
@@ -363,10 +386,9 @@ Como operar a catraca:
 
 ### A medição varia entre execuções
 
-Duas execuções seguidas da mesma suíte, sem uma linha alterada, dão números diferentes — observado em até **0,16 ponto** no branch e ~0,03 nas demais. Duas causas, ambas do próprio projeto:
+Duas execuções seguidas da mesma suíte, sem uma linha alterada, dão números diferentes — observado em até **0,16 ponto** no branch e ~0,03 nas demais. A causa é do próprio projeto: `src/test/resources/junit-platform.properties` roda classes de teste concorrentemente, e quais ramos de código compartilhado são exercitados muda de execução para execução — cache que ora popula ora acerta, caminho de contenção, timeout que ora dispara.
 
-- **Execução paralela.** `src/test/resources/junit-platform.properties` roda classes de teste concorrentemente. Quais ramos de código compartilhado são exercitados muda de execução para execução: cache que ora popula ora acerta, caminho de contenção, timeout que ora dispara.
-- **Testes que se auto-pulam.** Os que dependem do ffmpeg (`@EnabledIf`) pulam quando `tools/ffmpeg/bin` não existe, e os métodos que eles cobririam contam como descobertos. A pasta é gitignored, então um worktree ou um clone novo mede diferente da árvore principal.
+**Teste que se auto-pula é outra coisa, e não entra nessa conta.** Um teste que pula por falta do ffmpeg ou das ferramentas do PostgreSQL não faz a medição variar: faz a medição deixar de valer, e o que fazer está na seção seguinte.
 
 Como operar diante disso:
 
@@ -374,6 +396,27 @@ Como operar diante disso:
 - Uma queda que **se repete** entre execuções, ou que aponta para classe/método novo sem cobertura, é regressão de verdade e vale a regra acima.
 - **Não baixar o piso** por causa de oscilação, e **não arredondar** a casa decimal: a queda pode ser real, e uma régua mais grossa esconderia justamente o que a catraca existe para pegar.
 - Medir sempre com `clean` e com a árvore principal completa (ver *Piso exige build limpo*); comparar números tirados em condições diferentes produz conclusão errada.
+
+### A medição só vale com o ambiente completo
+
+Uma medição do JaCoCo serve de baseline, de comparação com o piso, de prova de regressão ou de número para o README **apenas quando todo teste de integração dependente de ambiente e aplicável à plataforma atual de fato executou**.
+
+Antes de comparar qualquer percentual, **ler a lista de testes pulados e o motivo de cada um**. São duas naturezas, e só uma é aceitável:
+
+- **Pulo esperado por plataforma** — `@EnabledOnOs`, symlink e permissão POSIX no Windows, glue nativo só-Windows no CI Linux. O teste é inaplicável ali e é exercitado de verdade no outro SO suportado. **Não invalida** a medição.
+- **Pulo por pré-requisito ausente** — uma ferramenta ou dado que o próprio produto administra e que deveria estar instalado: ferramentas do PostgreSQL (`pg_dump`, `pg_restore`), ffmpeg/ffprobe, dataset de fronteiras, qualquer binário que a aplicação baixa sob demanda. **Invalida** a medição.
+
+Diante de um pulo da segunda natureza:
+
+1. **não comparar** os percentuais com o piso nem com medição anterior;
+2. identificar o pré-requisito que falta;
+3. restaurar o ambiente;
+4. rodar a suíte completa de novo;
+5. só então avaliar regressão.
+
+*Motivo:* o percentual é global, então uma classe inteira que se auto-pula tira do numerador tudo o que ela cobria — sem falhar, sem avisar, e com a suíte terminando mais rápido. Cobertura obtida assim não é melhora nem piora: é a medição de outro conjunto de testes. Foi exatamente o que aconteceu ao apagar o workspace para um teste de instalação limpa — as ferramentas do PostgreSQL sumiram junto, `CatalogBackupIntegrationTest` inteiro passou a pular, e a cobertura caiu sem que uma linha de produção tivesse mudado.
+
+A contrapartida também vale: **suíte mais rápida ou cobertura mais alta obtidas pulando teste de integração em silêncio não são ganho**, e um piso gravado a partir de uma medição dessas passa a exigir menos do que exigia.
 
 ### Recalcular o piso
 
@@ -447,6 +490,34 @@ Os padrões abaixo já estão excluídos, com o motivo registrado no próprio `s
 - **`NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`** — `Path.getFileName()`/`getParent()` só são nulos na raiz de unidade; a guarda seria ramo inalcançável, que este documento já recusa. Desreferência nula continua coberta pelo Sonar.
 - **`REC_CATCH_EXCEPTION` e os `THROWS_METHOD_*`** — o `catch (Exception)` é deliberado: uma passagem agendada que deixa exceção escapar mata o próprio timer para sempre.
 - **`IMPROPER_UNICODE`** — comparações que já passam por `Locale.ROOT`.
+
+---
+
+# Alteração automatizada de código
+
+**Regex é ferramenta de busca, não de refatoração semântica.** `grep`, regex e substituição textual são o caminho certo para **localizar** candidatos, auditar ocorrências e aplicar transformações **puramente lexicais** — aquelas cuja correção não depende de nada que o compilador precise resolver.
+
+Uma reescrita de Java **não** se faz por regex quando a correção depender de informação semântica ou estrutural: tipo do receptor ou da expressão, posição e significado dos argumentos, resolução de overload, expressão ou bloco multi-linha, construtor ou builder, encadeamento de stubbing (`when`/`thenReturn`/`thenAnswer`), distinção temporal (`Instant` × `LocalDateTime`), accessor de mesmo nome existente em tipos diferentes, distinção entre entidade, DTO, projection, `Path` e result object — ou qualquer caso em que seja preciso conhecer tipos, AST, estrutura sintática ou a resolução do compilador para saber se a alteração está certa. O interior de um text block é o mesmo problema visto de outro ângulo (ver *Regras mecânicas*).
+
+Nesses casos, uma destas três:
+
+1. **edição explícita** de cada call site afetado;
+2. **transformação dirigida pelo compilador** — símbolo, localização e tipo do receptor, ou informação equivalente;
+3. **ferramenta estrutural/AST-aware** que preserve a semântica Java.
+
+**Uma automação que já produziu uma edição incorreta não é ampliada, relaxada nem repetida com um padrão mais permissivo.** A estratégia se encerra ali, e o que falta passa a ser feito por edição explícita ou transformação estrutural — um padrão mais permissivo erra mais longe, não menos.
+
+Vale igualmente para produção e para testes.
+
+## Validação obrigatória de script que altera Java
+
+Todo script que modifica fonte Java é seguido, **imediatamente**, por:
+
+1. inspeção do diff que ele produziu;
+2. a menor prova adequada — `javac`, `test-compile` ou o teste focado;
+3. conferência de que não surgiram parse errors, caracteres de controle, alterações fora dos call sites pretendidos, nem mudanças em receptores ou tipos não relacionados.
+
+**Queda abrupta na contagem de erros não é progresso enquanto não se prova que é.** Antes de lê-la como avanço, conferir quantos arquivos ainda foram analisados, se há parse error, qual é o **primeiro** erro do compilador, se a compilação não abortou cedo e se classpath e `target/` continuam válidos. Um número menor de erros, sozinho, não diz que a alteração ficou certa — diz apenas que o compilador parou de contar.
 
 ---
 

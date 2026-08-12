@@ -418,7 +418,10 @@ public class ExecutionDispatcher {
 
 		log.error("Execution {} failed", claimed.id(), exception);
 
-		executionProgressService.fail(ownership, ExecutionMessages.inventoryFailed(exception.getMessage()));
+		// The generic failure, because this runs every execution type there is. It
+		// used to say "inventory failed" for all of them, so a geographic dataset that
+		// died mid-import announced itself as a failed inventory.
+		executionProgressService.fail(ownership, ExecutionMessages.failed(exception.getMessage()));
 	}
 
 	/**

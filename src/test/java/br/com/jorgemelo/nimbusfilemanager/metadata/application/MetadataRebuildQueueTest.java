@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -73,7 +74,9 @@ class MetadataRebuildQueueTest {
 
 	private static final List<MetadataRebuildField> FIELDS = List.of(MetadataRebuildField.DATE);
 
-	private static final LocalDateTime CUTOFF = LocalDateTime.of(2026, Month.JULY, 26, 11, 16);
+	private static final Instant CUTOFF = Instant.parse("2026-07-26T11:16:00Z");
+	/** The capture date a simulation would write: a reading, and so still local. */
+	private static final LocalDateTime PROPOSED_CAPTURE_DATE = LocalDateTime.of(2026, Month.JULY, 26, 11, 16);
 
 	private final ExecutionEnqueueService executionEnqueueService = mock(ExecutionEnqueueService.class);
 	private final ExecutionPayloadCodec executionPayloadCodec = new ExecutionPayloadCodec(
@@ -238,7 +241,7 @@ class MetadataRebuildQueueTest {
 	@Test
 	void aSimulationPublishesItsPreviewAndWritesNoMetadata() {
 		when(metadataRebuildService.simulate(any())).thenReturn(new MetadataRebuildSimulationResult(80, 20, 50, 7,
-				List.of(new MetadataDateDifference("D:\\photos\\a.jpg", null, null, CUTOFF, DateSource.EXIF))));
+				List.of(new MetadataDateDifference("D:\\photos\\a.jpg", null, null, PROPOSED_CAPTURE_DATE, DateSource.EXIF))));
 
 		handler.handle(execution(), claimed(payload(1, true)), null);
 

@@ -24,14 +24,19 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.FingerprintWriter;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Photo half of the fingerprint backlog: the {@link FingerprintProducer} that
@@ -44,14 +49,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * behavior and keeps the same public API the screen and the async runner
  * already call.
  */
+@Slf4j
 @Service
 public class PhashBacklogService
-		implements FingerprintProducer<PendingPhoto, PhotoPerceptualFingerprint>, FingerprintBacklog {
+		implements GroupedFingerprintProducer<PendingPhoto, PhotoPerceptualFingerprint>, FingerprintBacklog {
 
 	static final FingerprintKind KIND = FingerprintKind.PHOTO_PHASH;
 	static final int MAX_ATTEMPTS = 3;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
+	private final FingerprintWriter fingerprintWriter;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
 	private final FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
 	private final PhotoPerceptualHashService photoPerceptualHashService;
@@ -63,8 +70,9 @@ public class PhashBacklogService
 			FingerprintFailureRepository fingerprintFailureRepository,
 			FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository,
 			PhotoPerceptualHashService photoPerceptualHashService,
-			SimilarityRelationWriter similarityRelationWriter, Clock clock) {
+			SimilarityRelationWriter similarityRelationWriter, FingerprintWriter fingerprintWriter, Clock clock) {
 		this.engine = engine;
+		this.fingerprintWriter = fingerprintWriter;
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
 		this.fingerprintRebuildTaskRepository = fingerprintRebuildTaskRepository;
@@ -134,8 +142,8 @@ public class PhashBacklogService
 
 	@Override
 	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress,
-			ExecutionOwnership ownership) {
-		return engine.drain(this, stop, progress, ownership);
+			ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		return engine.drain(this, stop, progress, ownership, metricsContext);
 	}
 
 	@Override
@@ -196,15 +204,85 @@ public class PhashBacklogService
 	}
 
 	@Override
-	public PhotoPerceptualFingerprint compute(PendingPhoto photo) {
-		return photoPerceptualHashService.compute(Path.of(photo.path()));
+	public PhotoPerceptualFingerprint compute(PendingPhoto photo, ProcessingMetrics metrics) {
+		return photoPerceptualHashService.compute(Path.of(photo.path()), metrics);
+	}
+
+	/**
+	 * The group first, and one photo at a time when the group cannot be trusted.
+	 *
+	 * <p>
+	 * Grouping is worth it because what it removes is process creation, not
+	 * decoding: against one ffmpeg per photo it cuts both the wall time and the CPU
+	 * a photo costs. For the same reason how many photos go into one invocation
+	 * barely moves the result - every size measured landed inside the run-to-run
+	 * spread of the others - which is why the engine is free to make a group the
+	 * same thing as a write.
+	 *
+	 * <p>
+	 * There is nothing in the decoded stream naming the photo a sample came from -
+	 * only its position - so a group that came back the wrong length is not a group
+	 * missing one answer, it is a group whose answers can no longer be matched to
+	 * photos at all. Storing the ones that still line up would attribute somebody
+	 * else's fingerprint to a photo and nothing downstream could ever tell. So the
+	 * whole group is dropped and its photos are read individually, where each
+	 * answer is attributable again and a photo that genuinely fails is one failure
+	 * against itself.
+	 */
+	@Override
+	public List<Outcome<PendingPhoto, PhotoPerceptualFingerprint>> computeGroup(List<PendingPhoto> group,
+			ProcessingMetrics metrics) {
+		List<Path> files = group.stream().map(photo -> Path.of(photo.path())).toList();
+
+		try {
+			List<PhotoPerceptualFingerprint> fingerprints = photoPerceptualHashService.computeGroup(files, metrics);
+
+			List<Outcome<PendingPhoto, PhotoPerceptualFingerprint>> outcomes = new ArrayList<>(group.size());
+
+			for (int index = 0; index < group.size(); index++) {
+				outcomes.add(Outcome.success(group.get(index), fingerprints.get(index)));
+			}
+
+			return outcomes;
+		} catch (RuntimeException failure) {
+			if (Thread.currentThread().isInterrupted()) {
+				// Nothing is wrong with these photos: the run is being cancelled. Reading
+				// them again one at a time would fail all of them and write down a failure
+				// against each.
+				throw failure;
+			}
+
+			log.warn("Reading {} photos one at a time: the grouped ffmpeg call is not usable. {}", group.size(),
+					failure.getMessage());
+
+			return group.stream().map(photo -> computeAlone(photo, metrics)).toList();
+		}
+	}
+
+	private Outcome<PendingPhoto, PhotoPerceptualFingerprint> computeAlone(PendingPhoto photo,
+			ProcessingMetrics metrics) {
+		try {
+			return Outcome.success(photo, compute(photo, metrics));
+		} catch (RuntimeException failure) {
+			return Outcome.error(photo, failure);
+		}
 	}
 
 	@Override
 	public void store(PendingPhoto photo, PhotoPerceptualFingerprint fingerprint) {
-		mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(photo.catalogFileId()).kind(KIND)
-				.algorithm(DuplicateConstants.ALGORITHM).sampleIndex(0).hashBytes(fingerprint.hash())
-				.sampleBytes(fingerprint.luminance()).computedAt(LocalDateTime.now(clock)).build());
+		// Refused when the file has been edited since this job read it: the answer
+		// would be about bytes the catalog no longer has, and writing it would undo
+		// the clearing that the edit performed.
+		boolean stored = fingerprintWriter.insertForRevision(
+				MediaFingerprint.builder().catalogFileId(photo.catalogFileId()).kind(KIND)
+						.algorithm(DuplicateConstants.ALGORITHM).sampleIndex(0).hashBytes(fingerprint.hash())
+						.sampleBytes(fingerprint.luminance()).computedAt(LocalDateTime.now(clock)).build(),
+				photo.contentRevision());
+
+		if (!stored) {
+			log.info("Discarded a photo fingerprint for catalog file {}: its content changed while it was computed",
+					photo.catalogFileId());
+		}
 	}
 
 	/**

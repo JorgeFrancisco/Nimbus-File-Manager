@@ -1,16 +1,19 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.application;
 
 import java.time.Clock;
-import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaEstimator;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LocationRebuildResult;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeoConstants;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LocationRebuildResult;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Snapshot;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.Phase;
@@ -24,26 +27,29 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.EnumUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 
 /**
- * What the settings page asks about the two geographic workloads: whether one is
- * running, how far it got, and what the last one reported.
+ * What the settings page asks about the two geographic workloads: whether one
+ * is running, how far it got, and what the last one reported.
  *
  * <p>
- * All of it used to be fields of two runners, which answered only while the work
- * happened in the process being asked. It does not, so all of it is read from
- * the most recent row of each type - which is also what lets the page report a
- * run this application never started, and keep reporting it after a restart.
+ * All of it used to be fields of two runners, which answered only while the
+ * work happened in the process being asked. It does not, so all of it is read
+ * from the most recent row of each type - which is also what lets the page
+ * report a run this application never started, and keep reporting it after a
+ * restart.
  */
 @Service
 @Transactional(readOnly = true)
 public class GeoRunReader extends LocalizedComponent {
 
 	private final ExecutionRepository executionRepository;
+	private final EtaEstimator etaEstimator;
 	private final ExecutionMessageCodec executionMessageCodec;
 	private final Clock clock;
 
-	public GeoRunReader(ExecutionRepository executionRepository, ExecutionMessageCodec executionMessageCodec,
-			Clock clock) {
+	public GeoRunReader(ExecutionRepository executionRepository, EtaEstimator etaEstimator,
+			ExecutionMessageCodec executionMessageCodec, Clock clock) {
 		this.executionRepository = executionRepository;
+		this.etaEstimator = etaEstimator;
 		this.executionMessageCodec = executionMessageCodec;
 		this.clock = clock;
 	}
@@ -65,6 +71,46 @@ public class GeoRunReader extends LocalizedComponent {
 		return active(ExecutionType.GEO_DATASET_UPDATE);
 	}
 
+	/**
+	 * When the dataset was last checked against its source - which is a different
+	 * fact from when it was imported, and the only one of the two that a run
+	 * finding nothing new produces.
+	 */
+	public LocalDateTime lastVerifiedAt() {
+		return lastCompleted().map(Execution::getFinishedAt).orElse(null);
+	}
+
+	/**
+	 * Whether a run has already discharged today's obligation to check the dataset.
+	 *
+	 * <p>
+	 * <b>The history is the authority, not the timer's memory.</b> The daily pass
+	 * used to remember in a field that a restart cleared, so the first tick after
+	 * every restart asked for another update - and with the old behaviour that
+	 * meant a second full reimport of every boundary minutes after the first. What
+	 * discharges the obligation is a run that finished successfully, and rows
+	 * outlive processes.
+	 *
+	 * <p>
+	 * <b>Only {@code FINISHED}, and by {@code finished_at}.</b> A run that was
+	 * rejected, cancelled or failed never reached the source, so it owes the day
+	 * nothing; one still running has not answered yet. The day is the local one,
+	 * from the application clock, because that is the zone the row was written in.
+	 * Nothing distinguishes a manual update from the timer's here, and nothing
+	 * should: they are the same request, made through the same launcher, doing the
+	 * same work.
+	 */
+	public boolean completedToday() {
+		LocalDateTime finishedAt = lastVerifiedAt();
+
+		return finishedAt != null && finishedAt.toLocalDate().equals(LocalDate.now(clock));
+	}
+
+	private Optional<Execution> lastCompleted() {
+		return executionRepository.findFirstByExecutionTypeAndStatusOrderByFinishedAtDesc(
+				ExecutionType.GEO_DATASET_UPDATE, ExecutionStatus.FINISHED);
+	}
+
 	public long rebuildProcessed() {
 		return latest(ExecutionType.LOCATION_REBUILD).map(execution -> value(execution.getFilesAnalyzed())).orElse(0L);
 	}
@@ -79,8 +125,9 @@ public class GeoRunReader extends LocalizedComponent {
 	}
 
 	/** Estimated seconds remaining by average rate, or -1 when unknown. */
-	public long rebuildEtaSeconds() {
-		return latest(ExecutionType.LOCATION_REBUILD).map(this::etaSeconds).orElse(-1L);
+	/** How much longer, from the one estimator the application has. */
+	public EtaEstimate rebuildEta() {
+		return latest(ExecutionType.LOCATION_REBUILD).map(etaEstimator::estimate).orElse(EtaEstimate.notApplicable());
 	}
 
 	/**
@@ -198,18 +245,6 @@ public class GeoRunReader extends LocalizedComponent {
 
 	private boolean isActive(Execution execution) {
 		return ExecutionStatusNames.ACTIVE.contains(execution.getStatus());
-	}
-
-	private long etaSeconds(Execution execution) {
-		if (execution.getStartedAt() == null || execution.getFinishedAt() != null) {
-			return -1;
-		}
-
-		long elapsed = Duration.between(execution.getStartedAt().atZone(clock.getZone()).toInstant(), clock.instant())
-				.toMillis();
-
-		return ProgressMath.etaSeconds(elapsed, value(execution.getFilesAnalyzed()),
-				value(execution.getTotalExpected()));
 	}
 
 	private long value(Integer count) {

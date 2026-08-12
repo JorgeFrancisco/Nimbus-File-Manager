@@ -18,8 +18,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.Outcome;
+import br.com.jorgemelo.nimbusfilemanager.processing.application.dto.SubmittedTask;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.LoggingRole;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import jakarta.annotation.PreDestroy;
 
 /**
@@ -62,12 +64,9 @@ public class ProcessingCoordinator {
 
 	private final ThreadPoolExecutor executor;
 	private final Semaphore backpressure;
-	private final ProcessingMetrics metrics;
 	private final AtomicInteger concurrency = new AtomicInteger();
 
-	public ProcessingCoordinator(ProcessingProperties properties, ProcessingMetrics metrics) {
-		this.metrics = metrics;
-
+	public ProcessingCoordinator(ProcessingProperties properties) {
 		int workers = properties.workersOrDefault();
 		int queueCapacity = properties.queueCapacityOrDefault();
 
@@ -93,13 +92,20 @@ public class ProcessingCoordinator {
 		log.info("ProcessingCoordinator started: workers={}, queueCapacity={}", workers, queueCapacity);
 	}
 
-	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker) {
-		return process(items, cancelled, worker, _ -> {
+	/**
+	 * @param metrics the calling execution's own accumulator. The pool is shared
+	 * and more than one execution drives it at once, so what a task costs is
+	 * counted where that execution is counting - never in one place for everybody
+	 */
+	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker,
+			ProcessingMetrics metrics) {
+		return process(items, cancelled, worker, metrics, _ -> {
 		});
 	}
 
 	/**
-	 * Same as {@link #process(List, BooleanSupplier, Worker)}, but calls
+	 * Same as {@link #process(List, BooleanSupplier, Worker, ProcessingMetrics)},
+	 * but calls
 	 * {@code onCompleted} once per finished item (success, error or cancel) with
 	 * the running completed count, so callers can surface granular progress while a
 	 * batch runs. The callback fires from pool threads and may run concurrently, so
@@ -107,7 +113,7 @@ public class ProcessingCoordinator {
 	 * only act every N items).
 	 */
 	public <I, O> List<Outcome<I, O>> process(List<I> items, BooleanSupplier cancelled, Worker<I, O> worker,
-			IntConsumer onCompleted) {
+			ProcessingMetrics metrics, IntConsumer onCompleted) {
 		int size = items.size();
 
 		AtomicReferenceArray<Outcome<I, O>> slots = new AtomicReferenceArray<>(size);
@@ -144,8 +150,10 @@ public class ProcessingCoordinator {
 			String role = LoggingRole.current();
 
 			try {
+				SubmittedTask<I> task = new SubmittedTask<>(slot, item, submittedAt);
+
 				futures.add(executor.submit(
-						() -> LoggingRole.runAs(role, () -> execute(slot, item, submittedAt, cancelled, worker, slots,
+						() -> LoggingRole.runAs(role, () -> execute(task, cancelled, worker, metrics, slots,
 								onItemDone))));
 			} catch (RejectedExecutionException rejected) {
 				backpressure.release();
@@ -162,11 +170,14 @@ public class ProcessingCoordinator {
 		return drain(items, slots);
 	}
 
-	private <I, O> void execute(int index, I item, long submittedAt, BooleanSupplier cancelled, Worker<I, O> worker,
-			AtomicReferenceArray<Outcome<I, O>> slots, Runnable onItemDone) {
+	private <I, O> void execute(SubmittedTask<I> task, BooleanSupplier cancelled, Worker<I, O> worker,
+			ProcessingMetrics metrics, AtomicReferenceArray<Outcome<I, O>> slots, Runnable onItemDone) {
+		int index = task.slot();
+		I item = task.item();
+
 		long startedAt = System.nanoTime();
 
-		metrics.recordQueueWait(startedAt - submittedAt);
+		metrics.recordQueueWait(startedAt - task.submittedAt());
 		metrics.updateMaxConcurrency(concurrency.incrementAndGet());
 
 		try {

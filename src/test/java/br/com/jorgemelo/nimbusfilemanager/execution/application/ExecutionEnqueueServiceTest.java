@@ -28,6 +28,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueueNotifier;
+import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.QueueAdmissionLockRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -48,9 +49,11 @@ class ExecutionEnqueueServiceTest {
 
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final ExecutionQueueNotifier executionQueueNotifier = mock(ExecutionQueueNotifier.class);
+	private final QueueAdmissionLockRepository queueAdmissionLockRepository = mock(QueueAdmissionLockRepository.class);
 
 	private final ExecutionEnqueueService service = new ExecutionEnqueueService(executionRepository,
-			executionQueueNotifier, mock(PlatformTransactionManager.class), Clock.fixed(NOW, ZoneOffset.UTC));
+			executionQueueNotifier, queueAdmissionLockRepository, mock(PlatformTransactionManager.class),
+			Clock.fixed(NOW, ZoneOffset.UTC));
 
 	@Test
 	void queuesTheRequestAsPendingAndAvailableAtOnce() {
@@ -62,6 +65,26 @@ class ExecutionEnqueueServiceTest {
 		assertThat(queued.get().getStatus()).isEqualTo(ExecutionStatus.PENDING);
 		assertThat(queued.get().getCreatedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
 		assertThat(queued.get().getAvailableAt()).isEqualTo(queued.get().getCreatedAt());
+	}
+
+	/**
+	 * A timer request with no dedup key. Refusing needs something to be equivalent
+	 * to, and without a key there is nothing - so the request goes through instead
+	 * of being silently swallowed by a coalescing rule it cannot participate in.
+	 */
+	@Test
+	void queuesARequestWithoutADedupKeyBecauseNothingCanBeEquivalentToIt() {
+		when(executionRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Execution keyless = Execution.builder().executionType(ExecutionType.INVENTORY).sourcePath("D:\fotos")
+				.build();
+
+		Optional<Execution> queued = service.enqueueUnlessAlreadyActive(keyless);
+
+		assertThat(queued).isPresent();
+
+		verify(executionRepository, never()).findFirstByExecutionTypeAndDedupKeyAndStatusInOrderByCreatedAtDesc(
+				any(), any(), any());
 	}
 
 	/**

@@ -8,6 +8,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileValidationUti
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.MetadataOptions;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor.MetadataExtractor;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 @Service
 public class MetadataFacade {
@@ -18,9 +19,9 @@ public class MetadataFacade {
 		this.metadataExtractor = metadataExtractor;
 	}
 
-	public MetadataResult extract(Path file, MetadataOptions options) {
+	public MetadataResult extract(Path file, MetadataOptions options, ProcessingMetrics metrics) {
 		FileValidationUtils.validateFile(file);
 
-		return metadataExtractor.extract(file, options);
+		return metadataExtractor.extract(file, options, metrics);
 	}
 }

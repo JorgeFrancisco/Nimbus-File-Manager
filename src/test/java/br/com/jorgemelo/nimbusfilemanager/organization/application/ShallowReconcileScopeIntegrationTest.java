@@ -1,9 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -13,14 +15,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
@@ -48,7 +55,7 @@ class ShallowReconcileScopeIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@TempDir
 	Path library;
@@ -58,6 +65,12 @@ class ShallowReconcileScopeIntegrationTest {
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@PersistenceContext
+	private EntityManager entityManager;
 
 	@Test
 	void aShallowPassLeavesCataloguedFilesInSubfoldersAlone() throws IOException {
@@ -95,7 +108,18 @@ class ShallowReconcileScopeIntegrationTest {
 		Assertions.assertThat(lifecycleOf(present)).isEqualTo(LifecycleStatus.ACTIVE);
 	}
 
+	/**
+	 * Read from the row rather than from the session.
+	 *
+	 * <p>
+	 * The lifecycle door writes by JDBC, in the transaction this test runs in but
+	 * not through its persistence context - so an entity this class loaded still
+	 * answers what it was loaded as, and a pass that really did mark the file
+	 * missing reads back as if it had done nothing.
+	 */
 	private LifecycleStatus lifecycleOf(Long catalogFileId) {
+		entityManager.clear();
+
 		return catalogFileRepository.findById(catalogFileId).orElseThrow().getLifecycleStatus();
 	}
 
@@ -108,12 +132,12 @@ class ShallowReconcileScopeIntegrationTest {
 
 		String folder = PathUtils.normalize(path.getParent());
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(path.getFileName().toString()).extension("jpg")
-				.sizeBytes(4L).modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO)
+		CatalogFile file = CatalogFile.builder().extension("jpg")
+				.sizeBytes(4L).modifiedAt(Instant.now()).fileType(FileType.PHOTO)
 				.lifecycleStatus(LifecycleStatus.ACTIVE).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(key).currentFolder(folder)
-				.originalPath(key).originalFolder(folder).build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file).getId();
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file).getId();
 	}
 }

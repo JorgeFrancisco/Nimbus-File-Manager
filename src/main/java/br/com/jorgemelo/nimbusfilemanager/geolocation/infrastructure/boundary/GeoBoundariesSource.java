@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetProgress;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary.BoundarySource;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.AcquiredBoundaries;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -94,25 +95,36 @@ public class GeoBoundariesSource implements BoundarySource {
 		this.clock = clock;
 	}
 
+	/**
+	 * <b>What makes this unchanged.</b> A level reports change only when its bytes
+	 * were actually transferred, and the record of that is already kept:
+	 * {@code pendingEtags} receives an entry on the {@code 200} path and none on
+	 * the {@code 304} one, so an empty map after the three levels means every one
+	 * of them was confirmed identical to what the installation already holds. A
+	 * local override is the exception - nothing consulted a server, so nothing
+	 * confirmed anything, and it says changed rather than assume.
+	 */
 	@Override
-	public List<LeveledBoundaryFile> fetch(Path workspaceFolder) {
+	public AcquiredBoundaries fetch(Path workspaceFolder) {
 		List<LeveledBoundaryFile> files = new ArrayList<>();
 
+		boolean localOverride = false;
+
 		// URLs live in app_setting (Settings screen), never hardcoded here.
-		add(files, AdminBoundaryKind.COUNTRY, appSettingService.stringValue(SettingsConstants.BOUNDARY_ADM0_URL, ""),
-				ADM0_FILE, workspaceFolder);
+		localOverride |= add(files, AdminBoundaryKind.COUNTRY,
+				appSettingService.stringValue(SettingsConstants.BOUNDARY_ADM0_URL, ""), ADM0_FILE, workspaceFolder);
 
-		add(files, AdminBoundaryKind.STATE, appSettingService.stringValue(SettingsConstants.BOUNDARY_ADM1_URL, ""),
-				ADM1_FILE, workspaceFolder);
+		localOverride |= add(files, AdminBoundaryKind.STATE,
+				appSettingService.stringValue(SettingsConstants.BOUNDARY_ADM1_URL, ""), ADM1_FILE, workspaceFolder);
 
-		add(files, AdminBoundaryKind.MUNICIPALITY,
+		localOverride |= add(files, AdminBoundaryKind.MUNICIPALITY,
 				appSettingService.stringValue(SettingsConstants.BOUNDARY_ADM2_URL, ""), ADM2_FILE, workspaceFolder);
 
 		if (files.isEmpty()) {
 			throw new IllegalStateException("No boundary levels configured to download.");
 		}
 
-		return files;
+		return new AcquiredBoundaries(files, localOverride || !pendingEtags.isEmpty());
 	}
 
 	@Override
@@ -246,9 +258,11 @@ public class GeoBoundariesSource implements BoundarySource {
 	 * is fixed at nine: a run that skipped straight past them would read as a
 	 * shorter pipeline, and nobody watching could tell that from a failure.
 	 */
-	private void add(List<LeveledBoundaryFile> files, AdminBoundaryKind kind, String url, String fileName,
+	private boolean add(List<LeveledBoundaryFile> files, AdminBoundaryKind kind, String url, String fileName,
 			Path workspaceFolder) {
 		Path local = localFile(fileName);
+
+		boolean localOverride = local != null;
 
 		if (local != null) {
 			progress.alreadyAvailable(kind);
@@ -270,6 +284,10 @@ public class GeoBoundariesSource implements BoundarySource {
 		// Reached only when the branch above returned without throwing, which is
 		// what keeps a failed acquisition out of the count.
 		progress.stageFinished();
+
+		// A file taken from the local override was never compared against anything
+		// remote, so this level cannot claim to be unchanged.
+		return localOverride;
 	}
 
 	private Path localFile(String fileName) {

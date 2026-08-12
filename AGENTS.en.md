@@ -9,7 +9,7 @@
 > and this file has not been retranslated. Update both in the same commit, and refresh the
 > marker below with the hash the test reports.
 
-<!-- agents-sha256: b656c2c80a4a22665436ba668568c70fc18f657d02dfa4d287c8717572c6baa1 -->
+<!-- agents-sha256: 4d40cbf36a0bc77cdf55e085e378525f14054fc6579451d6b6869ba374848fd7 -->
 
 > **Permanent reference document of the project.**
 
@@ -358,6 +358,29 @@ Classes outside the measurement (configured in `pom.xml` and mirrored in the Son
 
 Real logic **never** lives in those excluded classes — it lives in the service that uses them, which is tested. The numeric coverage targets and the current state live in the README.
 
+**Out of the metric is not out of proof.** Repositories leave JaCoCo because a percentage says nothing about them, not because what they declare matters less — what they declare is a contract, and the next section is how it is proved.
+
+## Repository query coverage
+
+Every query the application defines in a repository has executable integration coverage against the real supported database — today, PostgreSQL.
+
+The goal is **not** one test method per repository method. It is that **every data-access contract the application declares is actually executed and proved against PostgreSQL**. One integration class, a parameterised test or a matrix may cover several methods, as long as which contracts end up covered is plain to see.
+
+What counts as proof is the whole path: real repository → Spring Data/Hibernate → real query → PostgreSQL → real result or effect → an assertion about the contract.
+
+What does **not** count on its own: a service test with the repository mocked; `mvn compile`; `mvn test-compile`; the `ApplicationContext` having started; reflection checking a signature; and a query that returned an empty list when the point was to prove the projection. All of those may exist and stay useful — none of them replaces repository coverage.
+
+- **What the rule reaches:** `@Query` JPQL, native queries, constructor projections, interface/record/DTO projections, `@Modifying`, derived queries the application uses, custom JDBC repository methods, and any query whose semantics the product defines — lifecycle, `content_revision`, path/location, filesystem identity, ownership, temporal cutoffs, and pagination/ordering when they are part of the contract.
+- **The proof executes the real repository method.** Mocking the repository, compiling production or tests, or starting the context does not satisfy this rule.
+- **Repository mocks remain correct** in unit tests of the consumers — and never count as query coverage. The two layers answer different questions: the unit test, the consumer's behaviour; the integration test, the persistence contract.
+- **A projection is proved with a row.** Coverage of a projection query returns at least one row, so that Hibernate actually materialises the record/DTO. A fixture that makes the query come back empty proves nothing about projection compatibility — that is exactly how six incompatible constructors went unnoticed.
+- **A parameter is exercised with a value that decides.** Where inclusiveness, exclusiveness, ordering, pagination, lifecycle, revision, time, path or identity change the answer, the boundary is covered.
+- **`@Modifying` proves the state.** When the change is the contract, the test asserts what was left persisted, not only the row count returned.
+- **A count and a selection of one population agree.** Where a `count…` and a `find…` stand for the same set, the proof states that both answer the same thing — a screen cannot count one population and work on another.
+- **A derived query is not exempt** because Spring implements it: if the application depends on the property path, the parameter type, the ordering or the lifecycle filter, the real method is executed.
+- **The proof is of the contract**, not of how Hibernate or Spring Data work: a test that only reproduces the framework, with no Nimbus semantics of its own, is not written.
+- **Change the model and the query and its proof are revised in the same work.** It holds for a new method and for a change to a query, a signature, a projection, an **entity field type**, a parameter type, a return type or a relevant mapping. It is the rule that was missing when `LocalDateTime` became `Instant` and the old projection went on compiling: the consumers' tests stayed green, and the incompatibility only surfaced much later, at bootstrap. The same holds for `String path` → `CatalogFileLocation`, `fileKey` → location identity, `publicId` → a specific identity, and content → `contentRevision`.
+
 ## The coverage ratchet
 
 Coverage **never regresses**: the quality block of the README records the **current floor** of the five JaCoCo metrics (instruction, branch, line, method, class), and no task may close below it. The numbers live in the README — this document fixes only the policy, because the floor moves with every advance and a metric does not belong in a permanent document.
@@ -370,10 +393,9 @@ How to operate the ratchet:
 
 ### The measurement varies between runs
 
-Two consecutive runs of the same suite, without a line changed, give different numbers — observed at up to **0.16 point** on branch and ~0.03 on the others. Two causes, both from the project itself:
+Two consecutive runs of the same suite, without a line changed, give different numbers — observed at up to **0.16 point** on branch and ~0.03 on the others. The cause is from the project itself: `src/test/resources/junit-platform.properties` runs test classes concurrently, and which branches of shared code get exercised changes from run to run — a cache that now populates and now hits, a contention path, a timeout that now fires.
 
-- **Parallel execution.** `src/test/resources/junit-platform.properties` runs test classes concurrently. Which branches of shared code get exercised changes from run to run: a cache that now populates and now hits, a contention path, a timeout that now fires.
-- **Tests that skip themselves.** Those depending on ffmpeg (`@EnabledIf`) skip when `tools/ffmpeg/bin` does not exist, and the methods they would cover count as uncovered. That folder is gitignored, so a worktree or a fresh clone measures differently from the main tree.
+**A test that skips itself is a different thing, and does not belong in that account.** A test that skips for lack of ffmpeg or of the PostgreSQL tools does not make the measurement vary: it makes the measurement stop being valid, and what to do about it is in the section below.
 
 How to operate in the face of that:
 
@@ -381,6 +403,27 @@ How to operate in the face of that:
 - A drop that **repeats** between runs, or that points at a new class/method with no coverage, is a real regression and the rule above applies.
 - **Do not lower the floor** because of oscillation, and **do not round** the decimal place: the drop may be real, and a coarser ruler would hide exactly what the ratchet exists to catch.
 - Always measure with `clean` and with the complete main tree (see *The floor requires a clean build*); comparing numbers taken under different conditions produces a wrong conclusion.
+
+### A measurement is only valid with a complete environment
+
+A JaCoCo measurement serves as a baseline, as a comparison against the floor, as proof of regression or as a number for the README **only when every environment-dependent integration test applicable to the current platform actually ran**.
+
+Before comparing any percentage, **read the list of skipped tests and the reason for each**. There are two natures, and only one is acceptable:
+
+- **Skip expected by platform** — `@EnabledOnOs`, symlinks and POSIX permissions on Windows, Windows-only native glue on the Linux CI. The test is inapplicable there and is genuinely exercised on the other supported OS. It **does not invalidate** the measurement.
+- **Skip from a missing prerequisite** — a tool or dataset the product itself manages and that should be installed: PostgreSQL tools (`pg_dump`, `pg_restore`), ffmpeg/ffprobe, the boundary dataset, any binary the application downloads on demand. It **invalidates** the measurement.
+
+Faced with a skip of the second nature:
+
+1. **do not compare** the percentages with the floor or with a previous measurement;
+2. identify the missing prerequisite;
+3. restore the environment;
+4. run the complete suite again;
+5. only then assess regression.
+
+*Reason:* the percentage is global, so an entire class that skips itself removes from the numerator everything it covered — without failing, without warning, and with the suite finishing faster. Coverage obtained that way is neither an improvement nor a regression: it is the measurement of a different set of tests. That is exactly what happened when the workspace was deleted for a clean-install test — the PostgreSQL tools went with it, the whole `CatalogBackupIntegrationTest` began skipping, and coverage fell without a line of production having changed.
+
+The converse holds too: **a faster suite or higher coverage obtained by silently skipping integration tests is not a gain**, and a floor recorded from such a measurement starts demanding less than it used to.
 
 ### Recalculating the floor
 
@@ -454,6 +497,34 @@ The patterns below are already excluded, each with its reason recorded in `spotb
 - **`NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE`** — `Path.getFileName()`/`getParent()` are null only for a filesystem root; the guard would be an unreachable branch, which this document already refuses. Null dereference itself stays covered by Sonar.
 - **`REC_CATCH_EXCEPTION` and the `THROWS_METHOD_*` patterns** — catching `Exception` is deliberate: a scheduled pass that lets one escape kills its own timer forever.
 - **`IMPROPER_UNICODE`** — comparisons that already fold through `Locale.ROOT`.
+
+---
+
+# Automated code changes
+
+**Regex is a search tool, not a semantic refactoring one.** `grep`, regex and textual replacement are the right way to **find** candidates, audit occurrences and apply **purely lexical** transformations — the ones whose correctness depends on nothing the compiler has to resolve.
+
+A rewrite of Java is **not** done by regex when its correctness depends on semantic or structural information: the type of the receiver or of the expression, the position and meaning of arguments, overload resolution, a multi-line expression or block, a constructor or builder, a chain of stubbing (`when`/`thenReturn`/`thenAnswer`), a temporal distinction (`Instant` × `LocalDateTime`), an accessor of the same name existing on different types, telling an entity from a DTO, a projection, a `Path` or a result object — or any case where knowing types, the AST, the syntactic structure or the compiler's resolution is what says whether the change is right. The inside of a text block is the same problem from another angle (see *Mechanical rules*).
+
+In those cases, one of these three:
+
+1. **explicit editing** of each affected call site;
+2. **compiler-driven transformation** — symbol, location and receiver type, or equivalent information;
+3. a **structural/AST-aware tool** that preserves Java semantics.
+
+**An automation that has already produced one wrong edit is not widened, loosened or repeated with a more permissive pattern.** That strategy ends there, and what is left is done by explicit editing or a structural transformation — a more permissive pattern misses by more, not less.
+
+This applies equally to production code and to tests.
+
+## Mandatory validation of a script that changes Java
+
+Every script that modifies Java source is followed, **immediately**, by:
+
+1. inspecting the diff it produced;
+2. the smallest adequate proof — `javac`, `test-compile`, or the focused test;
+3. checking that no parse errors or control characters appeared, that nothing outside the intended call sites changed, and that no unrelated receivers or types were touched.
+
+**A sudden drop in the error count is not progress until it is shown to be.** Before reading it as one, check how many files were still analysed, whether there is a parse error, what the **first** compiler error is, whether compilation stopped early, and whether the classpath and `target/` are still valid. A smaller number of errors, on its own, does not say the change is right — only that the compiler stopped counting.
 
 ---
 

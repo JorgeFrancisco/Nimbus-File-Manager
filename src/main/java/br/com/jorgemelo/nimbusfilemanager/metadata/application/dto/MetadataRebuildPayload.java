@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -22,7 +22,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildF
  * waited in the queue
  */
 public record MetadataRebuildPayload(Integer schemaVersion, String sourcePath, List<MetadataRebuildField> refresh,
-		Boolean dryRun, LocalDateTime notAnalysedSince) {
+		Boolean dryRun, Instant notAnalysedSince) {
 
 	public boolean dryRunValue() {
 		return dryRun != null && dryRun;

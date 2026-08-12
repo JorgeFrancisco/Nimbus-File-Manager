@@ -6,6 +6,7 @@ import java.util.Set;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoSignature;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * The pluggable contract for a video similarity algorithm. It owns the three
@@ -35,7 +36,7 @@ public interface VideoSimilarityAlgorithm {
 	int framesPerFingerprint();
 
 	/** Computes the video's multi-frame fingerprint (used by the backlog). */
-	VideoPerceptualFingerprint fingerprint(Path file, Double durationSeconds);
+	VideoPerceptualFingerprint fingerprint(Path file, Double durationSeconds, ProcessingMetrics metrics);
 
 	/**
 	 * The set of candidate-bucket keys this video participates in. Two videos are

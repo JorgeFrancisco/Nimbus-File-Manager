@@ -1,8 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -59,7 +63,7 @@ class ExecutionQueryServiceTest {
 	private MovementRepository movementRepository;
 
 	private final ExecutionMapper executionMapper = new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()),
-			new ExecutionLabels());
+			new ExecutionLabels(), Progress.reader(), Progress.estimator());
 
 	@Test
 	void listShouldMapExecutions() {
@@ -92,9 +96,8 @@ class ExecutionQueryServiceTest {
 
 		execution.setStatus(ExecutionStatus.RUNNING);
 
-		when(executionRepository
-				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.ACTIVE))
-						.thenReturn(Optional.of(execution));
+		when(executionRepository.findUnderWay(eq(ExecutionStatusNames.ACTIVE), eq(ExecutionStatus.RUNNING), any(),
+				any())).thenReturn(List.of(execution));
 
 		Assertions.assertThat(service().active()).get().extracting(ExecutionResponse::executionId)
 				.isEqualTo(UuidV7.fromLegacy(1L));
@@ -105,23 +108,33 @@ class ExecutionQueryServiceTest {
 		Assertions.assertThat(executionMapper.toResponse(null)).isNull();
 	}
 
+	/**
+	 * The percentage comes from the workload's own model now, so an inventory is
+	 * measured by what it concluded - analysed, cached or failed - and not by what
+	 * it discovered, which always ran ahead of the work.
+	 *
+	 * <p>
+	 * A total with nothing done yet reads 0% rather than nothing at all: the bar
+	 * exists because the population is known, and an absent bar would say the
+	 * opposite.
+	 */
 	@Test
-	void mapperShouldComputeClampedPercentCompleteOrNullWhenTotalOrProcessedAreMissing() {
+	void mapperComputesTheClampedPercentageFromTheWorkloadsOwnCounters() {
 		Execution overHundredPercent = Execution.builder().id(1L).executionType(ExecutionType.INVENTORY)
 				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(10)
-				.filesFound(15).build();
+				.filesAnalyzed(15).build();
 
 		Execution zeroTotal = Execution.builder().id(2L).executionType(ExecutionType.INVENTORY)
-				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(0).filesFound(5)
+				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(0).filesAnalyzed(5)
 				.build();
 
-		Execution missingProcessed = Execution.builder().id(3L).executionType(ExecutionType.INVENTORY)
+		Execution nothingDoneYet = Execution.builder().id(3L).executionType(ExecutionType.INVENTORY)
 				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now()).totalExpected(10)
-				.filesFound(null).build();
+				.filesAnalyzed(null).build();
 
 		Assertions.assertThat(executionMapper.toResponse(overHundredPercent).percentComplete()).isEqualTo(100.0);
 		Assertions.assertThat(executionMapper.toResponse(zeroTotal).percentComplete()).isNull();
-		Assertions.assertThat(executionMapper.toResponse(missingProcessed).percentComplete()).isNull();
+		Assertions.assertThat(executionMapper.toResponse(nothingDoneYet).percentComplete()).isZero();
 	}
 
 	@Test
@@ -139,11 +152,11 @@ class ExecutionQueryServiceTest {
 				.createdAt(LocalDateTime.of(2024, Month.JANUARY, 1, 11, 0)).build();
 
 		Movement movement = Movement.builder().id(3L).execution(execution)
-				.catalogFile(CatalogFile.builder().id(2L).build()).sourcePath("C:/a.jpg").targetPath("C:/b.jpg")
+				.catalogFile(CatalogFile.builder().id(2L).build()).requestedSourcePath("C:/a.jpg").requestedTargetPath("C:/b.jpg")
 				.status(MovementStatus.MOVED).reason(MovementReason.NONE)
-				.movedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 12, 0)).build();
+				.movedAt(Instant.parse("2024-01-01T12:00:00Z")).build();
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(execution));
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.of(execution));
 		when(executionStepRepository.findByExecutionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(step));
 		when(executionErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(error));
 		when(executionErrorRepository.summarizeByExecutionId(1L))
@@ -182,7 +195,7 @@ class ExecutionQueryServiceTest {
 	void uuidLookupShouldThrowWhenPublicIdIsMissing() {
 		UUID publicId = UUID.randomUUID();
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.empty());
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.empty());
 
 		assertThatIllegalArgumentException().isThrownBy(() -> service().get(publicId))
 				.withMessageContaining("Execution not found");
@@ -198,10 +211,10 @@ class ExecutionQueryServiceTest {
 				.errorType(ExecutionErrorType.METADATA_ERROR).errorMessage("m").createdAt(LocalDateTime.now()).build();
 
 		Movement movementWithoutCatalogFile = Movement.builder().id(3L).execution(execution).catalogFile(null)
-				.sourcePath("C:/a").targetPath("C:/b").status(MovementStatus.SKIPPED).reason(null)
-				.movedAt(LocalDateTime.now()).build();
+				.requestedSourcePath("C:/a").requestedTargetPath("C:/b").status(MovementStatus.SKIPPED).reason(null)
+				.movedAt(Instant.now()).build();
 
-		when(executionRepository.findByPublicId(publicId)).thenReturn(Optional.of(execution));
+		when(executionRepository.findByExecutionPublicId(publicId)).thenReturn(Optional.of(execution));
 		when(executionErrorRepository.findByExecutionIdOrderByCreatedAtAsc(1L))
 				.thenReturn(List.of(errorWithoutExecution));
 		when(movementRepository.findByExecutionIdOrderByIdAsc(1L)).thenReturn(List.of(movementWithoutCatalogFile));
@@ -218,7 +231,7 @@ class ExecutionQueryServiceTest {
 
 	private ExecutionQueryService service() {
 		return new ExecutionQueryService(executionRepository, executionStepRepository, executionErrorRepository,
-				movementRepository, executionMapper);
+				movementRepository, executionMapper, Clock.systemDefaultZone());
 	}
 
 	private Execution execution(Long id) {

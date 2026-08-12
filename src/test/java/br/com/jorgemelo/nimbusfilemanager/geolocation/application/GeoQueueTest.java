@@ -159,7 +159,7 @@ class GeoQueueTest {
 
 		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
 
-		verify(offlineGeoDataset, never()).downloadAndImport();
+		verify(offlineGeoDataset, never()).bringUpToDate();
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.REJECTED), any(), any());
 	}
 
@@ -235,12 +235,13 @@ class GeoQueueTest {
 	 */
 	@Test
 	void aFinishedUpdateInvalidatesTheAnswersTheOldBoundariesGave() {
+		when(offlineGeoDataset.bringUpToDate()).thenReturn(true);
 		when(geoDatasetProgress.recordsImported()).thenReturn(1_234L);
 		when(geoDatasetProgress.stagesDone()).thenReturn(9);
 
 		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
 
-		verify(offlineGeoDataset).downloadAndImport();
+		verify(offlineGeoDataset).bringUpToDate();
 		verify(mediaLocationService).clearCache();
 		verify(geoDatasetProgress).attach(any());
 		verify(geoDatasetProgress).detach();
@@ -261,6 +262,7 @@ class GeoQueueTest {
 	 */
 	@Test
 	void theLastStageIsCountedOnlyAfterTheCacheTheNewDatasetInvalidates() {
+		when(offlineGeoDataset.bringUpToDate()).thenReturn(true);
 		when(geoDatasetProgress.stagesDone()).thenReturn(9);
 
 		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
@@ -268,7 +270,7 @@ class GeoQueueTest {
 		InOrder order = inOrder(offlineGeoDataset, geoDatasetProgress, mediaLocationService,
 				executionProgressService);
 
-		order.verify(offlineGeoDataset).downloadAndImport();
+		order.verify(offlineGeoDataset).bringUpToDate();
 		order.verify(geoDatasetProgress).finishing();
 		order.verify(mediaLocationService).clearCache();
 		order.verify(geoDatasetProgress).stageFinished();
@@ -291,7 +293,7 @@ class GeoQueueTest {
 
 		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
 
-		verify(offlineGeoDataset, never()).downloadAndImport();
+		verify(offlineGeoDataset, never()).bringUpToDate();
 		verify(geoDatasetProgress, never()).attach(any());
 		verify(mediaLocationService, never()).clearCache();
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.CANCELLED), any(), any());
@@ -304,7 +306,7 @@ class GeoQueueTest {
 	 */
 	@Test
 	void aFailedUpdateLetsTheReasonOutAndStillDetaches() {
-		when(offlineGeoDataset.downloadAndImport()).thenThrow(new IllegalStateException("the server refused"));
+		when(offlineGeoDataset.bringUpToDate()).thenThrow(new IllegalStateException("the server refused"));
 
 		Execution execution = execution(ExecutionType.GEO_DATASET_UPDATE);
 		ClaimedExecution claimed = claimed(datasetPayload(1));
@@ -331,7 +333,7 @@ class GeoQueueTest {
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("schema");
 
 		verify(locationRebuildService, never()).rebuild(any(), any(), any());
-		verify(offlineGeoDataset, never()).downloadAndImport();
+		verify(offlineGeoDataset, never()).bringUpToDate();
 	}
 
 	@Test
@@ -359,5 +361,29 @@ class GeoQueueTest {
 
 	private String datasetPayload(int schemaVersion) {
 		return executionPayloadCodec.encode(new GeoDatasetPayload(schemaVersion));
+	}
+
+	/**
+	 * The run that found nothing to do finishes like any other, and touches nothing
+	 * on its way out.
+	 *
+	 * <p>
+	 * The resolution cache is the point. Every answer in it was computed against
+	 * the boundaries that are still installed, so clearing it here would throw away
+	 * a working cache to mark an update that changed nothing - and every rebuild
+	 * afterwards would pay to recompute what it already knew.
+	 */
+	@Test
+	void anUpdateThatFoundNothingNewFinishesWithoutClearingAnything() {
+		when(offlineGeoDataset.bringUpToDate()).thenReturn(false);
+		when(geoDatasetProgress.stagesDone()).thenReturn(4);
+
+		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
+
+		verify(mediaLocationService, never()).clearCache();
+		verify(geoDatasetProgress, never()).finishing();
+
+		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), any(), any());
+		verify(geoDatasetProgress).detach();
 	}
 }

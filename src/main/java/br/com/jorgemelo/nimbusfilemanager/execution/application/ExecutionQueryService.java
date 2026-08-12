@@ -1,5 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +21,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionE
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionStepRepository;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.ExecutionErrorSummaryResponse;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.MovementSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
@@ -34,15 +37,17 @@ public class ExecutionQueryService {
 	private final ExecutionErrorRepository executionErrorRepository;
 	private final MovementRepository movementRepository;
 	private final ExecutionMapper executionMapper;
+	private final Clock clock;
 
 	public ExecutionQueryService(ExecutionRepository executionRepository,
 			ExecutionStepRepository executionStepRepository, ExecutionErrorRepository executionErrorRepository,
-			MovementRepository movementRepository, ExecutionMapper executionMapper) {
+			MovementRepository movementRepository, ExecutionMapper executionMapper, Clock clock) {
 		this.executionRepository = executionRepository;
 		this.executionStepRepository = executionStepRepository;
 		this.executionErrorRepository = executionErrorRepository;
 		this.movementRepository = movementRepository;
 		this.executionMapper = executionMapper;
+		this.clock = clock;
 	}
 
 	public List<ExecutionResponse> list() {
@@ -59,9 +64,14 @@ public class ExecutionQueryService {
 				.map(executionMapper::toResponse);
 	}
 
+	/**
+	 * What is running now, and the lease is what says so - a row whose owner
+	 * stopped renewing is not an answer to "may I start?", however recently it was
+	 * still writing.
+	 */
 	public Optional<ExecutionResponse> active() {
-		return executionRepository
-				.findFirstByFinishedAtIsNullAndStatusInOrderByStartedAtDesc(ExecutionStatusNames.ACTIVE)
+		return executionRepository.findUnderWay(ExecutionStatusNames.ACTIVE, ExecutionStatus.RUNNING,
+				LocalDateTime.now(clock), PageRequest.of(0, 1)).stream().findFirst()
 				.map(executionMapper::toResponse);
 	}
 
@@ -97,23 +107,33 @@ public class ExecutionQueryService {
 	}
 
 	private Execution findByPublicId(UUID publicId) {
-		return executionRepository.findByPublicId(publicId)
+		return executionRepository.findByExecutionPublicId(publicId)
 				.orElseThrow(() -> new IllegalArgumentException("Execution not found: " + publicId));
 	}
 
 	private ExecutionErrorResponse toExecutionErrorResponse(ExecutionError error) {
-		return new ExecutionErrorResponse(UuidV7.orLegacy(error.getPublicId(), error.getId()),
+		return new ExecutionErrorResponse(UuidV7.orLegacy(error.getExecutionErrorPublicId(), error.getId()),
 				error.getExecution() == null ? null
-						: UuidV7.orLegacy(error.getExecution().getPublicId(), error.getExecution().getId()),
+						: UuidV7.orLegacy(error.getExecution().getExecutionPublicId(), error.getExecution().getId()),
 				error.getPath(), error.getErrorType().name(), error.getErrorMessage(), error.getCreatedAt());
 	}
 
 	private MovementResponse toMovementResponse(Movement movement) {
-		return new MovementResponse(UuidV7.orLegacy(movement.getPublicId(), movement.getId()),
-				UuidV7.orLegacy(movement.getExecution().getPublicId(), movement.getExecution().getId()),
+		return new MovementResponse(UuidV7.orLegacy(movement.getMovementPublicId(), movement.getId()),
+				UuidV7.orLegacy(movement.getExecution().getExecutionPublicId(), movement.getExecution().getId()),
 				movement.getCatalogFile() == null ? null
-						: UuidV7.orLegacy(movement.getCatalogFile().getPublicId(), movement.getCatalogFile().getId()),
-				movement.getSourcePath(), movement.getTargetPath(), movement.getStatus().name(),
-				movement.getReason() == null ? null : movement.getReason().name(), movement.getMovedAt());
+						: UuidV7.orLegacy(movement.getCatalogFile().getCatalogFilePublicId(),
+								movement.getCatalogFile().getId()),
+				movement.getRequestedSourcePath(), movement.getRequestedTargetPath(), movement.getStatus().name(),
+				movement.getReason() == null ? null : movement.getReason().name(), movedAt(movement));
+	}
+
+	/**
+	 * A movement records the instant the file moved; the screen reads a date. The
+	 * conversion belongs here, in the application's configured zone, and not in the
+	 * row - and a movement that never moved simply has no date to show.
+	 */
+	private LocalDateTime movedAt(Movement movement) {
+		return movement.getMovedAt() == null ? null : LocalDateTime.ofInstant(movement.getMovedAt(), clock.getZone());
 	}
 }

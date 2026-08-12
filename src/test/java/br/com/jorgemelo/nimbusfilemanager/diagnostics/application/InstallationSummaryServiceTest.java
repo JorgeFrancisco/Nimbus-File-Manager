@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoDataset;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
@@ -31,11 +32,12 @@ class InstallationSummaryServiceTest {
 
 	private final ExternalToolInstaller externalToolInstaller = mock(ExternalToolInstaller.class);
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
+	private final GeoRunReader geoRunReader = mock(GeoRunReader.class);
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 
 	private InstallationSummaryService service() {
-		return new InstallationSummaryService(buildProperties, externalToolInstaller, offlineGeoDataset,
+		return new InstallationSummaryService(buildProperties, externalToolInstaller, offlineGeoDataset, geoRunReader,
 				catalogFileRepository, executionRepository, Clock.system(ZoneId.of("America/Sao_Paulo")));
 	}
 
@@ -47,7 +49,7 @@ class InstallationSummaryServiceTest {
 	private void geoAvailable() {
 		when(offlineGeoDataset.status())
 				.thenReturn(new OfflineGeoDatasetStatus(true, "CGAZ-2026", 1_500, 2_000_000_000L, LocalDateTime.now(),
-						LocalDateTime.now(), "C:/geo", null, "geoBoundaries", "CC BY 4.0"));
+						"C:/geo", "geoBoundaries", "CC BY 4.0"));
 	}
 
 	@Test
@@ -104,7 +106,12 @@ class InstallationSummaryServiceTest {
 		when(externalToolInstaller.status()).thenReturn(new ExternalToolStatus(false, "ffmpeg", false, "ffprobe", null,
 				false, true, "C:/app/tools/ffmpeg/bin"));
 
-		when(offlineGeoDataset.status()).thenReturn(OfflineGeoDatasetStatus.unavailable("C:/geo", "download failed"));
+		when(offlineGeoDataset.status()).thenReturn(OfflineGeoDatasetStatus.unavailable("C:/geo"));
+
+		// The failure is read from the run that failed, not from the dataset: a
+		// dataset that was never installed has no error of its own to report, and the
+		// execution is what remembers why.
+		when(geoRunReader.importError()).thenReturn("download failed");
 
 		String summary = service().summary();
 

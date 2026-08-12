@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryBootstrapState;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
@@ -45,6 +46,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	private final GeoLauncher geoLauncher = mock(GeoLauncher.class);
 	private final GeoRunReader geoRunReader = mock(GeoRunReader.class);
 	private final InventoryRunningState inventoryRunningState = mock(InventoryRunningState.class);
+	private final InventoryBootstrapState inventoryBootstrapState = mock(InventoryBootstrapState.class);
 
 	private static Clock at(String localDateTime) {
 		return Clock.fixed(LocalDateTime.parse(localDateTime).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
@@ -65,7 +67,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		properties.setAutoUpdate(autoUpdate);
 
 		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, geoLauncher, geoRunReader,
-				inventoryRunningState, clock, properties);
+				inventoryRunningState, inventoryBootstrapState, clock, properties);
 	}
 
 	private Set<Thread> timerThreads() {
@@ -73,11 +75,6 @@ class GeoDatasetAutoUpdateSchedulerTest {
 				.collect(Collectors.toSet());
 	}
 
-	/**
-	 * The timer runs on a thread of its own, and that thread is a daemon: a
-	 * scheduler waiting out its initial delay must never be the reason a JVM
-	 * refuses to exit.
-	 */
 	/**
 	 * An acquisition already under way is the one state this pass must not answer
 	 * with another request. It reads "nothing installed" while an import is running
@@ -101,6 +98,11 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		verify(offlineGeoDataset, never()).status();
 	}
 
+	/**
+	 * The timer runs on a thread of its own, and that thread is a daemon: a
+	 * scheduler waiting out its initial delay must never be the reason a JVM
+	 * refuses to exit.
+	 */
 	@Test
 	void schedulesTheTimerOnADaemonThreadOfItsOwn() {
 		Set<Thread> before = timerThreads();
@@ -146,9 +148,13 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	private void installed(boolean available) {
 		lenient().when(offlineGeoDataset.status())
 				.thenReturn(available
-						? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, null, "C:/geo", null, "geoBoundaries",
-								"CC BY")
-						: OfflineGeoDatasetStatus.unavailable("C:/geo", null));
+						? new OfflineGeoDatasetStatus(true, "v1", 1000, 1L, null, "C:/geo", "geoBoundaries", "CC BY")
+						: OfflineGeoDatasetStatus.unavailable("C:/geo"));
+	}
+
+	/** Whether this installation has ever finished walking its library. */
+	private void libraryCatalogued(boolean catalogued) {
+		lenient().when(inventoryBootstrapState.hasCompletedAtLeastOnce()).thenReturn(catalogued);
 	}
 
 	/** The case the whole feature exists for: enabled, nothing on disk. */
@@ -156,6 +162,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	void acquiresTheDatasetWhenTheFeatureIsOnAndNothingIsInstalled() {
 		locationEnabled(true);
 		installed(false);
+		libraryCatalogued(true);
 		scheduler(at("2026-08-01T09:15:00")).runOnce();
 
 		verify(geoLauncher).updateDataset();
@@ -172,6 +179,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	void asksAgainOnceTheRunThatFailedIsOver() {
 		locationEnabled(true);
 		installed(false);
+		libraryCatalogued(true);
 
 		when(geoRunReader.importRunning()).thenReturn(true, false);
 
@@ -184,6 +192,59 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		scheduler.runOnce();
 
 		verify(geoLauncher).updateDataset();
+	}
+
+	/**
+	 * A fresh installation, which is where this guard earns its place. The timer
+	 * fires a minute after boot, the feature is on by default and nothing is
+	 * installed - so before this rule existed it began downloading and importing
+	 * two hundred thousand polygons to resolve the coordinates of a library
+	 * nobody had catalogued yet, and then competed with the first walk.
+	 */
+	@Test
+	void staysQuietUntilTheLibraryHasBeenCataloguedOnce() {
+		locationEnabled(true);
+		installed(false);
+		libraryCatalogued(false);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
+	}
+
+	/**
+	 * The first walk being under way is not the same question, and both answers
+	 * have to be no: one because nothing has completed, the other because
+	 * something is running. Asserted together so removing either guard fails.
+	 */
+	@Test
+	void staysQuietWhileTheFirstInventoryIsStillGoing() {
+		locationEnabled(true);
+		installed(false);
+		libraryCatalogued(false);
+
+		when(inventoryRunningState.isRunning()).thenReturn(true);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
+	}
+
+	/**
+	 * Once the library has been walked, the ordinary policy resumes - including
+	 * yielding to a later inventory, which is the guard that was already here.
+	 */
+	@Test
+	void yieldsToALaterInventoryEvenAfterTheLibraryWasCatalogued() {
+		locationEnabled(true);
+		installed(false);
+		libraryCatalogued(true);
+
+		when(inventoryRunningState.isRunning()).thenReturn(true);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
 	}
 
 	@Test
@@ -299,5 +360,84 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		scheduler.runOnce();
 
 		verify(geoLauncher, never()).updateDataset();
+	}
+
+	/**
+	 * The restart case, and the reason the daily marker stopped being only a field.
+	 *
+	 * <p>
+	 * A run finished this morning; the process was restarted since, so the marker
+	 * is empty. Asking again was defended as costing three conditional requests -
+	 * and it did not: the update rebuilt every boundary whether or not anything had
+	 * changed, so a restart bought a second full reimport minutes after the first.
+	 * The history knows what the field forgot.
+	 */
+	@Test
+	void doesNotAskAgainAfterARestartWhenTodayIsAlreadyDischarged() {
+		locationEnabled(true);
+		installed(true);
+		autoUpdate(true, "04:00");
+
+		when(geoRunReader.completedToday()).thenReturn(true);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
+	}
+
+	/** Having been discharged yesterday discharges nothing today. */
+	@Test
+	void asksWhenTheLastCompletedRunWasNotToday() {
+		locationEnabled(true);
+		installed(true);
+		autoUpdate(true, "04:00");
+
+		when(geoRunReader.completedToday()).thenReturn(false);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher).updateDataset();
+	}
+
+	/**
+	 * Once the history has answered, the field carries the rest of the day: the
+	 * pass runs every minute, and asking the database every minute for something
+	 * that cannot change until midnight would be paying for the same answer over
+	 * and over.
+	 */
+	@Test
+	void readsTheHistoryOnceAndThenAnswersFromMemory() {
+		locationEnabled(true);
+		installed(true);
+		autoUpdate(true, "04:00");
+
+		when(geoRunReader.completedToday()).thenReturn(true);
+
+		GeoDatasetAutoUpdateScheduler scheduler = scheduler(at("2026-08-01T09:15:00"));
+
+		scheduler.runOnce();
+		scheduler.runOnce();
+		scheduler.runOnce();
+
+		verify(geoRunReader, times(1)).completedToday();
+	}
+
+	/**
+	 * A new day is a new obligation, whatever yesterday's history says - the field
+	 * holds a date rather than a flag precisely so this cannot be forgotten.
+	 */
+	@Test
+	void asksAgainOnTheNextDay() {
+		locationEnabled(true);
+		installed(true);
+		autoUpdate(true, "04:00");
+
+		when(geoRunReader.completedToday()).thenReturn(true, false);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		scheduler(at("2026-08-02T09:15:00")).runOnce();
+
+		verify(geoLauncher).updateDataset();
 	}
 }

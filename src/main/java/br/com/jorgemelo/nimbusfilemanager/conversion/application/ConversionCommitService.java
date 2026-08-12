@@ -4,22 +4,27 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.CommitResult;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionCommitRequest;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
+import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.PlacedConversion;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.ResolvedMediaDate;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineIntakeService;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.IntakeOutcome;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -73,13 +78,20 @@ public class ConversionCommitService {
 	 * that no longer holds the paths. The guard closes the commit, not the
 	 * computing
 	 */
-	public CommitResult commit(Execution execution, CatalogFile file, Path converted, Path quarantineRoot,
-			ConversionOptions options, ResolvedMediaDate originalDate, ExecutionOwnership ownership) {
-		Path source = Path.of(file.getFileKey());
+	public CommitResult commit(ConversionCommitRequest request, ExecutionOwnership ownership,
+			ProcessingMetrics metrics) {
+		Execution execution = request.execution();
+		CatalogFile file = request.file();
+		Path converted = request.converted();
+		Path quarantineRoot = request.quarantineRoot();
+		ConversionOptions options = request.options();
+		ResolvedMediaDate originalDate = request.originalDate();
+
+		Path source = Path.of(file.getLocation().getCurrentPath());
 
 		FileTime sourceModified = lastModifiedOf(source);
 
-		Path placed;
+		PlacedConversion placed;
 
 		// The last moment at which walking away is free: nothing of this file has
 		// entered the library yet, and the temporary is ours to discard.
@@ -94,9 +106,9 @@ public class ConversionCommitService {
 		try {
 			placed = conversionFilePlacement.place(converted, source, options, execution.getId());
 
-			inheritModifiedTime(placed, sourceModified, execution.getId());
+			inheritModifiedTime(placed.path(), sourceModified, execution.getId());
 
-			log.info("Converted {} placed as {}", source.getFileName(), placed.getFileName());
+			log.info("Converted {} placed as {}", source.getFileName(), placed.path().getFileName());
 		} catch (Exception e) {
 			log.error("Could not rename the converted file {} next to {}", converted, source, e);
 
@@ -106,26 +118,31 @@ public class ConversionCommitService {
 		}
 
 		if (quarantineRoot == null) {
-			return catalogQuietly(placed, false, null, originalDate);
+			return catalogQuietly(placed, false, metrics, null, originalDate);
 		}
 
-		IntakeOutcome outcome = quarantineIntakeService.intake(execution, file, quarantineRoot,
-				MovementReason.CONVERTED_QUARANTINED, execution.getId());
+		// One file, so the batch is one - the same call the multi-file callers make.
+		PreparedMovement operation = quarantineIntakeService
+				.prepare(execution, List.of(file), quarantineRoot, MovementReason.CONVERTED_QUARANTINED)
+				.get(file.getId());
+
+		IntakeOutcome outcome = quarantineIntakeService.intake(execution, file, quarantineRoot, operation,
+				execution.getId());
 
 		if (outcome != IntakeOutcome.MOVED) {
 			log.warn("The converted file for {} is in place, but the original could not be quarantined ({})", source,
 					outcome);
 
-			return catalogQuietly(placed, false, ConversionFailure.QUARANTINE_FAILED, originalDate);
+			return catalogQuietly(placed, false, metrics, ConversionFailure.QUARANTINE_FAILED, originalDate);
 		}
 
 		// With an affix configured the converted name is the one the user asked for,
 		// so only an unnamed conversion inherits the original's name.
-		Path finalPath = conversionFileNaming.affix(options).isEmpty()
+		PlacedConversion finalPlacement = conversionFileNaming.affix(options).isEmpty()
 				? conversionFilePlacement.renameToOriginalName(placed, source, execution.getId())
 				: placed;
 
-		return catalogQuietly(finalPath, true, null, originalDate);
+		return catalogQuietly(finalPlacement, true, metrics, null, originalDate);
 	}
 
 	/**
@@ -133,20 +150,20 @@ public class ConversionCommitService {
 	 * already where the user expects it, and the watcher/reconciliation would pick
 	 * it up anyway, so a failure here is reported and never undoes the conversion.
 	 */
-	private CommitResult catalogQuietly(Path placed, boolean originalQuarantined, ConversionFailure warning,
-			ResolvedMediaDate originalDate) {
+	private CommitResult catalogQuietly(PlacedConversion placed, boolean originalQuarantined, ProcessingMetrics metrics,
+			ConversionFailure warning, ResolvedMediaDate originalDate) {
 		boolean revived;
 
 		try {
-			revived = conversionCatalogService.catalog(placed, originalDate);
+			revived = conversionCatalogService.catalog(placed, originalDate, metrics);
 		} catch (Exception e) {
-			log.error("The converted file {} is in the library but could not be cataloged", placed, e);
+			log.error("The converted file {} is in the library but could not be cataloged", placed.path(), e);
 
-			return CommitResult.partial(placed, originalQuarantined, false, ConversionFailure.CATALOG_FAILED);
+			return CommitResult.partial(placed.path(), originalQuarantined, false, ConversionFailure.CATALOG_FAILED);
 		}
 
-		return warning == null ? CommitResult.committed(placed, originalQuarantined, revived)
-				: CommitResult.partial(placed, originalQuarantined, revived, warning);
+		return warning == null ? CommitResult.committed(placed.path(), originalQuarantined, revived)
+				: CommitResult.partial(placed.path(), originalQuarantined, revived, warning);
 	}
 
 	private FileTime lastModifiedOf(Path source) {

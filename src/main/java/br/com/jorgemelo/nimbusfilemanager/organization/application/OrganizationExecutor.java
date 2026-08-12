@@ -1,9 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -21,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostExc
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionMessages;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePaths;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MovePreparation;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
@@ -28,13 +32,17 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.MoveResult;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.MovementRecovery;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.MovementRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementProgress;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -154,6 +162,13 @@ public class OrganizationExecutor {
 
 			int processed = 0;
 
+			// Every operation on record before anything is touched, in one statement. A
+			// worker that dies leaves them PENDING, and the attempt that takes over
+			// prepares again and is handed back exactly these - identities included - so
+			// the same work is never recorded twice under two names.
+			Map<Long, PreparedMovement> operations = organizationMovementLog.prepare(execution,
+					plannedOperations(plan), dryRun);
+
 			for (OrganizationItem item : plan.items()) {
 				ensureNotCancelled(execution);
 
@@ -167,7 +182,7 @@ public class OrganizationExecutor {
 
 				processed++;
 
-				MoveResult result = resolveItemResult(execution, item, request);
+				MoveResult result = resolveItemResult(execution, item, request, operations);
 
 				switch (result) {
 				case MOVED -> moved++;
@@ -337,12 +352,27 @@ public class OrganizationExecutor {
 	 * result and reports progress exactly once, matching the original inline flow.
 	 */
 	private MoveResult resolveItemResult(Execution execution, OrganizationItem item,
-			OrganizationExecuteRequest request) {
+			OrganizationExecuteRequest request, Map<Long, PreparedMovement> operations) {
 		if (item.samePath()) {
 			return MoveResult.SKIPPED;
 		}
 
-		return moveOne(execution, item, request);
+		return moveOne(execution, item, request, operations.get(item.internalCatalogFileId()));
+	}
+
+	/**
+	 * What the run is about to attempt, one entry per file it would move.
+	 *
+	 * <p>
+	 * Items already in place are left out: nothing is attempted for them, so an
+	 * operation recording an attempt would be a record of something that never
+	 * happened.
+	 */
+	private List<MovementRequest> plannedOperations(OrganizationPlan plan) {
+		return plan.items().stream().filter(item -> !item.samePath())
+				.map(item -> new MovementRequest(item.internalCatalogFileId(),
+						PathUtils.normalizePath(item.sourcePath()), PathUtils.normalizePath(item.targetPath()), null))
+				.toList();
 	}
 
 	/**
@@ -354,7 +384,8 @@ public class OrganizationExecutor {
 	 * differences, and in dry-run they are all blocked (see {@link #recordMovement}
 	 * and the {@code dryRun} short-circuit below): dry-run = zero mutation.
 	 */
-	private MoveResult moveOne(Execution execution, OrganizationItem item, OrganizationExecuteRequest request) {
+	private MoveResult moveOne(Execution execution, OrganizationItem item, OrganizationExecuteRequest request,
+			PreparedMovement operation) {
 		Path source = PathUtils.normalizePath(item.sourcePath());
 
 		Path target = PathUtils.normalizePath(item.targetPath());
@@ -366,7 +397,13 @@ public class OrganizationExecutor {
 		MovePreparation preparation = null;
 
 		try {
-			MoveResult guardResult = evaluateGuards(execution, item, paths, dryRun, request);
+			MoveResult resumed = resumeInterruptedMove(execution, item, paths, operation);
+
+			if (resumed != null) {
+				return resumed;
+			}
+
+			MoveResult guardResult = evaluateGuards(execution, item, paths, request, operation);
 
 			if (guardResult != null) {
 				return guardResult;
@@ -385,16 +422,68 @@ public class OrganizationExecutor {
 			// exists,
 			// moves, and verifies the target byte-for-byte (immune to a stale catalog
 			// hash).
-			libraryFileMutations.move(source, target, request.overwriteExistingValue(), execution.getId());
+			MoveBaseline moved = libraryFileMutations.move(source, target, request.overwriteExistingValue(),
+					execution.getId());
 
-			organizationMovePersistence.persistSuccessfulMove(execution, preparation.catalogFile(),
-					preparation.location(), source, target);
+			organizationMovePersistence.persistSuccessfulMove(execution.getId(), operation,
+					preparation.catalogFile(), source, target, moved);
 
 			removeEmptySourceFolders(source, request.source(), execution);
 
 			return MoveResult.MOVED;
 		} catch (Exception e) {
-			return handleMoveFailure(execution, item, paths, preparation, dryRun, request, e);
+			return handleMoveFailure(execution, item, paths, request, operation, e);
+		}
+	}
+
+	/**
+	 * Finishes a move whose file already left, which is what a worker dying between
+	 * the file system and the database leaves behind.
+	 *
+	 * <p>
+	 * The operation is on record and still pending, the source is gone and the
+	 * target is there: nobody else wrote that operation, so the move it describes
+	 * is the one that happened. The fact is then recorded under the identity
+	 * reserved before any of it - so this completes the original move rather than
+	 * performing a second one.
+	 *
+	 * <p>
+	 * The size is checked because it is the evidence this product already has for
+	 * every catalogued file and costs one stat call. It is not proof: a different
+	 * file of the same size sitting at the destination would be adopted. Closing
+	 * that needs the hash - a full read of every resumed file - or a filesystem
+	 * identity the catalog does not carry yet, and inventing either here would be
+	 * guessing rather than knowing.
+	 */
+	private MoveResult resumeInterruptedMove(Execution execution, OrganizationItem item, MovePaths paths,
+			PreparedMovement operation) {
+		if (MovementRecovery.progressOf(operation, paths.source(), paths.target()) != MovementProgress.RESUME) {
+			return null;
+		}
+
+		MovePreparation preparation = prepareDatabaseUpdate(item.internalCatalogFileId(), paths.source());
+
+		if (!sameSize(preparation.catalogFile(), paths.target())) {
+			return null;
+		}
+
+		log.warn("Resuming an organization move whose file had already left. catalogFileId={} source={} target={}",
+				item.internalCatalogFileId(), paths.source(), paths.target());
+
+		// A resumed move has no baseline: the attempt that moved the file died with it,
+		// and re-reading the destination here would prove only that the bytes are
+		// self-consistent, not that they are the ones that left.
+		organizationMovePersistence.persistSuccessfulMove(execution.getId(), operation, preparation.catalogFile(),
+				paths.source(), paths.target(), null);
+
+		return MoveResult.MOVED;
+	}
+
+	private boolean sameSize(CatalogFile catalogFile, Path target) {
+		try {
+			return catalogFile.getSizeBytes() != null && catalogFile.getSizeBytes() == Files.size(target);
+		} catch (IOException _) {
+			return false;
 		}
 	}
 
@@ -405,20 +494,19 @@ public class OrganizationExecutor {
 	 * {@link #moveOne} so the move flow stays flat and the many audit branches live
 	 * on their own.
 	 */
-	private MoveResult evaluateGuards(Execution execution, OrganizationItem item, MovePaths paths, boolean dryRun,
-			OrganizationExecuteRequest request) {
+	private MoveResult evaluateGuards(Execution execution, OrganizationItem item, MovePaths paths,
+			OrganizationExecuteRequest request, PreparedMovement operation) {
 		Path source = paths.source();
 		Path target = paths.target();
 
 		if (item.duplicateTarget()) {
-			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
-					MovementStatus.SKIPPED, MovementReason.DUPLICATE_TARGET,
-					"Duplicate target inside the organization plan. File was not moved.", dryRun);
+			organizationMovementLog.recordSkipped(execution, operation, MovementReason.DUPLICATE_TARGET);
 
 			return MoveResult.SKIPPED;
 		}
 
-		CatalogFile existing = catalogFileRepository.findByFileKey(PathUtils.normalize(target)).orElse(null);
+		CatalogFile existing = catalogFileLocationRepository
+				.findPresentByPath(PathUtils.normalize(target), PathFlavor.of(target).name()).orElse(null);
 
 		// Never move the real target of a link/junction/.lnk - refuse it outright,
 		// even for stale records that predate the physical-only policy. Recorded with a
@@ -426,41 +514,32 @@ public class OrganizationExecutor {
 		// (findById),
 		// just an audit row.
 		if (!PhysicalFilePolicy.isProcessable(source)) {
-			organizationMovementLog.recordMovement(execution, (CatalogFile) null, paths, MovementStatus.SKIPPED,
-					MovementReason.SOURCE_NOT_PHYSICAL,
-					"Source is a symbolic link, junction or .lnk shortcut and is never moved.", dryRun);
+			organizationMovementLog.recordSkipped(execution, operation, MovementReason.SOURCE_NOT_PHYSICAL);
 
 			return MoveResult.SKIPPED;
 		}
 
 		if (!Files.exists(source)) {
 			if (isAlreadyMoved(item, target, existing)) {
-				organizationMovementLog.recordMovement(execution, existing, paths, MovementStatus.SKIPPED,
-						MovementReason.ALREADY_MOVED,
-						"Source file does not exist, but target file is already registered for this media file.",
-						dryRun);
+				organizationMovementLog.recordSkipped(execution, operation, MovementReason.ALREADY_MOVED);
 
 				return MoveResult.SKIPPED;
 			}
 
-			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths, MovementStatus.ERROR,
-					MovementReason.SOURCE_NOT_FOUND, "Source file does not exist.", dryRun);
+			organizationMovementLog.recordFailure(execution, operation, paths, MovementReason.SOURCE_NOT_FOUND,
+					"Source file does not exist.");
 
 			return MoveResult.ERROR;
 		}
 
 		if (existing != null && !Objects.equals(existing.getId(), item.internalCatalogFileId())) {
-			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
-					MovementStatus.SKIPPED, MovementReason.TARGET_EXISTS,
-					"Target path is already registered in the database for another media file.", dryRun);
+			organizationMovementLog.recordSkipped(execution, operation, MovementReason.TARGET_EXISTS);
 
 			return MoveResult.SKIPPED;
 		}
 
 		if (Files.exists(target) && !request.overwriteExistingValue()) {
-			organizationMovementLog.recordMovement(execution, item.internalCatalogFileId(), paths,
-					MovementStatus.SKIPPED, MovementReason.OVERWRITE_DISABLED,
-					"Target file already exists and overwriteExisting=false.", dryRun);
+			organizationMovementLog.recordSkipped(execution, operation, MovementReason.OVERWRITE_DISABLED);
 
 			return MoveResult.SKIPPED;
 		}
@@ -475,7 +554,7 @@ public class OrganizationExecutor {
 	 * {@link #moveOne}.
 	 */
 	private MoveResult handleMoveFailure(Execution execution, OrganizationItem item, MovePaths paths,
-			MovePreparation preparation, boolean dryRun, OrganizationExecuteRequest request, Exception e) {
+			OrganizationExecuteRequest request, PreparedMovement operation, Exception e) {
 		Path source = paths.source();
 		Path target = paths.target();
 
@@ -497,8 +576,7 @@ public class OrganizationExecutor {
 					item.internalCatalogFileId(), source, target, integrityFailure, rolledBack, e);
 		}
 
-		organizationMovementLog.recordSafely(execution, preparation == null ? null : preparation.catalogFile(),
-				item.internalCatalogFileId(), paths, reason, message, dryRun);
+		organizationMovementLog.recordFailureSafely(execution, operation, paths, reason, message);
 
 		return MoveResult.ERROR;
 	}
@@ -598,7 +676,7 @@ public class OrganizationExecutor {
 
 	private OrganizationExecuteResponse toResponse(Execution execution, long plannedMoves, long moved, long skipped,
 			long errors, boolean rejected, String message) {
-		return new OrganizationExecuteResponse(UuidV7.orLegacy(execution.getPublicId(), execution.getId()),
+		return new OrganizationExecuteResponse(UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()),
 				execution.getStatus().name(), execution.getStartedAt(), execution.getFinishedAt(),
 				execution.getSourcePath(), execution.getTargetPath(), plannedMoves, moved, skipped, errors, rejected,
 				message);

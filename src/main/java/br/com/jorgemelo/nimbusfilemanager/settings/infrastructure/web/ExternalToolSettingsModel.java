@@ -6,6 +6,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ToolInstallSnapshot;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstallAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolInstaller;
@@ -23,12 +25,15 @@ public class ExternalToolSettingsModel implements SettingsSectionModel {
 
 	private final ExternalToolInstaller externalToolInstaller;
 	private final ExternalToolInstallAsyncRunner installAsyncRunner;
+	private final EtaLabels etaLabels;
 
 	@Autowired
 	public ExternalToolSettingsModel(ExternalToolInstaller externalToolInstaller,
-			ExternalToolInstallAsyncRunner installAsyncRunner) {
+			ExternalToolInstallAsyncRunner installAsyncRunner,
+			EtaLabels etaLabels) {
 		this.externalToolInstaller = externalToolInstaller;
 		this.installAsyncRunner = installAsyncRunner;
+		this.etaLabels = etaLabels;
 	}
 
 	@Override
@@ -37,6 +42,11 @@ public class ExternalToolSettingsModel implements SettingsSectionModel {
 		model.addAttribute("toolInstallRunning", installAsyncRunner.isRunning());
 		model.addAttribute("toolInstallError", installAsyncRunner.lastError());
 		model.addAttribute("toolInstallResult", installAsyncRunner.lastResult());
-		model.addAttribute("toolInstallProgress", installAsyncRunner.progress());
+		// Read once: it is live progress, so two reads are two different moments -
+		// and the sentence would then describe a moment the numbers beside it do not.
+		ToolInstallSnapshot progress = installAsyncRunner.progress();
+
+		model.addAttribute("toolInstallProgress", progress);
+		model.addAttribute("toolInstallEta", etaLabels.label(progress.eta()));
 	}
 }

@@ -75,7 +75,7 @@ public class SimilarityViewService {
 		boolean analyzing = executionRepository.existsByExecutionTypeAndStatusIn(type, IN_FLIGHT);
 
 		if (active.isEmpty()) {
-			return new SimilarityView(Page.empty(pageable), false, false, analyzing, analyzer.eligibleCount(), 0,
+			return new SimilarityView(Page.empty(pageable), false, analyzing, analyzer.eligibleCount(), 0,
 					SimilarityConstants.NO_CANDIDATE_LIMIT, false);
 		}
 
@@ -83,17 +83,36 @@ public class SimilarityViewService {
 
 		Page<PublishedGroup> groups = reader.page(grouping, pageable);
 
-		return new SimilarityView(groups, true, outdated(analyzer, grouping), analyzing, grouping.getEligibleCount(),
-				grouping.getAnalyzedCount(), grouping.getCandidateLimit(), grouping.coverageComplete());
+		return new SimilarityView(groups, true, analyzing, grouping.getEligibleCount(), grouping.getAnalyzedCount(),
+				grouping.getCandidateLimit(), grouping.coverageComplete());
 	}
 
 	/**
-	 * Whether the world moved since the analysis. Reading it costs the light
-	 * projection of the candidates - ids and folders - which is what identifying a
-	 * composition costs; the analysis itself is untouched either way.
+	 * Whether the world moved since the analysis, for one family.
+	 *
+	 * <p>
+	 * Empty when nothing has been published: there is no analysis for the world to
+	 * have moved away from, and answering "current" would be a claim about an
+	 * answer that does not exist.
+	 *
+	 * <p>
+	 * It is asked for rather than included in {@link #photos} because it is the
+	 * expensive half of this class by a wide margin - it identifies the whole
+	 * eligible library to compare one digest, measured at 2,5 s against 0,3 s for
+	 * everything else the screen needs, and the page has nothing to show that
+	 * depends on it. The screen therefore renders its results first and asks this
+	 * afterwards; the API, whose contract carries the flag on every group, still
+	 * asks for it before answering.
 	 */
-	private boolean outdated(SimilarityAnalyzer analyzer, SimilarityGrouping grouping) {
-		return !analyzer.composition().digest().equals(grouping.getCompositionDigest());
+	public Optional<Boolean> outdated(ExecutionType type, int minSimilarityPercent) {
+		SimilarityAnalyzer analyzer = analyzerOf(type);
+
+		return reader.active(analyzer.family(SimilarityBounds.clamp(minSimilarityPercent)))
+				.map(grouping -> !analyzer.composition().digest().equals(grouping.getCompositionDigest()));
+	}
+
+	private SimilarityAnalyzer analyzerOf(ExecutionType type) {
+		return type == ExecutionType.SIMILARITY_VIDEO ? videoSimilarityService : photoSimilarityService;
 	}
 
 	/** Which medium a family belongs to, for callers that only have the type. */

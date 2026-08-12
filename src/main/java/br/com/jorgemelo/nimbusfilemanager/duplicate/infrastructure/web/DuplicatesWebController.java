@@ -48,12 +48,12 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateExc
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicatesViewRequest;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogProgress;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogProgressReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogLauncher;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintRunReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Reason;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.Verdict;
@@ -72,6 +72,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.FileTypeIcon;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SecurityUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.enums.Kind;
+
 
 /**
  * Renders the "Duplicados" screen: exact (byte-identical, SHA-256) duplicate
@@ -107,7 +108,6 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private final DuplicateService duplicateService;
 	private final PhashBacklogService phashBacklogService;
 	private final FingerprintBacklogLauncher fingerprintBacklogLauncher;
-	private final FingerprintRunReader fingerprintRunReader;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final SimilarityViewService similarityViewService;
 	private final SimilarityLauncher similarityLauncher;
@@ -116,20 +116,21 @@ public class DuplicatesWebController extends LocalizedComponent {
 	private final DuplicateExclusionService duplicateExclusionService;
 	private final VideoSimilarityWeb videoSimilarityWeb;
 	private final DateSourceLabels dateSourceLabels;
+	private final FingerprintBacklogProgressReader fingerprintBacklogProgressReader;
 
 	@Autowired
 	public DuplicatesWebController(DuplicateService duplicateService, PhashBacklogService phashBacklogService,
-			FingerprintBacklogLauncher fingerprintBacklogLauncher, FingerprintRunReader fingerprintRunReader,
+			FingerprintBacklogLauncher fingerprintBacklogLauncher,
 			UserPagePreferenceService userPagePreferenceService,
 			SimilarityViewService similarityViewService, SimilarityLauncher similarityLauncher,
 			DuplicateDeletionLauncherService duplicateDeletionLauncherService,
 			DuplicateDeletionProgressService duplicateDeletionProgressService,
 			DuplicateExclusionService duplicateExclusionService, VideoSimilarityWeb videoSimilarityWeb,
-			DateSourceLabels dateSourceLabels) {
+			DateSourceLabels dateSourceLabels,
+			FingerprintBacklogProgressReader fingerprintBacklogProgressReader) {
 		this.duplicateService = duplicateService;
 		this.phashBacklogService = phashBacklogService;
 		this.fingerprintBacklogLauncher = fingerprintBacklogLauncher;
-		this.fingerprintRunReader = fingerprintRunReader;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.similarityViewService = similarityViewService;
 		this.similarityLauncher = similarityLauncher;
@@ -138,6 +139,7 @@ public class DuplicatesWebController extends LocalizedComponent {
 		this.duplicateExclusionService = duplicateExclusionService;
 		this.videoSimilarityWeb = videoSimilarityWeb;
 		this.dateSourceLabels = dateSourceLabels;
+		this.fingerprintBacklogProgressReader = fingerprintBacklogProgressReader;
 	}
 
 	@GetMapping("/app/duplicates")
@@ -164,6 +166,15 @@ public class DuplicatesWebController extends LocalizedComponent {
 		// the Videos tab answered with photo files.
 		model.addAttribute("failuresUrl",
 				videosTab ? "/api/duplicates/similar-videos/failures" : "/api/duplicates/similar-photos/failures");
+
+		// Asked after the page is on screen, not before it is built. Identifying the
+		// whole eligible library to compare one digest was measured at 2,5 s of the
+		// 2,9 s this navigation cost, and nothing rendered here depends on the answer.
+		model.addAttribute("backlogUrl",
+				videosTab ? "/api/duplicates/similar-videos/backlog" : "/api/duplicates/similar-photos/backlog");
+		model.addAttribute("similarityFreshnessUrl",
+				(videosTab ? "/api/duplicates/similar-videos/freshness" : "/api/duplicates/similar-photos/freshness")
+						+ "?minSimilarity=" + safeMinSimilarity);
 		model.addAttribute(MIN_SIMILARITY_KEY, safeMinSimilarity);
 		model.addAttribute("minSimilarityFloor", DuplicateConstants.MIN_SIMILARITY_PERCENT);
 		model.addAttribute("similarityOptions", List.of(70, 75, 80, 85, 90, 95, 100));
@@ -198,14 +209,15 @@ public class DuplicatesWebController extends LocalizedComponent {
 		} else if (similarTab) {
 			renderPhotoTab(model, safeMinSimilarity, page, pageSize);
 		} else {
-			setBacklogAttributes(model, phashBacklogService.status(),
-					fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_PHOTO),
-					fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_PHOTO), PHOTO_ACTION_BASE, false);
+			FingerprintBacklogProgress progress = fingerprintBacklogProgressReader
+					.forTab(ExecutionType.FINGERPRINT_PHOTO);
+
+			setBacklogAttributes(model, progress, PHOTO_ACTION_BASE, false);
 
 			// The exact tab has no analysis of its own, but the template is one page: the
 			// similarity attributes get their neutral values so no expression on it is ever
 			// evaluated against a missing one.
-			renderSimilarity(model, SimilarityView.none(), false, false);
+			renderSimilarity(model, SimilarityView.none(), progress, false);
 
 			Page<DuplicateCandidateGroupResponse> exactPage = duplicateService
 					.candidates(PageRequest.of(page, pageSize), MediaTypeFilter.fileTypesOf(typeFilter));
@@ -348,27 +360,29 @@ public class DuplicatesWebController extends LocalizedComponent {
 	 * until the compute finishes.
 	 */
 	private void renderPhotoTab(Model model, int safeMinSimilarity, int page, int pageSize) {
-		FingerprintBacklogStatus status = phashBacklogService.status();
+		FingerprintBacklogProgress progress = fingerprintBacklogProgressReader
+				.forTab(ExecutionType.FINGERPRINT_PHOTO);
 
-		boolean block = status.blocking();
+		boolean block = progress.pending() > 0;
 
-		setBacklogAttributes(model, status, fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_PHOTO),
-				fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_PHOTO), PHOTO_ACTION_BASE, block);
+		setBacklogAttributes(model, progress, PHOTO_ACTION_BASE, block);
 
-		renderSimilarity(model, similarityViewService.photos(safeMinSimilarity, PageRequest.of(page, pageSize)), block,
-				false);
+		SimilarityView view = similarityViewService.photos(safeMinSimilarity, PageRequest.of(page, pageSize));
+
+		renderSimilarity(model, view, progress, false);
+
 	}
 
 	private void renderVideoTab(Model model, int safeMinSimilarity, int page, int pageSize) {
-		FingerprintBacklogStatus status = videoSimilarityWeb.backlogService().status();
+		FingerprintBacklogProgress progress = fingerprintBacklogProgressReader
+				.forTab(ExecutionType.FINGERPRINT_VIDEO);
 
-		boolean block = status.blocking();
+		boolean block = progress.pending() > 0;
 
-		setBacklogAttributes(model, status, fingerprintRunReader.etaSeconds(ExecutionType.FINGERPRINT_VIDEO),
-				fingerprintRunReader.isRunning(ExecutionType.FINGERPRINT_VIDEO), VIDEO_ACTION_BASE, block);
+		setBacklogAttributes(model, progress, VIDEO_ACTION_BASE, block);
 
-		renderSimilarity(model, similarityViewService.videos(safeMinSimilarity, PageRequest.of(page, pageSize)), block,
-				true);
+		renderSimilarity(model, similarityViewService.videos(safeMinSimilarity, PageRequest.of(page, pageSize)),
+				progress, true);
 	}
 
 	/**
@@ -380,18 +394,28 @@ public class DuplicatesWebController extends LocalizedComponent {
 	 * computed, while the library moves underneath it, and after a failed
 	 * recalculation - the only thing that replaces it is a successful publication.
 	 */
-	private void renderSimilarity(Model model, SimilarityView view, boolean block, boolean videos) {
+	private void renderSimilarity(Model model, SimilarityView view, FingerprintBacklogProgress progress,
+			boolean videos) {
 		model.addAttribute(ATTR_SIMILARITY_COMPUTING, view.analyzing());
 		model.addAttribute("similarityPublished", view.published());
-		model.addAttribute("similarityOutdated", view.outdated());
 		model.addAttribute("similarityEligible", view.eligibleCount());
 		model.addAttribute("similarityAnalyzed", view.analyzedCount());
 		model.addAttribute("similarityCandidateLimit", view.candidateLimit());
 		model.addAttribute("similarityCoverageComplete", view.coverageComplete());
+
+		// Two different statements, and the screen needs both before it may deliver a
+		// verdict. The analysis can have covered every file it was able to compare -
+		// which is all coverageComplete claims - while most of the library still has
+		// no fingerprint to compare with. Saying "no similar photos found" then is a
+		// claim about the library made from a fraction of it.
+		//
+		// A file whose fingerprint failed for good counts the same way: it will never
+		// be compared, so the library was never fully examined.
+		model.addAttribute("similarityLibraryComplete", progress.pending() == 0 && progress.failed() == 0);
 		model.addAttribute("similarityAnalyzeAction",
 				videos ? VIDEO_ACTION_BASE + "/analyze" : PHOTO_ACTION_BASE + "/analyze");
 
-		if (block) {
+		if (progress.pending() > 0) {
 			// Fingerprints are still being computed: what exists to group is not yet what
 			// the user is waiting for, so no partial answer is offered.
 			addPageAttributes(model, Page.empty(), List.of());
@@ -403,17 +427,23 @@ public class DuplicatesWebController extends LocalizedComponent {
 				view.groups().getContent().stream().map(group -> toView(group, videos)).toList());
 	}
 
-	private void setBacklogAttributes(Model model, FingerprintBacklogStatus status, long etaSeconds, boolean running,
-			String actionBase, boolean blocking) {
-		model.addAttribute("phashPending", status.pending());
-		model.addAttribute("phashDone", status.done());
-		model.addAttribute("phashFailed", status.failed());
-		model.addAttribute("phashTotal", status.total());
-		model.addAttribute("phashPercent", status.percent());
-		model.addAttribute("phashEtaSeconds", etaSeconds);
+	/**
+	 * The first render of the panel the poll then keeps current - both built from
+	 * the same reader, so the page and the answer that replaces it can never say
+	 * different things.
+	 */
+	private void setBacklogAttributes(Model model, FingerprintBacklogProgress progress, String actionBase,
+			boolean blocking) {
+		model.addAttribute("phashPending", progress.pending());
+		model.addAttribute("phashDone", progress.done());
+		model.addAttribute("phashFailed", progress.failed());
+		model.addAttribute("phashTotal", progress.total());
+		model.addAttribute("phashPercent", progress.percent());
+		model.addAttribute("phashEtaLabel", progress.etaLabel());
 		model.addAttribute("phashBlocking", blocking);
-		model.addAttribute("phashRunning", running);
-		model.addAttribute("phashRebuildAvailable", !running);
+		model.addAttribute("phashRunning", progress.running());
+		model.addAttribute("phashRebuildAvailable", !progress.running());
+		model.addAttribute("phashOther", progress.other());
 		model.addAttribute("retryAction", actionBase + "/retry");
 		model.addAttribute("rebuildAction", actionBase + "/rebuild");
 	}

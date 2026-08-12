@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,12 +29,6 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 			""")
 	List<MediaGeoLocation> findByIdIn(@Param("catalogFileIds") Long[] catalogFileIds);
 
-	@Modifying
-	@Query("delete from MediaGeoLocation gl where gl.manual = false")
-	int deleteAutomaticResolutions();
-
-	long countByManualFalse();
-
 	/**
 	 * GPS coordinates of the given media, straight from the same entity that owns
 	 * the resolved location identity (catalog_file_id).
@@ -48,8 +41,7 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 	List<MediaCoordinatesProjection> findCoordinatesByIds(@Param("ids") List<Long> ids);
 
 	/**
-	 * Media that have GPS but no resolved location yet ("pending"). Manual
-	 * locations are never listed: they prevail over automatic resolution.
+	 * Media that have GPS but no resolved location yet ("pending").
 	 */
 	@Query("""
 			select m.id
@@ -79,7 +71,6 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 			  and m.latitude is not null
 			  and m.longitude is not null
 			  and (m.latitude <> 0 or m.longitude <> 0)
-			  and gl.manual = false
 			  and gl.place.confidence in :confidences
 			  and m.id > :lastId
 			order by m.id
@@ -88,18 +79,16 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 			@Param("lastId") Long lastId, Pageable pageable);
 
 	/**
-	 * All media with GPS, excluding manual locations, for full rebuild.
+	 * All media with GPS, for full rebuild.
 	 */
 	@Query("""
 			select m.id
 			from MediaMetadata m
 			join m.catalogFile mf
-			left join MediaGeoLocation gl on gl.id = m.id
 			where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
 			  and m.latitude is not null
 			  and m.longitude is not null
 			  and (m.latitude <> 0 or m.longitude <> 0)
-			  and (gl.id is null or gl.manual = false)
 			  and m.id > :lastId
 			order by m.id
 			""")
@@ -127,7 +116,6 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 			  and m.latitude is not null
 			  and m.longitude is not null
 			  and (m.latitude <> 0 or m.longitude <> 0)
-			  and gl.manual = false
 			  and gl.place.confidence in :confidences
 			""")
 	long countByConfidenceForRebuild(@Param("confidences") List<LocationConfidence> confidences);
@@ -136,12 +124,10 @@ public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocati
 			select count(m.id)
 			from MediaMetadata m
 			join m.catalogFile mf
-			left join MediaGeoLocation gl on gl.id = m.id
 			where mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
 			  and m.latitude is not null
 			  and m.longitude is not null
 			  and (m.latitude <> 0 or m.longitude <> 0)
-			  and (gl.id is null or gl.manual = false)
 			""")
 	long countAllResolvable();
 }

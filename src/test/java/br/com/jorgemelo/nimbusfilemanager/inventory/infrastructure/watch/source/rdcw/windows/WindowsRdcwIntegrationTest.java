@@ -4,6 +4,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
@@ -118,7 +119,8 @@ class WindowsRdcwIntegrationTest {
 			// at one instant: a change from outside the root could arrive late.
 			await().during(Duration.ofMillis(5 * POLL_PAUSE_MILLIS)).atMost(Duration.ofSeconds(5))
 					.pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(POLL_PAUSE_MILLIS))
-					.untilAsserted(() -> Assertions.assertThat(source.pollChangedFiles()).doesNotContain(outside));
+					.untilAsserted(() -> Assertions.assertThat(source.pollChanges())
+							.extracting(FileSystemChange::path).doesNotContain(outside));
 		} finally {
 			source.close();
 		}
@@ -134,7 +136,7 @@ class WindowsRdcwIntegrationTest {
 		try {
 			await().atMost(Duration.ofMillis(MAX_POLLS * POLL_PAUSE_MILLIS)).pollDelay(Duration.ZERO)
 					.pollInterval(Duration.ofMillis(POLL_PAUSE_MILLIS))
-					.until(() -> source.pollChangedFiles().stream()
+					.until(() -> source.pollChanges().stream().map(FileSystemChange::path)
 							.map(path -> path.toAbsolutePath().normalize()).anyMatch(normalized::equals));
 
 			return true;

@@ -12,6 +12,7 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn.UsnCursorStore;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.usn.windows.WindowsUsnSupport;
+import br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.windows.WindowsVolumeScope;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -40,22 +41,29 @@ public final class WindowsChangeSourceSupport {
 
 		RdcwReadSeam seam = FfmRdcwReadSeam.open(normalized, bufferBytes);
 
+		// Resolved once, here, and handed to both sources. A file id means nothing
+		// without the volume it was issued by, and if the live source and the journal
+		// replay named that volume differently, the same file seen by both would
+		// never be recognised as one object.
+		String volumeScope = WindowsVolumeScope.forRoot(normalized).orElse(null);
+
 		try {
-			Optional<UsnCatchUpResult> catchUp = WindowsUsnSupport.tryCatchUp(normalized, cursorStore, bufferBytes);
+			Optional<UsnCatchUpResult> catchUp = WindowsUsnSupport.tryCatchUp(normalized, cursorStore, bufferBytes,
+					volumeScope);
 
 			if (catchUp.isPresent()) {
 				log.info("Change source for {}: ReadDirectoryChangesW (real-time) + USN journal catch-up", normalized);
 
 				describe(normalized, catchUp.get().recoveryReason());
 
-				return new RdcwFileChangeSource(normalized, seam, catchUp.get().offlineChanges(),
+				return new RdcwFileChangeSource(normalized, seam, volumeScope, catchUp.get().offlineChanges(),
 						catchUp.get().recoveryReason());
 			}
 
 			log.info("Change source for {}: ReadDirectoryChangesW (real-time) only; USN catch-up unavailable "
 					+ "(no elevation) - a startup reconcile covers offline changes", normalized);
 
-			return new RdcwFileChangeSource(normalized, seam, List.of(),
+			return new RdcwFileChangeSource(normalized, seam, volumeScope, List.of(),
 					WatchRecoveryReason.JOURNAL_UNREPLAYABLE);
 		} catch (RuntimeException | LinkageError failure) {
 			seam.close();

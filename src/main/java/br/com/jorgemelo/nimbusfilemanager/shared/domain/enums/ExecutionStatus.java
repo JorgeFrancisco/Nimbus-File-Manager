@@ -31,10 +31,21 @@ public enum ExecutionStatus {
 	INTERRUPTED, ERROR, CANCELLED,
 
 	/**
-	 * The execution was refused before any file was moved because the plan
-	 * contained conflicts and conflicts were not allowed. It is a deliberate, safe
-	 * no-op - not a failure - so it is shown as a warning ("Rejeitado"), never with
-	 * the red error styling. {@code errors} stays 0 for this state.
+	 * The execution deliberately did not go on, and nothing is wrong. Shown as a
+	 * warning ("Rejeitado"), never with the red error styling, because in neither
+	 * of its two cases did anything fail.
+	 *
+	 * <p>
+	 * An organization run refused before any file was moved, because the plan held
+	 * conflicts and conflicts were not allowed: a safe no-op, with {@code errors}
+	 * left at 0.
+	 *
+	 * <p>
+	 * Or a fingerprint backlog that stood aside for an inventory or a conversion -
+	 * whether before it started or part-way through. Everything it computed is
+	 * written and counted, so this one can carry counts, and the next run continues
+	 * from what the database still says is missing. It is not {@link #CANCELLED},
+	 * which means a person asked for the stop.
 	 */
 	REJECTED;
 

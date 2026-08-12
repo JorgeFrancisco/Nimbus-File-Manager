@@ -34,8 +34,7 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 
 	/**
 	 * @return folder segments to insert under the layout (possibly the fallback
-	 * folder), or an empty list when location must not subdivide this media. Manual
-	 * locations always qualify.
+	 * folder), or an empty list when location must not subdivide this media
 	 */
 	public List<String> subdivisionSegments(MediaGeoLocation location, LocationSubdivision subdivision,
 			LocationConfidence minimumConfidence, LocationFallbackMode fallback) {
@@ -79,10 +78,6 @@ public class LocationOrganizationPolicy extends LocalizedComponent {
 	private boolean qualifies(MediaGeoLocation location, LocationConfidence minimumConfidence) {
 		if (location == null || location.getPlace() == null || location.getPlace().getConfidence() == null) {
 			return false;
-		}
-
-		if (location.isManual()) {
-			return true;
 		}
 
 		return location.getPlace().getConfidence().atLeast(minimumConfidence);

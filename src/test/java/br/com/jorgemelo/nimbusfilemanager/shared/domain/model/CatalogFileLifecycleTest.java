@@ -1,7 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.model;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -10,8 +9,17 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 
 /**
  * Invariants of the {@code lifecycle_status} state machine: the three
- * mutually-exclusive states and the transitions that must never regress - most
- * importantly, that DELETED is never downgraded to MISSING.
+ * mutually-exclusive states, and the two transitions the entity is still
+ * allowed to make on its own.
+ *
+ * <p>
+ * Going missing is not one of them, and its absence here is the point. Becoming
+ * active or removed happens because an operation did something to the file, and
+ * the entity changes with it in the operation's transaction. A file going
+ * missing is something a pass concluded from an empty path - it has provenance,
+ * a moment and an observer - so it is written through the door that records the
+ * fact alongside the column, and an entity method for it would be a second way
+ * to reach the same state carrying none of that.
  */
 class CatalogFileLifecycleTest {
 
@@ -53,43 +61,37 @@ class CatalogFileLifecycleTest {
 	}
 
 	@Test
-	void markMissingFromActiveBecomesMissingAndStampsTheChange() {
-		CatalogFile file = CatalogFile.builder().lifecycleStatus(LifecycleStatus.ACTIVE).build();
-
-		file.markMissing();
-
-		Assertions.assertThat(file.getLifecycleStatus()).isEqualTo(LifecycleStatus.MISSING);
-		Assertions.assertThat(file.getLifecycleChangedAt()).isNotNull();
-	}
-
-	@Test
-	void markMissingNeverDowngradesDeletedNorStampsIt() {
-		CatalogFile deleted = CatalogFile.builder().lifecycleStatus(LifecycleStatus.DELETED).build();
-
-		deleted.markMissing();
-
-		Assertions.assertThat(deleted.getLifecycleStatus()).isEqualTo(LifecycleStatus.DELETED);
-		Assertions.assertThat(deleted.getLifecycleChangedAt()).as("no transition, no stamp").isNull();
-	}
-
-	@Test
-	void markMissingDoesNotResetTheTimestampWhenAlreadyMissing() {
-		LocalDateTime firstMark = LocalDateTime.of(2020, Month.JANUARY, 1, 12, 0);
-
-		CatalogFile file = CatalogFile.builder().lifecycleStatus(LifecycleStatus.MISSING).lifecycleChangedAt(firstMark)
-				.build();
-
-		file.markMissing();
-
-		Assertions.assertThat(file.getLifecycleChangedAt()).as("retention clock not reset").isEqualTo(firstMark);
-	}
-
-	@Test
 	void markDeletedWinsFromAnyState() {
 		CatalogFile file = CatalogFile.builder().lifecycleStatus(LifecycleStatus.MISSING).build();
 
 		file.markDeleted();
 
 		Assertions.assertThat(file.getLifecycleStatus()).isEqualTo(LifecycleStatus.DELETED);
+	}
+
+	/**
+	 * The stamp is when the state changed, so a transition that does not happen
+	 * does not touch it - which is what keeps a retention clock from being reset by
+	 * an operation that concluded nothing new.
+	 */
+	@Test
+	void aStateThatDidNotChangeDoesNotMoveTheStamp() {
+		Instant firstMark = Instant.parse("2020-01-01T12:00:00Z");
+
+		CatalogFile deleted = CatalogFile.builder().lifecycleStatus(LifecycleStatus.DELETED)
+				.lifecycleChangedAt(firstMark).build();
+
+		deleted.markDeleted();
+
+		Assertions.assertThat(deleted.getLifecycleChangedAt()).as("retention clock not reset").isEqualTo(firstMark);
+	}
+
+	@Test
+	void aStateThatChangedIsStamped() {
+		CatalogFile file = CatalogFile.builder().lifecycleStatus(LifecycleStatus.ACTIVE).build();
+
+		file.markDeleted();
+
+		Assertions.assertThat(file.getLifecycleChangedAt()).isNotNull();
 	}
 }

@@ -60,7 +60,7 @@ class ConversionExecutionRecorderTest {
 		ConversionItemResult line = captor.getValue();
 
 		Assertions.assertThat(line.getExecution()).isSameAs(execution);
-		Assertions.assertThat(line.getMediaPublicId()).isEqualTo(media);
+		Assertions.assertThat(line.getCatalogFilePublicId()).isEqualTo(media);
 		Assertions.assertThat(line.getFileName()).isEqualTo("holiday.mp4");
 		Assertions.assertThat(line.getOutcome()).isEqualTo(ConversionOutcome.CONVERTED);
 		Assertions.assertThat(line.getOriginalBytes()).isEqualTo(1_000L);

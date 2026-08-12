@@ -93,11 +93,47 @@ class SimilarityViewServiceTest {
 		SimilarityView view = service.photos(70, PageRequest.of(0, 20));
 
 		Assertions.assertThat(view.published()).isTrue();
-		Assertions.assertThat(view.outdated()).isFalse();
+		Assertions.assertThat(service.outdated(ExecutionType.SIMILARITY_PHOTO, 70)).contains(false);
 		Assertions.assertThat(view.groups()).hasSize(1);
 		Assertions.assertThat(view.eligibleCount()).isEqualTo(120);
 		Assertions.assertThat(view.analyzedCount()).isEqualTo(118);
 		Assertions.assertThat(view.coverageComplete()).isFalse();
+	}
+
+	/**
+	 * The contract this screen's speed rests on. Identifying the whole eligible
+	 * library to compare one digest was 2,5 s of the 2,9 s a navigation cost, and
+	 * the page has nothing on it that depends on the answer - so building the view
+	 * must not ask for it. It is asked for separately, by whoever needs it.
+	 */
+	@Test
+	void buildingTheViewNeverIdentifiesTheWholeLibrary() {
+		when(reader.active(any())).thenReturn(Optional.of(grouping(CURRENT_COMPOSITION, 120, 118)));
+		when(reader.page(any(), any())).thenReturn(oneGroup());
+
+		service.photos(70, PageRequest.of(0, 20));
+		service.videos(70, PageRequest.of(0, 20));
+
+		verify(photoSimilarityService, never()).composition();
+		verify(videoSimilarityService, never()).composition();
+	}
+
+	/** Nothing published is not "current": there is no answer to be current. */
+	@Test
+	void aFamilyThatWasNeverAnalysedHasNoVerdictAtAll() {
+		when(reader.active(any())).thenReturn(Optional.empty());
+
+		Assertions.assertThat(service.outdated(ExecutionType.SIMILARITY_PHOTO, 70)).isEmpty();
+		Assertions.assertThat(service.outdated(ExecutionType.SIMILARITY_VIDEO, 70)).isEmpty();
+	}
+
+	/** The same rule, asked about the other medium. */
+	@Test
+	void theVideoFamilyAnswersWithItsOwnComposition() {
+		videoAnalyzer(CURRENT_COMPOSITION);
+		when(reader.active(any())).thenReturn(Optional.of(grouping("d".repeat(64), 4, 4)));
+
+		Assertions.assertThat(service.outdated(ExecutionType.SIMILARITY_VIDEO, 70)).contains(true);
 	}
 
 	@Test
@@ -109,7 +145,7 @@ class SimilarityViewServiceTest {
 		SimilarityView view = service.photos(70, PageRequest.of(0, 20));
 
 		Assertions.assertThat(view.published()).isTrue();
-		Assertions.assertThat(view.outdated()).isTrue();
+		Assertions.assertThat(service.outdated(ExecutionType.SIMILARITY_PHOTO, 70)).contains(true);
 		Assertions.assertThat(view.groups()).hasSize(1);
 		Assertions.assertThat(view.coverageComplete()).isTrue();
 	}
@@ -160,8 +196,15 @@ class SimilarityViewServiceTest {
 				8000, SimilarityConstants.SELECTION_OLDEST_ELIGIBLE_FIRST));
 	}
 
+	private void videoAnalyzer(String compositionDigest) {
+		when(videoSimilarityService.family(70)).thenReturn(new SimilarityFamily(FileType.VIDEO,
+				FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1, SimilarityConstants.GROUPING_VERSION, PARAMETERS));
+		when(videoSimilarityService.composition()).thenReturn(new SimilarityComposition(compositionDigest, 4, 4, 8000,
+				SimilarityConstants.SELECTION_OLDEST_ELIGIBLE_FIRST));
+	}
+
 	private SimilarityGrouping grouping(String compositionDigest, int eligible, int analyzed) {
-		return SimilarityGrouping.builder().id(1L).publicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
+		return SimilarityGrouping.builder().id(1L).similarityGroupingPublicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
 				.algorithmId(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(PARAMETERS)
 				.compositionDigest(compositionDigest).eligibleCount(eligible).analyzedCount(analyzed)

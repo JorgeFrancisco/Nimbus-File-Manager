@@ -4,17 +4,18 @@ import java.util.List;
 
 /**
  * The outcome of one non-blocking {@code ReadDirectoryChangesW} drain: the
- * changed entries' paths relative to the watched root (already parsed by the
- * native seam), plus whether the OS reported a buffer overflow since the last
- * drain (too many changes to buffer - the watcher then forces a reconcile).
+ * entries the OS reported since the last drain (already decoded by the native
+ * seam), plus whether it reported a buffer overflow - too many changes to
+ * buffer, after which the watcher forces a reconcile.
  *
- * @param relativePaths the changed paths relative to the root (never null;
- * empty when nothing changed since the last drain).
+ * @param entries the changed entries, in the order Windows wrote them, which is
+ * what pairs the two halves of a rename (never null; empty when nothing changed
+ * since the last drain).
  * @param overflowed whether change events were dropped and a reconcile is due.
  */
-public record RdcwReadResult(List<String> relativePaths, boolean overflowed) {
+public record RdcwReadResult(List<FileNotifyEntry> entries, boolean overflowed) {
 
 	public RdcwReadResult {
-		relativePaths = relativePaths == null ? List.of() : List.copyOf(relativePaths);
+		entries = entries == null ? List.of() : List.copyOf(entries);
 	}
 }

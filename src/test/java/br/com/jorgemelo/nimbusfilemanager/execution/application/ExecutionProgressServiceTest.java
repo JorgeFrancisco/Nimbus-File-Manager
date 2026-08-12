@@ -32,6 +32,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -148,6 +149,29 @@ class ExecutionProgressServiceTest {
 		verify(executionRepository, never()).save(any());
 		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.PROCESSING_STARTED
 				&& ExecutionMessages.PROCESSING_FILES.equals(step.getStatusMessage().getCode())));
+	}
+
+	/**
+	 * A caller with nothing new to say. The row keeps the sentence it had and the
+	 * step is written without one - what must not happen is the update dying on
+	 * the way, taking the phase and the counters with it.
+	 */
+	@Test
+	void aPhaseChangeWithNothingToSayStillGetsWrittenDown() {
+		Execution execution = execution(1L);
+
+		execution.setStatusMessage(StatusMessage.coded(ExecutionMessages.PROCESSING_FILES, null));
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution));
+
+		service().updatePhase(Takings.owning(1L), ExecutionPhase.VERIFYING, ExecutionStepType.PROCESSING_STARTED,
+				null);
+
+		Assertions.assertThat(execution.getPhase()).isEqualTo(ExecutionPhase.VERIFYING);
+		Assertions.assertThat(execution.getStatusMessage().getCode()).isEqualTo(ExecutionMessages.PROCESSING_FILES);
+
+		verify(executionStepRepository).save(argThat(step -> step.getStepType() == ExecutionStepType.PROCESSING_STARTED
+				&& step.getStatusMessage() == null));
 	}
 
 	@Test
@@ -399,7 +423,7 @@ class ExecutionProgressServiceTest {
 	private ExecutionProgressService service() {
 		return new ExecutionProgressService(mock(ExecutionQueue.class), executionRepository,
 				new ExecutionItemProgressWriter(executionRepository), executionStepRepository, messageCodec,
-				Clock.systemDefaultZone());
+				Progress.window(Clock.systemDefaultZone()), Clock.systemDefaultZone());
 	}
 
 	private Execution execution(Long id) {

@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -37,7 +38,7 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 			Pageable pageable);
 
 	@EntityGraph(attributePaths = { "execution", "catalogFile" })
-	Optional<Movement> findByPublicId(UUID publicId);
+	Optional<Movement> findByMovementPublicId(UUID movementPublicId);
 
 	/**
 	 * Still-quarantined files whose soft-delete happened before {@code cutoff}: the
@@ -46,7 +47,7 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 	 */
 	@EntityGraph(attributePaths = { "catalogFile" })
 	Page<Movement> findByStatusAndReasonInAndMovedAtBeforeOrderByIdAsc(MovementStatus status,
-			Collection<MovementReason> reasons, LocalDateTime cutoff, Pageable pageable);
+			Collection<MovementReason> reasons, Instant cutoff, Pageable pageable);
 
 	/**
 	 * Whether anything at all is overdue, without loading it. The daily pass asks
@@ -57,10 +58,18 @@ public interface MovementRepository extends JpaRepository<Movement, Long> {
 			LocalDateTime cutoff);
 
 	/**
-	 * How many movement rows still reference a given media file - used to know when
-	 * it is safe to delete it.
+	 * How many quarantine operations still hold a given file, which is the only
+	 * question that decides whether the catalog row may go.
+	 *
+	 * <p>
+	 * Counting <em>every</em> movement was the same question asked wrongly, and it
+	 * only looked right while a quarantined file had exactly one movement to its
+	 * name. Once a folder relocation writes one operation per file, an ordinary
+	 * rename would hold a purge back forever - and silently, since a purge that
+	 * removes nothing reports success.
 	 */
-	long countByCatalogFileId(Long catalogFileId);
+	long countByCatalogFileIdAndStatusAndReasonIn(Long catalogFileId, MovementStatus status,
+			Collection<MovementReason> reasons);
 
 	/**
 	 * Aggregated post-move integrity report: movement counts grouped by status and

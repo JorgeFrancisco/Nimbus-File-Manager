@@ -3,8 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,7 +31,8 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection
  */
 class SimilarityCompositionAgreementTest {
 
-	private static final LocalDateTime NOW = LocalDateTime.of(2026, Month.MAY, 1, 10, 0);
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-05-01T10:00:00Z");
 
 	private final DuplicateExclusionService exclusions = mock(DuplicateExclusionService.class);
 
@@ -151,12 +151,13 @@ class SimilarityCompositionAgreementTest {
 
 	private PhotoHashRawResponse photo(UUID id, String folder) {
 		return new PhotoHashRawResponse(id.getMostSignificantBits(), id, new byte[32], new byte[64], "photo.jpg",
-				"jpg", 100L, folder + "/photo.jpg", folder, NOW);
+				"jpg", 100L, folder + "/photo.jpg", folder, WRITTEN_AT);
 	}
 
 	private VideoFrameRawResponse frame(UUID id, int sampleIndex) {
 		return new VideoFrameRawResponse(id.getLeastSignificantBits(), id, sampleIndex, (long) sampleIndex * 1000,
-				new byte[32], new byte[64], "video.mp4", "mp4", 100L, "C:/Videos/video.mp4", "C:/Videos", NOW, 10.0,
+				new byte[32], new byte[64], "video.mp4", "mp4", 100L, "C:/Videos/video.mp4", "C:/Videos", WRITTEN_AT,
+				10.0,
 				1920, 1080);
 	}
 }

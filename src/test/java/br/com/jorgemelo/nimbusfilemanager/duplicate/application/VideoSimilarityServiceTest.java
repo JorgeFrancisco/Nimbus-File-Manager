@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -44,6 +45,8 @@ class VideoSimilarityServiceTest {
 
 	private static final String ALGORITHM = "FFMPEG_LANCZOS_PHASH_256_FRAMES_V1";
 	private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-08T12:00:00");
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-07-08T12:00:00Z");
 
 	@Mock
 	private MediaFingerprintRepository mediaFingerprintRepository;
@@ -74,7 +77,7 @@ class VideoSimilarityServiceTest {
 		when(algorithm.algorithm()).thenReturn(ALGORITHM);
 		when(algorithm.framesPerFingerprint()).thenReturn(5);
 
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFilePublicIds()).thenReturn(List.of());
 		when(duplicateExclusionService.excludedFolders()).thenReturn(List.of());
 		when(duplicateExclusionService.isUnderExcludedFolder(any(), any())).thenCallRealMethod();
@@ -160,7 +163,7 @@ class VideoSimilarityServiceTest {
 	@Test
 	void aCandidateWithNullFolderSurvivesFolderExclusion() {
 		VideoFrameRawResponse nullFolder = new VideoFrameRawResponse(1L, UUID.randomUUID(), 0, 0L, new byte[32],
-				new byte[1024], "a", "mp4", 1000L, "C:/a.mp4", null, NOW, 10.0, 1920, 1080);
+				new byte[1024], "a", "mp4", 1000L, "C:/a.mp4", null, WRITTEN_AT, 10.0, 1920, 1080);
 
 		when(mediaFingerprintRepository.findFingerprintedVideoFrames(any(), any(), any()))
 				.thenReturn(List.of(nullFolder));
@@ -182,12 +185,13 @@ class VideoSimilarityServiceTest {
 
 	private VideoFrameRawResponse sizedRow(UUID id, String name, long sizeBytes) {
 		return new VideoFrameRawResponse(id.getLeastSignificantBits(), id, 0, 0L, new byte[32], new byte[1024], name,
-				"mp4", sizeBytes, "C:/" + name + ".mp4", "C:/", NOW, 10.0, 1920, 1080);
+				"mp4", sizeBytes, "C:/" + name + ".mp4", "C:/", WRITTEN_AT, 10.0, 1920, 1080);
 	}
 
 	private VideoFrameRawResponse frameRow(UUID id, String name, int sampleIndex) {
 		return new VideoFrameRawResponse(id.getLeastSignificantBits(), id, sampleIndex, sampleIndex * 1000L,
-				new byte[32], new byte[1024], name, "mp4", 1000L, "C:/" + name + ".mp4", "C:/", NOW, 10.0, 1920, 1080);
+				new byte[32], new byte[1024], name, "mp4", 1000L, "C:/" + name + ".mp4", "C:/", WRITTEN_AT, 10.0, 1920,
+				1080);
 	}
 
 	@Test
@@ -226,7 +230,7 @@ class VideoSimilarityServiceTest {
 				Set.of(2L));
 		when(algorithm.similarityPercent(any(), any(), eq(90))).thenReturn(95);
 
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of(quality(smallA, NOW.minusDays(1)),
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(quality(smallA, NOW.minusDays(1)),
 				quality(smallB, NOW), quality(bigA, NOW.minusDays(1)), quality(bigB, NOW)));
 
 		List<AnalyzedGroup> groups = service().analyze(90, (_, _) -> {

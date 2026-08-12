@@ -3,21 +3,26 @@ package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.OptionalInt;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnershipGuard;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -69,6 +74,9 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 	private CatalogFileRepository catalogFileRepository;
 
 	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
 	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
@@ -101,8 +109,7 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 		assertThat(purged).as("the purge says it did not run").isEmpty();
 		assertThat(catalogFileRepository.findById(overdue.getId())).as("the overdue row is still catalogued")
 				.isPresent();
-		assertThat(catalogFileLocationRepository.findById(overdue.getId())).as("with the placement that would cascade")
-				.isPresent();
+		assertThat(placementsOf(overdue.getId())).as("with the placement that would cascade").isOne();
 		assertThat(movementRepository.findById(audit.getId())).get().extracting(Movement::getCatalogFile)
 				.as("and the audit still points at it, undetached").isNotNull();
 	}
@@ -127,11 +134,11 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 		assertThat(catalogFileRetentionService.purgeMissingOlderThan(DAYS, current)).hasValue(1);
 
 		assertThat(catalogFileRepository.findById(overdue.getId())).isEmpty();
-		assertThat(catalogFileLocationRepository.findById(overdue.getId())).as("placement cascaded away").isEmpty();
+		assertThat(placementsOf(overdue.getId())).as("placement cascaded away").isZero();
 		assertThat(catalogFileRepository.findById(recent.getId())).as("and the recent one is not overdue yet")
 				.isPresent();
-		assertThat(movementRepository.findById(audit.getId())).get().extracting(Movement::getCatalogFile)
-				.as("history kept, only detached").isNull();
+		assertThat(movementRepository.findById(audit.getId()))
+				.as("the operation was this file's, and the file is gone for good").isEmpty();
 
 		assertThat(catalogFileRetentionService.purgeMissingOlderThan(DAYS, current)).as("nothing left to purge")
 				.hasValue(0);
@@ -190,18 +197,28 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 		Takings.fenced(executionId, WORKER, claimCount, executionOwnershipGuard);
 	}
 
+	/**
+	 * Asked of the file, because a placement has an id of its own: the two
+	 * sequences run together in a database built in one pass and drift apart in
+	 * any other, and a question keyed on the wrong one answers by coincidence.
+	 */
+	private int placementsOf(long catalogFileId) {
+		return jdbcTemplate.queryForObject("SELECT count(*) FROM catalog_file_location WHERE catalog_file_id = ?",
+				Integer.class, catalogFileId);
+	}
+
 	private CatalogFile missingSince(int days) {
 		String key = "catalog-purge-fencing-" + System.nanoTime();
 
 		String path = "C:/test/" + key + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now(clock)).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING)
-				.lifecycleChangedAt(LocalDateTime.now(clock).minusDays(days)).build();
+		CatalogFile file = CatalogFile.builder().extension("jpg").sizeBytes(1L)
+				.modifiedAt(Instant.now(clock)).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING)
+				.lifecycleChangedAt(Instant.now(clock).minus(days, ChronoUnit.DAYS)).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
-				.originalPath(path).originalFolder("C:/test").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file);
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 	}
 
 	private Movement movedBySomeEarlierRun(CatalogFile file) {
@@ -210,7 +227,10 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 						LocalDateTime.now(clock))
 				.sourcePath("D:/src").targetPath("D:/dst").recursive(true).executeFlag(true).build());
 
+		// A moved operation says when it moved - the database refuses one that does
+		// not, which is the only half of the story it can hold on its own.
 		return movementRepository.saveAndFlush(Movement.builder().execution(organization).catalogFile(file)
-				.sourcePath("D:/src/a").targetPath("D:/dst/a").status(MovementStatus.MOVED).build());
+				.requestedSourcePath("D:/src/a").requestedTargetPath("D:/dst/a").status(MovementStatus.MOVED)
+				.movedAt(Instant.now(clock)).build());
 	}
 }

@@ -1,5 +1,12 @@
 # Nimbus File Manager
 
+> ## ⚠️ Development notice
+>
+> Nimbus File Manager is currently undergoing a breaking persistence-model refactor.
+> Existing databases/workspaces are not guaranteed to be compatible with this development
+> version and may need to be recreated. Do not use this branch/version with data you cannot
+> rebuild or restore from backup.
+
 ![Nimbus File Manager](src/main/resources/static/img/nimbus-file-manager-banner-readme.png)
 
 <img width="1890" height="943" alt="imagem" src="https://github.com/user-attachments/assets/fe31e0b3-02d3-467b-bd31-a2d1fdd59321" />
@@ -272,6 +279,12 @@ the geodata folder as their path, and the lock every execution takes over the pa
 keeps them apart. Across processes, and without either of them knowing the other exists. Everything
 else carries on beside them.
 
+The photo and video fingerprints are kept apart too, but for a different reason and by a different
+means: they share no path, they compete for the decoder and the disk, and running them together made
+the photo batch 14,8× slower while barely slowing the video one. So the exclusion lives where work is
+admitted rather than in a path lock - the queue hands out one kind at a time, photos first - and it is
+a matter of admission, not of preemption: a batch already running is never interrupted.
+
 Three background jobs stay in the application on purpose: installing an update (it ends the
 application), installing ffmpeg (the worker needs it to exist first), and backing up or restoring the
 database (the restore drops every connection, the worker's included).
@@ -525,9 +538,20 @@ transaction that starts by clearing the previous rows — so a failure at any po
 dataset intact on disk and in the database, still answering queries. A successful update replaces the
 old files in place, leaving no earlier copy behind.
 
-Resolution works by administrative containment (point-in-polygon): the application downloads the [geoBoundaries](https://www.geoboundaries.org/) CGAZ global GeoJSON files (ADM0 countries, ADM1 states/provinces, ADM2 municipalities) into `workspace/geodata` and imports them into PostgreSQL. CGAZ dissolves dependent territories into their sovereign state (e.g. Aruba becomes anonymous Netherlands area), so after the main import the application automatically detects every ISO country left without a polygon of its own, fetches each one individually through the geoBoundaries gbOpen API and imports it additively — the smaller territory polygon then wins resolution over the sovereign's. No hardcoded territory list; the download URLs, the API URL and the auto-completion toggle are runtime settings, in the offline-location section of the settings screen. For development, tests or fully air-gapped installs, `nimbus-file-manager.location.boundary.local-dir` (or `NIMBUS_FILE_MANAGER_BOUNDARY_LOCAL_DIR`) points at a local folder with the GeoJSON files instead of downloading. Downloads and extracted files are runtime data and are not versioned. Updates are conditional: the ETag of each downloaded file is remembered, so updating the dataset reuses files that did not change on the server (the import itself always runs). Updating the database invalidates the resolution cache; existing automatic locations can then be rebuilt for pending, low-confidence or all media.
+What is installed **says what it is**, in a row written by the same transaction that writes the
+boundaries: which version, where it came from and when it was imported. That row also carries the point
+at which an installation counts as finished, and it is marked only after the levels, the dependent
+territories and the file publication have all succeeded. Importing the levels, completing the
+territories and publishing the files cannot share one transaction — a territory the source has no data
+for must not roll back a worldwide import — so the presence of boundaries never meant the installation
+had completed. A run that dies anywhere in between leaves a dataset the next run rebuilds, and it
+rebuilds from the files already on disk rather than downloading them again.
 
-Organization can optionally subdivide the selected layout by country, country/state or country/state/city, with a minimum-confidence rule and an optional `SEM_LOCALIZACAO_CONFIAVEL` fallback folder. Manual locations are represented in the model and take precedence over automatic results; editing them through the UI is reserved for a future version.
+Resolution works by administrative containment (point-in-polygon): the application downloads the [geoBoundaries](https://www.geoboundaries.org/) CGAZ global GeoJSON files (ADM0 countries, ADM1 states/provinces, ADM2 municipalities) into `workspace/geodata` and imports them into PostgreSQL. CGAZ dissolves dependent territories into their sovereign state (e.g. Aruba becomes anonymous Netherlands area), so after the main import the application automatically detects every ISO country left without a polygon of its own, fetches each one individually through the geoBoundaries gbOpen API and imports it additively — the smaller territory polygon then wins resolution over the sovereign's. No hardcoded territory list; the download URLs, the API URL and the auto-completion toggle are runtime settings, in the offline-location section of the settings screen. For development, tests or fully air-gapped installs, `nimbus-file-manager.location.boundary.local-dir` (or `NIMBUS_FILE_MANAGER_BOUNDARY_LOCAL_DIR`) points at a local folder with the GeoJSON files instead of downloading. Downloads and extracted files are runtime data and are not versioned. Updates are conditional twice over: the ETag of each file is remembered, so a file the server reports unchanged is not downloaded again — and when *every* level comes back unchanged over an installation that is complete, nothing is imported either. That second half used to be missing, and it was expensive: the update parsed roughly a gigabyte of GeoJSON and replaced every boundary in the database to arrive at exactly the rows it started with, once a day and again after every restart. An update that finds nothing new now ends normally, saying so, having written nothing. Only an update that actually installs something invalidates the resolution cache; existing automatic locations can then be rebuilt for pending, low-confidence or all media.
+
+The daily check is likewise remembered where it survives a restart. Whether today's check has happened is read from the execution history — a run that finished successfully today, by hand or by the timer, discharges the day — rather than from a field in memory that a restart cleared and that used to buy a second full rebuild minutes after the first.
+
+Organization can optionally subdivide the selected layout by country, country/state or country/state/city, with a minimum-confidence rule and an optional `SEM_LOCALIZACAO_CONFIAVEL` fallback folder.
 
 Confidence reflects the finest administrative level that actually contains the coordinate: containment in a municipality is unambiguous (very high), a state-only match is partial (medium) and a country-only match is weak (low). Coordinates outside every polygon (photos taken at sea near the coast, over water in flight, coastal GPS noise) fall back to the nearest boundary within 12 nautical miles (22.2 km), stored with low confidence and the measured distance. That figure is the breadth of the territorial sea under UNCLOS - in Brazil, Lei 8.617/1993 - so the water inside it is national territory and attributing it to the coast it belongs to is defensible. The tolerance is needed because the administrative polygons stop at the shoreline: no state or municipality has a maritime limit of its own (the sea belongs to the federal union), and the only projection of state limits onto the sea is the one used to share oil royalties, which is not jurisdiction. A coordinate farther out than the tolerance resolves as **open sea**: no place names, lowest confidence, and a flag of its own - so it shows as "Alto-mar" on the map, timeline and lightbox without ever being mistaken for a country in the statistics or the organization folders. The interface shows the resolved location and this confidence level.
 
@@ -1141,7 +1165,22 @@ If `refresh` is empty or omitted, only `DATE` is rebuilt by default. The REST ca
 
 ## Duplicates
 
-Three tabs: byte-identical duplicates (SHA-256), visually **similar photos** (256-bit DCT pHash confirmed by SSIM) and visually **similar videos**. Video similarity samples several frames at deterministic relative positions in a single ffmpeg pass, hashes each with the same pHash as photos, and matches videos frame-for-frame with a trimmed-mean aggregation plus a concordant-frame quorum — robust to re-encoding, bitrate, resolution, small duration differences and compression. Both similarity kinds are derived off-inventory by a shared fingerprint backlog, itself a queued execution the worker drains, and new algorithms plug in via the `VideoSimilarityAlgorithm` contract without touching the orchestrator.
+Three tabs: byte-identical duplicates (SHA-256), visually **similar photos** (256-bit DCT pHash confirmed by SSIM) and visually **similar videos**. Video similarity samples several frames at deterministic relative positions, hashes each with the same pHash as photos, and matches videos frame-for-frame with a trimmed-mean aggregation plus a concordant-frame quorum — robust to re-encoding, bitrate, resolution, small duration differences and compression. Both similarity kinds are derived off-inventory by a shared fingerprint backlog, itself a queued execution the worker drains, and new algorithms plug in via the `VideoSimilarityAlgorithm` contract without touching the orchestrator.
+
+Each sampled frame is reached by **seeking straight to it** (`FFMPEG_LANCZOS_PHASH_256_FRAMES_V2`). The
+previous family decoded the file sequentially and selected the frames on the way past, which meant
+reading most of a video to keep five frames from it. Seeking reproduced the sequential frame in 265 of
+267 measured frames and differed in two, so it is a separate algorithm identifier rather than a faster
+version of the same one: fingerprints of the two families are never compared, and a library holding the
+older ones simply counts as pending again until it is rebuilt. Nothing is deleted or converted.
+
+Photo and video fingerprinting **do not run at the same time**. Measured on a real library, a photo
+batch degrades 14,8× when a video batch runs beside it while the video batch barely notices — the two
+compete for the same decoder and the same disk, and sharing them made both slow. The queue now admits
+one kind at a time, photos first, and the effect on a first full pass was a photo backlog that went
+from a projected ~30 h to ~6 h. There is no preemption: whichever is running finishes its batch. While
+one kind waits, its tab says which other fingerprint is running and how far along it is, so a progress
+bar that is standing still is not mistaken for one that is stuck.
 
 The grouping itself is **durable**: a worker runs it as a queued execution and publishes the result, which the screen and the API then read instead of recomputing. A published analysis records which files it examined, so it can say that the library has moved since - and it stays on screen, still usable, while a new one is being computed and after a failed recomputation. A half-built result is never visible. When no analysis has been published for the current parameters, the similarity endpoints answer `202 Accepted` with the execution to follow rather than grouping the library inside the request.
 
@@ -1392,6 +1431,13 @@ of the versions on top of the baseline exist only to re-queue rows for reprocess
 fixed (`V10`, `V12`, `V13`, `V14`), which is the same idea seen from the other side — the migration
 knows how yesterday's data becomes today's.
 
+The one kind of data a migration may discard instead of carrying is the kind the application can
+produce again on its own. The geographic dataset and the caches derived from it are downloaded from
+their source exactly as they are on a fresh installation, so a migration that reshapes how they are
+recorded may reset them and let the next update rebuild — at the cost of one import. The catalog, the
+perceptual hashes and the resolved locations are the opposite: nothing outside this installation can
+produce them again, and they are always carried across.
+
 Check applied migrations with:
 
 ```sql
@@ -1610,9 +1656,18 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       3900 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.64% instruction, 92.95% branch, 98.14% line, 99.05% method, 100.00% class
+Tests:       4376 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.55% instruction, 92.87% branch, 97.95% line, 99.12% method, 100.00% class
 ```
+
+**These numbers assume a complete test environment.** They are comparable only when every
+environment-dependent integration test applicable to the platform actually ran. A test that
+skips because a prerequisite the product manages is missing — the PostgreSQL tools,
+FFmpeg/FFprobe, the boundary dataset — does not make the measurement vary, it makes it
+invalid: restore the prerequisite and measure again rather than compare. OS-specific skips
+are expected and invalidate nothing, because the other supported CI platform runs them. The
+skip count above is the one a complete Windows environment produces. See *A medição só vale
+com o ambiente completo* in `AGENTS.md`.
 
 ### Coverage ratchet
 
@@ -1627,19 +1682,24 @@ Floor:  98.61% instruction, 92.78% branch, 98.11% line, 98.99% method, 100.00% c
 Goal:   98.75% instruction, 93.00% branch, 98.25% line, 99.00% method, 100.00% class
 ```
 
-**The run above clears the floor on all five, and the floor stays where it was.** No margin is
-wide enough to raise into: against the drift this suite is known to have between runs (*A medição
-varia entre execuções* in `AGENTS.md`: up to 0.16 on branch and ~0.03 on the rest), instruction sits
-0.03 above its floor and branch 0.16 - both exactly at the edge of the band - while line at 0.04 and
-method at 0.05 clear it by a hundredth or two. A floor set at any of those readings would leave the
-next measurement of the same tree no room at all, which is how ordinary noise becomes a red build.
+**Branch, method and class clear the floor; instruction and line are still under it, and the floor
+has not moved.** Instruction sits 0.06 below and line 0.16, against a drift this suite is known to have
+between runs of ~0.03 on both (*A medição varia entre execuções* in `AGENTS.md`; branch tolerates up to
+0.16). Both are therefore a real shortfall rather than noise - roughly 55 instructions and 28 lines.
 
-**Method is the one this slice had to earn back.** The first measurement of it came in at 98.90,
-0.09 under the floor and well outside the drift - not noise, and the JaCoCo report said exactly why:
-five methods this slice added had no test touching the real object, because the tests around them
-mocked the collaborator they belonged to. Covering the five put it at 99.04. That is the ratchet
-working as intended: the number fell, the report named the cause, and the answer was tests of
-behaviour rather than a lower floor.
+**The ETA unification did not spend that gap, it closed a little of it.** The slice added a progress
+model, an estimator, a rate window and a formatter, and every one of them came in with tests of its
+own - so all three moving metrics finished marginally above where they started (98.54 / 92.86 / 97.94)
+rather than paying for the new code out of the existing margin.
+
+**The floor stays where it is while that is worked off.** Lowering it is not a side effect of a slice
+coming in short - the *Recalcular o piso* procedure in `AGENTS.md` requires first sweeping the project
+for coverage that is honestly reachable, then classifying line by line what remains, and only then
+recording the residue. The sweep has been done and it found reachable code: the label switch a screen
+reads its progress from, a group assembler with no test of its own, a nullable date that would print
+1970 on screen. Those were covered rather than declared. What is left in that sweep is the kind the
+procedure exists for - `catch` blocks that need the operating system to refuse something, and guards
+on paths that only the root of a drive produces - and it is not enough on its own to close the gap.
 
 **Similarity analysis could not be asked about a large library.** Choosing the eligible files and then
 naming them back to the database spent one bind parameter per file, and the PostgreSQL wire protocol

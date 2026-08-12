@@ -5,7 +5,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,7 +45,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), quarantine);
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.decided()).isTrue();
 		Assertions.assertThat(plan.quarantined()).isEqualTo(quarantine);
@@ -58,7 +58,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), null);
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), null);
 
 		Assertions.assertThat(plan.decided()).isTrue();
 		Assertions.assertThat(plan.destination()).isEqualTo(origin.resolve("a.jpg"));
@@ -73,7 +73,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.decided()).isFalse();
 		Assertions.assertThat(plan.answer().outcome()).isEqualTo(RestoreOutcome.CONFLICT.name());
@@ -92,7 +92,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(),
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(),
 				new QuarantineRestoreOptions(null, ConflictResolution.RENAME));
 
 		Assertions.assertThat(plan.decided()).isTrue();
@@ -111,7 +111,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("README"), writeQuarantineCopy(tmp, "10__README"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(),
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(),
 				new QuarantineRestoreOptions(null, ConflictResolution.RENAME));
 
 		Assertions.assertThat(plan.destination()).isEqualTo(origin.resolve("README (1)"));
@@ -123,7 +123,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(tmp.resolve("gone").resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(),
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(),
 				new QuarantineRestoreOptions(alternate, ConflictResolution.BLOCK));
 
 		Assertions.assertThat(plan.decided()).isTrue();
@@ -134,7 +134,7 @@ class QuarantineRestorePlannerTest {
 	void answersWithOriginMissingWhenTheOriginalFolderIsGone(@TempDir Path tmp) throws Exception {
 		Movement movement = known(tmp.resolve("gone").resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.answer().outcome()).isEqualTo(RestoreOutcome.ORIGIN_MISSING.name());
 	}
@@ -143,7 +143,7 @@ class QuarantineRestorePlannerTest {
 	void refusesARecordedOriginalPathWithNoFolderAboveIt(@TempDir Path tmp) throws Exception {
 		Movement movement = known(tmp.getRoot(), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.answer().outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 		Assertions.assertThat(plan.answer().message()).isNotBlank();
@@ -155,7 +155,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), writeQuarantineCopy(tmp, "10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(),
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(),
 				new QuarantineRestoreOptions(null, ConflictResolution.SKIP));
 
 		Assertions.assertThat(plan.decided()).isFalse();
@@ -168,7 +168,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.jpg"), tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.answer().outcome()).isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
 	}
@@ -184,7 +184,7 @@ class QuarantineRestorePlannerTest {
 
 		Movement movement = known(origin.resolve("a.lnk"), writeQuarantineCopy(tmp, "10__a.lnk"));
 
-		QuarantineRestorePlan plan = planner.plan(movement.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan plan = planner.plan(movement.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(plan.answer().outcome()).isEqualTo(RestoreOutcome.ERROR.name());
 	}
@@ -193,7 +193,7 @@ class QuarantineRestorePlannerTest {
 	void answersWithAnErrorForAnIdThatNamesNoMovement() {
 		UUID unknown = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(unknown)).thenReturn(Optional.empty());
 
 		QuarantineRestorePlan plan = planner.plan(unknown, QuarantineRestoreOptions.defaults());
 
@@ -214,9 +214,9 @@ class QuarantineRestorePlannerTest {
 
 		organized.setReason(MovementReason.NONE);
 
-		QuarantineRestorePlan undonePlan = planner.plan(undone.getPublicId(), QuarantineRestoreOptions.defaults());
+		QuarantineRestorePlan undonePlan = planner.plan(undone.getMovementPublicId(), QuarantineRestoreOptions.defaults());
 
-		QuarantineRestorePlan organizedPlan = planner.plan(organized.getPublicId(),
+		QuarantineRestorePlan organizedPlan = planner.plan(organized.getMovementPublicId(),
 				QuarantineRestoreOptions.defaults());
 
 		Assertions.assertThat(undonePlan.answer().outcome()).isEqualTo(RestoreOutcome.ERROR.name());
@@ -230,11 +230,11 @@ class QuarantineRestorePlannerTest {
 	}
 
 	private Movement known(Path original, Path quarantine) {
-		Movement movement = Movement.builder().publicId(UUID.randomUUID()).sourcePath(PathUtils.normalize(original))
-				.targetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
-				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now()).build();
+		Movement movement = Movement.builder().movementPublicId(UUID.randomUUID()).requestedSourcePath(PathUtils.normalize(original))
+				.requestedTargetPath(PathUtils.normalize(quarantine)).status(MovementStatus.MOVED)
+				.reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(Instant.now()).build();
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
 		return movement;
 	}

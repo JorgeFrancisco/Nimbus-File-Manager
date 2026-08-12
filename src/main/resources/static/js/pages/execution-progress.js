@@ -49,7 +49,7 @@
 		var percent = data.percentComplete != null ? data.percentComplete : 0;
 
 		document.getElementById("progressFill").style.width = percent + "%";
-		var estimate = executionStatus.estimatedRemaining(data);
+		var estimate = executionStatus.eta(data.eta);
 		var message = data.message;
 		document.getElementById("progressText").textContent = data.percentComplete != null
 				? executionStatus.percent(percent) + " - " + (message || "")

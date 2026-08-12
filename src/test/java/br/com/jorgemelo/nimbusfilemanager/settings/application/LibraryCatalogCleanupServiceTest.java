@@ -19,7 +19,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLo
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityPurgeWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CollectionCatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLocationWriter;
 
 @ExtendWith(MockitoExtension.class)
 class LibraryCatalogCleanupServiceTest {
@@ -38,6 +40,12 @@ class LibraryCatalogCleanupServiceTest {
 
 	@Mock
 	private EligibilityAnnouncer eligibilityAnnouncer;
+
+	@Mock
+	private CatalogLocationWriter catalogLocationWriter;
+
+	@Mock
+	private SimilarityPurgeWriter similarityPurgeWriter;
 
 	@Test
 	void clearShouldDeleteCatalogRowsAndWipeThumbnailCacheContents() throws Exception {
@@ -125,7 +133,8 @@ class LibraryCatalogCleanupServiceTest {
 
 	private LibraryCatalogCleanupService service() {
 		return new LibraryCatalogCleanupService(
-				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository), workspaceManager,
+				new CollectionCatalogMutations(catalogFileRepository, catalogFileLocationRepository,
+						catalogLocationWriter, similarityPurgeWriter, eligibilityAnnouncer), workspaceManager,
 				eligibilityAnnouncer);
 	}
 }

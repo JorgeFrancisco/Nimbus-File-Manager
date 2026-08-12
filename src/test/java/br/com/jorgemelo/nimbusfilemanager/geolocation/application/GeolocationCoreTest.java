@@ -52,7 +52,7 @@ class GeolocationCoreTest {
 
 	@Test
 	void shouldBuildSafeOrganizationSegmentsAndHonorConfidenceFallback() {
-		MediaGeoLocation location = MediaGeoLocation.builder().manual(false)
+		MediaGeoLocation location = MediaGeoLocation.builder()
 				.place(ResolvedPlace.builder().countryName("Brasil").stateName("Paraná").cityName("Curitiba/Centro")
 						.confidence(LocationConfidence.HIGH).build())
 				.build();
@@ -68,14 +68,7 @@ class GeolocationCoreTest {
 	}
 
 	@Test
-	void manualLocationShouldAlwaysQualifyAndDisplayHelpersShouldSkipMissingParts() {
-		MediaGeoLocation manual = MediaGeoLocation.builder().manual(true).place(ResolvedPlace.builder()
-				.countryName("Brasil").cityName("Curitiba").confidence(LocationConfidence.VERY_LOW).build()).build();
-
-		Assertions
-				.assertThat(organizationPolicy.subdivisionSegments(manual, LocationSubdivision.COUNTRY_STATE_CITY,
-						LocationConfidence.VERY_HIGH, LocationFallbackMode.IGNORE))
-				.containsExactly("Brasil", "Curitiba");
+	void theDisplayLabelSkipsThePartsThatAreMissing() {
 		Assertions.assertThat(LocationDisplay.fullLabel("Curitiba", null, "Brasil")).isEqualTo("Curitiba, Brasil");
 	}
 }

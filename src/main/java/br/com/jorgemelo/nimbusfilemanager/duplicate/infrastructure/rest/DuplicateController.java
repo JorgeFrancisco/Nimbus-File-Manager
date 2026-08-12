@@ -21,16 +21,20 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateCan
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateFileResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogProgress;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintFailureResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedGroup;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.PublishedMember;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityFreshness;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityGroupResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityMemberResponse;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogProgressReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.SimilarityMemberFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PagedResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import io.swagger.v3.oas.annotations.Operation;
 
@@ -44,17 +48,20 @@ public class DuplicateController {
 	private final PhashBacklogService phashBacklogService;
 	private final VideoFingerprintBacklogService videoFingerprintBacklogService;
 	private final FingerprintFailureLabels fingerprintFailureLabels;
+	private final FingerprintBacklogProgressReader fingerprintBacklogProgressReader;
 
 	public DuplicateController(DuplicateService duplicateService, SimilarityViewService similarityViewService,
 			SimilarityLauncher similarityLauncher, PhashBacklogService phashBacklogService,
 			VideoFingerprintBacklogService videoFingerprintBacklogService,
-			FingerprintFailureLabels fingerprintFailureLabels) {
+			FingerprintFailureLabels fingerprintFailureLabels,
+			FingerprintBacklogProgressReader fingerprintBacklogProgressReader) {
 		this.duplicateService = duplicateService;
 		this.similarityViewService = similarityViewService;
 		this.similarityLauncher = similarityLauncher;
 		this.phashBacklogService = phashBacklogService;
 		this.videoFingerprintBacklogService = videoFingerprintBacklogService;
 		this.fingerprintFailureLabels = fingerprintFailureLabels;
+		this.fingerprintBacklogProgressReader = fingerprintBacklogProgressReader;
 	}
 
 	@GetMapping
@@ -103,6 +110,7 @@ public class DuplicateController {
 	public ResponseEntity<PagedResponse<SimilarityGroupResponse>> similarPhotos(
 			@RequestParam(required = false) Integer minSimilarity, @PageableDefault(size = 20) Pageable pageable) {
 		return published(similarityViewService.photos(SimilarityBounds.clamp(minSimilarity), pageable),
+				ExecutionType.SIMILARITY_PHOTO, SimilarityBounds.clamp(minSimilarity),
 				() -> similarityLauncher.launchPhotos(SimilarityBounds.clamp(minSimilarity)));
 	}
 
@@ -122,6 +130,7 @@ public class DuplicateController {
 	public ResponseEntity<PagedResponse<SimilarityGroupResponse>> similarVideos(
 			@RequestParam(required = false) Integer minSimilarity, @PageableDefault(size = 20) Pageable pageable) {
 		return published(similarityViewService.videos(SimilarityBounds.clamp(minSimilarity), pageable),
+				ExecutionType.SIMILARITY_VIDEO, SimilarityBounds.clamp(minSimilarity),
 				() -> similarityLauncher.launchVideos(SimilarityBounds.clamp(minSimilarity)));
 	}
 
@@ -134,15 +143,21 @@ public class DuplicateController {
 	 * moved since. Withholding it would leave a consumer with nothing while a
 	 * perfectly usable answer sits in the database.
 	 */
-	private ResponseEntity<PagedResponse<SimilarityGroupResponse>> published(SimilarityView view,
-			Supplier<Execution> queue) {
+	private ResponseEntity<PagedResponse<SimilarityGroupResponse>> published(SimilarityView view, ExecutionType type,
+			int minSimilarity, Supplier<Execution> queue) {
 		if (!view.published()) {
 			Execution execution = queue.get();
 
-			return ResponseEntity.accepted().header("Location", "/api/executions/" + execution.getPublicId()).build();
+			return ResponseEntity.accepted()
+					.header("Location", "/api/executions/" + execution.getExecutionPublicId()).build();
 		}
 
-		return ResponseEntity.ok(PagedResponse.from(view.groups().map(group -> toResponse(group, view.outdated()))));
+		// Asked for here and not carried by the view: the screen renders without it
+		// and fetches it afterwards, while this contract promises the flag on every
+		// group and so pays for it before answering. One rule, two callers.
+		boolean outdated = similarityViewService.outdated(type, minSimilarity).orElse(false);
+
+		return ResponseEntity.ok(PagedResponse.from(view.groups().map(group -> toResponse(group, outdated))));
 	}
 
 	private SimilarityGroupResponse toResponse(PublishedGroup group, boolean outdated) {
@@ -157,6 +172,45 @@ public class DuplicateController {
 				file == null ? null : file.currentPath(), file == null ? null : file.sizeBytes(),
 				member.decision().verdict().name(),
 				member.decision().reason() == null ? null : member.decision().reason().name(), member.actionable());
+	}
+
+	/**
+	 * The backlog behind the similarity comparison, asked for on its own.
+	 *
+	 * <p>
+	 * Separate from the activity poll on purpose - see
+	 * {@link FingerprintBacklogProgress} - and separate from this page's HTML,
+	 * which the panel used to re-fetch whole every four seconds to learn these
+	 * numbers.
+	 */
+	@GetMapping("/similar-photos/backlog")
+	@Operation(summary = "Photo fingerprint backlog: what is done, pending, failed and how long is left")
+	public FingerprintBacklogProgress photoBacklog() {
+		return fingerprintBacklogProgressReader.forTab(ExecutionType.FINGERPRINT_PHOTO);
+	}
+
+	@GetMapping("/similar-videos/backlog")
+	@Operation(summary = "Video fingerprint backlog: what is done, pending, failed and how long is left")
+	public FingerprintBacklogProgress videoBacklog() {
+		return fingerprintBacklogProgressReader.forTab(ExecutionType.FINGERPRINT_VIDEO);
+	}
+
+	@GetMapping("/similar-photos/freshness")
+	@Operation(summary = "Whether the published photo analysis still describes the library")
+	public SimilarityFreshness similarPhotoFreshness(@RequestParam(required = false) Integer minSimilarity) {
+		return freshness(ExecutionType.SIMILARITY_PHOTO, SimilarityBounds.clamp(minSimilarity));
+	}
+
+	@GetMapping("/similar-videos/freshness")
+	@Operation(summary = "Whether the published video analysis still describes the library")
+	public SimilarityFreshness similarVideoFreshness(@RequestParam(required = false) Integer minSimilarity) {
+		return freshness(ExecutionType.SIMILARITY_VIDEO, SimilarityBounds.clamp(minSimilarity));
+	}
+
+	private SimilarityFreshness freshness(ExecutionType type, int minSimilarity) {
+		return similarityViewService.outdated(type, minSimilarity)
+				.map(outdated -> new SimilarityFreshness(true, outdated))
+				.orElseGet(SimilarityFreshness::notPublished);
 	}
 
 	@GetMapping("/similar-videos/failures")

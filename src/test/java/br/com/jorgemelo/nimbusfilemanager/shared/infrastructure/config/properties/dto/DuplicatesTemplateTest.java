@@ -35,8 +35,22 @@ class DuplicatesTemplateTest {
 		String javascript = Files.readString(Path.of("src/main/resources/static/js/pages/duplicates.js"));
 
 		assertThat(html).contains("id=\"duplicatesInventoryProgress\"").contains("id=\"fingerprintProgressRegion\"")
-				.contains("id=\"similarityProgressRegion\"").contains("data-refresh-ms=\"4000\"")
-				.contains("data-refresh-ms=\"3000\"").contains("data-refresh-ms=${phashBlocking ? 4000 : null}")
+				.contains("id=\"similarityProgressRegion\"")
+				// The two panels that carried no changing data of their own now watch the
+				// activity poll the app shell already runs, instead of asking the server to
+				// render this entire screen every few seconds. On a large library that render
+				// costs seconds, and the cycles stacked: a real navigation showed the document
+				// at 16,95 s beside a second, automatic request for the same URL at 15,42 s.
+				.contains("data-activity-watch=\"INVENTORY\" data-activity-on-idle=\"hide\"")
+				// Each tab watches its own family: a video analysis finishing says nothing
+				// about the photo one, and the panel on screen belongs to one of them.
+				.contains("'SIMILARITY_VIDEO' : 'SIMILARITY_PHOTO'")
+				// The backlog is catalog state rather than one execution's progress, so it has
+				// an endpoint of its own instead of a place in the activity snapshot - and, like
+				// the others, no longer asks for this whole page to learn four numbers.
+				.contains("data-backlog-url=${backlogUrl}")
+				// Nothing on this screen refreshes itself by re-rendering the screen.
+				.doesNotContain("data-refresh-ms")
 				.doesNotContain("window.location.reload()").contains("fingerprint-failures-open")
 				.contains("id=\"fingerprintFailuresDialog\"").contains("id=\"fingerprintFailuresRows\"")
 				// The dialog is shared by the tabs, so the list it loads is rendered into it.
@@ -62,6 +76,37 @@ class DuplicatesTemplateTest {
 		// The move also drives a visual bar, not just the "Movendo X de N" text.
 		assertThat(html).contains("id=\"deleteProgressBar\"");
 		assertThat(javascript).contains("setDeleteProgress(");
+	}
+
+	/**
+	 * The screen reads what is running; it never asks for itself again to find out.
+	 * Re-fetching this page to refresh a status panel is what made a navigation take
+	 * seconds under load, because each cycle re-runs the whole render.
+	 */
+	@Test
+	void theActivityPanelsReadTheSharedPollInsteadOfRefetchingThePage() throws Exception {
+		String javascript = Files.readString(Path.of("src/main/resources/static/js/pages/duplicates.js"));
+		String activity = Files.readString(Path.of("src/main/resources/static/js/execution-activity.js"));
+
+		assertThat(javascript).contains("nimbus-file-manager:activity").contains("data-activity-watch")
+				.doesNotContain("fetch(window.location.href)").doesNotContain("fetch(location.href)");
+
+		// Both halves of the snapshot are read: an inventory can be running while the
+		// banner draws something else, and a panel that only looked at the primary
+		// would call it finished.
+		assertThat(javascript).contains("snapshot.primary").contains("snapshot.others");
+
+		// One poll feeds every reader on the page: no second timer, and no second
+		// request for the same state.
+		// The backlog poll repeats the guarantees the shared one already had.
+		assertThat(javascript).contains("if (polling) {").contains("document.hidden ? HIDDEN_MILLIS : wait")
+				.contains("panel.dataset.backlogUrl");
+
+		assertThat(activity).contains("nimbus-file-manager:activity").contains("fetch(\"/api/execution-activity\")")
+				// The guarantees the shared poll already had, and must keep now that other
+				// panels depend on it: one request in flight at a time, and a slower cadence
+				// while nobody is looking.
+				.contains("if (polling) {").contains("document.hidden ? HIDDEN_MILLIS : wait");
 	}
 
 	@Test
@@ -101,5 +146,57 @@ class DuplicatesTemplateTest {
 				"checkbox.checked = inFolder(checkbox);", "checkbox.checked = isDeletionCandidate(checkbox)",
 				"const recommendedKeep = groupCheckboxes.find((checkbox) => !isDeletionCandidate(checkbox))",
 				"groupCheckboxes.every((checkbox) => checkbox.checked)", "recommendedKeep.checked = false");
+	}
+
+	/**
+	 * The line that says the other medium is being fingerprinted has to survive the
+	 * poll, which means being in the DOM before there is anything to say: the other
+	 * fingerprint can start after the page was drawn, and an element rendered
+	 * conditionally would never come back.
+	 */
+	@Test
+	void theOtherFingerprintLineIsHiddenRatherThanAbsent() throws Exception {
+		String html = Files.readString(Path.of("src/main/resources/templates/app/duplicates.html"));
+
+		// The last one is the point: rendering it conditionally would leave the poll
+		// nothing to unhide when the other fingerprint starts.
+		assertThat(html).contains("data-backlog-other").contains("th:hidden=\"${phashOther == null}\"")
+				.doesNotContain("data-backlog-other th:if");
+	}
+
+	/**
+	 * And the screen never spells out which fingerprint yields to which: that is
+	 * the queue's rule, it is free to change, and a page asserting it would go on
+	 * asserting it afterwards. The sentence names what is running, and it comes
+	 * from the bundle.
+	 */
+	@Test
+	void theOtherFingerprintLineNamesWhatIsRunningRatherThanWhatIsWaiting() throws Exception {
+		String javascript = Files.readString(Path.of("src/main/resources/static/js/pages/duplicates.js"));
+
+		assertThat(javascript).as("the label is built by the server, never assembled here")
+				.contains("backlog.other.label").doesNotContain("waiting").doesNotContain("aguardando");
+
+		String messages = Files.readString(Path.of("src/main/resources/messages.properties"));
+
+		assertThat(messages).contains("backend.duplicates.otherFingerprint.photos=")
+				.contains("backend.duplicates.otherFingerprint.videos=");
+	}
+
+	/**
+	 * The highlight has to hold its contrast in both themes, which means colours
+	 * that come from the theme rather than from the stylesheet - the mistake the
+	 * step progress bar made when it was pinned to one accent and vanished into the
+	 * background of the light theme.
+	 */
+	@Test
+	void theOtherFingerprintHighlightTakesItsColoursFromTheTheme() throws Exception {
+		String css = Files.readString(Path.of("src/main/resources/static/css/pages/duplicates.css"));
+
+		assertThat(css).contains(".fingerprint-other");
+
+		String block = css.substring(css.indexOf(".fingerprint-other"));
+
+		assertThat(block.substring(0, block.indexOf('}'))).contains("var(--").doesNotContain("#");
 	}
 }

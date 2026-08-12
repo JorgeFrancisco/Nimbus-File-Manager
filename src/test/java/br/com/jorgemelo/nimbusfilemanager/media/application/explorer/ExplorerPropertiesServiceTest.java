@@ -20,7 +20,9 @@ import org.springframework.context.support.ResourceBundleMessageSource;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
@@ -35,9 +37,12 @@ class ExplorerPropertiesServiceTest {
 	private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
 
 	private final CatalogFileRepository catalogFileRepository = mock(CatalogFileRepository.class);
+	private final CatalogFileLocationRepository catalogFileLocationRepository = mock(
+			CatalogFileLocationRepository.class);
 
 	private ExplorerPropertiesService service() {
-		ExplorerPropertiesService service = new ExplorerPropertiesService(catalogFileRepository);
+		ExplorerPropertiesService service = new ExplorerPropertiesService(catalogFileRepository,
+				catalogFileLocationRepository);
 
 		ResourceBundleMessageSource messages = new ResourceBundleMessageSource();
 
@@ -80,7 +85,7 @@ class ExplorerPropertiesServiceTest {
 	void describesAFileFromDiskAndSaysWhetherItIsCataloged(@TempDir Path folder) throws IOException {
 		Path file = Files.write(folder.resolve("photo.jpg"), new byte[2048]);
 
-		when(catalogFileRepository.findByFileKey(PathUtils.normalize(file)))
+		when(catalogFileLocationRepository.findPresentByPath(PathUtils.normalize(file), PathFlavor.of(file).name()))
 				.thenReturn(Optional.of(CatalogFile.builder().build()));
 
 		ExplorerItemProperties properties = service().of(file);
@@ -98,7 +103,7 @@ class ExplorerPropertiesServiceTest {
 	void marksAFileTheCatalogNeverSaw(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("photo.jpg"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service().of(file).cataloged()).isFalse();
 	}
@@ -129,7 +134,7 @@ class ExplorerPropertiesServiceTest {
 	void labelsAFileWithoutAnExtension(@TempDir Path folder) throws IOException {
 		Path file = Files.createFile(folder.resolve("README"));
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		Assertions.assertThat(service().of(file).typeLabel()).isEqualTo("Arquivo");
 	}

@@ -6,8 +6,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -77,8 +76,9 @@ class MediaSearchServiceTest {
 		return new MediaSearchService(mediaSearchRepository, appSettingService, properties);
 	}
 
-	private LocalDateTime now() {
-		return LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
+	/** The moment the file was written to, which is what the catalog holds. */
+	private Instant now() {
+		return Instant.parse("2024-05-09T10:30:00Z");
 	}
 	/**
 	 * The location filter is three-state, and the middle state is the one worth

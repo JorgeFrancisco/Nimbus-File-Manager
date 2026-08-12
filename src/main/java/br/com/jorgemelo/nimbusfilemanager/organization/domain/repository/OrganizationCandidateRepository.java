@@ -14,8 +14,8 @@ public interface OrganizationCandidateRepository extends JpaRepository<CatalogFi
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.organization.domain.repository.projection.OrganizationCandidate(
 			    mf.id,
-			    mf.publicId,
-			    mf.fileName,
+			    mf.catalogFilePublicId,
+			    catalogFileName(ml.currentPath, CAST(ml.pathFlavor AS string)),
 			    mf.extension,
 			    mf.fileType,
 			    mf.sizeBytes,
@@ -38,7 +38,8 @@ public interface OrganizationCandidateRepository extends JpaRepository<CatalogFi
 			       OR LOWER(ml.currentFolder) = LOWER(:sourcePath)
 			       OR LOWER(ml.currentFolder) LIKE LOWER(:descendantPattern) ESCAPE '\\'
 			  )
-			ORDER BY m.yearMonth ASC, m.day ASC, m.subcategory ASC, mf.fileName ASC
+			ORDER BY m.yearMonth ASC, m.day ASC, m.subcategory ASC,
+			         catalogFileName(ml.currentPath, CAST(ml.pathFlavor AS string)) ASC
 			""")
 	Page<OrganizationCandidate> findCandidates(@Param("sourcePath") String sourcePath,
 			@Param("descendantPattern") String descendantPattern, Pageable pageable);

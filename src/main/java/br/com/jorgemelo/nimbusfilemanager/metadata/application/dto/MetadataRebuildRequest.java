@@ -1,8 +1,7 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application.dto;
 
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MetadataRebuildField;
@@ -23,7 +22,7 @@ public record MetadataRebuildRequest(
 		@Schema(description = "Maximum number of files to process.", example = "10000") Integer limit,
 		@Schema(description = "Simulate rebuild without persisting changes.", example = "false") boolean dryRun,
 		@Schema(description = "Only rebuild files not analysed since this instant, which is how a run continues where a previous one stopped.",
-				example = "2026-07-26T11:16:13") LocalDateTime notAnalysedSince) {
+				example = "2026-07-26T11:16:13Z") Instant notAnalysedSince) {
 
 	/**
 	 * Real ceiling for {@link #limit}, independent of the caller-supplied value -
@@ -40,7 +39,7 @@ public record MetadataRebuildRequest(
 	 * rejects the statement - a far-future instant keeps one query, one code path,
 	 * and every file a candidate.
 	 */
-	public static final LocalDateTime NO_CUTOFF = LocalDateTime.of(9999, Month.DECEMBER, 31, 23, 59, 59);
+	public static final Instant NO_CUTOFF = Instant.parse("9999-12-31T23:59:59Z");
 
 	/**
 	 * Request for a whole folder, as the settings panel asks for it: no
@@ -55,12 +54,12 @@ public record MetadataRebuildRequest(
 	 * which is what makes the next run continue instead of starting over.
 	 */
 	public static MetadataRebuildRequest forFolder(String sourcePath, List<MetadataRebuildField> refresh,
-			boolean dryRun, LocalDateTime notAnalysedSince) {
+			boolean dryRun, Instant notAnalysedSince) {
 		return new MetadataRebuildRequest(sourcePath, refresh, null, null, MAX_LIMIT, dryRun, notAnalysedSince);
 	}
 
 	/** The cutoff to query by: {@link #NO_CUTOFF} when none was asked for. */
-	public LocalDateTime cutoff() {
+	public Instant cutoff() {
 		return notAnalysedSince == null ? NO_CUTOFF : notAnalysedSince;
 	}
 

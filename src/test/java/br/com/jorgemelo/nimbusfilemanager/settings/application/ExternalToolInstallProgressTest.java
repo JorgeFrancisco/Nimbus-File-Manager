@@ -3,12 +3,14 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.EtaState;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.dto.ToolInstallSnapshot;
 import br.com.jorgemelo.nimbusfilemanager.settings.domain.enums.ToolInstallPhase;
 
 class ExternalToolInstallProgressTest {
 
-	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress();
+	private final ExternalToolInstallProgress progress = new ExternalToolInstallProgress(Progress.estimator());
 
 	@Test
 	void reportsThePercentageOfTheDownloadInCourse() {
@@ -51,7 +53,7 @@ class ExternalToolInstallProgressTest {
 
 		Assertions.assertThat(snapshot.bytesTotal()).isNegative();
 		Assertions.assertThat(snapshot.percent()).isNegative();
-		Assertions.assertThat(snapshot.etaSeconds()).isNegative();
+		Assertions.assertThat(snapshot.eta().state()).isEqualTo(EtaState.NOT_APPLICABLE);
 	}
 
 	/** The archive may carry entries with no declared size. */

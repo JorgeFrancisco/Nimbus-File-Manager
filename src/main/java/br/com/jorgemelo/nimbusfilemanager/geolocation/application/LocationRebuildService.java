@@ -27,8 +27,8 @@ import lombok.extern.slf4j.Slf4j;
  * paginated batches (the catalog may hold hundreds of thousands of media). Each
  * batch is resolved in parallel because reverse geocoding is CPU-bound
  * (Point-in-Polygon); the degree of parallelism is bounded so the shared
- * database connection pool is never starved. Manual locations are never
- * touched. Errors are counted per media and never abort the whole rebuild.
+ * database connection pool is never starved. Errors are counted per media and
+ * never abort the whole rebuild.
  */
 @Slf4j
 @Service

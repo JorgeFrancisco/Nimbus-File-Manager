@@ -27,9 +27,6 @@
 				<div><dt th:text="#{statistics.chunk}">Chunk</dt><dd th:text="${execution.chunkSize() != null ? execution.chunkSize() : '—'}">—</dd></div>
 				<div><dt th:text="#{statistics.ffmpegLimit}">Limite ffmpeg (foto)</dt><dd th:text="${execution.ffmpegPhotoHashLimit() != null ? execution.ffmpegPhotoHashLimit() : '—'}">—</dd></div>
 				<div><dt th:text="#{statistics.ffprobeLimit}">Limite ffprobe (vídeo)</dt><dd th:text="${execution.ffprobeVideoLimit() != null ? execution.ffprobeVideoLimit() : '—'}">—</dd></div>
-				<div><dt th:text="#{statistics.photoHashJvm}">Foto-hash decodável em JVM (JPG/PNG)</dt><dd th:text="${execution.photoHashJvmDecodable() != null ? execution.photoHashJvmDecodable() : '—'}">—</dd></div>
-				<div><dt th:text="#{statistics.photoHashFfmpeg}">Foto-hash só via ffmpeg (HEIC/WEBP…)</dt><dd th:text="${execution.photoHashFfmpegOnly() != null ? execution.photoHashFfmpegOnly() : '—'}">—</dd></div>
-				<div><dt th:text="#{statistics.photoHashFailures}">Foto-hash falhos (indecodável)</dt><dd th:text="${execution.photoHashFailures() != null ? execution.photoHashFailures() : '—'}">—</dd></div>
 			</dl>
 		</section>
 
@@ -56,6 +53,36 @@
 					</tbody>
 				</table>
 			</div>
+		</section>
+
+		<section class="panel section">
+			<h2 th:text="#{statistics.externalTools}">Custo por ferramenta externa</h2>
+			<div class="table-wrap">
+				<table class="table section">
+					<thead><tr><th th:text="#{statistics.tool}">Ferramenta</th><th th:text="#{statistics.toolRuns}">Execuções</th><th th:text="#{statistics.toolGateWait}">Espera na fila</th><th th:text="#{statistics.toolExec}">Tempo de execução</th></tr></thead>
+					<tbody>
+					<tr th:each="category : ${categories}">
+						<td th:text="${categoryLabels.get(category.category)}">FFMPEG_PHOTO_HASH</td>
+						<td th:text="${category.runs}">0</td>
+						<td th:text="${#numbers.formatDecimal(category.gateWaitMillis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</td>
+						<td th:text="${#numbers.formatDecimal(category.externalExecMillis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</td>
+					</tr>
+					<tr th:if="${categories.isEmpty()}"><td colspan="4" th:text="#{statistics.noExternalTools}">Esta execução não usou ferramentas externas.</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel section" th:if="${aggregate != null}">
+			<h2 th:text="#{statistics.processing}">Processamento</h2>
+			<dl class="status-grid">
+				<div><dt th:text="#{statistics.tasksExecuted}">Tarefas executadas</dt><dd th:text="${aggregate.tasksExecuted}">0</dd></div>
+				<div><dt th:text="#{statistics.tasksCacheAvoided}">Evitadas por cache</dt><dd th:text="${aggregate.tasksCacheAvoided}">0</dd></div>
+				<div><dt th:text="#{statistics.tasksCancelled}">Canceladas</dt><dd th:text="${aggregate.tasksCancelled}">0</dd></div>
+				<div><dt th:text="#{statistics.tasksError}">Com falha</dt><dd th:text="${aggregate.tasksError}">0</dd></div>
+				<div><dt th:text="#{statistics.queueWait}">Espera na fila</dt><dd th:text="${#numbers.formatDecimal(aggregate.queueWaitMillis / 1000.0, 1, 1, 'COMMA')} + ' s'">0 s</dd></div>
+				<div><dt th:text="#{statistics.maxConcurrency}">Concorrência máxima</dt><dd th:text="${aggregate.maxConcurrency}">0</dd></div>
+			</dl>
 		</section>
 
 	</section>

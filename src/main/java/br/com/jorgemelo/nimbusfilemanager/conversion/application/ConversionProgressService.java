@@ -1,7 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.conversion.application;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,12 +11,14 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionP
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.model.ConversionItemResult;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.ConversionItemResultRepository;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaEstimator;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressReader;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.NumberUtils;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.SizeFormatter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
@@ -40,22 +40,23 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 public class ConversionProgressService {
 
 	/** Nothing has ever run, so there is nothing to report and nothing running. */
-	private static final ConversionProgress IDLE = new ConversionProgress(false, 0, 0, 0, 0, -1, null, null);
-
-	private static final int HUNDREDTHS = 100;
+	private static final ConversionProgress IDLE = new ConversionProgress(false, 0, 0, 0, 0,
+			EtaEstimate.notApplicable(), null, null);
 
 	private final ExecutionRepository executionRepository;
 	private final ConversionItemResultRepository conversionItemResultRepository;
 	private final ExecutionMessageCodec executionMessageCodec;
-	private final Clock clock;
+	private final EtaEstimator etaEstimator;
+	private final ExecutionProgressReader progressReader;
 
 	public ConversionProgressService(ExecutionRepository executionRepository,
-			ConversionItemResultRepository conversionItemResultRepository,
-			ExecutionMessageCodec executionMessageCodec, Clock clock) {
+			ConversionItemResultRepository conversionItemResultRepository, ExecutionMessageCodec executionMessageCodec,
+			EtaEstimator etaEstimator, ExecutionProgressReader progressReader) {
 		this.executionRepository = executionRepository;
 		this.conversionItemResultRepository = conversionItemResultRepository;
 		this.executionMessageCodec = executionMessageCodec;
-		this.clock = clock;
+		this.etaEstimator = etaEstimator;
+		this.progressReader = progressReader;
 	}
 
 	public ConversionProgress snapshot() {
@@ -80,61 +81,31 @@ public class ConversionProgressService {
 
 	private ConversionProgress snapshotOf(Execution execution) {
 		if (execution.getStatus().isTerminal()) {
-			return new ConversionProgress(false, 0, 0, 0, 0, -1, null, reportOf(execution));
+			return new ConversionProgress(false, 0, 0, 0, 0, EtaEstimate.notApplicable(), null, reportOf(execution));
 		}
 
-		int total = NumberUtils.toInt(execution.getTotalExpected() == null ? execution.getFilesFound()
-				: execution.getTotalExpected());
+		int total = NumberUtils
+				.toInt(execution.getTotalExpected() == null ? execution.getFilesFound() : execution.getTotalExpected());
 		int processed = NumberUtils.toInt(execution.getFilesAnalyzed());
 		// Null until the encoder reports for the first time, which is the state every
 		// batch is in for its first seconds - and the screen polls from the first one.
 		int filePercent = execution.getCurrentItemPercent() == null ? 0 : execution.getCurrentItemPercent();
 
-		return new ConversionProgress(true, processed, total, percentOf(processed, total, filePercent), filePercent,
-				etaOf(execution, processed, total, filePercent), currentFileOf(execution), null);
+		return new ConversionProgress(true, processed, total, percentOf(execution), filePercent,
+				etaEstimator.estimate(execution), currentFileOf(execution), null);
 	}
 
 	/**
-	 * Counted in hundredths of a video so a batch of one long file still advances
-	 * visibly, and held below a hundred while anything is still being written -
-	 * rounding showed a finished bar with the last video at 88%.
+	 * From the same reader every other screen uses, over the hundredths this
+	 * workload declares: a batch of one long video advances visibly because the
+	 * model counts hundredths, not because this class counts them for itself.
 	 */
-	private double percentOf(int processed, int total, int filePercent) {
-		if (total <= 0) {
-			return 0;
-		}
+	private double percentOf(Execution execution) {
+		Double percent = progressReader.percent(execution);
 
-		if (processed >= total) {
-			return 100;
-		}
-
-		double percent = ProgressMath.percent(done(processed, filePercent), (long) total * HUNDREDTHS);
-
-		return Math.clamp(ProgressMath.round(percent), 0, 99.99);
+		return percent == null ? 0 : percent;
 	}
 
-	private long etaOf(Execution execution, int processed, int total, int filePercent) {
-		if (execution.getStartedAt() == null) {
-			return -1;
-		}
-
-		// Through the clock's zone, as the telemetry does: a local time on its own
-		// carries no offset, so subtracting two of them is only right by accident.
-		long elapsed = Duration.between(execution.getStartedAt().atZone(clock.getZone()).toInstant(), clock.instant())
-				.toMillis();
-
-		return ProgressMath.etaSeconds(elapsed, done(processed, filePercent), (long) total * HUNDREDTHS);
-	}
-
-	private long done(int processed, int filePercent) {
-		return processed * (long) HUNDREDTHS + Math.clamp(filePercent, 0, HUNDREDTHS);
-	}
-
-	/**
-	 * The file the batch is on, taken from the argument the progress message was
-	 * built with rather than from the sentence it renders - the screen composes its
-	 * own text around the name.
-	 */
 	private String currentFileOf(Execution execution) {
 		if (execution.getStatusMessage() == null || execution.getStatusMessage().getArgs() == null) {
 			return null;
@@ -151,8 +122,8 @@ public class ConversionProgressService {
 	 * holding the sum of other rows is a column that can disagree with them.
 	 */
 	private ConversionResult reportOf(Execution execution) {
-		List<ConversionItemResult> items = conversionItemResultRepository.findByExecutionIdOrderByIdAsc(
-				execution.getId());
+		List<ConversionItemResult> items = conversionItemResultRepository
+				.findByExecutionIdOrderByIdAsc(execution.getId());
 
 		long originalBytes = items.stream().mapToLong(ConversionItemResult::getOriginalBytes).sum();
 		long convertedBytes = items.stream().mapToLong(ConversionItemResult::getConvertedBytes).sum();
@@ -162,7 +133,7 @@ public class ConversionProgressService {
 				NumberUtils.toInt(execution.getFilesMoved()), NumberUtils.toInt(execution.getCacheHits()),
 				NumberUtils.toInt(execution.getErrors()), originalBytes, convertedBytes, savedBytes,
 				SizeFormatter.format(Math.max(0, savedBytes)), savedPercent(originalBytes, savedBytes),
-				UuidV7.orLegacy(execution.getPublicId(), execution.getId()), messageOf(execution),
+				UuidV7.orLegacy(execution.getExecutionPublicId(), execution.getId()), messageOf(execution),
 				items.stream().map(this::toFileResult).toList());
 	}
 
@@ -177,7 +148,7 @@ public class ConversionProgressService {
 	private ConversionFileResult toFileResult(ConversionItemResult item) {
 		long savedBytes = item.getOriginalBytes() - item.getConvertedBytes();
 
-		return new ConversionFileResult(item.getMediaPublicId(), item.getFileName(), item.getOutcome(),
+		return new ConversionFileResult(item.getCatalogFilePublicId(), item.getFileName(), item.getOutcome(),
 				item.getOriginalBytes(), item.getConvertedBytes(), savedBytes,
 				SizeFormatter.format(Math.max(0, savedBytes)), 0,
 				new ConversionAdjustments(Boolean.TRUE.equals(item.getAudioFallback()),

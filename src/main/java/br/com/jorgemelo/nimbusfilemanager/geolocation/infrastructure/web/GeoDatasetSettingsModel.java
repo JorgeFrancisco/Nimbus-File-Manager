@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.InventoryRunningState;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoRunReader;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.MediaLocationService;
@@ -32,18 +33,21 @@ public class GeoDatasetSettingsModel implements SettingsSectionModel {
 	private final OfflineGeoDataset offlineGeoDataset;
 	private final MediaLocationService mediaLocationService;
 	private final GeoRunReader geoRunReader;
+	private final EtaLabels etaLabels;
 	private final UserPagePreferenceService userPagePreferenceService;
 	private final InventoryRunningState inventoryRunningState;
 	private final ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry;
 
 	@Autowired
-	public GeoDatasetSettingsModel(OfflineGeoDataset offlineGeoDataset, MediaLocationService mediaLocationService,
+	public GeoDatasetSettingsModel(EtaLabels etaLabels, OfflineGeoDataset offlineGeoDataset,
+			MediaLocationService mediaLocationService,
 			GeoRunReader geoRunReader, UserPagePreferenceService userPagePreferenceService,
 			InventoryRunningState inventoryRunningState,
 			ReverseGeocodingStrategyRegistry reverseGeocodingStrategyRegistry) {
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.mediaLocationService = mediaLocationService;
 		this.geoRunReader = geoRunReader;
+		this.etaLabels = etaLabels;
 		this.userPagePreferenceService = userPagePreferenceService;
 		this.inventoryRunningState = inventoryRunningState;
 		this.reverseGeocodingStrategyRegistry = reverseGeocodingStrategyRegistry;
@@ -54,6 +58,9 @@ public class GeoDatasetSettingsModel implements SettingsSectionModel {
 		model.addAttribute("geoStatus", offlineGeoDataset.status());
 		model.addAttribute("geoEnabled", mediaLocationService.enabled());
 		model.addAttribute("geoImportRunning", geoRunReader.importRunning());
+		// When the dataset was last checked against its source, which a run that
+		// imported nothing still answers - and the dataset itself cannot.
+		model.addAttribute("geoVerifiedAt", geoRunReader.lastVerifiedAt());
 		model.addAttribute("geoImportError", geoRunReader.importError());
 		model.addAttribute("geoProgress", geoRunReader.progress());
 		model.addAttribute("geoCacheSize", mediaLocationService.cacheSize());
@@ -63,7 +70,7 @@ public class GeoDatasetSettingsModel implements SettingsSectionModel {
 		model.addAttribute("geoRebuildProcessed", geoRunReader.rebuildProcessed());
 		model.addAttribute("geoRebuildTotal", geoRunReader.rebuildTotal());
 		model.addAttribute("geoRebuildPercent", geoRunReader.rebuildPercent());
-		model.addAttribute("geoRebuildEta", geoRunReader.rebuildEtaSeconds());
+		model.addAttribute("geoRebuildEta", etaLabels.label(geoRunReader.rebuildEta()));
 		model.addAttribute("geoRebuildError", geoRunReader.rebuildError());
 		model.addAttribute("geoRebuildResult", geoRunReader.lastRebuildResult());
 		model.addAttribute("geoRebuildScopes", LocationRebuildScope.values());

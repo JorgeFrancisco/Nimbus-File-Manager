@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.EtaState;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionProgress;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionOutcome;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.model.ConversionItemResult;
@@ -90,7 +92,7 @@ class ConversionProgressServiceTest {
 	void estimatesTheTimeLeftFromWhatHasActuallyBeenDone() {
 		running(2, 1, 0, "clip.mp4");
 
-		Assertions.assertThat(service().snapshot().etaSeconds()).isPositive();
+		Assertions.assertThat(service().snapshot().eta().remainingSeconds()).isPositive();
 	}
 
 	/**
@@ -100,7 +102,7 @@ class ConversionProgressServiceTest {
 	 */
 	@Test
 	void rebuildsTheReportFromTheLinesTheBatchWrote() {
-		Execution finished = Execution.builder().id(7L).publicId(UUID.randomUUID())
+		Execution finished = Execution.builder().id(7L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.CONVERSION).status(ExecutionStatus.FINISHED).filesFound(2).filesMoved(1)
 				.cacheHits(1).errors(0).statusMessage(StatusMessage.raw("done")).build();
 
@@ -181,7 +183,7 @@ class ConversionProgressServiceTest {
 
 		ConversionProgress progress = service().snapshot();
 
-		Assertions.assertThat(progress.etaSeconds()).isEqualTo(-1);
+		Assertions.assertThat(progress.eta().state()).isEqualTo(EtaState.NOT_APPLICABLE);
 		Assertions.assertThat(progress.total()).isEqualTo(2);
 		Assertions.assertThat(progress.currentFile()).isNull();
 	}
@@ -215,7 +217,7 @@ class ConversionProgressServiceTest {
 	}
 
 	private void finished(List<ConversionItemResult> items) {
-		Execution execution = Execution.builder().id(7L).publicId(UUID.randomUUID())
+		Execution execution = Execution.builder().id(7L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.CONVERSION).status(ExecutionStatus.FINISHED).filesFound(1).filesMoved(0)
 				.cacheHits(1).errors(0).build();
 
@@ -228,6 +230,9 @@ class ConversionProgressServiceTest {
 		Execution execution = Execution.builder().id(7L).executionType(ExecutionType.CONVERSION)
 				.status(ExecutionStatus.RUNNING).startedAt(LocalDateTime.now(CLOCK).minusMinutes(5))
 				.totalExpected(total).filesAnalyzed(processed).currentItemPercent(filePercent)
+				// The window the estimate is measured over: five minutes of it, opened
+				// when the batch began.
+				.rateWindowFromAt(LocalDateTime.now(CLOCK).minusMinutes(5)).rateWindowFromDone(0)
 				.statusMessage(message(fileName)).build();
 
 		when(executionRepository.findFirstByExecutionTypeOrderByCreatedAtDesc(ExecutionType.CONVERSION))
@@ -242,6 +247,9 @@ class ConversionProgressServiceTest {
 	}
 
 	private ConversionItemResult item(String fileName, ConversionOutcome outcome, long original, long converted) {
+		// The name the row carries: a conversion report is read long after the run,
+		// when the file may be somewhere else entirely, so the line says what was
+		// converted rather than pointing at where it is now.
 		return ConversionItemResult.builder().fileName(fileName).outcome(outcome).originalBytes(original)
 				.convertedBytes(converted).audioFallback(false).subtitlesDropped(false).dataDropped(false)
 				.originalQuarantined(false).build();
@@ -249,6 +257,6 @@ class ConversionProgressServiceTest {
 
 	private ConversionProgressService service() {
 		return new ConversionProgressService(executionRepository, conversionItemResultRepository,
-				new ExecutionMessageCodec(new ObjectMapper()), CLOCK);
+				new ExecutionMessageCodec(new ObjectMapper()), Progress.estimator(CLOCK), Progress.reader());
 	}
 }

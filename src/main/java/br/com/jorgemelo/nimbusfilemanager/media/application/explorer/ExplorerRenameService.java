@@ -4,7 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -15,7 +16,15 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgres
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
 import br.com.jorgemelo.nimbusfilemanager.media.application.constants.ExplorerMessages;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.media.application.explorer.dto.ExplorerMove;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.MovementRecovery;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogConvergenceMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.CatalogFactProvenance;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventEvidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
@@ -52,17 +61,20 @@ public class ExplorerRenameService {
 	private final ExplorerDeletionGuard guard;
 	private final LibraryFileMutations libraryFileMutations;
 	private final ExplorerRenamePersistence explorerRenamePersistence;
-	private final CatalogMutations catalogMutations;
+	private final ExplorerRelocationPlan explorerRelocationPlan;
+	private final CatalogConvergenceMutations catalogMutations;
 	private final ExecutionProgressService executionProgressService;
 	private final EligibilityAnnouncer eligibilityAnnouncer;
 	private final Clock clock;
 
 	public ExplorerRenameService(ExplorerDeletionGuard guard, LibraryFileMutations libraryFileMutations,
-			ExplorerRenamePersistence explorerRenamePersistence, CatalogMutations catalogMutations,
-			ExecutionProgressService executionProgressService, EligibilityAnnouncer eligibilityAnnouncer, Clock clock) {
+			ExplorerRenamePersistence explorerRenamePersistence, ExplorerRelocationPlan explorerRelocationPlan,
+			CatalogConvergenceMutations catalogMutations, ExecutionProgressService executionProgressService,
+			EligibilityAnnouncer eligibilityAnnouncer, Clock clock) {
 		this.guard = guard;
 		this.libraryFileMutations = libraryFileMutations;
 		this.explorerRenamePersistence = explorerRenamePersistence;
+		this.explorerRelocationPlan = explorerRelocationPlan;
 		this.catalogMutations = catalogMutations;
 		this.executionProgressService = executionProgressService;
 		this.eligibilityAnnouncer = eligibilityAnnouncer;
@@ -75,39 +87,86 @@ public class ExplorerRenameService {
 
 		String newName = target.getFileName().toString();
 
-		Optional<ExecutionMessage> refusal = guard.refusal(source);
+		// Asked of whichever end is there. After a crash the source is gone, and a
+		// folder that has already moved would be taken for a file.
+		boolean directory = Files.exists(source) ? Files.isDirectory(source) : Files.isDirectory(target);
 
-		if (refusal.isPresent()) {
-			executionProgressService.reject(ownership, refusal.get());
+		// Every catalogued file this will move, and the identity of the fact each of
+		// them will produce, written down before anything moves. A crash between the
+		// disk and the database leaves those rows behind, which is how the retry knows
+		// what it was in the middle of instead of concluding it from what it finds.
+		List<PreparedMovement> reserved = explorerRelocationPlan.reserve(execution, source, target, directory);
 
-			return;
+		boolean alreadyRenamed = alreadyRenamed(reserved, source, target);
+
+		if (!alreadyRenamed) {
+			Optional<ExecutionMessage> refusal = guard.refusal(source);
+
+			if (refusal.isPresent()) {
+				executionProgressService.reject(ownership, refusal.get());
+
+				return;
+			}
+
+			if (Files.exists(target)) {
+				executionProgressService.reject(ownership, ExplorerMessages.renameTargetExists(newName));
+
+				return;
+			}
 		}
-
-		if (Files.exists(target)) {
-			executionProgressService.reject(ownership, ExplorerMessages.renameTargetExists(newName));
-
-			return;
-		}
-
-		boolean directory = Files.isDirectory(source);
 
 		// Asked immediately before the irreversible part, which is the contract every
 		// handler that touches the user's files keeps: the locks can go away while the
 		// work is in flight, and nothing may be written after they have.
 		ownership.assertMayGoOnWorking();
 
-		if (!move(execution, ownership, source, target, directory)) {
+		// A retry finishes what is left of the operation rather than performing it
+		// again: the bytes are already at the destination, and moving them a second
+		// time would move whatever is at the source now - which is nothing.
+		ExplorerMove moved = alreadyRenamed ? new ExplorerMove(true, null)
+				: move(execution, ownership, source, target, directory);
+
+		if (!moved.done()) {
+			explorerRelocationPlan.abandon(execution, reserved, MovementReason.IO_ERROR);
+
 			return;
 		}
 
-		repointCatalog(execution, source, target, directory);
+		repointCatalog(execution, source, target, directory, moved.baseline(), reserved);
+
+		explorerRelocationPlan.settle(execution, reserved);
 
 		executionProgressService.finishCommand(ownership, ExecutionStatus.FINISHED, ExecutionCounts.one(),
 				ExplorerMessages.renameDone(newName));
 	}
 
-	/** @return whether the rename happened; a failure has already been reported */
-	private boolean move(Execution execution, ExecutionOwnership ownership, Path source, Path target,
+	/**
+	 * Whether this run's own effect is what is at the destination.
+	 *
+	 * <p>
+	 * The disk on its own cannot say: a source that is gone and a destination that
+	 * is there is what a finished rename looks like, and also what somebody else's
+	 * file at a name we were asked to write to looks like. The operations this
+	 * execution reserved are what tell the two apart - and only when every one of
+	 * them reads as this operation, because an attempt that was abandoned or
+	 * refused is a decision, not work waiting to be finished.
+	 */
+	private boolean alreadyRenamed(List<PreparedMovement> reserved, Path source, Path target) {
+		if (reserved.isEmpty() || Files.exists(source) || !Files.exists(target)) {
+			return false;
+		}
+
+		return reserved.stream().allMatch(operation -> switch (MovementRecovery.progressOf(operation, source, target)) {
+		case RESUME, ALREADY_DONE -> true;
+		case EXECUTE, REFUSE -> false;
+		});
+	}
+
+	/**
+	 * @return whether it happened and what it proved; a failure has already been
+	 * reported by the time this returns
+	 */
+	private ExplorerMove move(Execution execution, ExecutionOwnership ownership, Path source, Path target,
 			boolean directory) {
 		try {
 			if (directory) {
@@ -116,17 +175,18 @@ public class ExplorerRenameService {
 				// execution, which is what keeps the notifications for everything inside it
 				// from reading as changes from outside.
 				libraryFileMutations.renameDirectory(source, target, execution.getId());
-			} else {
-				libraryFileMutations.move(source, target, false, execution.getId());
+
+				return new ExplorerMove(true, null);
 			}
 
-			return true;
+			// The digest this move already proved, kept instead of discarded.
+			return new ExplorerMove(true, libraryFileMutations.move(source, target, false, execution.getId()));
 		} catch (IOException exception) {
 			log.error("Explorer could not rename {} to {}", source, target, exception);
 
 			executionProgressService.fail(ownership, ExplorerMessages.renameFailed(exception.getMessage()));
 
-			return false;
+			return new ExplorerMove(false, null);
 		}
 	}
 
@@ -139,15 +199,30 @@ public class ExplorerRenameService {
 	 * that column for all of them at once, and is announced when the folders
 	 * involved are ones the exclusion list has an opinion about.
 	 */
-	private void repointCatalog(Execution execution, Path source, Path target, boolean directory) {
+	private void repointCatalog(Execution execution, Path source, Path target, boolean directory,
+			MoveBaseline moved, List<PreparedMovement> reserved) {
+		// The instant the operation happened, and the same one whichever shape it
+		// takes. A retry that finds its own movements already prepared re-applies the
+		// same facts under their own identities, so the door recognises them rather
+		// than writing a second history dated at the retry.
+		CatalogFactProvenance provenance = new CatalogFactProvenance(Instant.now(clock),
+				CatalogEventSources.EXPLORER, CatalogEventEvidence.NIMBUS_OPERATION, null);
+
 		if (!directory) {
-			explorerRenamePersistence.rename(source, target);
+			// Nothing catalogued sat there, so there is no fact to record - the file the
+			// user renamed is one the catalog never knew.
+			if (reserved.isEmpty()) {
+				return;
+			}
+
+			explorerRenamePersistence.rename(source, target, reserved.getFirst().catalogFileEventPublicId(), moved);
 
 			return;
 		}
 
 		int repointed = catalogMutations.repointFolder(PathUtils.normalize(source), PathUtils.normalize(target),
-				LocalDateTime.now(clock));
+				reserved.stream().map(PreparedMovement::catalogFileId).toList(),
+				reserved.stream().map(PreparedMovement::catalogFileEventPublicId).toList(), provenance);
 
 		log.info("Execution {} renamed a folder and moved {} catalogued file(s) with it", execution.getId(),
 				repointed);

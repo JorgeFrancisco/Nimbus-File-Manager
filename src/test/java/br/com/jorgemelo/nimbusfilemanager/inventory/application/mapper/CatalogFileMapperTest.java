@@ -4,6 +4,7 @@ import static org.mockito.Mockito.mock;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 
@@ -11,6 +12,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoSimilarityAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.CaptureDateValidator;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.date.MediaDateResolver;
@@ -25,6 +27,9 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Photo;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Video;
 
 class CatalogFileMapperTest {
+
+	/** When the file was written, which the file system reports as an instant. */
+	private static final Instant WRITTEN_AT = Instant.parse("2024-05-09T13:30:00Z");
 
 	/**
 	 * Real resolver: it is a pure function of the extracted metadata, so stubbing
@@ -42,18 +47,7 @@ class CatalogFileMapperTest {
 	private final SimilarityRelationWriter similarityRelationWriter = mock(SimilarityRelationWriter.class);
 
 	private final VideoRelationInvalidator videoRelationInvalidator = new VideoRelationInvalidator(
-			similarityRelationWriter);
-
-	@Test
-	void toEntityShouldRejectAPathWithoutParentDirectory() {
-		MetadataResult metadata = photoMetadata(LocalDateTime.of(2024, Month.MAY, 9, 10, 30));
-		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone());
-
-		Path root = Path.of("/");
-
-		Assertions.assertThatThrownBy(() -> mapper.toEntity(root, root, metadata))
-				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("parent directory");
-	}
+			similarityRelationWriter, mock(VideoSimilarityAlgorithm.class));
 
 	@Test
 	void toEntityShouldMapPhotoMetadata() {
@@ -61,10 +55,11 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = photoMetadata(captureDate);
 
-		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone())
-				.toEntity(Path.of("C:/input/photo.jpg"), Path.of("C:/input"), metadata);
+		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone())
+				.toEntity(Path.of("C:/input/photo.jpg"), metadata);
 
-		Assertions.assertThat(catalogFile.getFileName()).isEqualTo("photo.jpg");
+		Assertions.assertThat(catalogFile.getLocation().fileName()).isEqualTo("photo.jpg");
 		Assertions.assertThat(catalogFile.getFileType()).isEqualTo(FileType.PHOTO);
 		Assertions.assertThat(catalogFile.isActive()).isTrue();
 		Assertions.assertThat(catalogFile.getLocation()).isNotNull();
@@ -85,10 +80,11 @@ class CatalogFileMapperTest {
 
 		CatalogFile catalogFile = CatalogFile.builder().fileType(FileType.PHOTO).build();
 
-		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
-				Path.of("C:/input/video.mp4"), Path.of("C:/input"), metadata);
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone()).updateEntity(catalogFile,
+				Path.of("C:/input/video.mp4"), metadata);
 
-		Assertions.assertThat(catalogFile.getFileName()).isEqualTo("video.mp4");
+		Assertions.assertThat(catalogFile.getLocation().fileName()).isEqualTo("video.mp4");
 		Assertions.assertThat(catalogFile.getFileType()).isEqualTo(FileType.VIDEO);
 		Assertions.assertThat(catalogFile.getMetadata().getDateSource()).isEqualTo(DateSource.MEDIA_INFO);
 		Assertions.assertThat(catalogFile.getLocation()).isNotNull();
@@ -104,19 +100,21 @@ class CatalogFileMapperTest {
 
 		MetadataResult metadata = videoMetadata(captureDate);
 
-		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone())
-				.toEntity(Path.of("C:/input/video.mp4"), Path.of("C:/input"), metadata);
+		CatalogFile catalogFile = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone())
+				.toEntity(Path.of("C:/input/video.mp4"), metadata);
 
 		Assertions.assertThat(catalogFile.getPhoto()).isNull();
 		Assertions.assertThat(catalogFile.getVideo()).isNotNull();
 		Assertions.assertThat(catalogFile.getVideo().getVideoCodec()).isEqualTo("h265");
 		Assertions.assertThat(catalogFile.getVideo().getHdr()).isTrue();
-		Assertions.assertThat(catalogFile.getLocation().getInventoryPath()).contains("input");
+		Assertions.assertThat(catalogFile.getLocation().getCurrentPath()).contains("input");
 
 		MetadataResult updated = photoMetadata(captureDate);
 
-		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
-				Path.of("C:/input/photo.jpg"), Path.of("C:/input"), updated);
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone()).updateEntity(catalogFile,
+				Path.of("C:/input/photo.jpg"), updated);
 
 		Assertions.assertThat(catalogFile.getLocation()).isNotNull();
 		Assertions.assertThat(catalogFile.getPhoto()).isNotNull();
@@ -130,16 +128,17 @@ class CatalogFileMapperTest {
 	void updateEntityShouldClearPhotoAndVideoForNonMediaSpecificType() {
 		LocalDateTime captureDate = LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
 
-		MetadataResult metadata = MetadataResult.builder().fileName("doc.pdf").extension("pdf").sizeBytes(10L)
-				.mimeType("application/pdf").fileType(FileType.PDF).createdAt(captureDate).modifiedAt(captureDate)
+		MetadataResult metadata = MetadataResult.builder().extension("pdf").sizeBytes(10L)
+				.mimeType("application/pdf").fileType(FileType.PDF).createdAt(WRITTEN_AT).modifiedAt(WRITTEN_AT)
 				.captureDate(captureDate).dateSource(DateSource.FILE_CREATED_AT).subcategory(MediaSubcategory.OTHER)
 				.build();
 
 		CatalogFile catalogFile = CatalogFile.builder().photo(Photo.builder().build()).video(Video.builder().build())
 				.build();
 
-		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone()).updateEntity(catalogFile,
-				Path.of("C:/input/doc.pdf"), Path.of("C:/input"), metadata);
+		new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone()).updateEntity(catalogFile,
+				Path.of("C:/input/doc.pdf"), metadata);
 
 		Assertions.assertThat(catalogFile.getPhoto()).isNull();
 		Assertions.assertThat(catalogFile.getVideo()).isNull();
@@ -150,37 +149,38 @@ class CatalogFileMapperTest {
 	void shouldNormalizeOnlyExactZeroPairAtPersistenceBoundary() {
 		LocalDateTime captureDate = LocalDateTime.of(2024, Month.MAY, 9, 10, 30);
 
-		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator, Clock.systemDefaultZone());
+		CatalogFileMapper mapper = new CatalogFileMapper(mediaDateResolver, videoRelationInvalidator,
+				new CatalogFileLocationMapper(Clock.systemDefaultZone()), Clock.systemDefaultZone());
 
 		MetadataResult zeroPair = coordinatesMetadata(captureDate, 0.0, 0.0);
 
-		CatalogFile missingGps = mapper.toEntity(Path.of("C:/input/zero.mp4"), Path.of("C:/input"), zeroPair);
+		CatalogFile missingGps = mapper.toEntity(Path.of("C:/input/zero.mp4"), zeroPair);
 		Assertions.assertThat(missingGps.getMetadata().getLatitude()).isNull();
 		Assertions.assertThat(missingGps.getMetadata().getLongitude()).isNull();
 
 		MetadataResult equator = coordinatesMetadata(captureDate, 0.0, -45.0);
 
-		CatalogFile validEquator = mapper.toEntity(Path.of("C:/input/equator.mp4"), Path.of("C:/input"), equator);
+		CatalogFile validEquator = mapper.toEntity(Path.of("C:/input/equator.mp4"), equator);
 		Assertions.assertThat(validEquator.getMetadata().getLatitude()).isZero();
 		Assertions.assertThat(validEquator.getMetadata().getLongitude()).isEqualTo(-45.0);
 
 		MetadataResult meridian = coordinatesMetadata(captureDate, -23.0, 0.0);
 
-		CatalogFile validMeridian = mapper.toEntity(Path.of("C:/input/meridian.mp4"), Path.of("C:/input"), meridian);
+		CatalogFile validMeridian = mapper.toEntity(Path.of("C:/input/meridian.mp4"), meridian);
 		Assertions.assertThat(validMeridian.getMetadata().getLatitude()).isEqualTo(-23.0);
 		Assertions.assertThat(validMeridian.getMetadata().getLongitude()).isZero();
 	}
 
 	private MetadataResult coordinatesMetadata(LocalDateTime captureDate, Double latitude, Double longitude) {
-		return MetadataResult.builder().fileName("video.mp4").extension("mp4").sizeBytes(1L).mimeType("video/mp4")
-				.fileType(FileType.VIDEO).createdAt(captureDate).modifiedAt(captureDate).captureDate(captureDate)
+		return MetadataResult.builder().extension("mp4").sizeBytes(1L).mimeType("video/mp4")
+				.fileType(FileType.VIDEO).createdAt(WRITTEN_AT).modifiedAt(WRITTEN_AT).captureDate(captureDate)
 				.dateSource(DateSource.MEDIA_INFO).subcategory(MediaSubcategory.CAMERA).latitude(latitude)
 				.longitude(longitude).build();
 	}
 
 	private MetadataResult photoMetadata(LocalDateTime captureDate) {
-		return MetadataResult.builder().fileName("photo.jpg").extension("jpg").sizeBytes(123L).sha256("sha").md5("md5")
-				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(captureDate).modifiedAt(captureDate)
+		return MetadataResult.builder().extension("jpg").sizeBytes(123L).sha256("sha")
+				.mimeType("image/jpeg").fileType(FileType.PHOTO).createdAt(WRITTEN_AT).modifiedAt(WRITTEN_AT)
 				.captureDate(captureDate).dateSource(DateSource.EXIF).subcategory(MediaSubcategory.CAMERA)
 				.storedWidth(4000).storedHeight(3000).displayWidth(4000).displayHeight(3000).orientationCode(1)
 				.rotation(0).orientationType(MediaOrientation.LANDSCAPE).manufacturer("Canon").model("R6")
@@ -190,8 +190,8 @@ class CatalogFileMapperTest {
 	}
 
 	private MetadataResult videoMetadata(LocalDateTime captureDate) {
-		return MetadataResult.builder().fileName("video.mp4").extension("mp4").sizeBytes(456L).mimeType("video/mp4")
-				.fileType(FileType.VIDEO).createdAt(captureDate).modifiedAt(captureDate).captureDate(captureDate)
+		return MetadataResult.builder().extension("mp4").sizeBytes(456L).mimeType("video/mp4")
+				.fileType(FileType.VIDEO).createdAt(WRITTEN_AT).modifiedAt(WRITTEN_AT).captureDate(captureDate)
 				.dateSource(DateSource.MEDIA_INFO).subcategory(MediaSubcategory.GOPRO).storedWidth(3840)
 				.storedHeight(2160).displayWidth(3840).displayHeight(2160).orientationType(MediaOrientation.LANDSCAPE)
 				.container("mov").videoCodec("h265").audioCodec("aac").videoProfile("main").fps(59.94)

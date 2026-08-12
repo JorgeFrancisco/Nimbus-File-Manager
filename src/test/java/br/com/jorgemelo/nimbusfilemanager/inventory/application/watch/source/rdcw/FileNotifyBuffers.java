@@ -33,7 +33,7 @@ final class FileNotifyBuffers {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
 		for (int index = 0; index < relativePaths.length; index++) {
-			out.writeBytes(entry(relativePaths[index], ACTION_ADDED, index == relativePaths.length - 1));
+			out.writeBytes(entry(relativePaths[index], ACTION_ADDED, index + 1L, 0, index == relativePaths.length - 1));
 		}
 
 		return out.toByteArray();
@@ -44,25 +44,63 @@ final class FileNotifyBuffers {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
 		for (int index = 0; index < relativePaths.size(); index++) {
-			out.writeBytes(entry(relativePaths.get(index), actions.get(index),
+			out.writeBytes(entry(relativePaths.get(index), actions.get(index), index + 1L, 0,
 					index == relativePaths.size() - 1));
 		}
 
 		return out.toByteArray();
 	}
 
-	private static byte[] entry(String relativePath, int action, boolean last) {
+	/**
+	 * One FILE_NOTIFY_EXTENDED_INFORMATION record, written at the offsets the
+	 * native structure defines rather than at the ones the parser happens to read.
+	 * That distinction is the whole value of the fixture: if it copied the
+	 * parser's arithmetic, the two would agree about a layout Windows never sends.
+	 *
+	 * <pre>
+	 * 0   DWORD         NextEntryOffset
+	 * 4   DWORD         Action
+	 * 8   LARGE_INTEGER CreationTime
+	 * 16  LARGE_INTEGER LastModificationTime
+	 * 24  LARGE_INTEGER LastChangeTime
+	 * 32  LARGE_INTEGER LastAccessTime
+	 * 40  LARGE_INTEGER AllocatedLength
+	 * 48  LARGE_INTEGER FileSize
+	 * 56  DWORD         FileAttributes
+	 * 60  DWORD         ReparsePointTag
+	 * 64  LARGE_INTEGER FileId
+	 * 72  LARGE_INTEGER ParentFileId
+	 * 80  DWORD         FileNameLength   (bytes, not characters)
+	 * 84  WCHAR         FileName[]       (UTF-16LE, relative, back-slashes)
+	 * </pre>
+	 */
+	private static byte[] entry(String relativePath, int action, long fileId, int attributes, boolean last) {
 		byte[] name = relativePath.getBytes(StandardCharsets.UTF_16LE);
-		int padded = (12 + name.length + 3) & ~3;
 
-		ByteBuffer buffer = ByteBuffer.allocate(padded).order(ByteOrder.LITTLE_ENDIAN);
+		// Records are aligned on a four-byte boundary, and NextEntryOffset counts
+		// from the start of this record to the start of the next.
+		int length = (FILE_NAME + name.length + 3) & ~3;
 
-		buffer.putInt(0, last ? 0 : padded);
-		buffer.putInt(4, action);
-		buffer.putInt(8, name.length);
+		ByteBuffer buffer = ByteBuffer.allocate(length).order(ByteOrder.LITTLE_ENDIAN);
 
-		System.arraycopy(name, 0, buffer.array(), 12, name.length);
+		buffer.putInt(NEXT_ENTRY_OFFSET, last ? 0 : length);
+		buffer.putInt(ACTION, action);
+		buffer.putInt(FILE_ATTRIBUTES, attributes);
+		buffer.putLong(FILE_ID, fileId);
+		buffer.putLong(PARENT_FILE_ID, 0L);
+		buffer.putInt(FILE_NAME_LENGTH, name.length);
+
+		System.arraycopy(name, 0, buffer.array(), FILE_NAME, name.length);
 
 		return buffer.array();
 	}
+
+	private static final int NEXT_ENTRY_OFFSET = 0;
+	private static final int ACTION = 4;
+	private static final int FILE_ATTRIBUTES = 56;
+	private static final int FILE_ID = 64;
+	private static final int PARENT_FILE_ID = 72;
+	private static final int FILE_NAME_LENGTH = 80;
+	private static final int FILE_NAME = 84;
+
 }

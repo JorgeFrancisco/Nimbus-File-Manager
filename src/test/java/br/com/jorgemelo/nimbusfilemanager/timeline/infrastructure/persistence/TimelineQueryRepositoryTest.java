@@ -85,7 +85,7 @@ class TimelineQueryRepositoryTest {
 		ResultSet resultSet = mock(ResultSet.class);
 
 		when(resultSet.getLong("internal_id")).thenReturn(42L);
-		when(resultSet.getObject("public_id", UUID.class)).thenReturn(publicId);
+		when(resultSet.getObject("catalog_file_public_id", UUID.class)).thenReturn(publicId);
 		when(resultSet.getString("file_name")).thenReturn("IMG_0042.JPG");
 		when(resultSet.getString("file_type")).thenReturn("PHOTO");
 		when(resultSet.getTimestamp("capture_date")).thenReturn(Timestamp.valueOf(captureDate));
@@ -111,7 +111,7 @@ class TimelineQueryRepositoryTest {
 		ResultSet resultSet = mock(ResultSet.class);
 
 		when(resultSet.getLong("internal_id")).thenReturn(43L);
-		when(resultSet.getObject("public_id", UUID.class)).thenReturn(UUID.randomUUID());
+		when(resultSet.getObject("catalog_file_public_id", UUID.class)).thenReturn(UUID.randomUUID());
 		when(resultSet.getString("file_name")).thenReturn("clip.mp4");
 		when(resultSet.getString("file_type")).thenReturn("VIDEO");
 		when(resultSet.getTimestamp("capture_date")).thenReturn(Timestamp.valueOf(LocalDateTime.now()));
@@ -299,5 +299,4 @@ class TimelineQueryRepositoryTest {
 		Assertions.assertThat(bound.getValue("manufacturer")).isNull();
 		Assertions.assertThat(bound.getValue("geo")).isNull();
 	}
-
 }

@@ -9,17 +9,20 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.constants.UsnReason;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 
 class UsnJournalReaderTest {
 
 	private static final Path ROOT = Path.of("/library").toAbsolutePath();
+	/** What a file reference number is unique within; the next volume reuses them. */
+	private static final String VOLUME = "volume-under-test";
 	private static final long SUB_A = 10L;
 	private static final int BUFFER = 65_536;
 
 	private final UsnPathResolver resolver = frn -> Optional.ofNullable(Map.of(SUB_A, ROOT.resolve("a")).get(frn));
 
 	private UsnJournalReader reader(UsnVolume volume, long startUsn) {
-		return new UsnJournalReader(volume, new UsnChangeInterpreter(ROOT, resolver), BUFFER, startUsn);
+		return new UsnJournalReader(volume, new UsnChangeInterpreter(ROOT, VOLUME, resolver), BUFFER, startUsn);
 	}
 
 	@Test
@@ -34,10 +37,10 @@ class UsnJournalReaderTest {
 
 		UsnJournalReader reader = reader(volume, 0L);
 
-		List<Path> changed = reader.poll();
+		List<FileSystemChange> changed = reader.poll();
 
-		Assertions.assertThat(changed).containsExactly(ROOT.resolve("a").resolve("one.jpg"),
-				ROOT.resolve("a").resolve("two.jpg"));
+		Assertions.assertThat(changed).extracting(FileSystemChange::path).containsExactly(
+				ROOT.resolve("a").resolve("one.jpg"), ROOT.resolve("a").resolve("two.jpg"));
 		Assertions.assertThat(reader.nextUsn()).isEqualTo(100L);
 		Assertions.assertThat(reader.consumeOverflow()).isFalse();
 	}

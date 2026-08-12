@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web.Fixture;
 class DuplicatesWebControllerTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.parse("2026-07-08T12:00:00");
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-07-08T12:00:00Z");
 
 	private final Fixture fixture = new Fixture();
 
@@ -58,7 +61,7 @@ class DuplicatesWebControllerTest {
 
 	@Test
 	void showsThePublishedAnalysisOfTheSimilarTab() {
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -71,26 +74,31 @@ class DuplicatesWebControllerTest {
 	}
 
 	/**
-	 * The rule the whole durable model exists for: a photo arriving does not take
-	 * the analysis off the screen. It stays, and the screen says there is something
-	 * newer to be found.
+	 * The page is built without ever asking whether the library moved since the
+	 * analysis. That question identifies the whole eligible library to compare one
+	 * digest - 2,5 s of the 2,9 s this navigation used to cost - and nothing
+	 * rendered here depends on the answer, so the screen ships with the results and
+	 * asks afterwards, at the address it is given.
 	 */
 	@Test
-	void keepsTheAnalysisOnScreenAndFlagsThatTheLibraryMovedSince() {
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, true, false));
+	void rendersTheAnalysisWithoutWaitingToLearnWhetherTheLibraryMovedSince() {
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
 		controller.duplicates(request("similar"), null, model);
 
-		Assertions.assertThat(model.getAttribute("similarityOutdated")).isEqualTo(true);
 		Assertions.assertThat(groups(model)).hasSize(1);
+		Assertions.assertThat(model.getAttribute("similarityFreshnessUrl")).isEqualTo(
+				"/api/duplicates/similar-photos/freshness?minSimilarity=" + model.getAttribute("minSimilarity"));
+
+		verify(fixture.similarityView, never()).outdated(any(), anyInt());
 	}
 
 	/** A new analysis running never replaces the one that is published. */
 	@Test
 	void keepsTheAnalysisOnScreenWhileANewOneIsBeingComputed() {
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, true, true));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, true));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -104,7 +112,7 @@ class DuplicatesWebControllerTest {
 	@Test
 	void showsTheProcessingStateWhenNothingWasEverPublished() {
 		when(fixture.similarityView.photos(anyInt(), any()))
-				.thenReturn(new SimilarityView(Page.empty(), false, false, true, 120, 0, 8000, false));
+				.thenReturn(new SimilarityView(Page.empty(), false, true, 120, 0, 8000, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -123,7 +131,7 @@ class DuplicatesWebControllerTest {
 	@Test
 	void publishesTheRealCoverageOfTheAnalysis() {
 		when(fixture.similarityView.photos(anyInt(), any()))
-				.thenReturn(new SimilarityView(published(), true, false, false, 98000, 8000, 8000, false));
+				.thenReturn(new SimilarityView(published(), true, false, 98000, 8000, 8000, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -149,7 +157,7 @@ class DuplicatesWebControllerTest {
 		Page<PublishedGroup> page = new PageImpl<>(
 				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember(), gone), 1)));
 
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false, false));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -171,7 +179,7 @@ class DuplicatesWebControllerTest {
 		Page<PublishedGroup> page = new PageImpl<>(
 				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember(), vanished), 1)));
 
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false, false));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(page, true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -187,7 +195,7 @@ class DuplicatesWebControllerTest {
 
 	@Test
 	void showsThePublishedAnalysisOfTheVideosTab() {
-		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(published(), true, false, false));
+		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(published(), true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -208,7 +216,7 @@ class DuplicatesWebControllerTest {
 		Page<PublishedGroup> page = new PageImpl<>(
 				List.of(new PublishedGroup("7", 96, 2048L, List.of(keepMember()), 1)));
 
-		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(page, true, false, false));
+		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(view(page, true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -230,7 +238,7 @@ class DuplicatesWebControllerTest {
 	@Test
 	void doesNotShowGroupsWhileFingerprintsAreStillBeingComputed() {
 		when(fixture.phash.status()).thenReturn(new FingerprintBacklogStatus(50, 10, 0));
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -269,7 +277,7 @@ class DuplicatesWebControllerTest {
 		when(fixture.preferences.find(any(), eq(DuplicateConstants.PAGE_KEY)))
 				.thenReturn(Map.of("tab", "similar", SharedConstants.PAGE_SIZE_KEY, "200",
 						DuplicateConstants.MIN_SIMILARITY_KEY, "85", "view", "xlarge"));
-		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false, false));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(view(published(), true, false));
 
 		ExtendedModelMap model = new ExtendedModelMap();
 
@@ -325,8 +333,8 @@ class DuplicatesWebControllerTest {
 		return (List<DuplicateGroupView>) model.getAttribute("groups");
 	}
 
-	private SimilarityView view(Page<PublishedGroup> groups, boolean published, boolean outdated, boolean analyzing) {
-		return new SimilarityView(groups, published, outdated, analyzing, 2, 2, 8000, true);
+	private SimilarityView view(Page<PublishedGroup> groups, boolean published, boolean analyzing) {
+		return new SimilarityView(groups, published, analyzing, 2, 2, 8000, true);
 	}
 
 	private Page<PublishedGroup> published() {
@@ -347,6 +355,98 @@ class DuplicatesWebControllerTest {
 
 	private SimilarityMemberFile file(String name, LifecycleStatus status) {
 		return new SimilarityMemberFile(UUID.randomUUID(), name, "jpg", "PHOTO", 1024L, "C:/fotos/" + name, "C:/fotos",
-				NOW, 1920, 1080, NOW, DateSource.EXIF, status);
+				WRITTEN_AT, 1920, 1080, NOW, DateSource.EXIF, status);
+	}
+
+	/**
+	 * The verdict the screen may not deliver from a fraction of the library.
+	 *
+	 * <p>
+	 * An analysis can have compared every file it was <em>able</em> to compare -
+	 * which is all the internal coverage flag claims - while most of the library
+	 * still has no fingerprint. Reading those two as one produced "no similar
+	 * videos found" over 188 of 5.860 videos: true about the analysis, and read by
+	 * everyone as a statement about the library.
+	 */
+	@Test
+	void aCompleteAnalysisOverAnIncompleteLibraryIsNotAFinalVerdict() {
+		when(fixture.phash.status()).thenReturn(new FingerprintBacklogStatus(5_360, 500, 0));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(analysed(500, 500));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("similar"), null, model);
+
+		Assertions.assertThat(model.getAttribute("similarityCoverageComplete"))
+				.as("the analysis did cover everything it could compare").isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("similarityLibraryComplete"))
+				.as("but the library is 500 of 5.860 fingerprinted").isEqualTo(false);
+	}
+
+	/** With every fingerprint in place and the analysis complete, it is a verdict. */
+	@Test
+	void aCompleteAnalysisOverACompleteLibraryIsAFinalVerdict() {
+		when(fixture.phash.status()).thenReturn(new FingerprintBacklogStatus(0, 5_860, 0));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(analysed(5_860, 5_860));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("similar"), null, model);
+
+		Assertions.assertThat(model.getAttribute("similarityCoverageComplete")).isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("similarityLibraryComplete")).isEqualTo(true);
+	}
+
+	/**
+	 * A fingerprint that failed for good is a file that will never be compared, so
+	 * the library was never examined in full - even with nothing left pending.
+	 */
+	@Test
+	void exhaustedFailuresKeepTheLibraryFromCountingAsFullyExamined() {
+		when(fixture.phash.status()).thenReturn(new FingerprintBacklogStatus(0, 5_858, 2));
+		when(fixture.similarityView.photos(anyInt(), any())).thenReturn(analysed(5_858, 5_858));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("similar"), null, model);
+
+		Assertions.assertThat(model.getAttribute("similarityLibraryComplete")).isEqualTo(false);
+	}
+
+	/** The same rule for videos, which is where it was first seen going wrong. */
+	@Test
+	void theVideoTabIsHeldToTheSameRule() {
+		when(fixture.videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(5_672, 188, 0));
+		when(fixture.similarityView.videos(anyInt(), any())).thenReturn(analysed(188, 188));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("videos"), null, model);
+
+		Assertions.assertThat(model.getAttribute("similarityCoverageComplete")).isEqualTo(true);
+		Assertions.assertThat(model.getAttribute("similarityLibraryComplete")).isEqualTo(false);
+	}
+
+	/**
+	 * Groups already found stay on screen while the rest of the library is still
+	 * being fingerprinted: a partial answer is worth working with, and hiding it
+	 * would turn an incomplete backlog into a blocked screen.
+	 */
+	@Test
+	void groupsAlreadyFoundSurviveAnIncompleteLibrary() {
+		when(fixture.videoBacklog.status()).thenReturn(new FingerprintBacklogStatus(0, 188, 0));
+		when(fixture.similarityView.videos(anyInt(), any()))
+				.thenReturn(new SimilarityView(published(), true, false, 188, 188, 8000, true));
+
+		ExtendedModelMap model = new ExtendedModelMap();
+
+		controller.duplicates(request("videos"), null, model);
+
+		Assertions.assertThat(groups(model)).as("what was found is still shown").hasSize(1);
+	}
+
+	/** An analysis of one eligible population, with no groups in it. */
+	private SimilarityView analysed(int eligible, int analyzed) {
+		return new SimilarityView(Page.empty(), true, false, eligible, analyzed, 8000, true);
 	}
 }

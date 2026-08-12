@@ -50,7 +50,7 @@ public class DuplicateGroupAssembler {
 			return Map.of();
 		}
 
-		return mediaQualityRepository.findByPublicIdIn(ids).stream()
+		return mediaQualityRepository.findByCatalogFilePublicIdIn(ids).stream()
 				.collect(Collectors.toMap(MediaQuality::publicId, q -> q, (first, _) -> first));
 	}
 

@@ -12,6 +12,7 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.Conve
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.ConversionFailure;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -45,7 +46,8 @@ public class ConvertedVideoValidator {
 	 * Empty when the converted file passed every check; otherwise the reason it
 	 * cannot be trusted.
 	 */
-	public Optional<ConversionFailure> validate(Path converted, Double sourceDurationSeconds) {
+	public Optional<ConversionFailure> validate(Path converted, Double sourceDurationSeconds,
+			ProcessingMetrics metrics) {
 		if (!Files.isRegularFile(converted) || isEmpty(converted)) {
 			return Optional.of(ConversionFailure.OUTPUT_MISSING);
 		}
@@ -53,7 +55,7 @@ public class ConvertedVideoValidator {
 		VideoMetadata metadata;
 
 		try {
-			metadata = mediaInfoService.extract(converted);
+			metadata = mediaInfoService.extract(converted, metrics);
 		} catch (RuntimeException e) {
 			log.warn("Could not probe the converted file {}", converted, e);
 

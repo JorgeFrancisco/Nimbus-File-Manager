@@ -43,6 +43,7 @@ public class MetadataController {
 	}
 
 	private ResponseEntity<Void> accepted(Execution execution) {
-		return ResponseEntity.accepted().header("Location", "/api/executions/" + execution.getPublicId()).build();
+		return ResponseEntity.accepted()
+				.header("Location", "/api/executions/" + execution.getExecutionPublicId()).build();
 	}
 }

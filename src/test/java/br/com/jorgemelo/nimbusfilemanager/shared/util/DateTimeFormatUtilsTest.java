@@ -25,6 +25,6 @@ class DateTimeFormatUtilsTest {
 
 	@Test
 	void humanShouldRenderEmDashForNull() {
-		Assertions.assertThat(DateTimeFormatUtils.human(null)).isEqualTo("—");
+		Assertions.assertThat(DateTimeFormatUtils.absent()).isEqualTo("—");
 	}
 }

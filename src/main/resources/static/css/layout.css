@@ -185,14 +185,23 @@
 	transition: width 0.35s ease;
 }
 
-/* A colour of its own rather than a fainter accent: --accent-strong is defined
-   in both themes and inverts between them (dark blue on light, light blue on
-   dark), so the step bar reads on either. A soft tint does not - on the dark
-   palette it lands almost exactly on the banner's own background. The hierarchy
-   between the two bars comes from thickness and position, not from washing this
-   one out until it disappears. */
+/* A colour of its own rather than a fainter accent, and a token because the two
+   themes need different ones. On the dark palette --accent-strong is a pale
+   blue over a mid blue and reads at a glance; on the light palette it is
+   #1d4ed8 beside #2563eb - two shades of one blue, which is how the two bars
+   came to look like a single thick one. Dark therefore keeps exactly what was
+   working and only light changes.
+
+   The light value answers two different questions, and they pull apart. Against
+   its own track the bar has to be visible, which is a matter of lightness - and
+   a bright teal fails it, landing almost as light as the track. Against the
+   overall bar it has to be a different colour, which is a matter of hue, and a
+   teal dark enough for the track sits near the accent in lightness while
+   staying plainly another colour. So the dark teal is chosen for the track and
+   the hue carries the rest, helped by the bars already differing in thickness
+   and position. A soft tint would answer neither question, on either theme. */
 .active-execution-progress.step span {
-	background: var(--accent-strong);
+	background: var(--progress-step);
 }
 
 .active-execution-step {

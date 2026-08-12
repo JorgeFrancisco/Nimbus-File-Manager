@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -11,12 +12,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Video;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -60,6 +64,9 @@ class SimilarityIdArrayScaleIntegrationTest extends SharedPostgresIntegrationTes
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private MediaFingerprintRepository mediaFingerprintRepository;
@@ -165,7 +172,7 @@ class SimilarityIdArrayScaleIntegrationTest extends SharedPostgresIntegrationTes
 		}
 
 		Assertions.assertThat(ids).hasSizeGreaterThan(65_535);
-		Assertions.assertThat(mediaQualityRepository.findByPublicIdIn(ids))
+		Assertions.assertThat(mediaQualityRepository.findByCatalogFilePublicIdIn(ids))
 				.as("both media types, and none of the ids that name nothing").hasSize(PHOTOS + VIDEOS);
 	}
 
@@ -222,7 +229,7 @@ class SimilarityIdArrayScaleIntegrationTest extends SharedPostgresIntegrationTes
 	void anEmptySetOfPublicIdsSelectsNothing() {
 		givenFingerprintedPhotos();
 
-		Assertions.assertThat(mediaQualityRepository.findByPublicIdIn(new UUID[0])).isEmpty();
+		Assertions.assertThat(mediaQualityRepository.findByCatalogFilePublicIdIn(new UUID[0])).isEmpty();
 	}
 
 	/**
@@ -255,7 +262,6 @@ class SimilarityIdArrayScaleIntegrationTest extends SharedPostgresIntegrationTes
 	private Long fingerprintedPhoto(int index) {
 		Long id = catalogued("photo-" + index, ".jpg", FileType.PHOTO, false);
 
-
 		mediaFingerprintRepository.saveAndFlush(fingerprint(id, FingerprintKind.PHOTO_PHASH, PHOTO_ALGORITHM, 0));
 
 		return id;
@@ -279,23 +285,23 @@ class SimilarityIdArrayScaleIntegrationTest extends SharedPostgresIntegrationTes
 	}
 
 	private UUID publicIdOf(Long catalogFileId) {
-		return catalogFileRepository.findById(catalogFileId).orElseThrow().getPublicId();
+		return catalogFileRepository.findById(catalogFileId).orElseThrow().getCatalogFilePublicId();
 	}
 
 	private Long catalogued(String name, String extension, FileType fileType, boolean withVideo) {
 		String folder = "D:" + (char) 92 + "biblioteca";
 		String path = folder + (char) 92 + name + extension;
 
-		CatalogFile file = CatalogFile.builder().fileKey(path).fileName(name + extension)
-				.extension(extension.substring(1)).sizeBytes(1L).modifiedAt(LocalDateTime.now()).fileType(fileType)
+		CatalogFile file = CatalogFile.builder()
+				.extension(extension.substring(1)).sizeBytes(1L).modifiedAt(Instant.now()).fileType(fileType)
 				.lifecycleStatus(LifecycleStatus.ACTIVE).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder(folder)
-				.originalPath(path).originalFolder(folder).build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
 		if (withVideo) {
 			file.setVideo(Video.builder().catalogFile(file).durationSeconds(10.0).build());
 		}
 
-		return catalogFileRepository.saveAndFlush(file).getId();
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file).getId();
 	}
 }

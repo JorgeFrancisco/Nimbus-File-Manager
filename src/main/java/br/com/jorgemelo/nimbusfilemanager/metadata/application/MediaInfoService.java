@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -21,8 +22,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.enums.MediaOrientation;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfprobeProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -45,8 +47,9 @@ public class MediaInfoService {
 		// its
 		// concurrency limit is enforced at the single point where the process is
 		// spawned.
-		this(objectMapper, (ffprobePath, file) -> externalToolGate.run(ExternalToolCategory.FFPROBE_VIDEO,
-				() -> processRunner.run(ffprobePath, file)), new MediaOrientationResolver(), externalToolPaths);
+		this(objectMapper, (ffprobePath, file, metrics) -> externalToolGate.run(ExternalToolCategory.FFPROBE_VIDEO,
+				metrics, () -> processRunner.run(ffprobePath, file)), new MediaOrientationResolver(),
+				externalToolPaths);
 	}
 
 	/**
@@ -81,13 +84,27 @@ public class MediaInfoService {
 	 * more defensively and still falls back to empty metadata, since that is more
 	 * likely an unexpected bug in this method than a real problem with the file.
 	 */
-	public VideoMetadata extract(Path file) {
+	private IllegalStateException probeFailure(Path file, Exception cause) {
+		return new IllegalStateException("Could not run ffprobe for file: " + file + ". " + cause.getMessage(), cause);
+	}
+
+	public VideoMetadata extract(Path file, ProcessingMetrics metrics) {
 		FfprobeResult result;
 
 		try {
-			result = ffprobeRunner.run(ffprobePath(), file);
-		} catch (Exception e) {
-			throw new IllegalStateException("Could not run ffprobe for file: " + file + ". " + e.getMessage(), e);
+			result = ffprobeRunner.run(ffprobePath(), file, metrics);
+		} catch (InterruptedException e) {
+			// The flag goes back on before the stack unwinds: whoever is shutting this
+			// pass down asked by interrupting, and swallowing that turns a cancellation
+			// into a run that keeps going.
+			Thread.currentThread().interrupt();
+
+			throw probeFailure(file, e);
+		} catch (IOException | RuntimeException e) {
+			// The unchecked half matters as much as the checked one: what reaches a log or
+			// an execution row has to say which file was being probed, and a failure from
+			// the runner carries no path of its own.
+			throw probeFailure(file, e);
 		}
 
 		if (!result.finished()) {

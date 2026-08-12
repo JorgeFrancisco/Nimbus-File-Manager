@@ -39,9 +39,8 @@ public class CatalogExportService {
 
 	private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
-	private static final String[] CSV_HEADERS = { "publicId", "fileKey", "fileName", "extension", "sizeBytes", "sha256",
-			"md5", "mimeType", "fileType", "lifecycleStatus", "createdAt", "modifiedAt", "importedAt", "currentPath",
-			"originalPath" };
+	private static final String[] CSV_HEADERS = { "publicId", "fileName", "extension", "sizeBytes", "sha256",
+			"mimeType", "fileType", "lifecycleStatus", "createdAt", "modifiedAt", "importedAt", "currentPath" };
 
 	private final CatalogFileRepository catalogFileRepository;
 	private final ObjectMapper objectMapper;
@@ -84,10 +83,10 @@ public class CatalogExportService {
 	}
 
 	private void writeCsvRow(Writer writer, CatalogExportRow row) throws IOException {
-		writer.write(String.join(",", csv(row.publicId()), csv(row.fileKey()), csv(row.fileName()),
-				csv(row.extension()), csv(row.sizeBytes()), csv(row.sha256()), csv(row.md5()), csv(row.mimeType()),
-				csv(row.fileType()), csv(row.lifecycleStatus()), csv(row.createdAt()), csv(row.modifiedAt()),
-				csv(row.importedAt()), csv(row.currentPath()), csv(row.originalPath())));
+		writer.write(String.join(",", csv(row.publicId()), csv(row.fileName()), csv(row.extension()),
+				csv(row.sizeBytes()), csv(row.sha256()), csv(row.mimeType()), csv(row.fileType()),
+				csv(row.lifecycleStatus()), csv(row.createdAt()), csv(row.modifiedAt()), csv(row.importedAt()),
+				csv(row.currentPath())));
 
 		writer.write("\r\n");
 	}

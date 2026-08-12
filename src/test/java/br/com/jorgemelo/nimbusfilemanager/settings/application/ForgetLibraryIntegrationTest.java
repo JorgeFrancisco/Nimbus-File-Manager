@@ -3,7 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.settings.application;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
@@ -11,17 +11,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogCollectionMutations;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
@@ -41,10 +44,13 @@ import jakarta.persistence.EntityManager;
 class ForgetLibraryIntegrationTest extends SharedPostgresIntegrationTest {
 
 	@Autowired
-	private CatalogMutations catalogMutations;
+	private CatalogCollectionMutations catalogMutations;
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private MovementRepository movementRepository;
@@ -100,27 +106,27 @@ class ForgetLibraryIntegrationTest extends SharedPostgresIntegrationTest {
 	}
 
 	/**
-	 * History survives the catalog. A movement says something happened to a file,
-	 * and that remains true after the file stops being part of the collection - the
-	 * foreign key detaches the row instead of deleting it.
+	 * Forgetting a library is a hard purge of the files in it, so what belonged to
+	 * those files goes with them - a movement is an operation on one file, and
+	 * there is no file left to have had one. The run that made it is not the
+	 * file's: it aggregates many, keeps its own totals, and stays on the
+	 * executions screen with them.
 	 */
 	@Test
-	void theHistoryOfWhatWasMovedSurvives(@TempDir Path root) throws IOException {
+	void whatWasMovedGoesWithTheFilesAndTheRunStays(@TempDir Path root) throws IOException {
 		Path forgotten = Files.createDirectories(root.resolve("A"));
+		Path elsewhere = Files.createDirectories(root.resolve("B"));
 
-		CatalogFile file = persist(forgotten.resolve("photo.jpg"));
+		CatalogFile inside = persist(forgotten.resolve("photo.jpg"));
+		CatalogFile outside = persist(elsewhere.resolve("other.jpg"));
 
-		// A movement belongs to the run that made it, and that run is history of its
-		// own: forgetting a library must not take it either.
 		Execution execution = executionRepository.saveAndFlush(Execution.builder()
 				.executionType(ExecutionType.ORGANIZATION).status(ExecutionStatus.FINISHED)
-				.publicId(UUID.randomUUID()).sourcePath(forgotten.toString()).recursive(true).executeFlag(true)
+				.executionPublicId(UUID.randomUUID()).sourcePath(forgotten.toString()).recursive(true).executeFlag(true)
 				.build());
 
-		Movement movement = movementRepository.saveAndFlush(Movement.builder().execution(execution).catalogFile(file)
-				.sourcePath(forgotten.resolve("photo.jpg").toString())
-				.targetPath(root.resolve("organized").resolve("photo.jpg").toString())
-				.status(MovementStatus.MOVED).movedAt(LocalDateTime.now()).build());
+		Movement forgottenMovement = movement(execution, inside, forgotten.resolve("photo.jpg"));
+		Movement keptMovement = movement(execution, outside, elsewhere.resolve("other.jpg"));
 
 		entityManager.clear();
 
@@ -128,13 +134,18 @@ class ForgetLibraryIntegrationTest extends SharedPostgresIntegrationTest {
 
 		entityManager.clear();
 
-		Movement kept = movementRepository.findById(movement.getId()).orElseThrow();
+		Assertions.assertThat(movementRepository.findById(forgottenMovement.getId()))
+				.as("the operation was that file's, and the file is no longer collected").isEmpty();
+		Assertions.assertThat(movementRepository.findById(keptMovement.getId()))
+				.as("a file outside the library keeps everything").isPresent();
+		Assertions.assertThat(executionRepository.findById(execution.getId()))
+				.as("the run aggregates many files and is nobody's history but its own").isPresent();
+	}
 
-		Assertions.assertThat(kept.getCatalogFile()).isNull();
-		Assertions.assertThat(kept.getSourcePath()).endsWith("photo.jpg");
-
-		// And the run that made it is still on the executions screen.
-		Assertions.assertThat(executionRepository.findById(execution.getId())).isPresent();
+	private Movement movement(Execution execution, CatalogFile file, Path at) {
+		return movementRepository.saveAndFlush(Movement.builder().execution(execution).catalogFile(file)
+				.requestedSourcePath(at.toString()).requestedTargetPath(at.getParent().resolve("moved.jpg").toString())
+				.status(MovementStatus.MOVED).movedAt(Instant.now()).build());
 	}
 
 	/**
@@ -180,15 +191,15 @@ class ForgetLibraryIntegrationTest extends SharedPostgresIntegrationTest {
 	}
 
 	private CatalogFile persist(Path file) {
-		CatalogFile saved = catalogFileRepository.saveAndFlush(CatalogFile.builder().publicId(UUID.randomUUID())
-				.fileKey(file.toString()).fileName(file.getFileName().toString()).extension("jpg").sizeBytes(10L)
-				.fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE).modifiedAt(LocalDateTime.now())
-				.importedAt(LocalDateTime.now()).build());
+		CatalogFile saved = catalogFileRepository.saveAndFlush(CatalogFile.builder()
+				.catalogFilePublicId(UUID.randomUUID()).extension("jpg").sizeBytes(10L)
+				.fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE).modifiedAt(Instant.now())
+				.importedAt(Instant.now()).build());
 
 		saved.setLocation(CatalogFileLocation.builder().catalogFile(saved).currentPath(file.toString())
-				.currentFolder(file.getParent().toString()).originalPath(file.toString())
-				.originalFolder(file.getParent().toString()).inventoryPath(file.toString()).build());
+				.currentFolder(file.getParent().toString())
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(saved);
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, saved);
 	}
 }

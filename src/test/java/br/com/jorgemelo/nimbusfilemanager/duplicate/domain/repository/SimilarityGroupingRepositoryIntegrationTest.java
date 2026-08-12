@@ -141,7 +141,7 @@ class SimilarityGroupingRepositoryIntegrationTest extends SharedPostgresIntegrat
 	}
 
 	private SimilarityGrouping grouping(String name, GroupingStatus status) {
-		return SimilarityGrouping.builder().publicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
+		return SimilarityGrouping.builder().similarityGroupingPublicId(UUID.randomUUID()).mediaType(FileType.PHOTO)
 				.algorithmId(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(PARAMETERS)
 				.compositionDigest(digest(name)).eligibleCount(10).analyzedCount(10).candidateLimit(8000)

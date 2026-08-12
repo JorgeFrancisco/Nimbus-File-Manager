@@ -1,9 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.quarantine.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -14,17 +17,16 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionPersistence;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
@@ -42,9 +44,12 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureFileMov
 import br.com.jorgemelo.nimbusfilemanager.organization.application.SecureLibraryFiles;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreBatchResult;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.domain.enums.RestoreOutcome;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.library.LibraryFileMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
@@ -68,20 +73,35 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  */
 class QuarantineServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
 	private final MovementRepository movementRepository = mock(MovementRepository.class);
-	private final DuplicateDeletionPersistence persistence = mock(DuplicateDeletionPersistence.class);
+	private final QuarantinePersistence persistence = mock(QuarantinePersistence.class);
 	private final ExecutionCancellationService executionCancellationService = mock(ExecutionCancellationService.class);
 	private final ExecutionStopReason executionStopReason = new ExecutionStopReason(executionCancellationService);
 	private final QuarantineOperationLog restoreLog = mock(QuarantineOperationLog.class);
 	/** Inert on purpose: what it is told is asserted where it is consumed. */
 	private final EligibilityAnnouncer eligibilityAnnouncer = mock(EligibilityAnnouncer.class);
 
-	private final QuarantineService service = new QuarantineService(movementRepository, persistence,
+	private final MovementWriter movementWriter = mock(MovementWriter.class);
+
+	/** Distinct per file, so a batch of several never collides on one key. */
+	private long nextCatalogFileId = 10L;
+
+	private final QuarantineService service = new QuarantineService(movementRepository, movementWriter, new FileHashService(), persistence,
 			new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 					pathRegistry), pathRegistry),
 			GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
+
+	/**
+	 * The operations the write door hands back, one per file the batch decided to
+	 * restore. A batch whose files are all refused before that point never asks,
+	 * and the door answering nothing is what a refusal looks like from here.
+	 */
+	@BeforeEach
+	void theWriteDoorAnswers() {
+		when(movementWriter.prepare(anyLong(), anyList()))
+				.thenAnswer(invocation -> PreparedMovements.pendingFor(invocation.getArgument(1)));
+	}
 
 	@Test
 	void restoresEachSelectedFileBackToItsOwnOrigin(@TempDir Path tmp) throws Exception {
@@ -90,9 +110,9 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(1);
@@ -100,7 +120,7 @@ class QuarantineServiceTest {
 		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isTrue();
 		Assertions.assertThat(Files.exists(quarantine)).isFalse();
 
-		verify(persistence).applyRestore(eq(movement), any(), any());
+		verify(persistence).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	/**
@@ -118,9 +138,9 @@ class QuarantineServiceTest {
 
 		Path decided = elsewhere.resolve("a (1).jpg");
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), decided,
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), decided,
 				claimedRow(), owning());
 
 		Assertions.assertThat(result.restored()).isEqualTo(1);
@@ -141,10 +161,10 @@ class QuarantineServiceTest {
 		Movement free = quarantineMovement(freeOriginal, freeQuarantine);
 		Movement taken = quarantineMovement(takenOriginal, takenQuarantine);
 
-		when(movementRepository.findByPublicId(free.getPublicId())).thenReturn(Optional.of(free));
-		when(movementRepository.findByPublicId(taken.getPublicId())).thenReturn(Optional.of(taken));
+		when(movementRepository.findByMovementPublicId(free.getMovementPublicId())).thenReturn(Optional.of(free));
+		when(movementRepository.findByMovementPublicId(taken.getMovementPublicId())).thenReturn(Optional.of(taken));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(free.getPublicId(), taken.getPublicId()),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(free.getMovementPublicId(), taken.getMovementPublicId()),
 				null, claimedRow(), owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
@@ -168,9 +188,9 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), taken, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), taken, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.conflicts()).isEqualTo(1);
@@ -184,15 +204,15 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(tmp.resolve("gone").resolve("a.jpg"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.originMissing()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	/**
@@ -205,16 +225,16 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(tmp.getRoot(), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(result.items().get(0).message()).isNotBlank();
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -226,16 +246,81 @@ class QuarantineServiceTest {
 
 		Execution row = claimedRow();
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, row, owning());
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, row, owning());
 
 		Assertions.assertThat(result.items().get(0).outcome())
 				.isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
 
 		// The failure names the file, which is what the executions screen lists.
 		verify(restoreLog).recordFailure(eq(row), eq(quarantine), eq(ExecutionErrorType.FILE_NOT_FOUND), any());
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
+	}
+
+	/**
+	 * A worker that died between moving the file back and recording it.
+	 *
+	 * <p>
+	 * The quarantine copy is gone and the file is at the destination the
+	 * operation named, which is what a finished restore looks like - except that
+	 * the operation is still pending. Told apart from a file that vanished by the
+	 * digest the catalog already holds: these are the bytes it is about. Finishing
+	 * it means recording it, not moving anything a second time.
+	 */
+	@Test
+	void aRestoreWhoseFileAlreadyLeftQuarantineIsRecordedNotRepeated(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path destination = Files.writeString(origin.resolve("a.jpg"), "content");
+		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
+
+		Movement movement = quarantineMovement(destination, quarantine);
+
+		movement.getCatalogFile().setSha256(new FileHashService().sha256(destination));
+
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId()))
+				.thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null,
+				claimedRow(), owning());
+
+		Assertions.assertThat(result.items().get(0).outcome()).isEqualTo(RestoreOutcome.RESTORED.name());
+		Assertions.assertThat(result.restored()).isEqualTo(1);
+
+		// Recorded under the identity reserved before the file moved, and with no
+		// digest: this attempt moved nothing, so it proved nothing about the bytes.
+		// The move here is the real one - had it been attempted, a quarantine copy
+		// that is not there could not have produced anything but a failure.
+		verify(persistence).persistRestore(anyLong(), any(), any(), eq(quarantine), eq(destination), isNull());
+
+		Assertions.assertThat(Files.readString(destination)).isEqualTo("content");
+	}
+
+	/**
+	 * The same crash window over a file nobody ever hashed. Hashing is opt-in on a
+	 * scan and deliberately skipped for archives wearing a media extension, so this
+	 * is an ordinary state - and without a digest there is no safe evidence that
+	 * what is at the destination is this file. Nothing is adopted, and the
+	 * operation stays for somebody to look at.
+	 */
+	@Test
+	void aRestoreCannotBeResumedForAFileNobodyHashed(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path destination = Files.writeString(origin.resolve("a.jpg"), "content");
+		Path quarantine = tmp.resolve("trash").resolve("exec-1").resolve("10__a.jpg");
+
+		Movement movement = quarantineMovement(destination, quarantine);
+
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId()))
+				.thenReturn(Optional.of(movement));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null,
+				claimedRow(), owning());
+
+		Assertions.assertThat(result.items().get(0).outcome())
+				.isEqualTo(RestoreOutcome.MISSING_IN_QUARANTINE.name());
+
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -249,22 +334,48 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(origin.resolve("a.lnk"), quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 		Assertions.assertThat(Files.exists(quarantine)).isTrue();
 
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
+	}
+
+	/**
+	 * The quarantine copy is still there and the operation is not: an earlier
+	 * attempt settled it. Moving the file now would be carrying out an operation
+	 * somebody already closed, under a record that says it is finished.
+	 */
+	@Test
+	void aRestoreWhoseOperationWasAlreadySettledIsRefused(@TempDir Path tmp) throws Exception {
+		Path origin = Files.createDirectories(tmp.resolve("library"));
+		Path quarantine = writeQuarantineCopy(tmp, "10__a.jpg", "content");
+
+		Movement movement = quarantineMovement(origin.resolve("a.jpg"), quarantine);
+
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId()))
+				.thenReturn(Optional.of(movement));
+		when(movementWriter.prepare(anyLong(), anyList())).thenReturn(List.of(PreparedMovements.settled(1L,
+				movement.getCatalogFile().getId(), quarantine, origin.resolve("a.jpg"))));
+
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null,
+				claimedRow(), owning());
+
+		Assertions.assertThat(result.items().get(0).outcome()).isEqualTo(RestoreOutcome.ERROR.name());
+		Assertions.assertThat(quarantine).as("nothing was moved under a closed operation").exists();
+
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	@Test
 	void reportsAnErrorForAnIdThatNamesNoMovement() {
 		UUID unknown = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(unknown)).thenReturn(Optional.empty());
 
 		QuarantineRestoreBatchResult result = service.restoreMany(List.of(unknown), null, claimedRow(), owning());
 
@@ -285,14 +396,14 @@ class QuarantineServiceTest {
 
 		movement.setStatus(MovementStatus.UNDONE);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	/**
@@ -309,9 +420,9 @@ class QuarantineServiceTest {
 
 		movement.setReason(MovementReason.NONE);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -325,10 +436,11 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(original, quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
-		doThrow(new IllegalStateException("db down")).when(persistence).applyRestore(any(), any(), any());
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
+		doThrow(new IllegalStateException("db down")).when(persistence).persistRestore(anyLong(), any(), any(), any(),
+				any(), any());
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -344,16 +456,16 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(original, quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 		// The catalog update fails AND re-creates the quarantine copy, so the physical
 		// roll-back (which never overwrites) cannot move the file back to quarantine.
 		doAnswer(_ -> {
 			Files.writeString(quarantine, "blocker");
 
 			throw new IllegalStateException("db down");
-		}).when(persistence).applyRestore(any(), any(), any());
+		}).when(persistence).persistRestore(anyLong(), any(), any(), any(), any(), any());
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -378,16 +490,16 @@ class QuarantineServiceTest {
 
 		OperationLockService lockService = mock(OperationLockService.class);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 		when(lockService.acquire(any(ExecutionType.class), any(Path.class), any(Path.class)))
 				.thenThrow(new OperationLockException("busy"));
 
-		QuarantineService locked = new QuarantineService(movementRepository, persistence,
+		QuarantineService locked = new QuarantineService(movementRepository, movementWriter, new FileHashService(), persistence,
 				new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 						pathRegistry), pathRegistry),
 				lockService, executionStopReason, restoreLog, eligibilityAnnouncer);
 
-		QuarantineRestoreBatchResult result = locked.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = locked.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.items().get(0).outcome()).isEqualTo(RestoreOutcome.LOCKED.name());
@@ -403,18 +515,18 @@ class QuarantineServiceTest {
 
 		LibraryFileMutations failingMove = mock(LibraryFileMutations.class);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 		doThrow(new IOException("disk full")).when(failingMove).move(any(), any(), anyBoolean(), any());
 
-		QuarantineService failing = new QuarantineService(movementRepository, persistence, failingMove,
+		QuarantineService failing = new QuarantineService(movementRepository, movementWriter, new FileHashService(), persistence, failingMove,
 				GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
 
-		QuarantineRestoreBatchResult result = failing.restoreMany(List.of(movement.getPublicId()), null, claimedRow(),
+		QuarantineRestoreBatchResult result = failing.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(),
 				owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
 
-		verify(persistence, never()).applyRestore(any(), any(), any());
+		verify(persistence, never()).persistRestore(anyLong(), any(), any(), any(), any(), any());
 	}
 
 	/**
@@ -431,7 +543,7 @@ class QuarantineServiceTest {
 
 		LibraryFileMutations failing = mock(LibraryFileMutations.class);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 		doAnswer(_ -> {
 			// The move physically happened and then failed its verify.
 			Files.move(quarantine, origin.resolve("a.jpg"));
@@ -440,10 +552,10 @@ class QuarantineServiceTest {
 		}).when(failing).move(any(), any(), anyBoolean(), any());
 		when(failing.rollback(any(), any())).thenReturn(false);
 
-		QuarantineService orphaning = new QuarantineService(movementRepository, persistence, failing,
+		QuarantineService orphaning = new QuarantineService(movementRepository, movementWriter, new FileHashService(), persistence, failing,
 				GrantingOperationLocks.granting(), executionStopReason, restoreLog, eligibilityAnnouncer);
 
-		QuarantineRestoreBatchResult result = orphaning.restoreMany(List.of(movement.getPublicId()), null,
+		QuarantineRestoreBatchResult result = orphaning.restoreMany(List.of(movement.getMovementPublicId()), null,
 				claimedRow(), owning());
 
 		Assertions.assertThat(result.errors()).isEqualTo(1);
@@ -475,10 +587,10 @@ class QuarantineServiceTest {
 
 		UUID unknown = UUID.randomUUID();
 
-		when(movementRepository.findByPublicId(originGone.getPublicId())).thenReturn(Optional.of(originGone));
-		when(movementRepository.findByPublicId(unknown)).thenReturn(Optional.empty());
+		when(movementRepository.findByMovementPublicId(originGone.getMovementPublicId())).thenReturn(Optional.of(originGone));
+		when(movementRepository.findByMovementPublicId(unknown)).thenReturn(Optional.empty());
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(originGone.getPublicId(), unknown), null,
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(originGone.getMovementPublicId(), unknown), null,
 				claimedRow(), owning());
 
 		Assertions.assertThat(result.total()).isEqualTo(2);
@@ -501,10 +613,10 @@ class QuarantineServiceTest {
 
 		Execution row = claimedRow();
 
-		when(movementRepository.findByPublicId(first.getPublicId())).thenReturn(Optional.of(first));
+		when(movementRepository.findByMovementPublicId(first.getMovementPublicId())).thenReturn(Optional.of(first));
 		when(executionCancellationService.isCancelled(77L)).thenReturn(false, true);
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(first.getPublicId(), second.getPublicId()),
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(first.getMovementPublicId(), second.getMovementPublicId()),
 				null, row, owning());
 
 		Assertions.assertThat(result.restored()).isEqualTo(1);
@@ -532,7 +644,7 @@ class QuarantineServiceTest {
 
 		doThrow(new OwnershipLostException("the lease went away")).when(lost).assertMayGoOnWorking();
 
-		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getPublicId()), null, row, lost);
+		QuarantineRestoreBatchResult result = service.restoreMany(List.of(movement.getMovementPublicId()), null, row, lost);
 
 		Assertions.assertThat(result.restored()).isZero();
 		Assertions.assertThat(Files.exists(origin.resolve("a.jpg"))).isFalse();
@@ -554,12 +666,12 @@ class QuarantineServiceTest {
 
 		Execution row = claimedRow();
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		service.restoreMany(List.of(movement.getPublicId()), null, row, owning());
+		service.restoreMany(List.of(movement.getMovementPublicId()), null, row, owning());
 
 		verify(restoreLog).finish(eq(ownership), eq(1), eq(1), eq(0), eq(0), any());
-		verify(persistence).applyRestore(eq(movement), any(), eq(row));
+		verify(persistence).persistRestore(eq(row.getId()), any(), any(), any(), any(), any());
 	}
 
 	/** An item left waiting for a decision is not a failure, nor counted as one. */
@@ -571,9 +683,9 @@ class QuarantineServiceTest {
 
 		Movement movement = quarantineMovement(original, quarantine);
 
-		when(movementRepository.findByPublicId(movement.getPublicId())).thenReturn(Optional.of(movement));
+		when(movementRepository.findByMovementPublicId(movement.getMovementPublicId())).thenReturn(Optional.of(movement));
 
-		service.restoreMany(List.of(movement.getPublicId()), null, claimedRow(), owning());
+		service.restoreMany(List.of(movement.getMovementPublicId()), null, claimedRow(), owning());
 
 		verify(restoreLog).finish(any(), eq(1), eq(0), eq(1), eq(0), any());
 	}
@@ -590,7 +702,7 @@ class QuarantineServiceTest {
 
 		List<UUID> selection = List.of(movementId);
 
-		when(movementRepository.findByPublicId(movementId)).thenThrow(new IllegalStateException("db down"));
+		when(movementRepository.findByMovementPublicId(movementId)).thenThrow(new IllegalStateException("db down"));
 
 		Assertions.assertThatThrownBy(() -> service.restoreMany(selection, null, row, ownership))
 				.isInstanceOf(IllegalStateException.class);
@@ -626,11 +738,18 @@ class QuarantineServiceTest {
 	}
 
 	private Movement quarantineMovement(Path original, Path quarantine) {
-		CatalogFile catalogFile = mock(CatalogFile.class);
+		// A real entry, because the restore keys the operations it prepares by the id
+		// of the file each one is for - and a mock has none.
+		CatalogFile catalogFile = CatalogFiles.at(nextCatalogFileId++, original);
 
-		return Movement.builder().publicId(UUID.randomUUID()).catalogFile(catalogFile)
-				.sourcePath(PathUtils.normalize(original)).targetPath(PathUtils.normalize(quarantine))
-				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(LocalDateTime.now())
+		// Quarantine is not a lifecycle of its own: what says the file is in
+		// quarantine is the operation that put it there, over an entry the catalog
+		// already carries as deleted. Restoring one that is not is refused.
+		catalogFile.markDeleted();
+
+		return Movement.builder().movementPublicId(UUID.randomUUID()).catalogFile(catalogFile)
+				.requestedSourcePath(PathUtils.normalize(original)).requestedTargetPath(PathUtils.normalize(quarantine))
+				.status(MovementStatus.MOVED).reason(MovementReason.DUPLICATE_QUARANTINED).movedAt(Instant.now())
 				.build();
 	}
 }

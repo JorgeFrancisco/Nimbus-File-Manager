@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.DuplicateDeletePayload;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
@@ -65,7 +66,7 @@ class DuplicateDeletionLauncherServiceTest {
 			Execution queued = invocation.getArgument(0);
 
 			queued.setStatus(ExecutionStatus.PENDING);
-			queued.setPublicId(UUID.randomUUID());
+			queued.setExecutionPublicId(UUID.randomUUID());
 
 			return Optional.of(queued);
 		});
@@ -138,6 +139,7 @@ class DuplicateDeletionLauncherServiceTest {
 	private DuplicateDeletionLauncherService launcher() {
 		return new DuplicateDeletionLauncherService(quarantineFolderPolicy, executionEnqueueService,
 				executionPayloadCodec,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class)));
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class),
+						Progress.reader(), Progress.estimator()));
 	}
 }

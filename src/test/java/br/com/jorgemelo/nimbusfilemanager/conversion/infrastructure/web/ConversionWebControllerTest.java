@@ -23,6 +23,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionCandidateService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.ConversionProgressService;
@@ -274,7 +275,7 @@ class ConversionWebControllerTest {
 	 */
 	@Test
 	void answersWithTheProgressThatWasPersisted() {
-		ConversionProgress snapshot = new ConversionProgress(true, 1, 3, 45, 20, 320, "clip.mp4", null);
+		ConversionProgress snapshot = new ConversionProgress(true, 1, 3, 45, 20, EtaEstimate.of(320), "clip.mp4", null);
 
 		when(conversionProgressService.snapshot()).thenReturn(snapshot);
 

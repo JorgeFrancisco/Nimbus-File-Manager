@@ -5,7 +5,7 @@ import static br.com.jorgemelo.nimbusfilemanager.shared.application.constants.To
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -72,7 +74,7 @@ class CatalogBackupIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private CatalogDump catalogDump;
@@ -97,9 +99,9 @@ class CatalogBackupIntegrationTest {
 	}
 
 	private CatalogFile catalogued(String fileKey) {
-		return catalogFileRepository.save(CatalogFile.builder().fileKey(fileKey).fileName("photo.jpg").extension("jpg")
+		return catalogFileRepository.save(CatalogFile.builder().extension("jpg")
 				.sizeBytes(1024L).sha256(fileKey).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
-				.modifiedAt(LocalDateTime.now()).importedAt(LocalDateTime.now()).build());
+				.modifiedAt(Instant.now()).importedAt(Instant.now()).build());
 	}
 
 	/**

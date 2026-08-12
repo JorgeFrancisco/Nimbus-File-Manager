@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCompletionWait;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
@@ -55,7 +56,8 @@ class QuarantineRestoreLauncherTest {
 	private final ExecutionMessageCodec executionMessageCodec = new ExecutionMessageCodec(new ObjectMapper());
 	private final QuarantineRestoreLauncher launcher = new QuarantineRestoreLauncher(planner, executionEnqueueService,
 			executionCompletionWait, executionPayloadCodec, executionMessageCodec,
-			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()));
+			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels(), Progress.reader(),
+					Progress.estimator()));
 
 	/**
 	 * A question is the end of the request: nothing is queued, because a queue
@@ -201,7 +203,7 @@ class QuarantineRestoreLauncherTest {
 	}
 
 	private Execution finished(ExecutionStatus status, int filesMoved) {
-		return Execution.builder().id(1L).publicId(UUID.randomUUID())
+		return Execution.builder().id(1L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.QUARANTINE_RESTORE).status(status).filesFound(1).filesAnalyzed(1)
 				.cacheHits(0).filesMoved(filesMoved).errors(0)
 				.statusMessage(StatusMessage.coded("backend.quarantine.batchCompleted", "[0,1,0,0]")).build();

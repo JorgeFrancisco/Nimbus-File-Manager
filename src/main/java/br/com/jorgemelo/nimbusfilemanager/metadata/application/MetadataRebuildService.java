@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.infrastructure.persistence.ContentRevisionGuard;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.VideoRelationInvalidator;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoComparisonInputs;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Coordinates;
@@ -36,6 +38,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PageUtils;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -72,15 +76,18 @@ public class MetadataRebuildService {
 	private final TransactionTemplate transactionTemplate;
 
 	private final CatalogFileRepository catalogFileRepository;
+	private final ContentRevisionGuard contentRevisionGuard;
 	private final MetadataExtractor metadataExtractor;
 	private final MediaDateResolver mediaDateResolver;
 	private final VideoRelationInvalidator videoRelationInvalidator;
 	private final Clock clock;
 
-	public MetadataRebuildService(CatalogFileRepository catalogFileRepository, MetadataExtractor metadataExtractor,
+	public MetadataRebuildService(CatalogFileRepository catalogFileRepository,
+			ContentRevisionGuard contentRevisionGuard, MetadataExtractor metadataExtractor,
 			MediaDateResolver mediaDateResolver, VideoRelationInvalidator videoRelationInvalidator,
 			PlatformTransactionManager transactionManager, Clock clock) {
 		this.catalogFileRepository = catalogFileRepository;
+		this.contentRevisionGuard = contentRevisionGuard;
 		this.metadataExtractor = metadataExtractor;
 		this.mediaDateResolver = mediaDateResolver;
 		this.videoRelationInvalidator = videoRelationInvalidator;
@@ -125,6 +132,8 @@ public class MetadataRebuildService {
 	 */
 	public MetadataRebuildResponse rebuild(MetadataRebuildRequest request, LongConsumer progress,
 			BooleanSupplier stop) {
+		ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
 		Path sourcePath = request.source();
 
 		String separator = sourcePath.getFileSystem().getSeparator();
@@ -163,7 +172,7 @@ public class MetadataRebuildService {
 			OptimisticLockRetry.run("metadata rebuild batch", MAX_BATCH_ATTEMPTS, () -> {
 				MetadataRebuildCounters batch = new MetadataRebuildCounters();
 
-				processBatch(ids, request, batch);
+				processBatch(ids, request, batch, metrics);
 
 				batchHolder[0] = batch;
 			});
@@ -190,6 +199,8 @@ public class MetadataRebuildService {
 	 * costs - which dates would actually change.
 	 */
 	public MetadataRebuildSimulationResult simulate(MetadataRebuildRequest request) {
+		ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
 		String sourcePathText = PathUtils.normalize(request.source());
 
 		String descendantPattern = PathUtils.descendantLikePattern(sourcePathText,
@@ -203,12 +214,13 @@ public class MetadataRebuildService {
 				request.captureDateNull(), request.dateSource(), MetadataRebuildRequest.NO_CUTOFF, 0L,
 				PageUtils.firstPage(request.safeLimit())).size();
 
-		return sample(ids.stream().limit(PREVIEW_SAMPLE).toList(), request, withoutCutoff - ids.size(), ids.size());
+		return sample(ids.stream().limit(PREVIEW_SAMPLE).toList(), request, withoutCutoff - ids.size(), ids.size(),
+				metrics);
 	}
 
 	/** Extracts the sample without writing anything: the entities are only read. */
 	private MetadataRebuildSimulationResult sample(List<Long> ids, MetadataRebuildRequest request, int skippedByCutoff,
-			int candidates) {
+			int candidates, ProcessingMetrics metrics) {
 		if (ids.isEmpty()) {
 			return new MetadataRebuildSimulationResult(candidates, skippedByCutoff, 0, 0, List.of());
 		}
@@ -226,7 +238,7 @@ public class MetadataRebuildService {
 
 			examined++;
 
-			MetadataDateDifference difference = difference(catalogFile, file, request);
+			MetadataDateDifference difference = difference(catalogFile, file, request, metrics);
 
 			if (difference != null) {
 				differences.add(difference);
@@ -241,7 +253,8 @@ public class MetadataRebuildService {
 	 * The date this file would end up with, when it differs from the one the
 	 * catalog holds today.
 	 */
-	private MetadataDateDifference difference(CatalogFile catalogFile, Path file, MetadataRebuildRequest request) {
+	private MetadataDateDifference difference(CatalogFile catalogFile, Path file, MetadataRebuildRequest request,
+			ProcessingMetrics metrics) {
 		if (!request.shouldRefresh(MetadataRebuildField.DATE)) {
 			return null;
 		}
@@ -249,7 +262,8 @@ public class MetadataRebuildService {
 		ResolvedMediaDate resolved;
 
 		try {
-			resolved = mediaDateResolver.resolve(metadataExtractor.extract(file, new MetadataOptions(false, true)));
+			resolved = mediaDateResolver
+					.resolve(metadataExtractor.extract(file, new MetadataOptions(false, true), metrics));
 		} catch (RuntimeException e) {
 			log.debug("Could not simulate the rebuild of {}", file, e);
 
@@ -268,7 +282,8 @@ public class MetadataRebuildService {
 				media == null ? null : media.getDateSource(), resolved.captureDate(), resolved.dateSource());
 	}
 
-	private void processBatch(List<Long> ids, MetadataRebuildRequest request, MetadataRebuildCounters counters) {
+	private void processBatch(List<Long> ids, MetadataRebuildRequest request, MetadataRebuildCounters counters,
+			ProcessingMetrics metrics) {
 		transactionTemplate.executeWithoutResult(_ -> {
 			List<CatalogFile> candidates = catalogFileRepository.findForMetadataRebuildByIds(ids);
 
@@ -276,36 +291,73 @@ public class MetadataRebuildService {
 					ids.getLast());
 
 			for (CatalogFile catalogFile : candidates) {
-				counters.countProcessed();
-				counters.countCandidate();
-
-				Path file = currentPath(catalogFile);
-
-				if (file == null) {
-					counters.countSkippedWithoutLocation();
-
-					logProgress(counters, null);
-				} else if (!Files.exists(file) || !Files.isRegularFile(file)) {
-					counters.countSkippedMissing();
-
-					logProgress(counters, file);
-				} else {
-					try {
-						MetadataResult metadata = metadataExtractor.extract(file, new MetadataOptions(false, true));
-
-						applySelectedFields(catalogFile, metadata, request);
-
-						counters.countRebuilt();
-					} catch (Exception e) {
-						counters.countError();
-
-						log.warn("Error rebuilding metadata. file={}", file, e);
-					}
-
-					logProgress(counters, file);
-				}
+				rebuildOne(catalogFile, request, counters, metrics);
 			}
 		});
+	}
+
+	/**
+	 * One candidate, and the three ways it can end: no place to read it from, no
+	 * file at that place, or a rebuild - which itself ends in what was written or
+	 * in what the read cost and could not use.
+	 */
+	private void rebuildOne(CatalogFile catalogFile, MetadataRebuildRequest request, MetadataRebuildCounters counters,
+			ProcessingMetrics metrics) {
+		counters.countProcessed();
+		counters.countCandidate();
+
+		Path file = currentPath(catalogFile);
+
+		if (file == null) {
+			counters.countSkippedWithoutLocation();
+
+			logProgress(counters, null);
+
+			return;
+		}
+
+		if (!Files.exists(file) || !Files.isRegularFile(file)) {
+			counters.countSkippedMissing();
+
+			logProgress(counters, file);
+
+			return;
+		}
+
+		rebuildFrom(catalogFile, file, request, counters, metrics);
+
+		logProgress(counters, file);
+	}
+
+	/**
+	 * The read and the write, with the guard between them: the bytes may have been
+	 * replaced between loading this row and reading them, and writing anyway would
+	 * put metadata of a generation the catalog has already discarded back where the
+	 * current one belongs. The lock the guard takes is what makes the answer still
+	 * true when it commits.
+	 */
+	private void rebuildFrom(CatalogFile catalogFile, Path file, MetadataRebuildRequest request,
+			MetadataRebuildCounters counters, ProcessingMetrics metrics) {
+		try {
+			MetadataResult metadata = metadataExtractor.extract(file, new MetadataOptions(false, true), metrics);
+
+			if (!contentRevisionGuard.stillAt(catalogFile.getId(), catalogFile.getContentRevision())) {
+				log.info("Discarded rebuilt metadata for catalog file {}: its content changed while it was being read",
+						catalogFile.getId());
+
+				counters.countSkippedMissing();
+
+				return;
+			}
+
+			applySelectedFields(catalogFile, metadata, request);
+
+			counters.countRebuilt();
+		} catch (Exception e) {
+			counters.countError();
+
+			log.warn("Error rebuilding metadata. file={}", file, e);
+		}
 	}
 
 	private MediaMetadata ensureMedia(CatalogFile catalogFile, MetadataResult metadata) {
@@ -341,7 +393,7 @@ public class MetadataRebuildService {
 			applyFileFields(catalogFile, metadata);
 		}
 
-		catalogFile.setLastAnalysis(LocalDateTime.now(clock));
+		catalogFile.setLastAnalysis(Instant.now(clock));
 
 		catalogFile.setAnalysisVersion("1");
 
@@ -387,7 +439,6 @@ public class MetadataRebuildService {
 	}
 
 	private void applyFileFields(CatalogFile catalogFile, MetadataResult metadata) {
-		catalogFile.setFileName(metadata.getFileName());
 		catalogFile.setExtension(metadata.getExtension());
 		catalogFile.setSizeBytes(metadata.getSizeBytes());
 		catalogFile.setMimeType(metadata.getMimeType());
@@ -395,13 +446,16 @@ public class MetadataRebuildService {
 
 		if (MediaProcessingPolicy.isArchiveMasqueradingAsMedia(metadata.getExtension(), metadata.getMimeType())) {
 			catalogFile.setSha256(null);
-			catalogFile.setMd5(null);
 		}
 
 		catalogFile.setCreatedAt(metadata.getCreatedAt());
 		catalogFile.setModifiedAt(metadata.getModifiedAt());
-		catalogFile.markActive();
-		catalogFile.setLastAnalysis(LocalDateTime.now(clock));
+
+		// Reading a file says what it contains and nothing about whether the catalog
+		// should count it. Promoting it here let an analysis bring back a file the user
+		// had quarantined, on no evidence beyond the rebuild having reached it - the
+		// walk that meets a file, and the restore that puts one back, are what know.
+		catalogFile.setLastAnalysis(Instant.now(clock));
 		catalogFile.setAnalysisVersion("1");
 	}
 

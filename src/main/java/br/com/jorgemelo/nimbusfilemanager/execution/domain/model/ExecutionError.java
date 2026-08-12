@@ -42,8 +42,8 @@ public class ExecutionError {
 	@EqualsAndHashCode.Include
 	private Long id;
 
-	@Column(name = "public_id", nullable = false, unique = true, updatable = false)
-	private UUID publicId;
+	@Column(name = "execution_error_public_id", nullable = false, unique = true, updatable = false)
+	private UUID executionErrorPublicId;
 
 	// Required: a failure with no execution answers nothing - not which operation,
 	// not when, not over which folder - and the database deletes it with its
@@ -68,8 +68,8 @@ public class ExecutionError {
 
 	@PrePersist
 	void prePersist() {
-		if (publicId == null) {
-			publicId = UuidV7.generate();
+		if (executionErrorPublicId == null) {
+			executionErrorPublicId = UuidV7.generate();
 		}
 
 		if (createdAt == null) {

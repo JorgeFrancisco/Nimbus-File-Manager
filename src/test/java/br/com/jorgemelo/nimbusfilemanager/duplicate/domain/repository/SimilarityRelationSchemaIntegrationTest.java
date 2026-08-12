@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
@@ -40,8 +41,8 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 
 	@Test
 	void storesACanonicalRelationAndReadsItBack() {
-		Long first = catalogued("a");
-		Long second = catalogued("b");
+		Long first = catalogued();
+		Long second = catalogued();
 
 		insert(ordered(first, second), 97);
 
@@ -51,8 +52,8 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 	/** The pair written the other way round is refused, not stored twice. */
 	@Test
 	void refusesTheReversedSpellingOfAPair() {
-		Long first = catalogued("a");
-		Long second = catalogued("b");
+		Long first = catalogued();
+		Long second = catalogued();
 
 		Long[] canonical = ordered(first, second);
 
@@ -63,7 +64,7 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 	/** A file cannot relate to itself, which the same check already prevents. */
 	@Test
 	void refusesAFileRelatedToItself() {
-		Long file = catalogued("a");
+		Long file = catalogued();
 
 		assertThatThrownBy(() -> insert(new Long[] { file, file }, 100))
 				.hasMessageContaining("ck_similarity_relation_canonical");
@@ -71,7 +72,7 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 
 	@Test
 	void refusesTheSameRelationTwiceForTheSameParameters() {
-		Long[] pair = ordered(catalogued("a"), catalogued("b"));
+		Long[] pair = ordered(catalogued(), catalogued());
 
 		insert(pair, 97);
 
@@ -84,7 +85,7 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 	 */
 	@Test
 	void keepsTheSamePairSeparatelyForEachParameterSet() {
-		Long[] pair = ordered(catalogued("a"), catalogued("b"));
+		Long[] pair = ordered(catalogued(), catalogued());
 
 		insert(pair, ALGORITHM, RADIUS, 95, 97);
 		insert(pair, ALGORITHM, RADIUS, 90, 97);
@@ -96,7 +97,7 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 
 	@Test
 	void refusesAPercentageOutsideTheScale() {
-		Long[] pair = ordered(catalogued("a"), catalogued("b"));
+		Long[] pair = ordered(catalogued(), catalogued());
 
 		assertThatThrownBy(() -> insert(pair, 101)).hasMessageContaining("ck_similarity_relation_percent");
 	}
@@ -109,8 +110,8 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 	 */
 	@Test
 	void deletingTheFileRemovesItsRelations() {
-		CatalogFile first = catalog("a");
-		Long second = catalogued("b");
+		CatalogFile first = catalog();
+		Long second = catalogued();
 
 		insert(ordered(first.getId(), second), 97);
 
@@ -140,14 +141,12 @@ class SimilarityRelationSchemaIntegrationTest extends SharedPostgresIntegrationT
 		return jdbcTemplate.queryForObject("SELECT count(*) FROM similarity_relation", Integer.class);
 	}
 
-	private Long catalogued(String name) {
-		return catalog(name).getId();
+	private Long catalogued() {
+		return catalog().getId();
 	}
 
-	private CatalogFile catalog(String name) {
-		String unique = name + System.nanoTime();
-
-		return catalogFileRepository.saveAndFlush(CatalogFile.builder().fileKey(unique).fileName(unique + ".jpg")
-				.extension("jpg").sizeBytes(1L).modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).build());
+	private CatalogFile catalog() {
+		return catalogFileRepository.saveAndFlush(CatalogFile.builder()
+				.extension("jpg").sizeBytes(1L).modifiedAt(Instant.now()).fileType(FileType.PHOTO).build());
 	}
 }

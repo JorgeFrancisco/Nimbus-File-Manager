@@ -12,6 +12,7 @@
 	--accent-soft-line: #bfdbfe;
 	--accent-strong: #1d4ed8;
 	--teal: #22c7ba;
+	--progress-step: #0d9488;
 	--danger: #b42318;
 	--danger-soft: #fee4e2;
 	--danger-soft-weak: #fff7f5;
@@ -48,6 +49,7 @@
 	--accent-soft-hover: #1c2c4a;
 	--accent-soft-line: #2c3e63;
 	--accent-strong: #93c5fd;
+	--progress-step: var(--accent-strong);
 	--danger: #f87171;
 	--danger-soft: #3a1518;
 	--danger-soft-weak: #2c1518;

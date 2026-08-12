@@ -1,8 +1,10 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure;
 
+import java.io.IOException;
 import java.nio.file.Path;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameSamplingPlan;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Seam over the single ffmpeg pass that extracts a video's sampled frames as
@@ -12,5 +14,6 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameSam
 @FunctionalInterface
 public interface FfmpegVideoFrameRunner {
 
-	byte[] run(String ffmpegPath, Path file, VideoFrameSamplingPlan plan) throws Exception;
+	byte[] run(String ffmpegPath, Path file, VideoFrameSamplingPlan plan, ProcessingMetrics metrics)
+			throws IOException, InterruptedException;
 }

@@ -1,23 +1,27 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,23 +31,31 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.ContentReconciliation;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionErrorService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionProgressService;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationMessages;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLock;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OperationLockService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.OwnershipLostException;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionCounts;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.ExecutionErrorType;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.constants.OrganizationMessages;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.AppliedLocationChanges;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.LocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.MovementRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -51,21 +63,23 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLocationWriter;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationUndoServiceTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
+	/** What each file's reversal turned out to be, keyed the way the run keys it. */
+	private final Map<Long, PreparedMovement> reserved = new LinkedHashMap<>();
 
 	@TempDir
 	Path tempDir;
@@ -80,7 +94,13 @@ class OrganizationUndoServiceTest {
 	private CatalogFileRepository catalogFileRepository;
 
 	@Mock
-	private CatalogFileLocationRepository catalogFileLocationRepository;
+	private CatalogLocationWriter catalogLocationWriter;
+
+	@Mock
+	private ContentReconciliation contentReconciliation;
+
+	@Mock
+	private MovementWriter movementWriter;
 
 	@Mock
 	private MovementRepository movementRepository;
@@ -102,16 +122,14 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, target);
 
-		CatalogFileLocation location = location(catalogFile, target);
-
 		Movement movement = movement(100L, catalogFile, source, target, MovementStatus.MOVED);
+
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		ExecutionCounts undo = undo(service(), 1L);
 
@@ -120,20 +138,62 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(undo.failed()).isZero();
 		Assertions.assertThat(Files.exists(source)).isTrue();
 		Assertions.assertThat(Files.exists(target)).isFalse();
-		Assertions.assertThat(catalogFile.getFileKey()).isEqualTo(source.toAbsolutePath().normalize().toString());
-		Assertions.assertThat(location.getCurrentPath()).isEqualTo(source.toAbsolutePath().normalize().toString());
-		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.UNDONE);
 
-		// The reversal is a movement of its own, in the opposite direction: two saves,
-		// the mark on the original and the row the undo appends.
-		ArgumentCaptor<Movement> saved = ArgumentCaptor.forClass(Movement.class);
+		// Where the file is now is stated to the write door, which is the only thing
+		// allowed to move a placement - and stated the way a reversal is: from where
+		// the forward move put it, back to where it came from.
+		LocationChange change = relocation();
 
-		verify(movementRepository, times(2)).save(saved.capture());
+		Assertions.assertThat(change.catalogFileId()).isEqualTo(10L);
+		Assertions.assertThat(change.expectedCurrentPath()).isEqualTo(target);
+		Assertions.assertThat(change.newPath()).isEqualTo(source);
+		Assertions.assertThat(change.provenance().source()).isEqualTo(CatalogEventSources.ORGANIZATION);
 
-		Movement reverse = saved.getAllValues().get(1);
+		// The reversing operation settles as itself; the movement it reverses records
+		// that its effect no longer stands, and nothing else about it is rewritten.
+		Assertions.assertThat(change.eventId()).isEqualTo(reversalOf(10L).catalogFileEventPublicId());
 
-		Assertions.assertThat(reverse.getReason()).isEqualTo(MovementReason.UNDONE_BY_USER);
-		Assertions.assertThat(reverse.getSourcePath()).isEqualTo(movement.getTargetPath());
+		verify(movementWriter).markMoved(500L, List.of(reversalOf(10L).movementPublicId()));
+		verify(movementWriter).markUndone(List.of(movement.getMovementPublicId()));
+	}
+
+	/**
+	 * The reversal is a move in the opposite direction, prepared before the file is
+	 * touched: it names the place the file is now as its source and the place it
+	 * came from as its target, and carries the reason it exists at all.
+	 */
+	@Test
+	void theReversalIsAnOperationOfItsOwnInTheOppositeDirection() throws Exception {
+		Path sourceFolder = Files.createDirectory(tempDir.resolve("source"));
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+		Path source = sourceFolder.resolve("photo.jpg");
+		Path target = Files.writeString(targetFolder.resolve("photo.jpg"), "content");
+
+		Movement movement = movement(100L, catalogFile(10L, target), source, target, MovementStatus.MOVED);
+
+		reversing();
+
+		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
+		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
+				List.of(MovementStatus.MOVED)))
+						.thenReturn(List.of(movement));
+
+		undo(service(), 1L);
+
+		ArgumentCaptor<List<MovementRequest>> requests = ArgumentCaptor.captor();
+
+		verify(movementWriter).prepare(eq(500L), requests.capture());
+
+		MovementRequest reversal = requests.getValue().getFirst();
+
+		Assertions.assertThat(reversal.catalogFileId()).isEqualTo(10L);
+		Assertions.assertThat(reversal.requestedSource()).isEqualTo(target);
+		Assertions.assertThat(reversal.requestedTarget()).isEqualTo(source);
+		Assertions.assertThat(reversal.reason()).isEqualTo(MovementReason.UNDONE_BY_USER);
+
+		Assertions.assertThat(reversalOf(10L).movementPublicId())
+				.as("the reversing operation is not the one being reversed")
+				.isNotEqualTo(movement.getMovementPublicId());
 	}
 
 	@Test
@@ -147,16 +207,14 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, target);
 
-		CatalogFileLocation location = location(catalogFile, target);
-
 		Movement movement = movement(100L, catalogFile, source, target, MovementStatus.MOVED);
+
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		Assertions.assertThat(Files.exists(source.getParent())).isFalse();
 
@@ -181,34 +239,36 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, okTarget);
 
-		CatalogFileLocation location = location(catalogFile, okTarget);
-
 		Movement missing = movement(100L, catalogFile(9L, missingTarget), missingSource, missingTarget,
 				MovementStatus.MOVED);
 		Movement ok = movement(101L, catalogFile, okSource, okTarget, MovementStatus.MOVED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(missing, ok));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				okTarget.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		ExecutionCounts undo = undo(service(), 1L);
 
 		Assertions.assertThat(finishedStatus()).isEqualTo(ExecutionStatus.FINISHED_WITH_ERRORS);
 		Assertions.assertThat(undo.moved()).isEqualTo(1);
 		Assertions.assertThat(undo.failed()).isEqualTo(1);
-		Assertions.assertThat(missing.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
-		Assertions.assertThat(missing.getReason()).isEqualTo(MovementReason.SOURCE_NOT_FOUND);
 		Assertions.assertThat(Files.exists(okSource)).isTrue();
+
+		// The failure is the reversing operation's. The one it could not reverse is
+		// left exactly as it was: it did move the file, which is still true.
+		verify(movementWriter).markFailed(500L, List.of(reversalOf(9L).movementPublicId()),
+				MovementReason.SOURCE_NOT_FOUND);
+		verify(movementWriter, never()).markUndone(List.of(missing.getMovementPublicId()));
 	}
 
 	/**
 	 * The physical restore already happened when the catalog write runs, so a
-	 * movement with no media row, or one whose placement no longer matches, has to
-	 * fail loudly enough to trigger the rollback rather than leave the catalog
-	 * pointing at the old path.
+	 * movement with no media row, or one the write door refuses because the file is
+	 * no longer where the reversal expected it, has to fail loudly enough to
+	 * trigger the rollback rather than leave the catalog pointing at the old path.
 	 */
 	@Test
 	void undoShouldFailTheMovementWhenTheCatalogSideCannotBeResolved() throws Exception {
@@ -218,29 +278,36 @@ class OrganizationUndoServiceTest {
 		Path orphanSource = sourceFolder.resolve("orphan.jpg");
 		Path orphanTarget = Files.writeString(targetFolder.resolve("orphan.jpg"), "content");
 
-		Path unlinkedSource = sourceFolder.resolve("unlinked.jpg");
-		Path unlinkedTarget = Files.writeString(targetFolder.resolve("unlinked.jpg"), "content");
+		Path refusedSource = sourceFolder.resolve("refused.jpg");
+		Path refusedTarget = Files.writeString(targetFolder.resolve("refused.jpg"), "content");
 
 		Movement withoutCatalog = Movement.builder().id(100L).execution(execution())
-				.sourcePath(orphanSource.toAbsolutePath().normalize().toString())
-				.targetPath(orphanTarget.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED).build();
+				.requestedSourcePath(orphanSource.toAbsolutePath().normalize().toString())
+				.requestedTargetPath(orphanTarget.toAbsolutePath().normalize().toString())
+				.status(MovementStatus.MOVED).build();
 
-		Movement withoutLocation = movement(101L, catalogFile(20L, unlinkedTarget), unlinkedSource, unlinkedTarget,
+		Movement refused = movement(101L, catalogFile(20L, refusedTarget), refusedSource, refusedTarget,
 				MovementStatus.MOVED);
+
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
-						.thenReturn(List.of(withoutCatalog, withoutLocation));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(eq(20L), any()))
-				.thenReturn(Optional.empty());
+				List.of(MovementStatus.MOVED)))
+						.thenReturn(List.of(withoutCatalog, refused));
+		doThrow(new IllegalStateException("the file is not where the reversal expected it"))
+				.when(catalogLocationWriter).relocate(any());
 
 		ExecutionCounts undo = undo(service(), 1L);
 
 		Assertions.assertThat(undo.failed()).isEqualTo(2);
 		Assertions.assertThat(undo.moved()).isZero();
-		Assertions.assertThat(withoutCatalog.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
-		Assertions.assertThat(withoutLocation.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
+
+		// A movement with no catalogued file reserves no reversal at all, so there is
+		// nothing to close - only the run's error list records it. The refused one has
+		// its reversal, and that is what fails.
+		verify(movementWriter).markFailed(500L, List.of(reversalOf(20L).movementPublicId()), MovementReason.IO_ERROR);
+		verify(movementWriter, never()).markUndone(any());
 	}
 
 	@Test
@@ -252,7 +319,7 @@ class OrganizationUndoServiceTest {
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 
 		ExecutionCounts undo = undo(service(), 1L);
@@ -260,7 +327,7 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(undo.skipped()).isEqualTo(1);
 		Assertions.assertThat(undo.failed()).isZero();
 
-		verify(catalogFileLocationRepository, never()).save(any());
+		verify(catalogLocationWriter, never()).relocate(any());
 	}
 
 	@Test
@@ -272,11 +339,11 @@ class OrganizationUndoServiceTest {
 
 		Movement movement = movement(100L, catalogFile(10L, target), source, target, MovementStatus.MOVED);
 
-		ArgumentCaptor<Movement> captor = ArgumentCaptor.forClass(Movement.class);
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 
 		ExecutionCounts undo = undo(service(), 1L);
@@ -285,10 +352,9 @@ class OrganizationUndoServiceTest {
 		Assertions.assertThat(Files.readString(source)).isEqualTo("original");
 		Assertions.assertThat(Files.readString(target)).isEqualTo("organized");
 
-		verify(movementRepository).save(captor.capture());
-
-		Assertions.assertThat(captor.getValue().getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
-		Assertions.assertThat(captor.getValue().getReason()).isEqualTo(MovementReason.TARGET_EXISTS);
+		verify(movementWriter).markFailed(500L, List.of(reversalOf(10L).movementPublicId()),
+				MovementReason.TARGET_EXISTS);
+		verify(movementWriter, never()).markUndone(any());
 	}
 
 	@Test
@@ -298,9 +364,11 @@ class OrganizationUndoServiceTest {
 
 		Movement movement = movement(100L, catalogFile(10L, target), source, target, MovementStatus.MOVED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 
 		ExecutionCounts undo = undo(service(), 1L);
@@ -315,8 +383,10 @@ class OrganizationUndoServiceTest {
 		verify(executionErrorService).save(any(), eq(ExecutionErrorType.MOVE_ERROR), failure.capture(), any());
 
 		Assertions.assertThat(failure.getValue()).isEqualTo("Target file does not exist.");
-		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
-		Assertions.assertThat(movement.getReason()).isEqualTo(MovementReason.SOURCE_NOT_FOUND);
+
+		verify(movementWriter).markFailed(500L, List.of(reversalOf(10L).movementPublicId()),
+				MovementReason.SOURCE_NOT_FOUND);
+		verify(movementWriter, never()).markUndone(any());
 	}
 
 	@Test
@@ -328,16 +398,14 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, target);
 
-		CatalogFileLocation location = location(catalogFile, target);
-
 		Movement movement = movement(100L, catalogFile, source, target, MovementStatus.MOVED);
+
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 		doThrow(new IllegalStateException("database down")).when(catalogFileRepository).save(catalogFile);
 
 		ExecutionCounts undo = undo(service(), 1L);
@@ -349,8 +417,9 @@ class OrganizationUndoServiceTest {
 		// target and the catalog (still pointing at target) stays consistent with disk.
 		Assertions.assertThat(Files.exists(source)).isFalse();
 		Assertions.assertThat(Files.exists(target)).isTrue();
-		Assertions.assertThat(movement.getStatus()).isEqualTo(MovementStatus.UNDO_ERROR);
-		Assertions.assertThat(movement.getReason()).isEqualTo(MovementReason.IO_ERROR);
+
+		verify(movementWriter).markFailed(500L, List.of(reversalOf(10L).movementPublicId()), MovementReason.IO_ERROR);
+		verify(movementWriter, never()).markUndone(any());
 
 		// The reason an undo failed lives with every other per-file failure now.
 		ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
@@ -376,9 +445,11 @@ class OrganizationUndoServiceTest {
 
 		Movement movement = movement(100L, catalogFile(10L, target), source, target, MovementStatus.MOVED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 		when(executionCancellationService.isCancelled(500L)).thenReturn(true);
 
@@ -406,18 +477,16 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, firstTarget);
 
-		CatalogFileLocation location = location(catalogFile, firstTarget);
-
 		Movement first = movement(100L, catalogFile, firstSource, firstTarget, MovementStatus.MOVED);
 		Movement second = movement(101L, catalogFile(11L, secondTarget), secondSource, secondTarget,
 				MovementStatus.MOVED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(first, second));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				firstTarget.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		ExecutionOwnership lost = mock(ExecutionOwnership.class);
 
@@ -456,18 +525,16 @@ class OrganizationUndoServiceTest {
 		CatalogFile done = catalogFile(10L, alreadyBack);
 		CatalogFile pending = catalogFile(11L, stillToGo);
 
-		CatalogFileLocation location = location(pending, stillToGo);
-
 		Movement undone = movement(100L, done, sourceFolder.resolve("first.jpg"), targetFolder.resolve("first.jpg"),
 				MovementStatus.UNDONE);
 		Movement moved = movement(101L, pending, sourceFolder.resolve("second.jpg"), stillToGo, MovementStatus.MOVED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(undone, moved));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(11L,
-				stillToGo.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		ExecutionCounts undo = undo(service(), 1L);
 
@@ -479,11 +546,14 @@ class OrganizationUndoServiceTest {
 		// and no second movement row was written for it.
 		Assertions.assertThat(Files.readString(alreadyBack)).isEqualTo("one");
 		Assertions.assertThat(Files.exists(targetFolder.resolve("first.jpg"))).isFalse();
-		Assertions.assertThat(undone.getStatus()).isEqualTo(MovementStatus.UNDONE);
 
 		Assertions.assertThat(Files.exists(sourceFolder.resolve("second.jpg"))).isTrue();
 		Assertions.assertThat(Files.exists(stillToGo)).isFalse();
-		Assertions.assertThat(moved.getStatus()).isEqualTo(MovementStatus.UNDONE);
+
+		// Only the one that still had to go back is closed, and the one the first
+		// attempt already reversed is not touched a second time.
+		verify(movementWriter).markUndone(List.of(moved.getMovementPublicId()));
+		verify(movementWriter, never()).markUndone(List.of(undone.getMovementPublicId()));
 	}
 
 	/**
@@ -501,20 +571,25 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, target);
 
-		CatalogFileLocation location = location(catalogFile, target);
+		catalogFile.setLifecycleStatus(LifecycleStatus.DELETED);
 
 		Movement movement = movement(100L, catalogFile, source, target, MovementStatus.MOVED);
 
 		movement.setReason(MovementReason.DUPLICATE_QUARANTINED);
 
+		reversing();
+
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		Assertions.assertThat(undo(service(), 1L).moved()).isEqualTo(1);
+
+		// The file is in the analysed set again because it is ACTIVE again, and what
+		// explains that in the history is the reversing operation's own move - no
+		// separate lifecycle write, and no second fact.
+		Assertions.assertThat(catalogFile.getLifecycleStatus()).isEqualTo(LifecycleStatus.ACTIVE);
 
 		verify(eligibilityAnnouncer).announce("organization undo");
 	}
@@ -533,14 +608,12 @@ class OrganizationUndoServiceTest {
 
 		CatalogFile catalogFile = catalogFile(10L, target);
 
-		CatalogFileLocation location = location(catalogFile, target);
+		reversing();
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR))).thenReturn(
+				List.of(MovementStatus.MOVED))).thenReturn(
 						List.of(movement(100L, catalogFile, source, target, MovementStatus.MOVED)));
-		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(10L,
-				target.toAbsolutePath().normalize().toString())).thenReturn(Optional.of(location));
 
 		Assertions.assertThat(undo(service(), 1L).moved()).isEqualTo(1);
 
@@ -599,8 +672,9 @@ class OrganizationUndoServiceTest {
 
 		when(workspace.getWorkspacePath()).thenReturn(tempDir);
 
-		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
-				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogLocationWriter,
+				contentReconciliation,
+				new OrganizationMovementLog(movementRepository, movementWriter, executionErrorService),
 				operationLockService, new OrganizationPathValidator(mock(AppSettingService.class), workspace),
 				executionProgressService, executionCancellationService,
 				new SecureLibraryFiles(
@@ -626,8 +700,8 @@ class OrganizationUndoServiceTest {
 		CatalogFile catalogFile = catalogFile(10L, quarantineCopy);
 
 		Movement movement = Movement.builder().id(100L).execution(dedup).catalogFile(catalogFile)
-				.sourcePath(original.toAbsolutePath().normalize().toString())
-				.targetPath(quarantineCopy.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED)
+				.requestedSourcePath(original.toAbsolutePath().normalize().toString())
+				.requestedTargetPath(quarantineCopy.toAbsolutePath().normalize().toString()).status(MovementStatus.MOVED)
 				.build();
 
 		OperationLockService lockService = mock(OperationLockService.class);
@@ -637,8 +711,8 @@ class OrganizationUndoServiceTest {
 		stubUndoExecution();
 
 		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
-				catalogFileLocationRepository,
-				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				catalogLocationWriter, contentReconciliation,
+				new OrganizationMovementLog(movementRepository, movementWriter, executionErrorService),
 				lockService, mock(OrganizationPathValidator.class), executionProgressService,
 				executionCancellationService,
 				new SecureLibraryFiles(
@@ -648,7 +722,7 @@ class OrganizationUndoServiceTest {
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(dedup));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 
 		undo(service, 1L);
@@ -695,7 +769,7 @@ class OrganizationUndoServiceTest {
 
 		when(executionRepository.findById(1L)).thenReturn(Optional.of(execution()));
 		when(movementRepository.findByExecutionIdAndStatusInOrderByIdDesc(1L,
-				List.of(MovementStatus.MOVED, MovementStatus.UNDONE, MovementStatus.UNDO_ERROR)))
+				List.of(MovementStatus.MOVED)))
 						.thenReturn(List.of(movement));
 
 		OrganizationPathValidator refusingValidator = mock(OrganizationPathValidator.class);
@@ -706,8 +780,8 @@ class OrganizationUndoServiceTest {
 		stubUndoExecution();
 
 		OrganizationUndoService service = new OrganizationUndoService(executionRepository, catalogFileRepository,
-				catalogFileLocationRepository,
-				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+				catalogLocationWriter, contentReconciliation,
+				new OrganizationMovementLog(movementRepository, movementWriter, executionErrorService),
 				operationLockService, refusingValidator, executionProgressService, executionCancellationService,
 				new SecureLibraryFiles(
 						new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()), pathRegistry),
@@ -728,8 +802,9 @@ class OrganizationUndoServiceTest {
 	private OrganizationUndoService serviceWithoutWorkspace() {
 		stubUndoExecution();
 
-		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogFileLocationRepository,
-				new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService),
+		return new OrganizationUndoService(executionRepository, catalogFileRepository, catalogLocationWriter,
+				contentReconciliation,
+				new OrganizationMovementLog(movementRepository, movementWriter, executionErrorService),
 				operationLockService, mock(OrganizationPathValidator.class), executionProgressService,
 				executionCancellationService,
 				new SecureLibraryFiles(
@@ -744,25 +819,68 @@ class OrganizationUndoServiceTest {
 				.build();
 	}
 
+	/**
+	 * The placement as the row now holds it, which the reversed entry has to agree
+	 * with - the save that follows is a merge, and would otherwise put the file
+	 * back at the place the undo just took it from.
+	 */
+	@BeforeEach
+	void thePlacementDoorAnswers() {
+		lenient().when(catalogLocationWriter.relocate(any()))
+				.thenAnswer(invocation -> AppliedLocationChanges.applying(invocation.getArgument(0)));
+	}
+
 	private CatalogFile catalogFile(Long id, Path path) {
-		return CatalogFile.builder().id(id).fileKey(path.toAbsolutePath().normalize().toString())
-				.fileName(path.getFileName().toString()).extension("jpg").sizeBytes(10L).modifiedAt(LocalDateTime.now())
-				.importedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
-				.build();
+		return CatalogFiles.located(CatalogFile.builder().id(id).extension("jpg").sizeBytes(10L)
+				.modifiedAt(Instant.EPOCH).importedAt(Instant.EPOCH).fileType(FileType.PHOTO)
+				.lifecycleStatus(LifecycleStatus.ACTIVE).build(), path);
 	}
 
-	private CatalogFileLocation location(CatalogFile catalogFile, Path path) {
-		return CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(path.toAbsolutePath().normalize().toString())
-				.currentFolder(path.getParent().toAbsolutePath().normalize().toString())
-				.originalPath(path.toAbsolutePath().normalize().toString())
-				.originalFolder(path.getParent().toAbsolutePath().normalize().toString()).updatedAt(LocalDateTime.now())
-				.build();
-	}
-
+	/**
+	 * A movement with its own identity, because that is what an undo settles and
+	 * what it marks as no longer standing - the row's primary key names it for the
+	 * database, its public id names it for everything else.
+	 */
 	private Movement movement(Long id, CatalogFile catalogFile, Path source, Path target, MovementStatus status) {
-		return Movement.builder().id(id).execution(execution()).catalogFile(catalogFile)
-				.sourcePath(source.toAbsolutePath().normalize().toString())
-				.targetPath(target.toAbsolutePath().normalize().toString()).status(status).build();
+		return Movement.builder().id(id).movementPublicId(UuidV7.generate()).execution(execution())
+				.catalogFile(catalogFile).requestedSourcePath(source.toAbsolutePath().normalize().toString())
+				.requestedTargetPath(target.toAbsolutePath().normalize().toString()).status(status).build();
+	}
+
+	/**
+	 * The reversing operations the run reserves before it touches a file, minted
+	 * from the requests themselves so a test asserts on the identities the run
+	 * actually decided on rather than on ones it invented afterwards.
+	 */
+	private void reversing() {
+		lenient().when(movementWriter.prepare(eq(500L), anyList())).thenAnswer(invocation -> {
+			List<MovementRequest> requests = invocation.getArgument(1);
+
+			List<PreparedMovement> prepared = new ArrayList<>();
+
+			for (MovementRequest request : requests) {
+				PreparedMovement reversal = PreparedMovements.pending(reserved.size() + 1L, request.catalogFileId(),
+						request.requestedSource(), request.requestedTarget());
+
+				reserved.put(request.catalogFileId(), reversal);
+
+				prepared.add(reversal);
+			}
+
+			return prepared;
+		});
+	}
+
+	private PreparedMovement reversalOf(long catalogFileId) {
+		return reserved.get(catalogFileId);
+	}
+
+	/** The one change the run stated to the write door. */
+	private LocationChange relocation() {
+		ArgumentCaptor<LocationChange> change = ArgumentCaptor.forClass(LocationChange.class);
+
+		verify(catalogLocationWriter).relocate(change.capture());
+
+		return change.getValue();
 	}
 }

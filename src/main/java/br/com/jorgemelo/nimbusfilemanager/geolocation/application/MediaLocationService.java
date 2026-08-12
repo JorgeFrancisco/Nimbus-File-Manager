@@ -88,9 +88,8 @@ public class MediaLocationService {
 	}
 
 	/**
-	 * Resolves and persists the location of a media. A manual location always
-	 * prevails: it is never overwritten by automatic resolution. Returns true when
-	 * a resolution was persisted.
+	 * Resolves and persists the location of a media. Returns true when a
+	 * resolution was persisted.
 	 */
 	@Transactional
 	public boolean resolveAndPersist(Long catalogFileId, Coordinates coordinates) {
@@ -103,10 +102,6 @@ public class MediaLocationService {
 		}
 
 		Optional<MediaGeoLocation> existing = mediaGeoLocationRepository.findById(catalogFileId);
-
-		if (existing.map(MediaGeoLocation::isManual).orElse(false)) {
-			return false;
-		}
 
 		Optional<LocationResolution> resolution = doResolve(coordinates);
 
@@ -207,7 +202,6 @@ public class MediaLocationService {
 				.datasetVersion(resolution.datasetVersion()).openSea(resolution.openSea())
 				.resolvedAt(resolution.resolvedAt() == null ? LocalDateTime.now(clock) : resolution.resolvedAt())
 				.build());
-		entity.setManual(false);
 	}
 
 	private LocationResolution toResolution(GeoResolutionCache cache) {

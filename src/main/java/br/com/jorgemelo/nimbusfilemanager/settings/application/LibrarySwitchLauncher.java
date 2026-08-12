@@ -85,7 +85,7 @@ public class LibrarySwitchLauncher extends LocalizedComponent {
 		Execution existing = executionEnqueueService.enqueueOrExisting(queued);
 
 		log.info("Library switch from {} to {} queued as execution {}", oldFolder, newFolder,
-				existing.getPublicId());
+				existing.getExecutionPublicId());
 
 		return executionMapper.toResponse(existing);
 	}

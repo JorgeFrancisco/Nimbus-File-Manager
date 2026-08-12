@@ -53,7 +53,7 @@ public class ConversionExecutionRecorder extends LocalizedComponent {
 	 */
 	public void recordItem(Execution execution, ConversionFileResult item) {
 		conversionItemResultRepository.save(ConversionItemResult.builder().execution(execution)
-				.mediaPublicId(item.mediaId()).fileName(item.fileName()).outcome(item.outcome())
+				.catalogFilePublicId(item.mediaId()).fileName(item.fileName()).outcome(item.outcome())
 				.originalBytes(item.originalBytes()).convertedBytes(item.convertedBytes()).message(item.message())
 				.audioFallback(item.adjustments().audioFallback())
 				.subtitlesDropped(item.adjustments().subtitlesDropped())

@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Clock;
 import java.util.HexFormat;
 
 import org.junit.jupiter.api.Assumptions;
@@ -21,8 +20,7 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.FileHashService;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 
 /**
  * The secure move against a real file system, with the real verifier behind it.
@@ -51,7 +49,7 @@ class SecureFileMoveFileSystemIntegrationTest {
 
 	private final SecureFileMove secureFileMove = new SecureFileMove(
 			new OrganizationMoveVerifier(new FileHashService()),
-			new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(), Clock.systemDefaultZone()));
+			new SelfWriteOff());
 
 	/**
 	 * A library is full of names nobody would type: accents, cedillas, and the

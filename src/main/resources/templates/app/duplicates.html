@@ -7,7 +7,7 @@
 	<!-- An inventory in progress narrows what has been analysed; it does not make the
 	     analysis wrong. The notice stays, the results stay with it. -->
 	<section class="panel section" id="duplicatesInventoryProgress" th:if="${inventoryActive}" role="status"
-			data-refresh-ms="4000">
+			data-activity-watch="INVENTORY" data-activity-on-idle="hide">
 		<h2 th:text="#{duplicates.inventory.running}">Inventário em andamento</h2>
 		<p class="muted" th:text="#{duplicates.inventory.running.description}">Arquivos que estão entrando agora ainda não foram analisados, então um grupo pode aparecer incompleto ou não aparecer. O que já foi analisado continua disponível. Este painel se atualiza sozinho.</p>
 		<progress></progress>
@@ -89,14 +89,19 @@
 		</div>
 	</div>
 
-	<!-- Similar grouping runs in the background: this panel shows progress and polls until the
-	     compute finishes, at which point the region disappears from the fresh HTML and app.js falls
-	     back to a full reload that renders the groups. The page is never blocked while it computes. -->
+	<!-- Similar grouping runs in the background. This panel watches the activity poll the whole app
+	     already runs - it used to re-fetch this entire page every 3 seconds, which on a large library
+	     costs seconds of server work per cycle and stacks with itself. When the analysis leaves the
+	     queue the page is loaded once, because the groups it produced are what has to appear. -->
 	<section class="panel section" id="similarityProgressRegion"
-			th:if="${similarityComputing}" role="status" data-refresh-ms="3000">
+			th:if="${similarityComputing}" role="status"
+			th:attr="data-activity-watch=${activeTab == 'videos'} ? 'SIMILARITY_VIDEO' : 'SIMILARITY_PHOTO'"
+			data-activity-on-idle="announce">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.similarity.calculatingVideos} : #{duplicates.similarity.calculating}">Calculando fotos semelhantes…</h2>
 		<p class="muted" th:text="#{duplicates.similarity.calculating.description}">A análise roda no worker, em segundo plano.</p>
 		<p class="muted" th:text="#{duplicates.similarity.eligible(${similarityEligible})}">0 arquivo(s) elegível(is).</p>
+		<p data-activity-idle-announcement hidden><a class="button secondary" th:href="@{''}"
+				th:text="#{duplicates.similarity.finished}">Análise concluída — ver resultados</a></p>
 	</section>
 
 	<!-- Nothing published for these parameters yet. The screen never computes: it asks for the
@@ -114,8 +119,11 @@
 		</form>
 	</section>
 
-	<div class="alert" role="status" th:if="${similarityPublished and similarityOutdated}">
-		<span th:text="#{duplicates.similarity.outdated}">A biblioteca mudou desde esta análise.</span>
+	<div class="alert" role="status" id="similarityFreshness" th:if="${similarityPublished}"
+			th:attr="data-freshness-url=${similarityFreshnessUrl}">
+		<span data-freshness-state="checking" th:text="#{duplicates.similarity.checking}">Verificando se os resultados estão atualizados…</span>
+		<span data-freshness-state="outdated" hidden th:text="#{duplicates.similarity.outdated}">A biblioteca mudou desde esta análise.</span>
+		<span data-freshness-state="error" hidden th:text="#{duplicates.similarity.checkFailed}">Não foi possível verificar se os resultados estão atualizados.</span>
 	</div>
 
 	<div class="alert" role="status" th:if="${similarityPublished and !similarityCoverageComplete}">
@@ -126,14 +134,16 @@
 			th:if="${groups.isEmpty() and !similarityComputing and (activeTab == 'exact' or similarityPublished)}">
 		<p th:if="${activeTab == 'exact'}" th:text="#{duplicates.empty.exact}">Nenhum arquivo duplicado encontrado.</p>
 		<!--
-			"Nothing found" has to say what it looked at. While the analysis is capped
-			it is a verdict about the files examined, not about the library, and the
-			two readings differ by everything the cap left out.
+			"Nothing found" has to say what it looked at, and two separate things have to
+			be true before it may be said plainly: the analysis covered every file it
+			could compare, and the library has a fingerprint for every file. The second
+			is the one that bites - a run can examine all 188 videos that have been
+			fingerprinted, find nothing, and be reporting on 3% of the library.
 		-->
-		<p th:if="${activeTab == 'similar' and similarityPublished and similarityCoverageComplete}" th:text="#{duplicates.empty.similar}">Nenhum grupo de fotos semelhantes encontrado com esse nível de semelhança.</p>
-		<p th:if="${activeTab == 'similar' and similarityPublished and !similarityCoverageComplete}" th:text="#{duplicates.empty.similarPartial(${similarityAnalyzed})}">Nenhum grupo entre os arquivos examinados.</p>
-		<p th:if="${activeTab == 'videos' and similarityPublished and similarityCoverageComplete}" th:text="#{duplicates.empty.videos}">Nenhum grupo de vídeos semelhantes encontrado com esse nível de semelhança.</p>
-		<p th:if="${activeTab == 'videos' and similarityPublished and !similarityCoverageComplete}" th:text="#{duplicates.empty.videosPartial(${similarityAnalyzed})}">Nenhum grupo entre os arquivos examinados.</p>
+		<p th:if="${activeTab == 'similar' and similarityPublished and similarityCoverageComplete and similarityLibraryComplete}" th:text="#{duplicates.empty.similar}">Nenhum grupo de fotos semelhantes encontrado com esse nível de semelhança.</p>
+		<p th:if="${activeTab == 'similar' and similarityPublished and (!similarityCoverageComplete or !similarityLibraryComplete)}" th:text="#{duplicates.empty.similarPartial(${similarityAnalyzed})}">Nenhum grupo entre os arquivos examinados.</p>
+		<p th:if="${activeTab == 'videos' and similarityPublished and similarityCoverageComplete and similarityLibraryComplete}" th:text="#{duplicates.empty.videos}">Nenhum grupo de vídeos semelhantes encontrado com esse nível de semelhança.</p>
+		<p th:if="${activeTab == 'videos' and similarityPublished and (!similarityCoverageComplete or !similarityLibraryComplete)}" th:text="#{duplicates.empty.videosPartial(${similarityAnalyzed})}">Nenhum grupo entre os arquivos examinados.</p>
 	</div>
 
 	<div class="panel section table-toolbar pagination-toolbar" th:if="${totalElements> 0}">
@@ -323,23 +333,41 @@
 	<!-- Whole-library progress stays below the screen content, matching the other jobs.
 	     Auto-refresh is limited to the blocked similar tab, so browsing exact duplicates
 	     is not interrupted. -->
+	<!-- The backlog is catalog state, not one execution's progress: it is true with nothing running,
+	     which is how the screen knows there is work left to ask for. So it has an endpoint of its own
+	     rather than a place in the activity snapshot - and, either way, no longer re-fetches this
+	     whole page to learn four numbers. -->
 	<section class="panel section" id="fingerprintProgressRegion"
 			th:if="${phashPending> 0}" role="status"
-			th:attr="data-refresh-ms=${phashBlocking ? 4000 : null}">
+			th:attr="data-backlog-url=${backlogUrl}">
 		<h2 th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos} : #{duplicates.fingerprint.calculating}">Calculando impressões digitais das fotos…</h2>
 		<p class="muted"><span th:text="${activeTab == 'videos'} ? #{duplicates.fingerprint.calculatingVideos.description} : #{duplicates.fingerprint.calculating.description}">A comparação por semelhança fica disponível quando todas as fotos tiverem sua impressão digital.</span><span th:if="${phashBlocking}" th:text="#{duplicates.fingerprint.calculating.refresh}"> Este painel se atualiza automaticamente a cada 4 segundos.</span></p>
-		<p class="progress-text"><strong th:text="${#numbers.formatPercent(phashPercent / 100.0, 1, 2)}">0%</strong>
-			<span th:if="${phashEtaSeconds>= 60}" th:text="#{duplicates.eta.minutes(${phashEtaSeconds / 60})}">· tempo estimado</span>
-			<span th:if="${phashEtaSeconds>= 0 and phashEtaSeconds < 60}" th:text="#{duplicates.eta.lessThanMinute}">· menos de 1 min restante</span>
-			<span th:if="${phashEtaSeconds < 0 and phashRunning}" th:text="#{duplicates.eta.calculating}">· calculando tempo estimado…</span>
+		<p class="progress-text"><strong data-backlog-percent th:text="${#numbers.formatPercent(phashPercent / 100.0, 1, 2)}">0%</strong>
+			<span data-backlog-eta th:text="${phashEtaLabel}">· tempo estimado</span>
 		</p>
-		<div class="fingerprint-progress-bar" role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}"
+		<div class="fingerprint-progress-bar" data-backlog-bar role="progressbar" th:aria-label="#{duplicates.progress(${#numbers.formatPercent(phashPercent / 100.0, 1, 2)})}"
 				th:attr="aria-valuenow=${phashPercent},aria-valuemin=0,aria-valuemax=100">
-			<div class="fingerprint-progress-fill" th:style="|width: ${phashPercent}%|"></div>
+			<div class="fingerprint-progress-fill" data-backlog-fill th:style="|width: ${phashPercent}%|"></div>
 		</div>
-		<p><strong th:text="${phashDone}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong th:text="${phashTotal}">0</strong> <span th:text="#{duplicates.completed}">concluídas</span>
-			· <span th:text="${phashPending}">0</span> <span th:text="#{duplicates.pending}">pendentes</span>
-			· <span th:text="${phashFailed}">0</span> <span th:text="#{duplicates.failures}">falhas</span>
+		<!--
+			The other medium's fingerprint, and only while it is the one running: this
+			bar can stand still for hours because the machine is busy elsewhere, and
+			without saying so it reads as stuck. It names what is running, never who is
+			waiting for whom - that is the queue's rule and it is free to change.
+		-->
+		<!--
+			Always in the DOM, hidden when there is nothing to say: the other fingerprint
+			can start after this page was drawn, and the poll that keeps the panel
+			current has to have something to unhide.
+		-->
+		<p class="fingerprint-other" data-backlog-other th:hidden="${phashOther == null}">
+			<span data-backlog-other-label th:text="${phashOther?.label()}">Impressão digital de fotos em processamento</span>
+			· <strong data-backlog-other-percent
+					th:text="${phashOther != null} ? ${#numbers.formatPercent(phashOther.percent() / 100.0, 1, 2)} : ''">0%</strong>
+		</p>
+		<p><strong data-backlog-done th:text="${phashDone}">0</strong> <span th:text="#{duplicates.of}">de</span> <strong data-backlog-total th:text="${phashTotal}">0</strong> <span th:text="#{duplicates.completed}">concluídas</span>
+			· <span data-backlog-pending th:text="${phashPending}">0</span> <span th:text="#{duplicates.pending}">pendentes</span>
+			· <span data-backlog-failed th:text="${phashFailed}">0</span> <span th:text="#{duplicates.failures}">falhas</span>
 			<button th:if="${phashFailed> 0}" type="button" class="secondary small fingerprint-failures-open">
 				<span th:text="#{duplicates.viewFiles}">Ver arquivos</span>
 			</button>

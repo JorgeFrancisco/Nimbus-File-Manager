@@ -34,6 +34,14 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
  * wonder which two failed.
  *
  * <p>
+ * <b>The exception is not an installation.</b> A run that finds every level
+ * unchanged over a dataset already installed does three conditional requests and
+ * stops - see {@link #alreadyUpToDate()}. That is a shorter operation rather than
+ * a shorter pipeline, and it reports its own count, because marking an import and
+ * a publication done when neither happened would be the exact dishonesty the
+ * fixed denominator is here to prevent.
+ *
+ * <p>
  * <b>The second bar is not part of the first.</b> It measures the item being
  * worked on right now and only where a real denominator exists: bytes against a
  * {@code Content-Length} while downloading, bytes of the file consumed while
@@ -162,6 +170,34 @@ public class GeoDatasetProgress {
 	/** Turned off, or nothing was missing. Either way the stage is behind us. */
 	public synchronized void noTerritoriesMissing() {
 		stageStarted(ExecutionPhase.PROCESSING, GeoMessages.noTerritoriesMissing(), -1);
+	}
+
+	/**
+	 * The run turned out to be a verification: every level came back unchanged and
+	 * what is installed is complete, so the six stages an installation would still
+	 * have are not going to happen.
+	 *
+	 * <p>
+	 * <b>The denominator shrinks here, and only here.</b> Everywhere else it is
+	 * fixed at {@link #STAGES} precisely so a pipeline cannot look shorter on one
+	 * run than another - but this is not that pipeline running fast, it is a
+	 * different and much shorter operation: three conditional requests and the
+	 * answer. Reporting nine stages and marking six of them done would draw a full
+	 * bar over an import and a publication that never occurred, which is the one
+	 * thing the fixed denominator exists to prevent.
+	 */
+	public synchronized void alreadyUpToDate() {
+		ExecutionOwnership current = ownership.get();
+
+		if (current == null) {
+			return;
+		}
+
+		executionProgressService.updateTotal(current, (int) stagesDone.get() + 1);
+
+		stageStarted(ExecutionPhase.PROCESSING, GeoMessages.alreadyUpToDate(), -1);
+
+		stageFinished();
 	}
 
 	public synchronized void publishing() {

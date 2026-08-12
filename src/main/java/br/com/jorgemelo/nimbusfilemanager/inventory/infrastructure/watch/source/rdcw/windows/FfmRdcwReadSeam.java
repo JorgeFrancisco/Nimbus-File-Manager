@@ -4,6 +4,7 @@ import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.ERROR_IO_INCOMPLETE;
+import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.EXTENDED_INFORMATION;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.FILE_FLAG_BACKUP_SEMANTICS;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.FILE_FLAG_OVERLAPPED;
 import static br.com.jorgemelo.nimbusfilemanager.inventory.infrastructure.watch.source.rdcw.windows.WindowsRdcwConstants.FILE_LIST_DIRECTORY;
@@ -17,7 +18,8 @@ import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import java.util.List;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.FileNotifyInformationParser;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.FileNotifyEntry;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.FileNotifyExtendedInformationParser;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwReadResult;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwReadSeam;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.rdcw.RdcwUnavailableException;
@@ -27,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The FFM implementation of {@link RdcwReadSeam}: opens a single overlapped
  * directory handle on the root ({@code FILE_LIST_DIRECTORY} - no elevation, no
- * per-subdirectory handle) and drives {@code ReadDirectoryChangesW} with
+ * per-subdirectory handle) and drives {@code ReadDirectoryChangesExW} with
  * {@code bWatchSubtree=TRUE}. One read is kept armed; each poll checks its
  * completion without blocking, parses the buffer, and re-arms. Unverifiable off
  * Windows - guarded by {@code WindowsChangeSourceSupport} and covered by a
@@ -96,11 +98,12 @@ final class FfmRdcwReadSeam implements RdcwReadSeam {
 	private void arm() {
 		overlapped.fill((byte) 0);
 
-		armed = WindowsKernel32.readDirectoryChanges(handle, buffer, bufferBytes, true, NOTIFY_FILTER, overlapped,
-				capture);
+		armed = WindowsKernel32.readDirectoryChangesEx(handle, buffer, bufferBytes, true, NOTIFY_FILTER, overlapped,
+				EXTENDED_INFORMATION, capture);
 
 		if (!armed) {
-			log.debug("Could not arm ReadDirectoryChangesW on {} (error {})", root, WindowsKernel32.lastError(capture));
+			log.debug("Could not arm ReadDirectoryChangesExW on {} (error {})", root,
+					WindowsKernel32.lastError(capture));
 		}
 	}
 
@@ -122,12 +125,12 @@ final class FfmRdcwReadSeam implements RdcwReadSeam {
 
 		// A zero-byte completion means the OS overflowed the buffer and discarded the
 		// batch: request a reconcile instead of losing the changes silently.
-		List<String> paths = bytes == 0 ? List.of()
-				: FileNotifyInformationParser.parse(buffer.asSlice(0L, bytes).toArray(JAVA_BYTE));
+		List<FileNotifyEntry> entries = bytes == 0 ? List.of()
+				: FileNotifyExtendedInformationParser.parse(buffer.asSlice(0L, bytes).toArray(JAVA_BYTE));
 
 		arm();
 
-		return new RdcwReadResult(paths, bytes == 0);
+		return new RdcwReadResult(entries, bytes == 0);
 	}
 
 	private RdcwReadResult afterIncompleteOrError(int error) {
@@ -135,7 +138,8 @@ final class FfmRdcwReadSeam implements RdcwReadSeam {
 			return new RdcwReadResult(List.of(), false);
 		}
 
-		log.debug("ReadDirectoryChangesW failed on {} (error {}); re-arming and requesting reconcile", root, error);
+		log.debug("ReadDirectoryChangesExW failed on {} (error {}); re-arming and requesting reconcile", root,
+				error);
 
 		armed = false;
 		arm();

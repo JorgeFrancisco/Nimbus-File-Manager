@@ -31,11 +31,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.FingerprintFailureLabels;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityLauncher;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityViewService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogProgressReader;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintRunReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.VideoFingerprintBacklogService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.rest.DuplicateController;
@@ -52,9 +55,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.rest.MetadataC
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationPreviewExportService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.OrganizationService;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationExecuteRequest;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPreviewRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.StoredPlanPage;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
 import br.com.jorgemelo.nimbusfilemanager.organization.infrastructure.rest.OrganizationController;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
@@ -183,7 +186,8 @@ class ControllersTest {
 
 		DuplicateController duplicateController = new DuplicateController(duplicateService, similarityViewService,
 				similarityLauncher, phashBacklogService, videoFingerprintBacklogService,
-				new FingerprintFailureLabels());
+				new FingerprintFailureLabels(), new FingerprintBacklogProgressReader(mock(EtaLabels.class),
+						phashBacklogService, videoFingerprintBacklogService, mock(FingerprintRunReader.class)));
 
 		duplicateController.groups(pageable);
 		duplicateController.files("hash");
@@ -343,6 +347,6 @@ class ControllersTest {
 
 	/** A published analysis with no groups: the endpoint answers 200, not 202. */
 	private static SimilarityView publishedView() {
-		return new SimilarityView(Page.empty(), true, false, false, 0, 0, 8000, true);
+		return new SimilarityView(Page.empty(), true, false, 0, 0, 8000, true);
 	}
 }

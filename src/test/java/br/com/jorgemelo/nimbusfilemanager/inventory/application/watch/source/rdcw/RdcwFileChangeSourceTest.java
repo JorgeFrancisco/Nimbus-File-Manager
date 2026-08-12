@@ -6,6 +6,10 @@ import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.FileChangeKind;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.FileChangeSourceKind;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
 class RdcwFileChangeSourceTest {
@@ -16,10 +20,11 @@ class RdcwFileChangeSourceTest {
 	void reportsLiveChangesResolvedUnderTheRoot() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of("2024\\a.jpg"), false));
+		seam.enqueue(Notifications.read(Notifications.modified("2024\\a.jpg")));
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
-			Assertions.assertThat(source.pollChangedFiles()).containsExactly(ROOT.resolve("2024").resolve("a.jpg"));
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(), null)) {
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
+					.containsExactly(ROOT.resolve("2024").resolve("a.jpg"));
 			Assertions.assertThat(source.consumeRecoveryReason()).isEmpty();
 		}
 	}
@@ -28,14 +33,20 @@ class RdcwFileChangeSourceTest {
 	void deliversTheUsnCatchUpChangesOnlyOnTheFirstPoll() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of("live.jpg"), false));
-		seam.enqueue(new RdcwReadResult(List.of("live2.jpg"), false));
+		seam.enqueue(Notifications.read(Notifications.modified("live.jpg")));
+		seam.enqueue(Notifications.read(Notifications.modified("live2.jpg")));
 
+		// The journal replay, which is the one source that knows when a change
+		// happened - the live watch never does.
 		Path offline = ROOT.resolve("offline.jpg");
+		FileSystemChange replayed = new FileSystemChange(FileChangeKind.MODIFIED, offline, null, null,
+				FileChangeSourceKind.USN_JOURNAL, false, Instant.parse("2026-08-13T09:00:00Z"));
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(offline), null)) {
-			Assertions.assertThat(source.pollChangedFiles()).containsExactly(offline, ROOT.resolve("live.jpg"));
-			Assertions.assertThat(source.pollChangedFiles()).containsExactly(ROOT.resolve("live2.jpg"));
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(replayed), null)) {
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
+					.containsExactly(offline, ROOT.resolve("live.jpg"));
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
+					.containsExactly(ROOT.resolve("live2.jpg"));
 		}
 	}
 
@@ -50,15 +61,21 @@ class RdcwFileChangeSourceTest {
 	void handsTheCatchUpChangesOverOnceAndKeepsReportingLiveOnes() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of("live.jpg"), false));
+		seam.enqueue(Notifications.read(Notifications.modified("live.jpg")));
 
+		// The journal replay, which is the one source that knows when a change
+		// happened - the live watch never does.
 		Path offline = ROOT.resolve("offline.jpg");
+		FileSystemChange replayed = new FileSystemChange(FileChangeKind.MODIFIED, offline, null, null,
+				FileChangeSourceKind.USN_JOURNAL, false, Instant.parse("2026-08-13T09:00:00Z"));
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(offline), null)) {
-			Assertions.assertThat(source.takeOfflineBacklog()).containsExactly(offline);
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(replayed), null)) {
+			Assertions.assertThat(source.takeOfflineBacklog()).extracting(FileSystemChange::path)
+					.containsExactly(offline);
 			Assertions.assertThat(source.takeOfflineBacklog()).isEmpty();
 
-			Assertions.assertThat(source.pollChangedFiles()).containsExactly(ROOT.resolve("live.jpg"));
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
+					.containsExactly(ROOT.resolve("live.jpg"));
 		}
 	}
 
@@ -70,10 +87,10 @@ class RdcwFileChangeSourceTest {
 	void propagatesTheSeamOverflowAsLostEvents() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of(), true));
+		seam.enqueue(Notifications.overflowed());
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
-			source.pollChangedFiles();
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(), null)) {
+			source.pollChanges();
 
 			Assertions.assertThat(source.consumeRecoveryReason()).contains(WatchRecoveryReason.EVENTS_LOST);
 			Assertions.assertThat(source.consumeRecoveryReason()).isEmpty();
@@ -87,7 +104,7 @@ class RdcwFileChangeSourceTest {
 	 */
 	@Test
 	void carriesTheStartupReasonWithoutCallingItAnOverflow() {
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, new FakeSeam(), List.of(),
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, new FakeSeam(), null, List.of(),
 				WatchRecoveryReason.JOURNAL_UNREPLAYABLE)) {
 			Assertions.assertThat(source.consumeRecoveryReason()).contains(WatchRecoveryReason.JOURNAL_UNREPLAYABLE);
 			Assertions.assertThat(source.consumeRecoveryReason()).isEmpty();
@@ -97,7 +114,7 @@ class RdcwFileChangeSourceTest {
 	/** A replay that was itself incomplete is a third thing, and stays distinct. */
 	@Test
 	void carriesAnIncompleteReplayAsItsOwnReason() {
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, new FakeSeam(), List.of(),
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, new FakeSeam(), null, List.of(),
 				WatchRecoveryReason.JOURNAL_REPLAY_INCOMPLETE)) {
 			Assertions.assertThat(source.consumeRecoveryReason())
 					.contains(WatchRecoveryReason.JOURNAL_REPLAY_INCOMPLETE);
@@ -113,11 +130,11 @@ class RdcwFileChangeSourceTest {
 	void reportsTheLiveOverflowWhenAStartupReasonIsAlsoPending() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of(), true));
+		seam.enqueue(Notifications.overflowed());
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(),
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(),
 				WatchRecoveryReason.JOURNAL_UNREPLAYABLE)) {
-			source.pollChangedFiles();
+			source.pollChanges();
 
 			Assertions.assertThat(source.consumeRecoveryReason()).contains(WatchRecoveryReason.EVENTS_LOST);
 			Assertions.assertThat(source.consumeRecoveryReason()).isEmpty();
@@ -136,13 +153,13 @@ class RdcwFileChangeSourceTest {
 	void reportsBothSidesOfARenameEvenWhenTheyLandInDifferentBatches() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of("2024\\was-called.jpg"), false));
-		seam.enqueue(new RdcwReadResult(List.of("2024\\is-called.jpg"), false));
+		seam.enqueue(Notifications.read(Notifications.modified("2024\\was-called.jpg")));
+		seam.enqueue(Notifications.read(Notifications.modified("2024\\is-called.jpg")));
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
-			Assertions.assertThat(source.pollChangedFiles())
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(), null)) {
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
 					.containsExactly(ROOT.resolve("2024").resolve("was-called.jpg"));
-			Assertions.assertThat(source.pollChangedFiles())
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
 					.containsExactly(ROOT.resolve("2024").resolve("is-called.jpg"));
 		}
 	}
@@ -159,10 +176,10 @@ class RdcwFileChangeSourceTest {
 	void reportsAFolderPathAndNotOnlyFilePaths() {
 		FakeSeam seam = new FakeSeam();
 
-		seam.enqueue(new RdcwReadResult(List.of("albums\\holiday-2026"), false));
+		seam.enqueue(Notifications.read(Notifications.modified("albums\\holiday-2026")));
 
-		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null)) {
-			Assertions.assertThat(source.pollChangedFiles())
+		try (RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(), null)) {
+			Assertions.assertThat(source.pollChanges()).extracting(FileSystemChange::path)
 					.containsExactly(ROOT.resolve("albums").resolve("holiday-2026"));
 		}
 	}
@@ -171,7 +188,7 @@ class RdcwFileChangeSourceTest {
 	void exposesTheRootAndClosesTheSeam() {
 		FakeSeam seam = new FakeSeam();
 
-		RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, List.of(), null);
+		RdcwFileChangeSource source = new RdcwFileChangeSource(ROOT, seam, null, List.of(), null);
 
 		Assertions.assertThat(source.root()).isEqualTo(ROOT);
 

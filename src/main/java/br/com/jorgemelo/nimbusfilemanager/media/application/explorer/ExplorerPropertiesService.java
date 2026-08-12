@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.jorgemelo.nimbusfilemanager.media.application.dto.ExplorerItemProperties;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.FolderInventorySummary;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.i18n.LocalizedComponent;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.DateTimeFormatUtils;
@@ -37,8 +39,12 @@ public class ExplorerPropertiesService extends LocalizedComponent {
 
 	private final CatalogFileRepository catalogFileRepository;
 
-	public ExplorerPropertiesService(CatalogFileRepository catalogFileRepository) {
+	private final CatalogFileLocationRepository catalogFileLocationRepository;
+
+	public ExplorerPropertiesService(CatalogFileRepository catalogFileRepository,
+			CatalogFileLocationRepository catalogFileLocationRepository) {
 		this.catalogFileRepository = catalogFileRepository;
+		this.catalogFileLocationRepository = catalogFileLocationRepository;
 	}
 
 	public ExplorerItemProperties of(Path path) throws IOException {
@@ -50,7 +56,10 @@ public class ExplorerPropertiesService extends LocalizedComponent {
 	}
 
 	private ExplorerItemProperties file(Path target, BasicFileAttributes attributes) {
-		boolean cataloged = catalogFileRepository.findByFileKey(PathUtils.normalize(target)).isPresent();
+		// Present, not merely known: a file the catalog remembers at a path it has
+		// since left is not the file sitting there now.
+		boolean cataloged = catalogFileLocationRepository
+				.findPresentByPath(PathUtils.normalize(target), PathFlavor.of(target).name()).isPresent();
 
 		String extension = ExtensionUtils.fromPath(target);
 

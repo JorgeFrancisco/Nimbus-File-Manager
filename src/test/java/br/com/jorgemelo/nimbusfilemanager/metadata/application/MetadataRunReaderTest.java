@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.domain.enums.EtaState;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.model.MetadataRebuildPreviewItemRecord;
 import br.com.jorgemelo.nimbusfilemanager.metadata.domain.model.MetadataRebuildPreviewRecord;
@@ -49,8 +51,8 @@ class MetadataRunReaderTest {
 			MetadataRebuildPreviewItemRepository.class);
 	private final Clock clock = Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
-	private final MetadataRunReader reader = new MetadataRunReader(executionRepository, previewRepository,
-			itemRepository, new ExecutionMessageCodec(new ObjectMapper()), new DateSourceLabels(), clock);
+	private final MetadataRunReader reader = new MetadataRunReader(executionRepository, Progress.estimator(clock),
+			previewRepository, itemRepository, new ExecutionMessageCodec(new ObjectMapper()), new DateSourceLabels());
 
 	@Test
 	void withNoRunEverAskedForThereIsNothingToReport() {
@@ -60,7 +62,7 @@ class MetadataRunReaderTest {
 		Assertions.assertThat(reader.isRunning()).isFalse();
 		Assertions.assertThat(reader.processed()).isZero();
 		Assertions.assertThat(reader.total()).isZero();
-		Assertions.assertThat(reader.etaSeconds()).isEqualTo(-1);
+		Assertions.assertThat(reader.eta().state()).isEqualTo(EtaState.NOT_APPLICABLE);
 		Assertions.assertThat(reader.lastResult()).isNull();
 		Assertions.assertThat(reader.lastError()).isNull();
 	}
@@ -73,13 +75,18 @@ class MetadataRunReaderTest {
 		running.setFilesAnalyzed(50);
 		running.setTotalExpected(100);
 
+		// The estimate is the window's, not the run's: half of them arrived in the
+		// minute measured, so the other half take another minute.
+		running.setRateWindowFromAt(NOW.minusMinutes(1));
+		running.setRateWindowFromDone(0);
+
 		latest(running);
 
 		Assertions.assertThat(reader.isRunning()).isTrue();
 		Assertions.assertThat(reader.processed()).isEqualTo(50);
 		Assertions.assertThat(reader.total()).isEqualTo(100);
 		Assertions.assertThat(reader.percent()).isEqualTo(50d);
-		Assertions.assertThat(reader.etaSeconds()).isEqualTo(60);
+		Assertions.assertThat(reader.eta().remainingSeconds()).isEqualTo(60);
 		Assertions.assertThat(reader.lastResult()).isNull();
 	}
 
@@ -238,7 +245,7 @@ class MetadataRunReaderTest {
 	void anEstimateNeedsARunThatStarted() {
 		latest(execution(ExecutionStatus.PENDING, true));
 
-		Assertions.assertThat(reader.etaSeconds()).isEqualTo(-1);
+		Assertions.assertThat(reader.eta().state()).isEqualTo(EtaState.NOT_APPLICABLE);
 		Assertions.assertThat(reader.percent()).isEqualTo(-1);
 	}
 }

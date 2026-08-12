@@ -3,7 +3,9 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.model;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
@@ -13,16 +15,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionQueryService;
 import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.projection.MovementSummaryResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
 
@@ -38,7 +47,7 @@ class MovementSummaryQueryIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	private static final Path WORKSPACE = createWorkspace();
 
@@ -47,6 +56,15 @@ class MovementSummaryQueryIntegrationTest {
 
 	@Autowired
 	private MovementRepository movementRepository;
+
+	@Autowired
+	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
+	private PlatformTransactionManager transactionManager;
 
 	@Autowired
 	private ExecutionQueryService executionQueryService;
@@ -69,7 +87,7 @@ class MovementSummaryQueryIntegrationTest {
 		saveMovement(execution, MovementStatus.SKIPPED, MovementReason.ALREADY_MOVED);
 		saveMovement(execution, MovementStatus.ERROR, MovementReason.INTEGRITY_CHECK_FAILED);
 
-		var summary = executionQueryService.movementSummary(execution.getPublicId());
+		var summary = executionQueryService.movementSummary(execution.getExecutionPublicId());
 
 		// Ordered by count desc: 2 MOVED (null reason), then the two singletons.
 		Assertions.assertThat(summary)
@@ -82,8 +100,18 @@ class MovementSummaryQueryIntegrationTest {
 	}
 
 	private void saveMovement(Execution execution, MovementStatus status, MovementReason reason) {
-		movementRepository.save(Movement.builder().execution(execution).sourcePath("D:/src/a").targetPath("D:/dst/a")
-				.status(status).reason(reason).build());
+		// Only the states that claim the file moved may carry the moment, and they
+		// must: the check constraint reads the two together.
+		Instant movedAt = status == MovementStatus.MOVED || status == MovementStatus.UNDONE ? Instant.now() : null;
+
+		// A movement is an operation on one file and the database says so, so the
+		// summary is asked about rows that name a real one.
+		CatalogFile file = CatalogFiles.catalogued(new TransactionTemplate(transactionManager), catalogFileRepository,
+				catalogFileLocationRepository, Path.of("D:", "src", UUID.randomUUID() + ".jpg"));
+
+		movementRepository.save(Movement.builder().execution(execution).catalogFile(file)
+				.requestedSourcePath("D:/src/a").requestedTargetPath("D:/dst/a").status(status).reason(reason)
+				.movedAt(movedAt).build());
 	}
 
 	private static Path createWorkspace() {

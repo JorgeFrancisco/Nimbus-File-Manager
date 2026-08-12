@@ -1,13 +1,15 @@
 package br.com.jorgemelo.nimbusfilemanager.processing.application;
 
+import java.io.IOException;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import org.springframework.stereotype.Component;
 
-import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Caps how many external processes of each {@link ExternalToolCategory} may run
@@ -29,11 +31,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.propertie
 public class ExternalToolGate {
 
 	private final Map<ExternalToolCategory, Semaphore> semaphores = new EnumMap<>(ExternalToolCategory.class);
-	private final ProcessingMetrics metrics;
 
-	public ExternalToolGate(ProcessingProperties properties, ProcessingMetrics metrics) {
-		this.metrics = metrics;
-
+	public ExternalToolGate(ProcessingProperties properties) {
 		// Fair semaphores so long-waiting workers are not starved under contention.
 		semaphores.put(ExternalToolCategory.FFMPEG_PHOTO_HASH,
 				new Semaphore(properties.ffmpegPhotoHashLimitOrDefault(), true));
@@ -53,9 +52,18 @@ public class ExternalToolGate {
 	 * (with backpressure) until a permit is free. The permit is always released,
 	 * even if the action throws or the thread is interrupted while running it.
 	 *
+	 * <p>
+	 * The permits are the gate's and are shared by everything that runs; where the
+	 * waiting and the running are <em>counted</em> is not. The caller says which
+	 * execution is paying for this invocation, because several cross this gate at
+	 * once and a shared accumulator would report their sum as each of them.
+	 *
+	 * @param metrics where this invocation's wait and execution are accumulated -
+	 * the calling execution's own, never a shared one
 	 * @throws InterruptedException if interrupted while waiting for a permit
 	 */
-	public <T> T run(ExternalToolCategory category, GatedAction<T> action) throws Exception {
+	public <T> T run(ExternalToolCategory category, ProcessingMetrics metrics, GatedAction<T> action)
+			throws IOException, InterruptedException {
 		Semaphore semaphore = semaphores.get(category);
 
 		long waitStart = System.nanoTime();

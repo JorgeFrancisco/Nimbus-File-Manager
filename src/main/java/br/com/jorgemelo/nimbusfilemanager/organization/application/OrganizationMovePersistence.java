@@ -4,100 +4,108 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Instant;
+import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.CatalogTimestamp;
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.ContentReconciliation;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MoveBaseline;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventEvidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.AppliedLocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.CatalogFactProvenance;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.LocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLocationWriter;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Atomic persistence of a successful physical move.
+ * Closing one organization move: the fact, the placement and the operation, in
+ * one transaction.
  *
  * <p>
- * The catalog update ({@link CatalogFile#setFileKey}, the
- * {@link CatalogFileLocation} path) and the {@code MOVED} {@link Movement}
- * record are written in a <em>single</em> transaction, so the catalog and its
- * audit trail can never diverge: either the file's new location and its
- * movement both commit, or neither does. This is the transactional boundary the
- * reliability work requires - the physical {@code Files.move} happens before
- * this call, and the executor rolls the file back on disk if this transaction
- * throws.
+ * The operation was written before the file was touched and already carries the
+ * identity this fact will have, so what happens here is not a decision - it is
+ * the commit that makes a move real. A retry arriving with the same identity
+ * gets the same fact recorded once, which is the whole reason the identity was
+ * reserved rather than minted now.
  *
  * <p>
- * Lives in its own bean (not inside {@link OrganizationExecutor}) so the
- * {@code @Transactional} proxy is honored - a self-invoked annotated method
- * would run without a transaction.
+ * All three have to close together. Committing the fact and leaving the
+ * operation pending would tell a later attempt to do the work again, and the
+ * catalog would then hold two facts for one move - which is the state this
+ * front exists to make impossible.
+ *
+ * <p>
+ * Its own bean, and not a method inside {@link OrganizationExecutor}, because
+ * Spring's {@code @Transactional} does not apply to self-invocation: the
+ * annotation on a method the executor called itself would open no transaction
+ * at all.
  */
+@Slf4j
 @Service
 public class OrganizationMovePersistence {
 
+	private final CatalogLocationWriter catalogLocationWriter;
+	private final ContentReconciliation contentReconciliation;
+	private final MovementWriter movementWriter;
 	private final CatalogFileRepository catalogFileRepository;
-	private final CatalogFileLocationRepository catalogFileLocationRepository;
-	private final MovementRepository movementRepository;
 	private final Clock clock;
 
-	@Autowired
-	public OrganizationMovePersistence(CatalogFileRepository catalogFileRepository,
-			CatalogFileLocationRepository catalogFileLocationRepository, MovementRepository movementRepository,
-			Clock clock) {
+	public OrganizationMovePersistence(CatalogLocationWriter catalogLocationWriter,
+			ContentReconciliation contentReconciliation, MovementWriter movementWriter,
+			CatalogFileRepository catalogFileRepository, Clock clock) {
+		this.catalogLocationWriter = catalogLocationWriter;
+		this.contentReconciliation = contentReconciliation;
+		this.movementWriter = movementWriter;
 		this.catalogFileRepository = catalogFileRepository;
-		this.catalogFileLocationRepository = catalogFileLocationRepository;
-		this.movementRepository = movementRepository;
 		this.clock = clock;
 	}
 
 	/**
-	 * Points the catalog at {@code target} and records the {@code MOVED} movement
-	 * in the same transaction. Returns the updated {@link CatalogFile}.
+	 * Records where the file went and marks the operation done.
+	 *
+	 * <p>
+	 * Whether this counts as a move or a rename is worked out from the two paths
+	 * rather than asserted: organizing computes a destination folder and keeps the
+	 * file's own name, so which of the two it turns out to be is an outcome.
 	 */
 	@Transactional
-	public CatalogFile persistSuccessfulMove(Execution execution, CatalogFile catalogFile, CatalogFileLocation location,
-			Path source, Path target) {
-		Path parent = requireParent(target);
+	public void persistSuccessfulMove(long executionId, PreparedMovement operation, CatalogFile catalogFile,
+			Path source, Path target, MoveBaseline moved) {
+		AppliedLocationChange applied = catalogLocationWriter.relocate(new LocationChange(catalogFile.getId(),
+				operation.catalogFileEventPublicId(), source, target,
+				new CatalogFactProvenance(Instant.now(clock), CatalogEventSources.ORGANIZATION,
+						CatalogEventEvidence.NIMBUS_OPERATION, null)));
 
-		catalogFile.setFileKey(PathUtils.normalize(target));
-		catalogFile.setFileName(target.getFileName().toString());
-		catalogFile.setModifiedAt(readLastModifiedTime(target, catalogFile.getModifiedAt()));
+		// The entry was read before the move and still names the place the file left,
+		// while the row already names where it went - and the save below is a merge.
+		catalogFile.getLocation().placedAt(applied.currentPath(), applied.pathKey(), applied.currentFolder());
 
-		location.setCurrentPath(PathUtils.normalize(target));
-		location.setCurrentFolder(PathUtils.normalize(parent));
-		location.setUpdatedAt(LocalDateTime.now(clock));
+		// The file itself is not where it was: what it is has not changed, but when it
+		// was last written may have, and the move is the moment to read it.
+		catalogFile.setModifiedAt(lastModified(target, catalogFile.getModifiedAt()));
 
-		catalogFileLocationRepository.save(location);
+		// The digest the move already proved, handed to the one place that decides what
+		// it means: nothing new when it agrees, a first digest when the catalog had
+		// none, and a content change when it does not - which the move did not cause.
+		contentReconciliation.reconcileFromDigest(catalogFile, moved == null ? null : moved.sha256(),
+				moved == null ? null : moved.sizeBytes(), CatalogEventSources.ORGANIZATION, Instant.now(clock));
 
 		catalogFileRepository.save(catalogFile);
 
-		movementRepository.save(
-				Movement.builder().execution(execution).catalogFile(catalogFile).sourcePath(PathUtils.normalize(source))
-						.targetPath(PathUtils.normalize(target)).status(MovementStatus.MOVED).reason(null).build());
-
-		return catalogFile;
+		movementWriter.markMoved(executionId, List.of(operation.movementPublicId()));
 	}
 
-	private Path requireParent(Path target) {
-		Path parent = target.getParent();
-
-		if (parent == null) {
-			throw new IllegalStateException("An organization target path must have a parent directory: " + target);
-		}
-
-		return parent;
-	}
-
-	private LocalDateTime readLastModifiedTime(Path file, LocalDateTime fallback) {
+	private Instant lastModified(Path file, Instant fallback) {
 		try {
-			return LocalDateTime.ofInstant(Files.getLastModifiedTime(file).toInstant(), ZoneId.systemDefault());
+			return CatalogTimestamp.observed(Files.getLastModifiedTime(file));
 		} catch (IOException _) {
 			return fallback;
 		}

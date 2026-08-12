@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
 import org.assertj.core.api.Assertions;
@@ -35,22 +36,32 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingPhoto;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.FingerprintWriter;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.Takings;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoHashGroupMismatchException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.PhotoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedPhotoFingerprintException;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingCoordinator;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
 
 @ExtendWith(MockitoExtension.class)
 class PhashBacklogServiceTest {
+
+	/** This test's own context: nothing here is shared with another run. */
+	private final ExecutionMetricsContext metricsContext = new ExecutionMetricsContext();
+
+	/** The generation of bytes the work started from. */
+	private static final long REVISION = 1L;
+
+	private final FingerprintWriter fingerprintWriter = mock(FingerprintWriter.class);
 
 	@Mock
 	private MediaFingerprintRepository mediaFingerprintRepository;
@@ -75,12 +86,12 @@ class PhashBacklogServiceTest {
 	private PhashBacklogService service() {
 		FingerprintBacklogEngine engine = new FingerprintBacklogEngine(mediaFingerprintRepository,
 				fingerprintFailureRepository, fingerprintRebuildTaskRepository,
-				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()),
+				new ProcessingCoordinator(new ProcessingProperties(1, 8, 1, 1, 1, 1)),
 				executionRepository, transactionManager, Clock.systemDefaultZone());
 
 		return new PhashBacklogService(engine, mediaFingerprintRepository, fingerprintFailureRepository,
 				fingerprintRebuildTaskRepository, photoPerceptualHashService, similarityRelationWriter,
-				Clock.systemDefaultZone());
+				fingerprintWriter, Clock.systemDefaultZone());
 	}
 
 	/**
@@ -93,27 +104,103 @@ class PhashBacklogServiceTest {
 	@Test
 	void aFetchedBatchIsWrittenInSeveralSmallTransactions() {
 		List<PendingPhoto> sixty = IntStream.rangeClosed(1, 60)
-				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg"))
+				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg", 1L))
 				.toList();
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any())).thenReturn(sixty,
 						List.of());
-		when(photoPerceptualHashService.compute(any()))
-				.thenReturn(new PhotoPerceptualFingerprint(new byte[32], new byte[1024]));
+		when(photoPerceptualHashService.computeGroup(any(), any())).thenAnswer(invocation -> oneSamplePerPhoto(
+				invocation.getArgument(0)));
 
 		service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		// 60 items in units of 25: three writes, never one of sixty.
 		verify(transactionManager, times(3)).getTransaction(any());
 	}
 
+	/**
+	 * A group that came back the wrong length has not lost one photo's sample: it
+	 * has lost which photo any of them belongs to, since the only thing pairing the
+	 * two is position. So none of it is written and every photo is read again on
+	 * its own, where each answer is attributable. What must never happen is the
+	 * group being kept minus the sample it came up short of - that would file one
+	 * photo's fingerprint under another's name, and nothing downstream could tell.
+	 */
+	@SuppressWarnings("unchecked")
+	@Test
+	void aRefusedGroupIsReadOnePhotoAtATimeAndNoPhotoIsLost() {
+		List<PendingPhoto> twentyFive = IntStream.rangeClosed(1, 25)
+				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg",
+						REVISION))
+				.toList();
+
+		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
+				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
+						.thenReturn(twentyFive, List.of());
+		when(photoPerceptualHashService.computeGroup(any(), any()))
+				.thenThrow(new PhotoHashGroupMismatchException("Expected 25600 bytes, got 24576"));
+		when(photoPerceptualHashService.compute(any(), any()))
+				.thenReturn(new PhotoPerceptualFingerprint(new byte[32], new byte[1024]));
+		when(fingerprintWriter.insertForRevision(any(), eq(REVISION))).thenReturn(true);
+
+		DrainResult result = service().drainPending(() -> false, (_, _) -> {
+		}, Takings.unfenced(1L), metricsContext);
+
+		Assertions.assertThat(result.processed()).isEqualTo(25);
+		Assertions.assertThat(result.failed()).isZero();
+
+		verify(photoPerceptualHashService, times(25)).compute(any(), any());
+		verify(fingerprintWriter, times(25)).insertForRevision(any(), eq(REVISION));
+	}
+
+	/**
+	 * A stop reaches the groups that had not started yet, and what it leaves them
+	 * is nothing at all: no fingerprint, and above all no failure. Writing one
+	 * would spend an attempt of a photo that was never read, and three of those
+	 * retire it from the queue for good.
+	 */
+	@SuppressWarnings("unchecked")
+	@Test
+	void aStopLeavesTheGroupsItReachedPendingRatherThanFailed() {
+		List<PendingPhoto> sixty = IntStream.rangeClosed(1, 60)
+				.<PendingPhoto>mapToObj(index -> new PendingPhoto((long) index, "/tmp/photo" + index + ".jpg",
+						REVISION))
+				.toList();
+
+		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
+				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any())).thenReturn(sixty,
+						List.of());
+
+		AtomicBoolean stop = new AtomicBoolean();
+
+		// Stops the run from inside the first group, so the ones behind it are still
+		// waiting on the pool when the cancellation arrives.
+		when(photoPerceptualHashService.computeGroup(any(), any())).thenAnswer(invocation -> {
+			stop.set(true);
+
+			return oneSamplePerPhoto(invocation.getArgument(0));
+		});
+
+		DrainResult result = service().drainPending(stop::get, (_, _) -> {
+		}, Takings.unfenced(1L), metricsContext);
+
+		Assertions.assertThat(result.processed()).isEqualTo(25);
+		Assertions.assertThat(result.failed()).isZero();
+
+		verify(fingerprintFailureRepository, never()).save(any());
+	}
+
+	private static List<PhotoPerceptualFingerprint> oneSamplePerPhoto(List<Path> files) {
+		return files.stream().map(_ -> new PhotoPerceptualFingerprint(new byte[32], new byte[1024])).toList();
+	}
+
 	@SuppressWarnings("unchecked")
 	@Test
 	void drainStoresSuccessesAndRecordsFailures() {
-		PendingPhoto good = new PendingPhoto(1L, "/tmp/a.jpg");
-		PendingPhoto bad = new PendingPhoto(2L, "/tmp/b.jpg");
+		PendingPhoto good = new PendingPhoto(1L, "/tmp/a.jpg", REVISION);
+		PendingPhoto bad = new PendingPhoto(2L, "/tmp/b.jpg", REVISION);
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
@@ -123,21 +210,29 @@ class PhashBacklogServiceTest {
 
 		hash[0] = 111;
 
-		when(photoPerceptualHashService.compute(Path.of("/tmp/a.jpg")))
+		// A photo the decoder cannot read takes the whole group down with it, which
+		// is how a failure comes to be attributed at all: read alone, it is the only
+		// one that fails.
+		when(photoPerceptualHashService.computeGroup(any(), any()))
+				.thenThrow(new IllegalStateException("Could not run ffmpeg for a group. boom"));
+		when(photoPerceptualHashService.compute(eq(Path.of("/tmp/a.jpg")), any()))
 				.thenReturn(new PhotoPerceptualFingerprint(hash, new byte[1024]));
-		when(photoPerceptualHashService.compute(Path.of("/tmp/b.jpg"))).thenThrow(new IllegalStateException("boom"));
+		when(photoPerceptualHashService.compute(eq(Path.of("/tmp/b.jpg")), any()))
+				.thenThrow(new IllegalStateException("boom"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(2L), any(), any()))
 				.thenReturn(Optional.empty());
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		Assertions.assertThat(result.processed()).isEqualTo(1);
 		Assertions.assertThat(result.failed()).isEqualTo(1);
 
 		ArgumentCaptor<MediaFingerprint> fingerprint = ArgumentCaptor.forClass(MediaFingerprint.class);
 
-		verify(mediaFingerprintRepository).save(fingerprint.capture());
+		// Written for the generation the job read, so an edit landing mid-computation
+		// refuses the answer instead of recording one about bytes the catalog dropped.
+		verify(fingerprintWriter).insertForRevision(fingerprint.capture(), eq(REVISION));
 
 		Assertions.assertThat(fingerprint.getValue().getCatalogFileId()).isEqualTo(1L);
 		Assertions.assertThat(fingerprint.getValue().getHash()).isNull();
@@ -158,7 +253,7 @@ class PhashBacklogServiceTest {
 		active(ExecutionType.INVENTORY, true);
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		Assertions.assertThat(result.processed()).isZero();
 
@@ -176,7 +271,7 @@ class PhashBacklogServiceTest {
 		active(ExecutionType.CONVERSION, true);
 
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		Assertions.assertThat(result.processed()).isZero();
 
@@ -191,7 +286,7 @@ class PhashBacklogServiceTest {
 	@Test
 	void drainStopsWhenItArrivesAlreadyCancelled() {
 		DrainResult result = service().drainPending(() -> true, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		Assertions.assertThat(result.processed()).isZero();
 
@@ -210,7 +305,7 @@ class PhashBacklogServiceTest {
 	@Test
 	void drainStopsWhenTheRowHasBeenTakenOver() {
 		DrainResult result = service().drainPending(() -> false, (_, _) -> {
-		}, Takings.replaced(1L));
+		}, Takings.replaced(1L), metricsContext);
 
 		Assertions.assertThat(result.processed()).isZero();
 
@@ -225,7 +320,7 @@ class PhashBacklogServiceTest {
 	@Test
 	void drainKeepsGoingWhileAnUnrelatedExecutionRuns() {
 		service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		verify(mediaFingerprintRepository).findPendingPhotos(any(), any(), anyInt(), any());
 		verify(executionRepository, never()).existsByExecutionTypeAndStatusIn(eq(ExecutionType.ORGANIZATION), any());
@@ -305,7 +400,7 @@ class PhashBacklogServiceTest {
 	 */
 	@Test
 	void blamesTheToolAndNotTheFileWhenFfmpegCouldNotStart() {
-		PendingPhoto photo = new PendingPhoto(9L, "/tmp/holiday.jpg");
+		PendingPhoto photo = new PendingPhoto(9L, "/tmp/holiday.jpg", REVISION);
 
 		FingerprintFailureReason reason = service().reason(photo,
 				new ExternalToolNotRunnableException("./tools/bin/ffmpeg.exe", new IOException("error=2")));
@@ -317,18 +412,22 @@ class PhashBacklogServiceTest {
 	@SuppressWarnings("unchecked")
 	@Test
 	void unsupportedContainerBecomesTerminalImmediatelyAndIsNotReportedAsRetryableFailure() {
-		PendingPhoto sticker = new PendingPhoto(3L, "/tmp/sticker.webp");
+		PendingPhoto sticker = new PendingPhoto(3L, "/tmp/sticker.webp", REVISION);
 
 		when(mediaFingerprintRepository.findPendingPhotos(eq(PhashBacklogService.KIND),
 				eq(DuplicateConstants.ALGORITHM), eq(PhashBacklogService.MAX_ATTEMPTS), any()))
 						.thenReturn(List.of(sticker), List.of());
-		when(photoPerceptualHashService.compute(Path.of("/tmp/sticker.webp")))
+		// The container is refused before any decoding, so it refuses the group it
+		// was in as well and each of its photos is then read on its own.
+		when(photoPerceptualHashService.computeGroup(any(), any()))
+				.thenThrow(new UnsupportedPhotoFingerprintException("ZIP/Lottie"));
+		when(photoPerceptualHashService.compute(eq(Path.of("/tmp/sticker.webp")), any()))
 				.thenThrow(new UnsupportedPhotoFingerprintException("ZIP/Lottie"));
 		when(fingerprintFailureRepository.findByCatalogFileIdAndKindAndAlgorithm(eq(3L), any(), any()))
 				.thenReturn(Optional.empty());
 
 		service().drainPending(() -> false, (_, _) -> {
-		}, Takings.unfenced(1L));
+		}, Takings.unfenced(1L), metricsContext);
 
 		ArgumentCaptor<FingerprintFailure> failure = ArgumentCaptor.forClass(FingerprintFailure.class);
 
@@ -377,7 +476,6 @@ class PhashBacklogServiceTest {
 				DuplicateConstants.ALGORITHM);
 		verify(mediaFingerprintRepository, never()).deleteByCatalogFileIdAndKindAndAlgorithm(any(), any(), any());
 	}
-
 
 	private void active(ExecutionType executionType, boolean active) {
 		when(executionRepository.existsByExecutionTypeAndStatusIn(executionType, ExecutionStatusNames.ACTIVE))

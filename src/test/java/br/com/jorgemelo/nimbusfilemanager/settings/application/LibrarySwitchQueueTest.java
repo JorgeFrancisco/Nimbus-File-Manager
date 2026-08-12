@@ -23,6 +23,7 @@ import org.mockito.InOrder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCancellationService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
@@ -58,7 +59,8 @@ class LibrarySwitchQueueTest {
 
 	private final LibrarySwitchLauncher launcher = new LibrarySwitchLauncher(executionEnqueueService,
 			executionCancellationService, executionPayloadCodec,
-			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()));
+			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels(), Progress.reader(),
+					Progress.estimator()));
 
 	private final LibrarySwitchJobHandler handler = new LibrarySwitchJobHandler(libraryCatalogCleanupService,
 			appSettingService, executionProgressService, executionPayloadCodec);

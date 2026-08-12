@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -67,7 +69,7 @@ class SimilarityPublicationFencingIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	/**
 	 * The clock the application writes with, so what this test compares against is
@@ -239,7 +241,7 @@ class SimilarityPublicationFencingIntegrationTest {
 	}
 
 	private SimilarityGrouping published() {
-		return groupingRepository.saveAndFlush(SimilarityGrouping.builder().publicId(UUID.randomUUID())
+		return groupingRepository.saveAndFlush(SimilarityGrouping.builder().similarityGroupingPublicId(UUID.randomUUID())
 				.mediaType(FileType.PHOTO).algorithmId(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(PARAMETERS)
 				.compositionDigest(COMPOSITION).eligibleCount(120).analyzedCount(120).candidateLimit(8000)

@@ -51,6 +51,21 @@ public class ExplorerReconcileLauncher {
 	/**
 	 * Runs in its own transaction because browsing is a read-only one, and a
 	 * read-only transaction cannot write the row this queues.
+	 *
+	 * <p>
+	 * A repair already waiting answers this listing; one already <em>running</em>
+	 * does not. A reconcile compares the folder once, and this is only ever called
+	 * because the screen is displaying an entry the disk no longer has - so a
+	 * request arriving now is about a state the running pass may well have gone
+	 * past. Refusing it would leave the screen showing a problem that nothing was
+	 * asked to fix.
+	 *
+	 * <p>
+	 * The second listing used to break the page instead: the deduplication index
+	 * refused the duplicate, that marked this transaction rollback-only, and the
+	 * {@code UnexpectedRollbackException} surfaced on its commit. That is now
+	 * settled by asking before inserting and by the advisory lock behind it, rather
+	 * than by dropping the request.
 	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void repairFolder(Path folder) {

@@ -11,6 +11,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * One chunk of pending work, with no photo in it.
@@ -104,8 +105,12 @@ class ChunkOfPending implements FingerprintProducer<Long, byte[]> {
 		return pendingItem;
 	}
 
+	/**
+	 * The accumulator goes unused because nothing here runs an external tool: the
+	 * hash is decided, not decoded, so there is no gate wait and no exec to record.
+	 */
 	@Override
-	public byte[] compute(Long pendingItem) {
+	public byte[] compute(Long pendingItem, ProcessingMetrics metrics) {
 		try {
 			if (pendingItem == failsToCompute) {
 				throw new IllegalStateException("this one does not decode");

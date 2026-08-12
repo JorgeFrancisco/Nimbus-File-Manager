@@ -1,11 +1,11 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.Interpretation;
 
 /**
@@ -73,12 +73,12 @@ public class UsnJournalReader {
 	}
 
 	/**
-	 * Drains every pending record from the cursor and returns the distinct physical
-	 * files under the root that changed. Stops when the journal reports no more
-	 * records or fails to advance (guarding against a stuck cursor).
+	 * Drains every pending record from the cursor and returns the distinct changes
+	 * observed under the root. Stops when the journal reports no more records or
+	 * fails to advance (guarding against a stuck cursor).
 	 */
-	public List<Path> poll() {
-		Set<Path> changed = new LinkedHashSet<>();
+	public List<FileSystemChange> poll() {
+		Set<FileSystemChange> changed = new LinkedHashSet<>();
 		boolean draining = true;
 
 		while (draining) {
@@ -92,7 +92,7 @@ public class UsnJournalReader {
 			} else {
 				Interpretation interpretation = interpreter.interpret(UsnRecordParser.parse(result.records()));
 
-				changed.addAll(interpretation.changedFiles());
+				changed.addAll(interpretation.changes());
 				overflow |= interpretation.reconcileNeeded();
 				nextUsn = result.nextStartUsn();
 

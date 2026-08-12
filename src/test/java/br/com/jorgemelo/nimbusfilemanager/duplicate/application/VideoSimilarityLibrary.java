@@ -7,8 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,7 +17,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoFrameHash;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoSignature;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
@@ -70,6 +68,13 @@ final class VideoSimilarityLibrary {
 
 	private final VideoSimilarityService service;
 
+	/**
+	 * The same algorithm instance the service under test uses, so what this harness
+	 * forgets is keyed exactly like what that service wrote. Naming the identifier
+	 * here instead let the harness go on forgetting an algorithm nothing produces.
+	 */
+	private final VideoSimilarityAlgorithm algorithm;
+
 	VideoSimilarityLibrary() {
 		this(new VideoSimilarityProperties(null, null, null, null, null));
 	}
@@ -78,12 +83,13 @@ final class VideoSimilarityLibrary {
 		wireReads();
 
 		when(exclusions.signature()).thenReturn("none");
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
+
+		algorithm = new FfmpegLanczosFramesPhashAlgorithm(null, new LuminanceSsimService(), properties);
 
 		service = new VideoSimilarityService(fingerprints,
-				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository),
-				new FfmpegLanczosFramesPhashAlgorithm(null, new LuminanceSsimService(), properties), exclusions, properties,
-				store.writer(), store.repository());
+				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository), algorithm, exclusions,
+				properties, store.writer(), store.repository());
 	}
 
 	VideoSimilarityService service() {
@@ -109,7 +115,7 @@ final class VideoSimilarityLibrary {
 			rows.add(new VideoFrameRawResponse(catalogFileId, signature.id(), frame.sampleIndex(),
 					frame.sampleIndex() * 1000L, frame.phash(), frame.luminance(), catalogFileId + ".mp4", "mp4", 100L,
 					"C:/Videos/" + catalogFileId + ".mp4", "C:/Videos",
-					LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0), durationSeconds, width, height));
+					Instant.parse("2024-01-01T10:00:00Z"), durationSeconds, width, height));
 		}
 
 		videos.put(catalogFileId, rows);
@@ -160,7 +166,7 @@ final class VideoSimilarityLibrary {
 	void refingerprint(long catalogFileId, int... frames) {
 		video(catalogFileId, frames);
 
-		store.writer().forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1, catalogFileId);
+		store.writer().forget(algorithm.algorithm(), catalogFileId);
 	}
 
 	/**
@@ -181,7 +187,7 @@ final class VideoSimilarityLibrary {
 
 		videos.put(catalogFileId, updated);
 
-		store.writer().forget(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1, catalogFileId);
+		store.writer().forget(algorithm.algorithm(), catalogFileId);
 	}
 
 	/**

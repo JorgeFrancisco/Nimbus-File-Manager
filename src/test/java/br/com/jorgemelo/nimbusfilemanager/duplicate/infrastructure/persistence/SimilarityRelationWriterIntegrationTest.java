@@ -2,7 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -192,10 +192,8 @@ class SimilarityRelationWriterIntegrationTest extends SharedPostgresIntegrationT
 	}
 
 	private long catalogued() {
-		String unique = "relation-" + System.nanoTime();
-
-		CatalogFile file = catalogFileRepository.saveAndFlush(CatalogFile.builder().fileKey(unique)
-				.fileName(unique + ".jpg").extension("jpg").sizeBytes(1L).modifiedAt(LocalDateTime.now())
+		CatalogFile file = catalogFileRepository.saveAndFlush(CatalogFile.builder()
+				.extension("jpg").sizeBytes(1L).modifiedAt(Instant.now())
 				.fileType(FileType.PHOTO).build());
 
 		return file.getId();

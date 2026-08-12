@@ -12,18 +12,31 @@ import org.springframework.stereotype.Component;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationItem;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
+/**
+ * Whether a plan would put two files in the same place, or one on top of a file
+ * already there.
+ *
+ * <p>
+ * Two targets are the same place under the rules of the file system they are on,
+ * and that is asked of the file system itself: a {@link Path} compares the way
+ * its own provider says paths compare, which is case-insensitively on Windows
+ * and byte for byte on Linux. It used to be asked by lowercasing both, which is
+ * the Windows answer given everywhere - so on Linux a plan that produced
+ * {@code Foto.jpg} and {@code foto.JPG}, two files that can perfectly well
+ * coexist, was rejected as a conflict with itself.
+ */
 @Component
 public class OrganizationConflictDetector {
 
 	public List<OrganizationItem> detect(List<OrganizationItem> items) {
-		Map<String, Long> targetOccurrences = items.stream().filter(item -> !item.samePath())
-				.map(item -> PathUtils.normalizeLower(item.targetPath()))
+		Map<Path, Long> targetOccurrences = items.stream().filter(item -> !item.samePath())
+				.map(item -> PathUtils.normalizePath(item.targetPath()))
 				.collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
 		return items.stream().map(item -> detect(item, targetOccurrences)).toList();
 	}
 
-	private OrganizationItem detect(OrganizationItem item, Map<String, Long> targetOccurrences) {
+	private OrganizationItem detect(OrganizationItem item, Map<Path, Long> targetOccurrences) {
 		if (item.samePath()) {
 			return item.withConflict(false, false);
 		}
@@ -39,7 +52,8 @@ public class OrganizationConflictDetector {
 
 		boolean targetExists = sourceExists && Files.exists(Path.of(item.targetPath()));
 
-		boolean duplicateTarget = targetOccurrences.getOrDefault(PathUtils.normalizeLower(item.targetPath()), 0L) > 1;
+		boolean duplicateTarget = targetOccurrences
+				.getOrDefault(PathUtils.normalizePath(item.targetPath()), 0L) > 1;
 
 		return item.withConflict(targetExists, duplicateTarget);
 	}

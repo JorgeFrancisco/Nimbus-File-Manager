@@ -17,6 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.PerceptualHashCod
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoPerceptualHashService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Default video similarity algorithm: frames sampled at deterministic relative
@@ -67,7 +68,7 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 
 	@Override
 	public String algorithm() {
-		return FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V1;
+		return FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_FRAMES_V2;
 	}
 
 	@Override
@@ -76,8 +77,8 @@ public class FfmpegLanczosFramesPhashAlgorithm implements VideoSimilarityAlgorit
 	}
 
 	@Override
-	public VideoPerceptualFingerprint fingerprint(Path file, Double durationSeconds) {
-		return videoPerceptualHashService.compute(file, durationSeconds, FRAME_SAMPLES);
+	public VideoPerceptualFingerprint fingerprint(Path file, Double durationSeconds, ProcessingMetrics metrics) {
+		return videoPerceptualHashService.compute(file, durationSeconds, FRAME_SAMPLES, metrics);
 	}
 
 	@Override

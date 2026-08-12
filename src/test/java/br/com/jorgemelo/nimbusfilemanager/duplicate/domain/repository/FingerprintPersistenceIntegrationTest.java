@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.assertj.core.api.Assertions;
@@ -10,10 +11,13 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintFail
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.FingerprintKind;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.FingerprintFailure;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 
 /**
@@ -29,6 +33,9 @@ class FingerprintPersistenceIntegrationTest extends SharedPostgresIntegrationTes
 
 	@Autowired
 	private CatalogFileRepository catalogFileRepository;
+
+	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@Autowired
 	private MediaFingerprintRepository mediaFingerprintRepository;
@@ -80,12 +87,12 @@ class FingerprintPersistenceIntegrationTest extends SharedPostgresIntegrationTes
 	private CatalogFile persistCatalogFile(String key) {
 		String path = "C:/test/" + key + "-" + System.nanoTime() + ".jpg";
 
-		CatalogFile file = CatalogFile.builder().fileKey("fingerprint-" + key + "-" + System.nanoTime())
-				.fileName(key + ".jpg").extension("jpg").sizeBytes(1L).modifiedAt(LocalDateTime.now())
+		CatalogFile file = CatalogFile.builder()
+				.extension("jpg").sizeBytes(1L).modifiedAt(Instant.now())
 				.fileType(FileType.PHOTO).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
-				.originalPath(path).originalFolder("C:/test").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(file);
+		return CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 	}
 }

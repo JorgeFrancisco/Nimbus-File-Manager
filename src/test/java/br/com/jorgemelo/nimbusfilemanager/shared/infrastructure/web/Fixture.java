@@ -10,15 +10,17 @@ import java.util.Map;
 
 import org.springframework.data.domain.Page;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateDeletionProgressService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.DuplicateService;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityLauncher;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.SimilarityViewService;
-import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.FingerprintBacklogStatus;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.SimilarityView;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogProgressReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintBacklogLauncher;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.FingerprintRunReader;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint.PhashBacklogService;
@@ -58,9 +60,10 @@ public final class Fixture {
 	}
 
 	public DuplicatesWebController controller() {
-		return new DuplicatesWebController(duplicates, phash, fingerprintLauncher, fingerprintRunReader, preferences,
-				similarityView, similarityLauncher, deletionLauncher, deletionProgress, exclusions,
-				videoSimilarityWeb(), new DateSourceLabels());
+		return new DuplicatesWebController(duplicates, phash, fingerprintLauncher, preferences, similarityView,
+				similarityLauncher, deletionLauncher, deletionProgress, exclusions, videoSimilarityWeb(),
+				new DateSourceLabels(), new FingerprintBacklogProgressReader(mock(EtaLabels.class), phash, videoBacklog,
+						fingerprintRunReader));
 	}
 
 	private VideoSimilarityWeb videoSimilarityWeb() {

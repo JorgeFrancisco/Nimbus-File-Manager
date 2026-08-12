@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionCompletionWait;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
@@ -55,7 +56,8 @@ class QuarantineCleanupLauncherTest {
 	private final QuarantineCleanupLauncher launcher = new QuarantineCleanupLauncher(quarantineAbsenceScan,
 			quarantineFolderPolicy, executionEnqueueService, executionCompletionWait, executionPayloadCodec,
 			new ExecutionMessageCodec(new ObjectMapper()),
-			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels()));
+			new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), new ExecutionLabels(), Progress.reader(),
+					Progress.estimator()));
 
 	/**
 	 * Nothing absent is not an operation that cleared nothing - it is an operation
@@ -188,7 +190,7 @@ class QuarantineCleanupLauncherTest {
 	}
 
 	private Execution finished(int removed) {
-		return Execution.builder().id(1L).publicId(UUID.randomUUID())
+		return Execution.builder().id(1L).executionPublicId(UUID.randomUUID())
 				.executionType(ExecutionType.QUARANTINE_CLEANUP).status(ExecutionStatus.FINISHED).filesFound(1)
 				.filesAnalyzed(1).cacheHits(0).filesMoved(removed).errors(0)
 				.statusMessage(StatusMessage.coded("backend.quarantine.cleanupCompleted", "[1,0]")).build();

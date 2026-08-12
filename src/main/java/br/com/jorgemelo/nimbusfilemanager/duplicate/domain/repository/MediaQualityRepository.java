@@ -24,14 +24,14 @@ public interface MediaQualityRepository extends Repository<CatalogFile, Long> {
 
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.MediaQuality(
-				m.publicId, md.displayWidth, md.displayHeight, md.captureDate,
+				m.catalogFilePublicId, md.displayWidth, md.displayHeight, md.captureDate,
 				CASE WHEN p.exifJson IS NOT NULL THEN true ELSE false END,
 				md.subcategory, md.dateSource,
 				CASE WHEN md.manufacturer IS NOT NULL OR md.model IS NOT NULL THEN true ELSE false END)
 			FROM CatalogFile m
 			LEFT JOIN m.metadata md
 			LEFT JOIN m.photo p
-			WHERE inArray(m.publicId, :ids)
+			WHERE inArray(m.catalogFilePublicId, :ids)
 			""")
-	List<MediaQuality> findByPublicIdIn(@Param("ids") UUID[] ids);
+	List<MediaQuality> findByCatalogFilePublicIdIn(@Param("ids") UUID[] ids);
 }

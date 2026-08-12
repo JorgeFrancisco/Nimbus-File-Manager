@@ -5,26 +5,33 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.dto.ContentSuspect;
+import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.MissingFile;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileIssueResponse;
-import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.PathSync;
 
 /**
  * Package-private holder that tallies reconcile findings (missing on disk,
- * missing in database, path mismatches) and keeps bounded samples of each, plus
- * the queued current_path syncs. Used only by
+ * missing in database) and keeps bounded samples of each, alongside the full
+ * lists a repair pass works from. Used only by
  * {@link OrganizationReconcileService} while scanning a source tree.
  */
 class ReconcileAccumulator {
 
 	private final int sampleLimit;
 	private final Set<String> dbPaths = new HashSet<>();
+	/** Every catalogued file the pass found gone, not a sample of them. */
+	private final ArrayList<MissingFile> missingFiles = new ArrayList<>();
+
+	/** Every present file whose size or timestamp no longer matches the catalog. */
+	private final ArrayList<ContentSuspect> contentSuspects = new ArrayList<>();
+
+	/** Every path on disk with no catalogued file, not a sample of them. */
+	private final ArrayList<String> physicalOnly = new ArrayList<>();
+
 	private final ArrayList<OrganizationReconcileIssueResponse> missingOnDiskSamples = new ArrayList<>();
 	private final ArrayList<OrganizationReconcileIssueResponse> missingInDatabaseSamples = new ArrayList<>();
-	private final ArrayList<OrganizationReconcileIssueResponse> pathMismatchSamples = new ArrayList<>();
-	private final ArrayList<PathSync> pathSyncs = new ArrayList<>();
 	private long missingOnDisk;
 	private long missingInDatabase;
-	private long pathMismatches;
 
 	ReconcileAccumulator(int sampleLimit) {
 		this.sampleLimit = sampleLimit;
@@ -37,6 +44,12 @@ class ReconcileAccumulator {
 	void addMissingOnDisk(Long catalogFileId, String currentPath) {
 		missingOnDisk++;
 
+		// Two collections and they are not the same thing. The sample is what a screen
+		// shows and stops at a hundred; this is every file the pass has to converge,
+		// and capping it was how a run could report five thousand differences and
+		// repair a hundred of them.
+		missingFiles.add(new MissingFile(catalogFileId, currentPath));
+
 		addSample(missingOnDiskSamples, new OrganizationReconcileIssueResponse(catalogFileId, currentPath, currentPath,
 				null, "File is registered in database but does not exist on disk."));
 	}
@@ -44,23 +57,26 @@ class ReconcileAccumulator {
 	void addMissingInDatabase(String path) {
 		missingInDatabase++;
 
+		physicalOnly.add(path);
+
 		addSample(missingInDatabaseSamples, new OrganizationReconcileIssueResponse(null, path, null, path,
 				"File exists on disk but is not registered in database."));
 	}
 
-	void addPathMismatch(Long catalogFileId, String fileKey, String currentPath) {
-		pathMismatches++;
-
-		addSample(pathMismatchSamples, new OrganizationReconcileIssueResponse(catalogFileId, currentPath, currentPath,
-				fileKey, "catalog_file.file_key differs from catalog_file_location.current_path."));
+	void addContentSuspect(Long catalogFileId, String currentPath) {
+		contentSuspects.add(new ContentSuspect(catalogFileId, currentPath));
 	}
 
-	void addPathSync(Long catalogFileId, String fileKey) {
-		pathSyncs.add(new PathSync(catalogFileId, fileKey));
+	List<ContentSuspect> contentSuspects() {
+		return contentSuspects;
 	}
 
-	List<PathSync> pathSyncs() {
-		return pathSyncs;
+	List<MissingFile> missingFiles() {
+		return missingFiles;
+	}
+
+	List<String> physicalOnly() {
+		return physicalOnly;
 	}
 
 	private void addSample(List<OrganizationReconcileIssueResponse> samples,
@@ -86,19 +102,11 @@ class ReconcileAccumulator {
 		return missingInDatabase;
 	}
 
-	long pathMismatches() {
-		return pathMismatches;
-	}
-
 	List<OrganizationReconcileIssueResponse> missingOnDiskSamples() {
 		return missingOnDiskSamples;
 	}
 
 	List<OrganizationReconcileIssueResponse> missingInDatabaseSamples() {
 		return missingInDatabaseSamples;
-	}
-
-	List<OrganizationReconcileIssueResponse> pathMismatchSamples() {
-		return pathMismatchSamples;
 	}
 }

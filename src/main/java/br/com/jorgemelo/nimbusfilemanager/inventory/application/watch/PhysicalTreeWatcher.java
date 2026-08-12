@@ -19,7 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.FileChangeKind;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.FileChangeSourceKind;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PhysicalFilePolicy;
@@ -79,10 +82,16 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 	 * {@code OVERFLOW} event sets a flag consumable via
 	 * {@link #consumeRecoveryReason()} - the caller should trigger an early
 	 * reconcile because events may have been dropped.
+	 *
+	 * <p>
+	 * This source never reports a rename. {@code WatchService} has no such event
+	 * kind, so a rename reaches it as a deletion and a creation that nothing here
+	 * can tell apart from two unrelated ones - and inventing the pairing at this
+	 * level would be a guess, not an observation.
 	 */
 	@Override
-	public List<Path> pollChangedFiles() {
-		List<Path> changed = new ArrayList<>();
+	public List<FileSystemChange> pollChanges() {
+		List<FileSystemChange> changed = new ArrayList<>();
 
 		WatchKey key;
 
@@ -105,7 +114,7 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 	// Package-private for deterministic unit testing of the event branches
 	// (create/modify/delete/overflow) without depending on real WatchService
 	// timing.
-	void handleEvent(Path directory, WatchEvent<?> event, List<Path> changed) {
+	void handleEvent(Path directory, WatchEvent<?> event, List<FileSystemChange> changed) {
 		WatchEvent.Kind<?> kind = event.kind();
 
 		if (StandardWatchEventKinds.OVERFLOW.equals(kind)) {
@@ -129,9 +138,10 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 				removed.cancel();
 			}
 
-			// The path is already gone, so it cannot be inspected; signal it as a
-			// change so the debounced reconcile removes it from the catalog.
-			changed.add(child);
+			// The path is already gone, so it cannot be inspected - but a key held for
+			// it is proof it was a directory, which is the one thing that could not be
+			// asked of it afterwards.
+			changed.add(observed(FileChangeKind.DELETED, child, removed != null));
 
 			return;
 		}
@@ -153,15 +163,25 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 			// arrived. The same window exists for a folder created and filled in
 			// the moment before this registration ran.
 			if (StandardWatchEventKinds.ENTRY_CREATE.equals(kind)) {
-				changed.add(child);
+				changed.add(observed(FileChangeKind.CREATED, child, true));
 			}
 
 			return;
 		}
 
 		if (PhysicalFilePolicy.isProcessable(child)) {
-			changed.add(child);
+			changed.add(observed(kindOf(kind), child, false));
 		}
+	}
+
+	private static FileChangeKind kindOf(WatchEvent.Kind<?> kind) {
+		return StandardWatchEventKinds.ENTRY_CREATE.equals(kind) ? FileChangeKind.CREATED : FileChangeKind.MODIFIED;
+	}
+
+	private static FileSystemChange observed(FileChangeKind kind, Path path, boolean directory) {
+		// WatchService carries no time either, and none is invented for it.
+		return new FileSystemChange(kind, path, null, null, FileChangeSourceKind.WATCH_SERVICE, directory,
+				null);
 	}
 
 	/**
@@ -243,7 +263,7 @@ public class PhysicalTreeWatcher implements FileChangeSource {
 	 * what makes the watcher reconcile rather than trust a list it never got.
 	 */
 	@Override
-	public List<Path> takeOfflineBacklog() {
+	public List<FileSystemChange> takeOfflineBacklog() {
 		return List.of();
 	}
 

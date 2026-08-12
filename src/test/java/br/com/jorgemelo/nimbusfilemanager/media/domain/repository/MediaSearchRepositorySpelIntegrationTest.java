@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.media.domain.repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
@@ -12,14 +12,17 @@ import org.springframework.data.domain.Pageable;
 
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchFilter;
 import br.com.jorgemelo.nimbusfilemanager.media.domain.repository.projection.MediaSearchRawResponse;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Video;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.FilterBuilder;
 
@@ -39,27 +42,29 @@ class MediaSearchRepositorySpelIntegrationTest extends SharedPostgresIntegration
 	private CatalogFileRepository catalogFileRepository;
 
 	@Autowired
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
 	private MediaSearchRepository mediaSearchRepository;
 
 	private CatalogFile persisted;
 
 	@BeforeEach
 	void seed() {
-		String key = "search-spel-" + System.nanoTime();
 		String path = "C:/Vacation/movie-" + System.nanoTime() + ".mp4";
 
-		CatalogFile file = CatalogFile.builder().fileKey(key).fileName("movie.mp4").extension("mp4").sizeBytes(2048L)
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.VIDEO).build();
+		CatalogFile file = CatalogFile.builder().extension("mp4").sizeBytes(2048L)
+				.modifiedAt(Instant.now()).fileType(FileType.VIDEO).build();
 
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/Vacation")
-				.originalPath(path).originalFolder("C:/Vacation").build());
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
 		file.setMetadata(MediaMetadata.builder().catalogFile(file).category(FileCategory.MEDIA)
 				.subcategory(MediaSubcategory.CAMERA).year(2024).month(5).build());
 
 		file.setVideo(Video.builder().catalogFile(file).videoCodec("h265").build());
 
-		persisted = catalogFileRepository.saveAndFlush(file);
+		persisted = CatalogFiles.catalogued(catalogFileRepository, catalogFileLocationRepository, file);
 	}
 
 	@Test
@@ -111,7 +116,7 @@ class MediaSearchRepositorySpelIntegrationTest extends SharedPostgresIntegration
 	}
 
 	private boolean isSeeded(MediaSearchRawResponse row) {
-		return persisted.getPublicId().equals(row.id());
+		return persisted.getCatalogFilePublicId().equals(row.id());
 	}
 
 	private FilterBuilder filter() {

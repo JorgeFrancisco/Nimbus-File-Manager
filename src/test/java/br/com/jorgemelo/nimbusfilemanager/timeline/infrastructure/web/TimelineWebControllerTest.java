@@ -41,7 +41,7 @@ class TimelineWebControllerTest {
 	private final Authentication auth = new TestingAuthenticationToken("bob", "x");
 
 	private static OfflineGeoDatasetStatus available() {
-		return new OfflineGeoDatasetStatus(true, "v1", 10, 0, null, null, "dir", null, "geoBoundaries", "ODbL");
+		return new OfflineGeoDatasetStatus(true, "v1", 10, 0, null, "dir", "geoBoundaries", "ODbL");
 	}
 
 	@Test

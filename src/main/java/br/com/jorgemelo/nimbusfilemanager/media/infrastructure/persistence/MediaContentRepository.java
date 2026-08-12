@@ -24,10 +24,10 @@ public class MediaContentRepository {
 			LEFT JOIN video v ON v.catalog_file_id = mf.id
 			LEFT JOIN media_geo_location gl ON gl.catalog_file_id = mf.id
 			JOIN LATERAL (
-			 SELECT ml.current_path FROM catalog_file_location ml WHERE ml.catalog_file_id = mf.id
+			 SELECT ml.current_path, ml.path_flavor FROM catalog_file_location ml WHERE ml.catalog_file_id = mf.id
 			 ORDER BY ml.updated_at DESC, ml.catalog_file_id DESC LIMIT 1
 			) location ON TRUE
-			WHERE mf.public_id = :publicId AND mf.lifecycle_status IN ('ACTIVE', 'DELETED')
+			WHERE mf.catalog_file_public_id = :publicId AND mf.lifecycle_status IN ('ACTIVE', 'DELETED')
 			  AND mf.file_type IN ('PHOTO', 'VIDEO')
 			""";
 
@@ -41,24 +41,28 @@ public class MediaContentRepository {
 
 	public Optional<MediaContentSource> findContent(UUID publicId) {
 		String sql = """
-				SELECT mf.public_id, location.current_path, mf.file_name, mf.mime_type, mf.file_type
+				SELECT mf.catalog_file_public_id, location.current_path,
+				       catalog_file_name(location.current_path, location.path_flavor) AS file_name,
+				       mf.mime_type, mf.file_type
 				FROM catalog_file mf
 				JOIN LATERAL (
-				 SELECT ml.current_path FROM catalog_file_location ml WHERE ml.catalog_file_id = mf.id
+				 SELECT ml.current_path, ml.path_flavor FROM catalog_file_location ml WHERE ml.catalog_file_id = mf.id
 				 ORDER BY ml.updated_at DESC, ml.catalog_file_id DESC LIMIT 1
 				) location ON TRUE
-				WHERE mf.public_id = :publicId AND mf.lifecycle_status IN ('ACTIVE', 'DELETED')
+				WHERE mf.catalog_file_public_id = :publicId AND mf.lifecycle_status IN ('ACTIVE', 'DELETED')
 				""";
 		List<MediaContentSource> rows = jdbcTemplate.query(sql, params(publicId),
-				(rs, _) -> new MediaContentSource(rs.getObject("public_id", UUID.class), rs.getString("current_path"),
-						rs.getString("file_name"), rs.getString("mime_type"),
+				(rs, _) -> new MediaContentSource(rs.getObject("catalog_file_public_id", UUID.class),
+						rs.getString("current_path"), rs.getString("file_name"), rs.getString("mime_type"),
 						FileType.valueOf(rs.getString("file_type"))));
 		return rows.stream().findFirst();
 	}
 
 	public Optional<MediaDetails> findDetails(UUID publicId) {
 		String sql = """
-				SELECT mf.public_id, mf.file_name, mf.file_type, m.capture_date, m.date_source,
+				SELECT mf.catalog_file_public_id,
+				       catalog_file_name(location.current_path, location.path_flavor) AS file_name,
+				       mf.file_type, m.capture_date, m.date_source,
 				       mf.created_at, mf.modified_at, m.display_width, m.display_height,
 				       m.manufacturer, m.model, m.latitude, m.longitude, v.duration_seconds,
 				       location.current_path,
@@ -75,7 +79,7 @@ public class MediaContentRepository {
 
 			String dateSource = rs.getString("date_source");
 
-			return new MediaDetails(rs.getObject("public_id", UUID.class), rs.getString("file_name"),
+			return new MediaDetails(rs.getObject("catalog_file_public_id", UUID.class), rs.getString("file_name"),
 					FileType.valueOf(rs.getString("file_type")),
 
 					captureDate == null ? null : captureDate.toLocalDateTime(),

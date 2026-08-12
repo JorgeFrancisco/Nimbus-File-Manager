@@ -1,12 +1,16 @@
 package br.com.jorgemelo.nimbusfilemanager.organization.application;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -17,14 +21,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +37,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import br.com.jorgemelo.nimbusfilemanager.catalog.application.ContentReconciliation;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.NoCancellations;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.GrantingOperationLocks;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.EligibilityAnnouncer;
@@ -55,27 +60,31 @@ import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.Organizat
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationPlan;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationSummary;
 import br.com.jorgemelo.nimbusfilemanager.organization.domain.enums.OrganizationLayout;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.InMemorySelfWrittenPaths;
+import br.com.jorgemelo.nimbusfilemanager.shared.AppliedLocationChanges;
+import br.com.jorgemelo.nimbusfilemanager.shared.PreparedMovements;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWriteOff;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.SelfWrittenPathRegistry;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.LocationChange;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.PreparedMovement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStepType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementReason;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MovementStatus;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Movement;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.MovementRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLocationWriter;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.MovementWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationExecutorTest {
 
-	private final SelfWrittenPathRegistry pathRegistry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-			Clock.systemDefaultZone());
+	private final SelfWrittenPathRegistry pathRegistry = new SelfWriteOff();
 
 	@TempDir
 	Path tempDir;
@@ -94,6 +103,15 @@ class OrganizationExecutorTest {
 
 	@Mock
 	private MovementRepository movementRepository;
+
+	@Mock
+	private MovementWriter movementWriter;
+
+	@Mock
+	private CatalogLocationWriter catalogLocationWriter;
+
+	@Mock
+	private ContentReconciliation contentReconciliation;
 
 	@Mock
 	private ExecutionProgressService executionProgressService;
@@ -260,17 +278,17 @@ class OrganizationExecutorTest {
 		Path targetFolder = tempDir.resolve("target");
 		Path source = Files.writeString(sourceFolder.resolve("photo.jpg"), "content");
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		stubPlanFor(sourceFolder, targetFolder, source);
 
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -297,18 +315,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -318,7 +336,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.moved()).isEqualTo(1);
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED.name());
 		Assertions.assertThat(Files.exists(target)).isTrue();
-		Assertions.assertThat(catalogFile.getFileName()).isEqualTo("photo.jpg");
+		Assertions.assertThat(catalogFile.getLocation().fileName()).isEqualTo("photo.jpg");
 
 		verify(catalogFileRepository, times(1)).findById(1L);
 	}
@@ -333,18 +351,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -381,7 +399,7 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
@@ -409,12 +427,10 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, shortcut, target, false, false);
 
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
-
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
@@ -424,11 +440,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(Files.exists(target)).isFalse();
 
 		verify(catalogFileRepository, never()).findById(any());
-		verify(movementRepository).save(movementCaptor.capture());
-
-		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.SKIPPED);
-		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.SOURCE_NOT_PHYSICAL);
-		Assertions.assertThat(movementCaptor.getValue().getCatalogFile()).isNull();
+		verify(movementWriter).markSkipped(anyLong(), anyCollection(), eq(MovementReason.SOURCE_NOT_PHYSICAL));
 	}
 
 	@Test
@@ -440,14 +452,12 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").build();
-
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.empty());
@@ -459,10 +469,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(Files.exists(source)).isTrue();
 		Assertions.assertThat(Files.exists(target)).isFalse();
 
-		verify(movementRepository).save(movementCaptor.capture());
-
-		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.ERROR);
-		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.IO_ERROR);
+		verify(movementWriter).markFailed(anyLong(), anyCollection(), eq(MovementReason.IO_ERROR));
 	}
 
 	@Test
@@ -474,20 +481,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
-
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -500,10 +505,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(Files.exists(source)).isTrue();
 		Assertions.assertThat(Files.exists(target)).isFalse();
 
-		verify(movementRepository).save(movementCaptor.capture());
-
-		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.ERROR);
-		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.DATABASE_UPDATE_FAILED);
+		verify(movementWriter).markFailed(anyLong(), anyCollection(), eq(MovementReason.DATABASE_UPDATE_FAILED));
 		Assertions.assertThat(recordedError()).contains("Physical rollback succeeded");
 	}
 
@@ -516,17 +518,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").build();
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
+		// A file being moved has a place it is leaving, and the entry carries it.
+		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -542,7 +545,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.moved()).isZero();
 		Assertions.assertThat(response.errors()).isEqualTo(1);
 
-		verify(movementRepository).save(movementCaptor.capture());
+		verify(movementWriter).markFailed(anyLong(), anyCollection(), any());
 
 		Assertions.assertThat(recordedError()).contains("Physical rollback failed");
 		Assertions.assertThat(Files.exists(target)).isTrue();
@@ -557,20 +560,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
-
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -592,10 +593,7 @@ class OrganizationExecutorTest {
 
 		// Catalog is never updated when integrity fails.
 		verify(catalogFileRepository, never()).save(any());
-		verify(movementRepository).save(movementCaptor.capture());
-
-		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.ERROR);
-		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.INTEGRITY_CHECK_FAILED);
+		verify(movementWriter).markFailed(anyLong(), anyCollection(), eq(MovementReason.INTEGRITY_CHECK_FAILED));
 		Assertions.assertThat(recordedError()).contains("integrity check failed", "Physical rollback succeeded");
 	}
 
@@ -612,8 +610,7 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(2, 2, 0, 0, 2, 100, 0, 0, 1), List.of(duplicate, missing)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
-		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
@@ -631,14 +628,14 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").fileKey(target.toString()).build();
-
-		ArgumentCaptor<Movement> movementCaptor = ArgumentCaptor.forClass(Movement.class);
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.of(catalogFile));
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.of(catalogFile));
+		when(movementWriter.prepare(anyLong(), anyList()))
+				.thenReturn(List.of(PreparedMovements.settled(1L, 1L, source, target)));
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
 
@@ -648,12 +645,94 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED.name());
 		Assertions.assertThat(Files.exists(target)).isTrue();
 
-		verify(movementRepository).save(movementCaptor.capture());
-
-		Assertions.assertThat(movementCaptor.getValue().getStatus()).isEqualTo(MovementStatus.SKIPPED);
-		Assertions.assertThat(movementCaptor.getValue().getReason()).isEqualTo(MovementReason.ALREADY_MOVED);
+		verify(movementWriter).markSkipped(anyLong(), anyCollection(), eq(MovementReason.ALREADY_MOVED));
 
 		verify(catalogFileRepository, never()).findById(1L);
+	}
+
+	/**
+	 * The same crash window over a file that is not the one that left.
+	 *
+	 * <p>
+	 * The size is the evidence this product already has for every catalogued file
+	 * and costs one stat. It is not proof - a different file of the same size would
+	 * be adopted - but it is what separates finishing an interrupted move from
+	 * adopting a stranger, and a mismatch means the operation stops being a resume.
+	 */
+	@Test
+	void aFileOfAnotherSizeAtTheDestinationIsNotTheOneThatLeft() throws Exception {
+		Path sourceFolder = tempDir.resolve("source");
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+		Path source = sourceFolder.resolve("photo.jpg");
+		Path target = Files.writeString(targetFolder.resolve("photo.jpg"), "somebody else's bytes");
+
+		OrganizationItem item = item(1L, source, target, false, false);
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).sizeBytes(Files.size(target) + 1).build();
+
+		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build());
+
+		when(organizationPlanner.preview(any(), any())).thenReturn(
+				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
+						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
+		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
+
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
+
+		Assertions.assertThat(response.moved()).as("nothing was adopted").isZero();
+		Assertions.assertThat(response.errors()).isEqualTo(1);
+
+		verify(movementWriter).markFailed(anyLong(), anyCollection(), eq(MovementReason.SOURCE_NOT_FOUND));
+		verify(catalogLocationWriter, never()).relocate(any());
+	}
+
+	/**
+	 * The other half of the state above: same disk, pending operation.
+	 *
+	 * <p>
+	 * A worker that died between moving the file and recording it leaves exactly
+	 * this behind, and the operation it prepared before touching anything is what
+	 * says so. Finishing it under the identity reserved back then is what keeps the
+	 * catalog from telling the story twice under two names - which is the reason
+	 * the identity is reserved at all.
+	 */
+	@Test
+	void anOperationStillPendingOverAFileThatAlreadyLeftIsFinishedNotRepeated() throws Exception {
+		Path sourceFolder = tempDir.resolve("source");
+		Path targetFolder = Files.createDirectory(tempDir.resolve("target"));
+		Path source = sourceFolder.resolve("photo.jpg");
+		Path target = Files.writeString(targetFolder.resolve("photo.jpg"), "content");
+
+		OrganizationItem item = item(1L, source, target, false, false);
+
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).sizeBytes(Files.size(target)).build();
+
+		// Still where it was catalogued: what the resumed move is about to correct.
+		catalogFile.setLocation(CatalogFileLocation.builder().catalogFile(catalogFile)
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build());
+
+		PreparedMovement interrupted = PreparedMovements.pending(1L, 1L, source, target);
+
+		when(organizationPlanner.preview(any(), any())).thenReturn(
+				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
+						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
+		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
+		when(movementWriter.prepare(anyLong(), anyList())).thenReturn(List.of(interrupted));
+
+		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
+
+		Assertions.assertThat(response.moved()).isEqualTo(1);
+		Assertions.assertThat(response.errors()).isZero();
+		Assertions.assertThat(Files.readString(target)).isEqualTo("content");
+
+		ArgumentCaptor<LocationChange> change = ArgumentCaptor.forClass(LocationChange.class);
+
+		verify(catalogLocationWriter).relocate(change.capture());
+		verify(movementWriter).markMoved(anyLong(), eq(List.of(interrupted.movementPublicId())));
+
+		Assertions.assertThat(change.getValue().eventId()).isEqualTo(interrupted.catalogFileEventPublicId());
 	}
 
 	@SuppressWarnings("unchecked")
@@ -672,9 +751,8 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(new OrganizationPlan(sourceFolder.toString(),
 				targetFolder.toString(), OrganizationLayout.DEFAULT, false,
 				new OrganizationSummary(2, 2, 0, 0, 2, 100, 0, 0, 0), List.of(registeredTarget, existingTarget)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.of(CatalogFile.builder().id(99L).build()),
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.of(CatalogFile.builder().id(99L).build()),
 				Optional.empty());
-		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
@@ -695,17 +773,17 @@ class OrganizationExecutorTest {
 		OrganizationItem item = item(1L, source, target, false, false);
 
 		CatalogFile catalogFile = CatalogFile.builder().id(1L)
-				.modifiedAt(LocalDateTime.of(2024, Month.JANUARY, 1, 0, 0)).build();
+				.modifiedAt(Instant.parse("2024-01-01T00:00:00Z")).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.empty());
@@ -728,7 +806,8 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		doThrow(new IllegalStateException("movement failed")).when(movementRepository).save(any());
+		doThrow(new IllegalStateException("movement failed")).when(movementWriter).markFailed(anyLong(),
+				anyCollection(), any());
 
 		var movementFailure = execute(executor(), request(sourceFolder, targetFolder, true, false));
 
@@ -756,8 +835,7 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(2, 2, 0, 1, 1, 100, 0, 0, 0), List.of(samePath, missing)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
-		when(catalogFileRepository.findById(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 
 		var response = executorWithProgress().execute(request(sourceFolder, targetFolder, true, false), execution,
 				owning());
@@ -825,7 +903,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.CANCELLED.name());
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
 
-		verify(catalogFileRepository, never()).findByFileKey(any());
+		verify(catalogFileLocationRepository, never()).findPresentByPath(any(), any());
 
 		// execute() unregisters in its finally block once it stops, cancelled or not,
 		// so this confirms cleanup happened instead of leaving a stale entry behind.
@@ -843,11 +921,11 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		OrganizationMoveVerifier verifier = mock(OrganizationMoveVerifier.class);
 		OrganizationMovePersistence persistence = mock(OrganizationMovePersistence.class);
@@ -857,7 +935,7 @@ class OrganizationExecutorTest {
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -876,7 +954,7 @@ class OrganizationExecutorTest {
 
 		verify(catalogFileRepository, never()).save(any());
 		verify(catalogFileLocationRepository, never()).save(any());
-		verify(movementRepository, never()).save(any());
+		verify(movementWriter, never()).prepare(anyLong(), anyList());
 		verify(verifier, never()).capture(any());
 		verify(verifier, never()).verify(any(), any(), any());
 		Mockito.verifyNoInteractions(persistence);
@@ -891,18 +969,18 @@ class OrganizationExecutorTest {
 
 		OrganizationItem item = item(1L, source, target, false, false);
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
 		when(organizationPlanner.preview(any(), any())).thenReturn(
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0), List.of(item)));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -937,7 +1015,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.REJECTED.name());
 		Assertions.assertThat(response.errors()).isZero();
 
-		verify(movementRepository, never()).save(any());
+		verify(movementWriter, never()).prepare(anyLong(), anyList());
 		Mockito.verifyNoInteractions(persistence);
 	}
 
@@ -962,7 +1040,7 @@ class OrganizationExecutorTest {
 		Assertions.assertThat(response.skipped()).isEqualTo(1);
 		Assertions.assertThat(response.status()).isEqualTo(ExecutionStatus.FINISHED.name());
 
-		verify(movementRepository, never()).save(any());
+		verify(movementWriter, never()).prepare(anyLong(), anyList());
 		Mockito.verifyNoInteractions(persistence);
 	}
 
@@ -985,7 +1063,7 @@ class OrganizationExecutorTest {
 		CatalogFile catalogFile = CatalogFile.builder().id(1L).build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(firstSource.toString()).build();
+				.currentPath(firstSource.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
@@ -994,7 +1072,7 @@ class OrganizationExecutorTest {
 				new OrganizationSummary(2, 2, 0, 0, 2, 100, 0, 0, 0),
 				List.of(item(1L, firstSource, firstTarget, false, false),
 						item(2L, secondSource, secondTarget, false, false))));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -1030,7 +1108,7 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0),
 						List.of(item(1L, source, target, false, false))));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.empty());
 
 		var response = execute(executor(), request(sourceFolder, targetFolder, false, false));
@@ -1054,11 +1132,11 @@ class OrganizationExecutorTest {
 		Path source = Files.writeString(sourceFolder.resolve("photo.jpg"), "content");
 		Path target = targetFolder.resolve("202405/09/CAMERA/IMAGENS/photo.jpg");
 
-		CatalogFile catalogFile = CatalogFile.builder().id(1L).fileName("photo.jpg").modifiedAt(LocalDateTime.now())
+		CatalogFile catalogFile = CatalogFile.builder().id(1L).modifiedAt(Instant.now())
 				.build();
 
 		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(source.toString()).build();
+				.currentPath(source.toString()).pathFlavor(PathFlavor.WINDOWS).build();
 
 		catalogFile.setLocation(location);
 
@@ -1066,7 +1144,7 @@ class OrganizationExecutorTest {
 				new OrganizationPlan(sourceFolder.toString(), targetFolder.toString(), OrganizationLayout.DEFAULT,
 						false, new OrganizationSummary(1, 1, 0, 0, 1, 100, 0, 0, 0),
 						List.of(item(1L, source, target, false, false))));
-		when(catalogFileRepository.findByFileKey(any())).thenReturn(Optional.empty());
+		when(catalogFileLocationRepository.findPresentByPath(any(), any())).thenReturn(Optional.empty());
 		when(catalogFileRepository.findById(1L)).thenReturn(Optional.of(catalogFile));
 		when(catalogFileLocationRepository.findByCatalogFileIdAndCurrentPath(any(), any()))
 				.thenReturn(Optional.of(location));
@@ -1131,7 +1209,28 @@ class OrganizationExecutorTest {
 	}
 
 	private OrganizationMovementLog movementLog() {
-		return new OrganizationMovementLog(movementRepository, catalogFileRepository, executionErrorService);
+		return new OrganizationMovementLog(movementRepository, movementWriter, executionErrorService);
+	}
+
+	/**
+	 * The operations the write door hands back, one per planned move.
+	 *
+	 * <p>
+	 * Lenient because a run that plans nothing - a dry run, a refused plan - never
+	 * asks, and those cases are as much part of this class as the ones that move.
+	 * Without it the executor is handed no operation for the file it is about to
+	 * move and refuses the move, so every assertion reads like the move itself was
+	 * rejected - which is not what happened.
+	 */
+	@BeforeEach
+	void theWriteDoorAnswers() {
+		lenient().when(movementWriter.prepare(anyLong(), anyList()))
+				.thenAnswer(invocation -> PreparedMovements.pendingFor(invocation.getArgument(1)));
+
+		// The placement door answers with the placement as it now stands, which is
+		// what the move reads back to keep its own copy of the file in agreement.
+		lenient().when(catalogLocationWriter.relocate(any()))
+				.thenAnswer(invocation -> AppliedLocationChanges.applying(invocation.getArgument(0)));
 	}
 
 	private OrganizationExecuteRequest dryRunRequest(Path source, Path target, boolean allowConflicts) {
@@ -1144,8 +1243,8 @@ class OrganizationExecutorTest {
 		return new OrganizationExecutor(organizationPlanner, catalogFileRepository, catalogFileLocationRepository,
 				movementLog(), operationLockService, executionProgressService, executionCancellationService,
 				new SecureLibraryFiles(new SecureFileMove(verifier, pathRegistry), pathRegistry),
-				new OrganizationMovePersistence(catalogFileRepository, catalogFileLocationRepository,
-						movementRepository, Clock.systemDefaultZone()),
+				new OrganizationMovePersistence(catalogLocationWriter, contentReconciliation, movementWriter,
+						catalogFileRepository, Clock.systemDefaultZone()),
 				new EmptyDirectoryCleaner(libraryFiles()), eligibilityAnnouncer, Clock.systemDefaultZone());
 	}
 
@@ -1171,8 +1270,7 @@ class OrganizationExecutorTest {
 	 * watcher from re-inventorying it.
 	 */
 	private static SecureLibraryFiles libraryFiles() {
-		SelfWrittenPathRegistry registry = new SelfWrittenPathRegistry(new InMemorySelfWrittenPaths(),
-				Clock.systemUTC());
+		SelfWrittenPathRegistry registry = new SelfWriteOff();
 
 		return new SecureLibraryFiles(new SecureFileMove(new OrganizationMoveVerifier(new FileHashService()),
 				registry), registry);

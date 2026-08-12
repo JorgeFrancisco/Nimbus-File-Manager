@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
@@ -29,28 +30,34 @@ public class RdcwFileChangeSource implements FileChangeSource {
 	private final RdcwReadSeam seam;
 	private final RdcwChangeInterpreter interpreter;
 
-	private List<Path> pendingCatchUp;
+	private List<FileSystemChange> pendingCatchUp;
 	private WatchRecoveryReason startupReason;
 	private boolean overflow;
 
-	public RdcwFileChangeSource(Path root, RdcwReadSeam seam, List<Path> catchUpChanges,
-			WatchRecoveryReason startupReason) {
+	/**
+	 * @param volumeScope what the file ids this source reports are unique within,
+	 * resolved once by the opener so that a change seen live and one recovered
+	 * from the journal name the same volume the same way - without which the two
+	 * would never compare equal.
+	 */
+	public RdcwFileChangeSource(Path root, RdcwReadSeam seam, String volumeScope,
+			List<FileSystemChange> catchUpChanges, WatchRecoveryReason startupReason) {
 		this.root = root.toAbsolutePath().normalize();
 		this.seam = seam;
-		this.interpreter = new RdcwChangeInterpreter(this.root);
+		this.interpreter = new RdcwChangeInterpreter(this.root, volumeScope);
 		this.pendingCatchUp = catchUpChanges == null ? List.of() : List.copyOf(catchUpChanges);
 		this.startupReason = startupReason;
 	}
 
 	@Override
-	public List<Path> pollChangedFiles() {
-		List<Path> changed = new ArrayList<>(pendingCatchUp);
+	public List<FileSystemChange> pollChanges() {
+		List<FileSystemChange> changed = new ArrayList<>(pendingCatchUp);
 		pendingCatchUp = List.of();
 
 		RdcwReadResult result = seam.poll();
 
 		overflow |= result.overflowed();
-		changed.addAll(interpreter.interpret(result.relativePaths()));
+		changed.addAll(interpreter.interpret(result.entries()));
 
 		return changed;
 	}
@@ -63,8 +70,8 @@ public class RdcwFileChangeSource implements FileChangeSource {
 	 * poll, and never missed.
 	 */
 	@Override
-	public List<Path> takeOfflineBacklog() {
-		List<Path> backlog = pendingCatchUp;
+	public List<FileSystemChange> takeOfflineBacklog() {
+		List<FileSystemChange> backlog = pendingCatchUp;
 
 		pendingCatchUp = List.of();
 

@@ -43,10 +43,6 @@ public final class PathUtils {
 		return normalize(Path.of(path));
 	}
 
-	public static String normalizeLower(String path) {
-		return normalize(path).toLowerCase(Locale.ROOT);
-	}
-
 	/**
 	 * Builds a LIKE pattern matching every descendant path of {@code folder}. On
 	 * Windows the separator is a backslash, which is a LIKE escape char, and file

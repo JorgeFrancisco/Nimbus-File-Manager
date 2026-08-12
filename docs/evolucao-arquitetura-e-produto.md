@@ -37,6 +37,44 @@ pode ser compartilhado entre contas Windows. Decidir a proteção antes do model
 fechadura sem saber quantas pessoas precisam da chave. Não bloqueia o handoff App → Worker, que já
 está provado de ponta a ponta: o arquivo é lido pelos dois processos exatamente como está.
 
+**A12. O custo do fingerprint de foto é leitura, não decodificação.** Medido em produção e em
+harness, nesta máquina, com a concorrência que o produto usa:
+
+| condição | ms/foto |
+| --- | --- |
+| harness sobre amostra representativa dos pendentes, **cache frio** | **168** |
+| a **mesma** amostra, segunda passada com cache quente | **70** |
+| pipeline real | **177** |
+| o que o Nimbus acrescenta ao ffmpeg | **~9 (≈5%)** |
+
+A diferença entre frio e quente é do cache de páginas do sistema operacional, e é **2,4×** sobre os
+mesmos arquivos. Como o acervo tem centenas de GB, ele nunca está em cache: **produção é sempre
+fria**, e a leitura responde por cerca de 58% do custo.
+
+Isso reposiciona a hipótese que este item carregava antes. Otimizar só o decodificador — JPEG DCT
+scaling e afins — tem **teto de ganho limitado**, porque ataca os ~70 ms da parte quente e não os ~98
+ms de leitura. Mesmo uma decodificação instantânea deixaria a maior parte do custo de pé.
+
+A hipótese que passa a valer é **evitar ler o arquivo inteiro quando já existe representação visual
+suficiente dentro dele** — o thumbnail ou preview embutido no EXIF, que é justamente o que uma
+câmera grava para a própria tela.
+
+Vale para qualquer caminho: alterar os pixels que entram no pHash exige **identidade de algoritmo
+nova** (a identidade cobre decoder, scaler, tamanho da amostra, hash e versão), reprocessamento da
+biblioteca e — o que pesa mais aqui — **validação de que a qualidade da similaridade não regride**.
+Uma preview é menor e recomprimida; ela pode ou não preservar as decisões de agrupamento.
+
+*Investigação, não implementação.* O que precisa ser medido antes de qualquer desenho:
+
+- quantas fotos do acervo têm thumbnail/preview EXIF utilizável;
+- tamanho e resolução dessas previews;
+- custo de extrair só a preview, sem ler nem decodificar o arquivo inteiro;
+- pHash e decisões de similaridade da preview comparados aos do algoritmo atual, sobre os mesmos
+  pares;
+- cobertura resultante e o fallback necessário para os arquivos sem preview.
+
+*Entrega:* o tempo de espera da primeira análise de semelhantes, que hoje é a fila mais longa que o
+produto apresenta a quem acabou de instalar.
 ### Complexidade alta — meses
 
 **A7. Uma instalação, uma biblioteca.** `WATCH_FOLDER` é um `AppSetting` global único. Trocar de

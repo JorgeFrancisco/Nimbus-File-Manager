@@ -12,8 +12,13 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExifMetadataServi
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class MediaMetadataReaderTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	private final ExifMetadataService exifToolService = mock(ExifMetadataService.class);
 	private final MediaInfoService mediaInfoService = mock(MediaInfoService.class);
@@ -37,8 +42,8 @@ class MediaMetadataReaderTest {
 				false, "yuv420p", "bt2020", "smpte2084", "bt2020", 10, 48000, 2, "stereo", null, null, null, "{media}",
 				null);
 
-		when(mediaInfoService.extract(file)).thenReturn(video);
+		when(mediaInfoService.extract(file, metrics)).thenReturn(video);
 
-		Assertions.assertThat(reader.video(file)).isSameAs(video);
+		Assertions.assertThat(reader.video(file, metrics)).isSameAs(video);
 	}
 }

@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -29,6 +30,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 class SimilarityGroupSupportTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, Month.MAY, 1, 10, 0);
+	/** When the file was last written to, which is a moment on the timeline. */
+	private static final Instant WRITTEN_AT = Instant.parse("2026-05-01T10:00:00Z");
 
 	@Test
 	void theKeepIsFirstAndTheReviewCandidatesComeAfterTheDeleteCandidates() {
@@ -60,6 +63,6 @@ class SimilarityGroupSupportTest {
 
 	private DuplicateCandidateFileResponse file(String name, Verdict verdict, Reason reason) {
 		return new DuplicateCandidateFileResponse(UUID.randomUUID(), name, "jpg", "PHOTO", SizeResponse.of(1024),
-				"C:/fotos/" + name, "C:/fotos", NOW, verdict, reason, 1920, 1080, NOW, DateSource.EXIF);
+				"C:/fotos/" + name, "C:/fotos", WRITTEN_AT, verdict, reason, 1920, 1080, NOW, DateSource.EXIF);
 	}
 }

@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -26,28 +25,8 @@ class FileHashServiceTest {
 	void shouldCalculateKnownHashes() throws Exception {
 		Path file = Files.writeString(tempDir.resolve("file.txt"), "abc");
 
-		Assertions.assertThat(service.md5(file)).isEqualTo("900150983cd24fb0d6963f7d28e17f72");
 		Assertions.assertThat(service.sha256(file))
 				.isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
-	}
-
-	@Test
-	void hashesShouldCalculateMd5AndSha256InSingleRead() throws Exception {
-		Path file = Files.writeString(tempDir.resolve("file.txt"), "abc");
-
-		AtomicInteger opens = new AtomicInteger();
-
-		FileHashService combined = new FileHashService(_ -> {
-			opens.incrementAndGet();
-
-			return new ByteArrayInputStream("abc".getBytes(StandardCharsets.UTF_8));
-		});
-
-		var hashes = combined.hashes(file);
-
-		Assertions.assertThat(hashes.md5()).isEqualTo(service.md5(file));
-		Assertions.assertThat(hashes.sha256()).isEqualTo(service.sha256(file));
-		Assertions.assertThat(opens).hasValue(1);
 	}
 
 	/**
@@ -62,7 +41,7 @@ class FileHashServiceTest {
 			throw new IOException("drive went away");
 		});
 
-		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file)).withMessageContaining("unreadable.txt")
+		assertThatIllegalStateException().isThrownBy(() -> failing.sha256(file)).withMessageContaining("unreadable.txt")
 				.withMessageContaining("drive went away");
 	}
 
@@ -76,15 +55,21 @@ class FileHashServiceTest {
 					throw new NoSuchAlgorithmException(algorithm + " missing");
 				});
 
-		assertThatIllegalStateException().isThrownBy(() -> failing.hashes(file))
-				.withMessageContaining("Hash algorithm not available").withMessageContaining("SHA-256 missing");
+		// The failure that explains it is chained, not spliced into the text: the
+		// message says which algorithm was asked for, and the cause says what the
+		// platform answered.
+		assertThatIllegalStateException().isThrownBy(() -> failing.sha256(file))
+				.withMessageContaining("Hash algorithm not available: SHA-256")
+				.withCauseInstanceOf(NoSuchAlgorithmException.class)
+				.havingCause().withMessageContaining("SHA-256 missing");
 	}
 
 	@Test
 	void shouldValidateFileBeforeHashing() {
 		assertThatIllegalArgumentException().isThrownBy(() -> service.sha256(tempDir.resolve("missing.txt")))
 				.withMessageContaining("File does not exist");
-		assertThatIllegalArgumentException().isThrownBy(() -> service.md5(tempDir))
+
+		assertThatIllegalArgumentException().isThrownBy(() -> service.sha256(tempDir))
 				.withMessageContaining("Path is not a regular file");
 	}
 
@@ -108,7 +93,7 @@ class FileHashServiceTest {
 			throw new NoSuchAlgorithmException("missing");
 		});
 
-		Assertions.assertThatThrownBy(() -> failing.md5(file)).isInstanceOf(IllegalStateException.class)
+		Assertions.assertThatThrownBy(() -> failing.sha256(file)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Hash algorithm not available")
 				.hasRootCauseInstanceOf(NoSuchAlgorithmException.class);
 	}

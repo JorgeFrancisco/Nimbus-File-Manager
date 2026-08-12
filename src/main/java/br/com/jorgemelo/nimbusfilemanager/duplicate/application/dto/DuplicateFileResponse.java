@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.SizeResponse;
@@ -16,10 +16,10 @@ public record DuplicateFileResponse(
 
 		String currentPath, String currentFolder,
 
-		LocalDateTime modifiedAt) {
+		Instant modifiedAt) {
 
 	public DuplicateFileResponse(Long id, String fileName, String extension, String fileType, SizeResponse size,
-			String currentPath, String currentFolder, LocalDateTime modifiedAt) {
+			String currentPath, String currentFolder, Instant modifiedAt) {
 		this(UuidV7.fromLegacy(id), fileName, extension, fileType, size, currentPath, currentFolder, modifiedAt);
 	}
 }

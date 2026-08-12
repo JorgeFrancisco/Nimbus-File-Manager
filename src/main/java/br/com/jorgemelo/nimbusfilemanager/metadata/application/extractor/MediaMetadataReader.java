@@ -8,6 +8,7 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExifMetadataServi
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.MediaInfoService;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.PhotoMetadata;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoMetadata;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Reads embedded metadata from a media file, grouping the two readers
@@ -30,7 +31,7 @@ public class MediaMetadataReader {
 		return exifMetadataService.extract(file);
 	}
 
-	public VideoMetadata video(Path file) {
-		return mediaInfoService.extract(file);
+	public VideoMetadata video(Path file, ProcessingMetrics metrics) {
+		return mediaInfoService.extract(file, metrics);
 	}
 }

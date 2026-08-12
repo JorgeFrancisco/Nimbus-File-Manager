@@ -22,6 +22,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.ui.Model;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaLabels;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.CatalogBackupAsyncRunner;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.BackgroundWorkGate;
 import br.com.jorgemelo.nimbusfilemanager.backup.application.dto.BackupSnapshot;
@@ -76,6 +78,13 @@ class SettingsPageRenderTest {
 
 	// Wired into every web slice by WebMvcConfig: the interceptor that holds the
 	// screens off while a restore is replacing the catalog.
+	/**
+	 * The one formatter for a remaining time. A web slice does not load it, and
+	 * the panels these pages render reach it through the progress reader.
+	 */
+	@MockitoBean
+	private EtaLabels etaLabels;
+
 	@MockitoBean
 	private CatalogBackupAsyncRunner catalogBackupAsyncRunner;
 
@@ -145,7 +154,7 @@ class SettingsPageRenderTest {
 			Model model = invocation.getArgument(0);
 
 			model.addAttribute("inventoryRunning", false);
-			model.addAttribute("geoStatus", OfflineGeoDatasetStatus.unavailable("C:/geo", null));
+			model.addAttribute("geoStatus", OfflineGeoDatasetStatus.unavailable("C:/geo"));
 			model.addAttribute("geoImportRunning", false);
 			model.addAttribute("geoRebuildRunning", false);
 			model.addAttribute("geoCacheSize", 0);
@@ -163,7 +172,7 @@ class SettingsPageRenderTest {
 
 			model.addAttribute("toolStatus", MISSING_TOOLS);
 			model.addAttribute("toolInstallRunning", false);
-			model.addAttribute("toolInstallProgress", new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, -1));
+			model.addAttribute("toolInstallProgress", new ToolInstallSnapshot(ToolInstallPhase.IDLE, 0, -1, -1, EtaEstimate.notApplicable()));
 
 			return null;
 		}).when(externalToolSettingsModel).addTo(any(), any());
@@ -195,7 +204,7 @@ class SettingsPageRenderTest {
 
 			model.addAttribute("updateStatus", new UpdateStatus("6.0.0.147", false, null, null, true, false, null));
 			model.addAttribute("updateProgress",
-					new UpdateInstallSnapshot(UpdatePhase.IDLE, false, 0, -1, -1, -1, null));
+					new UpdateInstallSnapshot(UpdatePhase.IDLE, false, 0, -1, -1, null));
 
 			return null;
 		}).when(updateSettingsModel).addTo(any(), any());

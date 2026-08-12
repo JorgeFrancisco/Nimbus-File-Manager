@@ -1,17 +1,16 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.application.fingerprint;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.EtaEstimator;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.EtaEstimate;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 
 /**
  * Whether a fingerprint backlog is being drained, and how much longer it looks
@@ -29,11 +28,11 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.ProgressMath;
 public class FingerprintRunReader {
 
 	private final ExecutionRepository executionRepository;
-	private final Clock clock;
+	private final EtaEstimator etaEstimator;
 
-	public FingerprintRunReader(ExecutionRepository executionRepository, Clock clock) {
+	public FingerprintRunReader(ExecutionRepository executionRepository, EtaEstimator etaEstimator) {
 		this.executionRepository = executionRepository;
-		this.clock = clock;
+		this.etaEstimator = etaEstimator;
 	}
 
 	public Optional<Execution> running(ExecutionType type) {
@@ -46,29 +45,18 @@ public class FingerprintRunReader {
 	}
 
 	/**
-	 * Estimated seconds remaining, or -1 when there is nothing to estimate from.
+	 * How much longer this backlog has to go, from the one estimator the
+	 * application has.
 	 *
 	 * <p>
-	 * Derived from the row rather than from a counter in memory: how long this run
-	 * has been going against how much of what it set out to do it has reached.
+	 * It used to work the answer out here, from elapsed time against the fraction
+	 * reached, and it divided by the wrong counter for years: the drain reports the
+	 * same running count in {@code filesFound} and {@code filesAnalyzed}, so
+	 * dividing by the first divided by the numerator and the remainder came out as
+	 * zero on every poll. The panel said "less than a minute" with a hundred
+	 * thousand files still to hash.
 	 */
-	public long etaSeconds(ExecutionType type) {
-		return running(type).map(this::etaSeconds).orElse(-1L);
-	}
-
-	private long etaSeconds(Execution execution) {
-		if (execution.getStartedAt() == null) {
-			return -1;
-		}
-
-		long elapsed = Duration.between(execution.getStartedAt().atZone(clock.getZone()).toInstant(), clock.instant())
-				.toMillis();
-
-		return ProgressMath.etaSeconds(elapsed, value(execution.getFilesAnalyzed()) + value(execution.getErrors()),
-				value(execution.getFilesFound()));
-	}
-
-	private long value(Integer count) {
-		return count == null ? 0 : count;
+	public EtaEstimate eta(ExecutionType type) {
+		return running(type).map(etaEstimator::estimate).orElse(EtaEstimate.notApplicable());
 	}
 }

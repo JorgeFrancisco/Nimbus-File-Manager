@@ -34,13 +34,16 @@ public class OrganizationReconcileApply {
 
 	private final OrganizationReconcileService organizationReconcileService;
 	private final OperationLockService operationLockService;
-	private final ReconcileApplier reconcileApplier;
+	private final RelocationByContent relocationByContent;
+	private final ReconcileConvergence reconcileConvergence;
 
 	public OrganizationReconcileApply(OrganizationReconcileService organizationReconcileService,
-			OperationLockService operationLockService, ReconcileApplier reconcileApplier) {
+			OperationLockService operationLockService, RelocationByContent relocationByContent,
+			ReconcileConvergence reconcileConvergence) {
 		this.organizationReconcileService = organizationReconcileService;
 		this.operationLockService = operationLockService;
-		this.reconcileApplier = reconcileApplier;
+		this.relocationByContent = relocationByContent;
+		this.reconcileConvergence = reconcileConvergence;
 	}
 
 	/**
@@ -61,7 +64,10 @@ public class OrganizationReconcileApply {
 		try (var _ = operationLockService.acquire(ExecutionType.RECONCILE, request.source())) {
 			Scan scan = organizationReconcileService.scan(request);
 
-			return reconcileApplier.apply(scan);
+			// Before anything is written off. A file whose bytes turned up elsewhere was
+			// never missing, and asking for an inventory of the path holding them would
+			// catalogue the same photograph a second time under a new identity.
+			return reconcileConvergence.apply(relocationByContent.recover(scan));
 		} catch (OperationLockException _) {
 			// Never reconcile against a moving target: end here without touching the
 			// catalog and let the next pass retry - deferred, not dropped.

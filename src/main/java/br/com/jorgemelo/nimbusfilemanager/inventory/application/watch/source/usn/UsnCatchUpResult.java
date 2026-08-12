@@ -1,8 +1,8 @@
 package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.usn;
 
-import java.nio.file.Path;
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
 /**
@@ -15,11 +15,11 @@ import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryRe
  * different facts about the journal and used to be indistinguishable once they
  * reached the watcher.
  *
- * @param offlineChanges the files changed while the app was down.
+ * @param offlineChanges what changed while the app was down.
  * @param recoveryReason why the catalog must be reconciled anyway, or
  * {@code null} when the replay accounted for the whole window.
  */
-public record UsnCatchUpResult(List<Path> offlineChanges, WatchRecoveryReason recoveryReason) {
+public record UsnCatchUpResult(List<FileSystemChange> offlineChanges, WatchRecoveryReason recoveryReason) {
 
 	public UsnCatchUpResult {
 		offlineChanges = offlineChanges == null ? List.of() : List.copyOf(offlineChanges);

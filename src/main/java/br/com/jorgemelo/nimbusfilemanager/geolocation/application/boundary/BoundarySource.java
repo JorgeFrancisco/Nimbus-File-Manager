@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary;
 import java.nio.file.Path;
 import java.util.List;
 
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.AcquiredBoundaries;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 
 /**
@@ -17,9 +18,18 @@ public interface BoundarySource {
 
 	/**
 	 * Ensures the dataset is present under {@code workspaceFolder} and returns the
-	 * per-level GeoJSON files to import. Blocking.
+	 * per-level GeoJSON files to import, saying whether any of them actually
+	 * changed. Blocking.
+	 *
+	 * <p>
+	 * The answer carries {@code changed} because only the source can know it: a
+	 * file the server confirms unchanged and one that was just transferred are the
+	 * same path on disk, and a caller handed paths alone has no choice but to
+	 * rebuild the dataset from files it already imported. An implementation with no
+	 * notion of remote change - an embedded or local-folder one - reports
+	 * {@code true} and is rebuilt from, which is the safe answer.
 	 */
-	List<LeveledBoundaryFile> fetch(Path workspaceFolder);
+	AcquiredBoundaries fetch(Path workspaceFolder);
 
 	/**
 	 * Optional: acquires the files of individual territories whose ISO codes are

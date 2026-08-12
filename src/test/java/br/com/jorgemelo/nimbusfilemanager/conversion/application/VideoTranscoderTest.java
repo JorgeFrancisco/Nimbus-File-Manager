@@ -29,11 +29,15 @@ import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.NameAffixPosit
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.OriginalDisposition;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.enums.VideoEncoder;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.application.ProcessingMetrics;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.dto.ProcessingProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 class VideoTranscoderTest {
+
+	/** This test's own accumulator: nothing here is shared with another run. */
+	private final ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
 
 	private static final TranscodeExecution SUCCESS = new TranscodeExecution(true, 0, "");
 	private static final TranscodeExecution HARDWARE_REJECTED = new TranscodeExecution(true, 1,
@@ -59,7 +63,7 @@ class VideoTranscoderTest {
 
 	VideoTranscoderTest() {
 		when(externalToolPaths.ffmpeg()).thenReturn("ffmpeg");
-		when(validator.validate(any(), any())).thenReturn(Optional.empty());
+		when(validator.validate(any(), any(), any())).thenReturn(Optional.empty());
 	}
 
 	@Test
@@ -67,7 +71,7 @@ class VideoTranscoderTest {
 		stubNaming();
 
 		TranscodeResult result = transcoder(_ -> SUCCESS).transcode(request(AudioHandling.COPY), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.output()).isEqualTo(output);
@@ -84,7 +88,7 @@ class VideoTranscoderTest {
 		stubNaming();
 
 		transcoder(_ -> SUCCESS).transcode(request(AudioHandling.AAC), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(commands.getFirst()).containsSubsequence("-c:a", "aac");
 	}
@@ -95,7 +99,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(attempt -> attempt == 1 ? AUDIO_REJECTED : SUCCESS)
 				.transcode(request(AudioHandling.AUTO), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.audioFallback()).isTrue();
@@ -111,7 +115,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(_ -> new TranscodeExecution(true, 1, "No space left on device"))
 				.transcode(request(AudioHandling.AUTO), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.ENCODER_FAILED);
@@ -126,10 +130,10 @@ class VideoTranscoderTest {
 	void discardsTheOutputWhenValidationRejectsIt() {
 		stubNaming();
 
-		when(validator.validate(output, 120.0)).thenReturn(Optional.of(ConversionFailure.NOT_HEVC));
+		when(validator.validate(output, 120.0, metrics)).thenReturn(Optional.of(ConversionFailure.NOT_HEVC));
 
 		TranscodeResult result = transcoder(_ -> SUCCESS).transcode(request(AudioHandling.COPY), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.NOT_HEVC);
@@ -145,7 +149,7 @@ class VideoTranscoderTest {
 
 		VideoTranscoder transcoder = transcoderReporting(List.of("frame=1", "out_time_us=60000000", "progress=end"));
 
-		transcoder.transcode(request(AudioHandling.COPY), reported::add, notCancelled());
+		transcoder.transcode(request(AudioHandling.COPY), reported::add, notCancelled(), metrics);
 
 		Assertions.assertThat(reported).containsExactly(50);
 	}
@@ -156,7 +160,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(_ -> new TranscodeExecution(false, -1, "FFmpeg was stopped on request"))
 				.transcode(request(AudioHandling.AUTO), _ -> {
-				}, () -> true);
+				}, () -> true, metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.CANCELLED);
@@ -165,7 +169,7 @@ class VideoTranscoderTest {
 		Assertions.assertThat(commands).hasSize(1);
 
 		verify(conversionFileNaming).discard(output);
-		verify(validator, never()).validate(any(), any());
+		verify(validator, never()).validate(any(), any(), any());
 	}
 
 	@Test
@@ -177,7 +181,7 @@ class VideoTranscoderTest {
 		});
 
 		TranscodeResult result = transcoder.transcode(request(AudioHandling.COPY), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.ENCODER_FAILED);
@@ -191,7 +195,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(_ -> new TranscodeExecution(false, -1, "timed out"))
 				.transcode(request(AudioHandling.COPY), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.ENCODER_FAILED);
@@ -206,7 +210,7 @@ class VideoTranscoderTest {
 		});
 
 		TranscodeResult result = transcoder.transcode(request(AudioHandling.COPY), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(result.failure()).isEqualTo(ConversionFailure.ENCODER_FAILED);
@@ -227,7 +231,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(attempt -> attempt == 1 ? DATA_REJECTED : SUCCESS)
 				.transcode(request(AudioHandling.COPY), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.dataDropped()).isTrue();
@@ -245,7 +249,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(attempt -> attempt == 1 ? SUBTITLES_REJECTED : SUCCESS)
 				.transcode(request(AudioHandling.COPY), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(result.subtitlesDropped()).isTrue();
@@ -264,7 +268,7 @@ class VideoTranscoderTest {
 				AudioHandling.COPY, OriginalDisposition.KEEP, "", NameAffixPosition.SUFFIX), true);
 
 		TranscodeResult result = transcoder(_ -> SUCCESS).transcode(remux, _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 		Assertions.assertThat(commands.getFirst()).containsSubsequence("-c:v", "copy");
@@ -286,7 +290,7 @@ class VideoTranscoderTest {
 
 		TranscodeResult result = transcoder(attempt -> attempt == 1 ? HARDWARE_REJECTED : SUCCESS)
 				.transcode(fastRequest(), _ -> {
-				}, notCancelled());
+				}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isTrue();
 
@@ -303,7 +307,7 @@ class VideoTranscoderTest {
 		stubNaming();
 
 		TranscodeResult result = transcoder(_ -> HARDWARE_REJECTED).transcode(request(AudioHandling.COPY), _ -> {
-		}, notCancelled());
+		}, notCancelled(), metrics);
 
 		Assertions.assertThat(result.successful()).isFalse();
 		Assertions.assertThat(commands).hasSize(1);
@@ -345,6 +349,6 @@ class VideoTranscoderTest {
 	private VideoTranscoder build(VideoTranscodeRunner runner) {
 		return new VideoTranscoder(new VideoConversionCommandBuilder(externalToolPaths, hardwareEncoderProbe), runner,
 				validator, new StreamCompatibilityPolicy(), conversionFileNaming, new FfmpegProgressParser(),
-				new ExternalToolGate(new ProcessingProperties(1, 8, 1, 1, 1, 1), new ProcessingMetrics()));
+				new ExternalToolGate(new ProcessingProperties(1, 8, 1, 1, 1, 1)));
 	}
 }

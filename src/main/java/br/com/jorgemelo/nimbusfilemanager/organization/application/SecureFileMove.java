@@ -44,9 +44,13 @@ public class SecureFileMove {
 	 * leaves the source in place; a verification failure throws
 	 * {@link MoveIntegrityException} <em>without</em> rolling back, so the caller
 	 * applies its own rollback/audit policy (mirrors the organization executor).
+	 *
+	 * @return what the target now contains, proved rather than assumed: the size
+	 * and SHA-256 the source had, which the verification has just shown the target
+	 * to match
 	 */
-	public void move(Path source, Path target, boolean overwrite) throws IOException {
-		move(source, target, overwrite, null);
+	public MoveBaseline move(Path source, Path target, boolean overwrite) throws IOException {
+		return move(source, target, overwrite, null);
 	}
 
 	/**
@@ -56,16 +60,29 @@ public class SecureFileMove {
 	 * recognised as this product's own work for as long as the execution
 	 * demonstrably still holds its paths
 	 */
-	public void move(Path source, Path target, boolean overwrite, Long executionId) throws IOException {
+	public MoveBaseline move(Path source, Path target, boolean overwrite, Long executionId) throws IOException {
 		MoveBaseline baseline = capture(source);
 
-		// Announced before the file actually moves, because the folder watcher can
-		// poll the event milliseconds later: every move through here is the
-		// application rearranging its own library, and it updates the catalog itself,
-		// so the watcher has nothing to discover and no reason to re-scan the tree.
-		selfWrittenPathRegistry.announce(source, executionId);
-		selfWrittenPathRegistry.announce(target, executionId);
+		// Both ends announced before the file actually moves, because the folder
+		// watcher can poll the event milliseconds later: every move through here is
+		// the application rearranging its own library, and it updates the catalog
+		// itself, so the watcher has nothing to discover and no reason to re-scan the
+		// tree. The registry runs the move so that a move that never happened takes
+		// its announcement with it, rather than leaving both paths silenced.
+		selfWrittenPathRegistry.move(executionId, () -> place(source, target, overwrite), source, target);
 
+		verifier.verify(source, target, baseline);
+
+		reportIfTheMoveLeftSomethingBehind(source, target);
+
+		// Returned rather than discarded, which is the whole of this change. The bytes
+		// were read twice to prove this value; a caller that needs the digest and does
+		// not get it here reads them a third time, and until now every one of them
+		// either did or went without.
+		return baseline;
+	}
+
+	private static void place(Path source, Path target, boolean overwrite) throws IOException {
 		Path parent = target.getParent();
 
 		if (parent != null) {
@@ -77,10 +94,6 @@ public class SecureFileMove {
 		} else {
 			Files.move(source, target);
 		}
-
-		verifier.verify(source, target, baseline);
-
-		reportIfTheMoveLeftSomethingBehind(source, target);
 	}
 
 	/**
@@ -130,10 +143,16 @@ public class SecureFileMove {
 	/**
 	 * Best-effort physical move-back after a failed post-move step. Returns false
 	 * if it could not.
+	 *
+	 * <p>
+	 * Announced in its own right rather than relying on the move it undoes. The
+	 * two entries that move left behind do cover this one, and only because both
+	 * ends are the same two paths - a coincidence, and not one worth a correct
+	 * outcome depending on.
 	 */
 	public boolean rollback(Path from, Path to) {
 		try {
-			Files.move(from, to);
+			selfWrittenPathRegistry.move(null, () -> Files.move(from, to), from, to);
 
 			return true;
 		} catch (IOException e) {

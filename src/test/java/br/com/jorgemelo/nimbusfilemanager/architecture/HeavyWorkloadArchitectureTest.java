@@ -116,7 +116,7 @@ class HeavyWorkloadArchitectureTest {
 		return javaClass.getMethodCallsFromSelf().stream()
 				.anyMatch(call -> call.getTargetOwner().getName()
 						.equals(ROOT + ".geolocation.application.OfflineGeoDataset")
-						&& call.getName().equals("downloadAndImport"));
+						&& call.getName().equals("bringUpToDate"));
 	}
 
 	private boolean dependsOnAHeavyService(JavaClass javaClass) {

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScanOptions;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.ScannedFile;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ScanExclusionService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
@@ -53,6 +54,38 @@ class FileScannerTest {
 
 		Assertions.assertThat(files).extracting(path -> path.getFileName().toString())
 				.containsExactlyInAnyOrder("photo.jpg", "video.mp4");
+	}
+
+	/**
+	 * A scan reports a percentage, and a percentage needs a denominator that was
+	 * counted by the same rules the walk itself applies - otherwise the bar reaches
+	 * a hundred before the work does, or never gets there.
+	 */
+	@Test
+	void countsExactlyTheFilesTheWalkWouldVisit() throws Exception {
+		Files.writeString(tempDir.resolve("photo.jpg"), "jpg");
+		Files.writeString(tempDir.resolve("skip.tmp"), "tmp");
+
+		Path nested = Files.createDirectory(tempDir.resolve("nested"));
+
+		Files.writeString(nested.resolve("video.mp4"), "mp4");
+
+		ScanOptions options = new ScanOptions(true, true, List.of(".jpg", "mp4"), List.of("tmp"));
+
+		Assertions.assertThat(scanner.count(tempDir, options)).isEqualTo(stream(tempDir, options).size()).isEqualTo(2);
+
+		Assertions.assertThat(scanner.count(tempDir, new ScanOptions(false, true, List.of(), List.of())))
+				.as("the shallow walk counts what the shallow walk visits").isEqualTo(2);
+	}
+
+	@Test
+	void countingSomewhereThatIsNotThereIsRefusedLikeWalkingIt() {
+		Path missing = tempDir.resolve("nowhere");
+
+		ScanOptions options = ScanOptions.defaultOptions();
+
+		Assertions.assertThatThrownBy(() -> scanner.count(missing, options))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -361,9 +394,14 @@ class FileScannerTest {
 		return stream(scanner, sourcePath, options);
 	}
 
+	/**
+	 * What the walk found, as paths. The two facts it also carries - the size and
+	 * the timestamp the operating system handed it - are the subject of their own
+	 * checks; these are about which files are visited at all.
+	 */
 	private List<Path> stream(FileScanner fileScanner, Path sourcePath, ScanOptions options) {
 		try (var stream = fileScanner.stream(sourcePath, options)) {
-			return stream.toList();
+			return stream.map(ScannedFile::path).toList();
 		}
 	}
 

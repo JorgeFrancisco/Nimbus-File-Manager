@@ -640,3 +640,20 @@
 	left: 8px;
 	position: absolute;
 }
+
+/* The other medium's fingerprint, shown while it is the one running. Marked out
+   rather than muted: it is the line that explains why the bar above it is not
+   moving, so it has to read as information and not as a footnote. Both colours
+   are theme tokens, so the accent bar and the text keep their contrast in light
+   and dark alike. */
+.fingerprint-other {
+	background: var(--bg-subtle);
+	border-left: 3px solid var(--progress-step);
+	border-radius: 4px;
+	color: var(--text);
+	padding: 8px 12px;
+}
+
+.fingerprint-other[hidden] {
+	display: none;
+}

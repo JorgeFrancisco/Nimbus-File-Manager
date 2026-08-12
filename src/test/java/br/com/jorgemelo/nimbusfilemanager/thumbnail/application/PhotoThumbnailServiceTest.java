@@ -8,9 +8,6 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,12 +51,12 @@ class PhotoThumbnailServiceTest {
 		graphics.dispose();
 		ImageIO.write(original, "png", source.toFile());
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), modified, 90)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), contentRevision, 90)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		Path target = temp.resolve("cache").resolve(key + ".jpg");
 
@@ -99,12 +96,12 @@ class PhotoThumbnailServiceTest {
 		Path source = temp.resolve("sticker.webp");
 		Files.writeString(source, "not a decodable image");
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), modified, 0)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		Path target = temp.resolve("cache").resolve(key + ".jpg");
 
@@ -124,12 +121,12 @@ class PhotoThumbnailServiceTest {
 	void shouldReturnEmptyWhenTheSourceFileNoLongerExists() throws Exception {
 		UUID id = UUID.randomUUID();
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id)).thenReturn(
-				Optional.of(new PhotoThumbnailSource(id, temp.resolve("gone.jpg").toString(), modified, 0)));
+				Optional.of(new PhotoThumbnailSource(id, temp.resolve("gone.jpg").toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
 				.thenReturn(temp.resolve("cache").resolve(key + ".jpg"));
@@ -149,12 +146,12 @@ class PhotoThumbnailServiceTest {
 
 		UUID id = UUID.randomUUID();
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), modified, 0)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		Path target = temp.resolve("cache").resolve(key + ".jpg");
 
@@ -177,12 +174,12 @@ class PhotoThumbnailServiceTest {
 		Path source = temp.resolve("thumb.webp");
 		Files.copy(fixture, source);
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 12, 9, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), modified, 0)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, source.toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		Path target = temp.resolve("cache").resolve(key + ".jpg");
 
@@ -223,12 +220,12 @@ class PhotoThumbnailServiceTest {
 
 		UUID id = UUID.randomUUID();
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), modified, 0)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, fixture.toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w640";
+		String key = id + "-" + contentRevision + "-w640";
 
 		Path target = temp.resolve("cache").resolve(key + ".jpg");
 
@@ -255,12 +252,12 @@ class PhotoThumbnailServiceTest {
 
 		UUID id = UUID.randomUUID();
 
-		LocalDateTime modified = LocalDateTime.of(2026, Month.JULY, 11, 10, 0);
+		long contentRevision = 4L;
 
 		when(repository.findSource(id))
-				.thenReturn(Optional.of(new PhotoThumbnailSource(id, truncated.toString(), modified, 0)));
+				.thenReturn(Optional.of(new PhotoThumbnailSource(id, truncated.toString(), contentRevision, 0)));
 
-		String key = id + "-" + modified.toEpochSecond(ZoneOffset.UTC) + "-w320";
+		String key = id + "-" + contentRevision + "-w320";
 
 		when(workspaceManager.resolve("cache", "thumbnails", id.toString().substring(0, 2), key + ".jpg"))
 				.thenReturn(temp.resolve("cache").resolve(key + ".jpg"));

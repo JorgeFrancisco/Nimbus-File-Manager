@@ -4,8 +4,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
-import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.PersistedCursor;
+import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 
 /**
  * Reads the USN journal once at startup to recover the changes made while the
@@ -28,18 +29,18 @@ public final class WindowsUsnCatchUp {
 	}
 
 	public static UsnCatchUpResult catchUp(Path root, UsnVolume volume, UsnPathResolver resolver,
-			UsnCursorStore cursorStore, String volumeKey, int bufferBytes) {
-		Optional<PersistedCursor> saved = cursorStore.load(volumeKey);
+			UsnCursorStore cursorStore, String cursorKey, String volumeScope, int bufferBytes) {
+		Optional<PersistedCursor> saved = cursorStore.load(cursorKey);
 
 		boolean canReplay = saved.isPresent() && saved.get().journalId() == volume.journalId()
 				&& saved.get().nextUsn() >= volume.lowestValidUsn();
 
 		long startUsn = canReplay ? saved.get().nextUsn() : volume.nextUsn();
 
-		UsnJournalReader reader = new UsnJournalReader(volume, new UsnChangeInterpreter(root, resolver), bufferBytes,
-				startUsn);
+		UsnJournalReader reader = new UsnJournalReader(volume, new UsnChangeInterpreter(root, volumeScope, resolver),
+				bufferBytes, startUsn);
 
-		List<Path> offlineChanges = List.of();
+		List<FileSystemChange> offlineChanges = List.of();
 
 		WatchRecoveryReason recoveryReason = canReplay ? null : WatchRecoveryReason.JOURNAL_UNREPLAYABLE;
 
@@ -58,7 +59,7 @@ public final class WindowsUsnCatchUp {
 			recoveryReason = WatchRecoveryReason.JOURNAL_UNREPLAYABLE;
 		}
 
-		cursorStore.save(volumeKey, volume.journalId(), reader.nextUsn());
+		cursorStore.save(cursorKey, volume.journalId(), reader.nextUsn());
 
 		return new UsnCatchUpResult(offlineChanges, recoveryReason);
 	}

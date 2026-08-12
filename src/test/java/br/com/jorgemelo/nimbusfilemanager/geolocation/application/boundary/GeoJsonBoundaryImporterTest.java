@@ -10,6 +10,9 @@ import static org.mockito.Mockito.verify;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,8 +25,10 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.GeoDatasetProgress;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.GeoDatasetIdentity;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoDatasetStateRepository;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.persistence.GeoAdminBoundaryImportRepository;
 
 /**
@@ -33,9 +38,15 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.infrastructure.persistence
  */
 class GeoJsonBoundaryImporterTest {
 
+	private static final GeoDatasetIdentity IDENTITY = new GeoDatasetIdentity("TEST", "v1", "Test provider",
+			"Test license");
+
+	private static final LocalDateTime IMPORTED_AT = LocalDateTime.parse("2026-08-16T13:08:11");
+
 	private static final String POLYGON = "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[0,1],[1,1],[1,0],[0,0]]]}";
 
 	private final GeoAdminBoundaryImportRepository boundaryRepository = mock(GeoAdminBoundaryImportRepository.class);
+	private final GeoDatasetStateRepository geoDatasetStateRepository = mock(GeoDatasetStateRepository.class);
 	private final GeoJsonBoundaryReader reader = new GeoJsonBoundaryReader(new ObjectMapper());
 	/**
 	 * Attached to nothing, which is what an import outside a run is: it reports
@@ -63,7 +74,8 @@ class GeoJsonBoundaryImporterTest {
 			return null;
 		}).when(boundaryRepository).batchInsert(any());
 
-		importer = new GeoJsonBoundaryImporter(boundaryRepository, reader, progress);
+		importer = new GeoJsonBoundaryImporter(boundaryRepository, geoDatasetStateRepository, reader, progress,
+				Clock.fixed(IMPORTED_AT.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	@Test
@@ -71,8 +83,7 @@ class GeoJsonBoundaryImporterTest {
 		Path file = write(collection(feature("Brasil", "BRA", POLYGON), feature("EUA", "USA", POLYGON),
 				feature("Unknown", "XXX", POLYGON), feature("", "BRA", POLYGON)));
 
-		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST",
-				"v1");
+		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), IDENTITY);
 
 		Assertions.assertThat(total).isEqualTo(2);
 
@@ -92,7 +103,7 @@ class GeoJsonBoundaryImporterTest {
 
 		List<LeveledBoundaryFile> files = List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file));
 
-		Assertions.assertThatThrownBy(() -> importer.importDataset(files, "TEST", "v1"))
+		Assertions.assertThatThrownBy(() -> importer.importDataset(files, IDENTITY))
 				.isInstanceOf(IllegalStateException.class).hasMessageContaining("no importable polygons");
 	}
 
@@ -101,7 +112,7 @@ class GeoJsonBoundaryImporterTest {
 		// "RegiÃ³n" (double-encoded UTF-8) must be repaired to "Región".
 		Path file = write(collection(feature("RegiÃ³n", "BRA", POLYGON)));
 
-		importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST", "v1");
+		importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), IDENTITY);
 
 		Assertions.assertThat(insertedRows.get(0).getValue("name")).isEqualTo("Región");
 	}
@@ -115,7 +126,7 @@ class GeoJsonBoundaryImporterTest {
 	void importDatasetLeavesNamesThatAreAlreadyRealUnicodeAlone() throws IOException {
 		Path file = write(collection(feature("Hà Nội", "VNM", POLYGON)));
 
-		importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST", "v1");
+		importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), IDENTITY);
 
 		Assertions.assertThat(insertedRows.get(0).getValue("name")).isEqualTo("Hà Nội");
 	}
@@ -129,8 +140,7 @@ class GeoJsonBoundaryImporterTest {
 	void importDatasetSkipsNamelessFeaturesAndTrimsOverlongNames() throws IOException {
 		Path file = write(collection(namelessFeature("BRA", POLYGON), feature("A".repeat(250), "BRA", POLYGON)));
 
-		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST",
-				"v1");
+		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), IDENTITY);
 
 		Assertions.assertThat(total).isEqualTo(1);
 		Assertions.assertThat(insertedRows).hasSize(1);
@@ -163,8 +173,7 @@ class GeoJsonBoundaryImporterTest {
 
 		Path file = write(collection(features.toArray(String[]::new)));
 
-		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), "TEST",
-				"v1");
+		long total = importer.importDataset(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, file)), IDENTITY);
 
 		Assertions.assertThat(total).isEqualTo(501);
 

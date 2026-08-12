@@ -25,6 +25,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -69,7 +71,7 @@ class SimilarityGroupingSweeperIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private SimilarityGroupingRepository groupingRepository;
@@ -252,7 +254,7 @@ class SimilarityGroupingSweeperIntegrationTest {
 	 * index allows one ACTIVE per family.
 	 */
 	private SimilarityGrouping stored(String digest, GroupingStatus status, LocalDateTime computedAt) {
-		return groupingRepository.saveAndFlush(SimilarityGrouping.builder().publicId(UUID.randomUUID())
+		return groupingRepository.saveAndFlush(SimilarityGrouping.builder().similarityGroupingPublicId(UUID.randomUUID())
 				.mediaType(FileType.PHOTO).algorithmId(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(digest(digest))
 				.compositionDigest(digest("composition")).eligibleCount(120).analyzedCount(120).candidateLimit(8000)

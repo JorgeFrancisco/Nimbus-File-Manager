@@ -2,7 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.mapper;
 
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.springframework.stereotype.Component;
 
@@ -19,19 +19,20 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocatio
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.MediaMetadata;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Photo;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Video;
-import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 @Component
 public class CatalogFileMapper {
 
 	private final MediaDateResolver mediaDateResolver;
 	private final VideoRelationInvalidator videoRelationInvalidator;
+	private final CatalogFileLocationMapper catalogFileLocationMapper;
 	private final Clock clock;
 
 	public CatalogFileMapper(MediaDateResolver mediaDateResolver, VideoRelationInvalidator videoRelationInvalidator,
-			Clock clock) {
+			CatalogFileLocationMapper catalogFileLocationMapper, Clock clock) {
 		this.mediaDateResolver = mediaDateResolver;
 		this.videoRelationInvalidator = videoRelationInvalidator;
+		this.catalogFileLocationMapper = catalogFileLocationMapper;
 		this.clock = clock;
 	}
 
@@ -52,25 +53,23 @@ public class CatalogFileMapper {
 	 * catalog returns to what a duplicate analysis may look at, and that is a fact
 	 * about the run rather than about the file
 	 */
-	public boolean updateEntity(CatalogFile catalogFile, Path file, Path sourcePath, MetadataResult metadata) {
+	public boolean updateEntity(CatalogFile catalogFile, Path file, MetadataResult metadata) {
 		VideoComparisonInputs before = VideoComparisonInputs.of(catalogFile);
 
 		boolean wasSetAside = !catalogFile.isActive();
 
-		catalogFile.setFileName(metadata.getFileName());
 		catalogFile.setExtension(metadata.getExtension());
 		catalogFile.setSizeBytes(metadata.getSizeBytes());
 		catalogFile.setSha256(metadata.getSha256());
-		catalogFile.setMd5(metadata.getMd5());
 		catalogFile.setMimeType(metadata.getMimeType());
 		catalogFile.setCreatedAt(metadata.getCreatedAt());
 		catalogFile.setModifiedAt(metadata.getModifiedAt());
 		catalogFile.setFileType(metadata.getFileType());
 		catalogFile.markActive();
-		catalogFile.setLastAnalysis(LocalDateTime.now(clock));
+		catalogFile.setLastAnalysis(Instant.now(clock));
 		catalogFile.setAnalysisVersion("1");
 
-		updateLocation(catalogFile, file, sourcePath);
+		updateLocation(catalogFile, file);
 
 		updateMedia(catalogFile, metadata);
 
@@ -96,26 +95,16 @@ public class CatalogFileMapper {
 		return wasSetAside;
 	}
 
-	private void updateLocation(CatalogFile catalogFile, Path file, Path sourcePath) {
+	private void updateLocation(CatalogFile catalogFile, Path file) {
 		CatalogFileLocation location = catalogFile.getLocation();
 
 		if (location == null) {
-			location = CatalogFileLocation.builder().catalogFile(catalogFile).build();
+			catalogFile.setLocation(catalogFileLocationMapper.create(catalogFile, file));
 
-			catalogFile.setLocation(location);
+			return;
 		}
 
-		Path normalized = PathUtils.normalizePath(file.toString());
-
-		Path parent = requireParent(normalized, "media file");
-
-		location.setCurrentPath(PathUtils.normalize(normalized));
-		location.setCurrentFolder(PathUtils.normalize(parent));
-
-		location.setOriginalPath(normalized.toString());
-		location.setOriginalFolder(PathUtils.normalize(parent));
-
-		location.setInventoryPath(PathUtils.normalize(sourcePath));
+		catalogFileLocationMapper.update(location, file);
 	}
 
 	private void updateMedia(CatalogFile catalogFile, MetadataResult metadata) {
@@ -203,24 +192,15 @@ public class CatalogFileMapper {
 		video.setAudioChannelLayout(metadata.getAudioChannelLayout());
 	}
 
-	public CatalogFile toEntity(Path file, Path sourcePath, MetadataResult metadata) {
-		CatalogFile catalogFile = CatalogFile.builder().fileKey(PathUtils.normalize(file))
-				.fileName(metadata.getFileName()).extension(metadata.getExtension()).sizeBytes(metadata.getSizeBytes())
-				.sha256(metadata.getSha256()).md5(metadata.getMd5()).mimeType(metadata.getMimeType())
-				.createdAt(metadata.getCreatedAt()).modifiedAt(metadata.getModifiedAt())
-				.fileType(metadata.getFileType()).lifecycleStatus(LifecycleStatus.ACTIVE)
-				.lastAnalysis(LocalDateTime.now(clock)).analysisVersion("1").build();
+	public CatalogFile toEntity(Path file, MetadataResult metadata) {
+		CatalogFile catalogFile = CatalogFile.builder().extension(metadata.getExtension())
+				.sizeBytes(metadata.getSizeBytes()).sha256(metadata.getSha256())
+				.mimeType(metadata.getMimeType()).createdAt(metadata.getCreatedAt())
+				.modifiedAt(metadata.getModifiedAt()).fileType(metadata.getFileType())
+				.lifecycleStatus(LifecycleStatus.ACTIVE).lastAnalysis(Instant.now(clock)).analysisVersion("1")
+				.build();
 
-		Path normalized = PathUtils.normalizePath(file.toString());
-
-		Path parent = requireParent(normalized, "media file");
-
-		CatalogFileLocation location = CatalogFileLocation.builder().catalogFile(catalogFile)
-				.currentPath(normalized.toString()).currentFolder(PathUtils.normalize(parent))
-				.originalPath(normalized.toString()).originalFolder(PathUtils.normalize(parent))
-				.inventoryPath(PathUtils.normalize(sourcePath)).build();
-
-		catalogFile.setLocation(location);
+		catalogFile.setLocation(catalogFileLocationMapper.create(catalogFile, file));
 
 		MediaMetadata media = buildMedia(catalogFile, metadata);
 
@@ -243,16 +223,6 @@ public class CatalogFileMapper {
 		}
 
 		return catalogFile;
-	}
-
-	private Path requireParent(Path path, String description) {
-		Path parent = path.getParent();
-
-		if (parent == null) {
-			throw new IllegalArgumentException("A " + description + " path must have a parent directory: " + path);
-		}
-
-		return parent;
 	}
 
 	private MediaMetadata buildMedia(CatalogFile catalogFile, MetadataResult metadata) {

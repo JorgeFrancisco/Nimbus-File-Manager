@@ -5,6 +5,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.Arrays;
@@ -33,6 +34,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 class PhotoSimilarityServiceTest {
 
+	/** What a person reads off the photograph: local by nature, and not a moment. */
+	private static final LocalDateTime CAPTURED_EARLIER = LocalDateTime.of(2023, Month.JANUARY, 1, 10, 0);
+	private static final LocalDateTime CAPTURED_LATER = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+
 	private final MediaFingerprintRepository repository = mock(MediaFingerprintRepository.class);
 	private final MediaQualityRepository mediaQualityRepository = mock(MediaQualityRepository.class);
 	private final SimilarityRelationWriter relationWriter = mock(SimilarityRelationWriter.class);
@@ -41,8 +46,8 @@ class PhotoSimilarityServiceTest {
 
 	@Test
 	void identicalSsimSamplesGroupAndDisplayOneHundredPercent() {
-		LocalDateTime older = LocalDateTime.of(2023, Month.JANUARY, 1, 10, 0);
-		LocalDateTime newer = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		Instant older = Instant.parse("2023-01-01T10:00:00Z");
+		Instant newer = Instant.parse("2024-01-01T10:00:00Z");
 
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
 				.thenReturn(List.of(photo(1L, hash(0), sample(100), older),
@@ -52,10 +57,11 @@ class PhotoSimilarityServiceTest {
 		UUID id2 = UuidV7.fromLegacy(2L);
 		UUID id3 = UuidV7.fromLegacy(3L);
 
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(
-				List.of(new MediaQuality(id1, 100, 100, older, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-						new MediaQuality(id2, 100, 100, newer, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-						new MediaQuality(id3, 100, 100, older, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(
+				new MediaQuality(id1, 100, 100, CAPTURED_EARLIER, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
+				new MediaQuality(id2, 100, 100, CAPTURED_LATER, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
+				new MediaQuality(id3, 100, 100, CAPTURED_EARLIER, true, MediaSubcategory.CAMERA, DateSource.EXIF,
+						true)));
 
 		List<AnalyzedGroup> result = service(new LuminanceSsimService()).analyze(70, (_, _) -> {
 		}).groups();
@@ -71,7 +77,7 @@ class PhotoSimilarityServiceTest {
 
 	@Test
 	void excludedFileIsDroppedBeforeGroupingSoItsGroupNeverForms() {
-		LocalDateTime when = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		Instant when = Instant.parse("2024-01-01T10:00:00Z");
 
 		when(repository.findFingerprintedPhotos(any(), any(), any())).thenReturn(
 				List.of(photo(1L, hash(0), sample(100), when), photo(2L, hash(0), sample(100), when)));
@@ -87,7 +93,7 @@ class PhotoSimilarityServiceTest {
 
 	@Test
 	void excludedFolderDropsTheFolderAndItsSubfoldersButKeepsUnrelatedPhotos() {
-		LocalDateTime when = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		Instant when = Instant.parse("2024-01-01T10:00:00Z");
 
 		// Two identical photos in an excluded folder and its subfolder (must be
 		// dropped),
@@ -110,8 +116,8 @@ class PhotoSimilarityServiceTest {
 	@Test
 	void identicalPHashDoesNotOverrideLowSsim() {
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(0), LocalDateTime.now()),
-						photo(2L, hash(0), sample(255), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(0), Instant.now()),
+						photo(2L, hash(0), sample(255), Instant.now())));
 
 		Assertions.assertThat(service(new LuminanceSsimService()).analyze(70, (_, _) -> {
 		}).groups()).isEmpty();
@@ -123,8 +129,8 @@ class PhotoSimilarityServiceTest {
 
 		when(ssim.similarityPercent(any(), any())).thenReturn(60);
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(1), LocalDateTime.now()),
-						photo(2L, hash(0), sample(2), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(1), Instant.now()),
+						photo(2L, hash(0), sample(2), Instant.now())));
 
 		Assertions.assertThat(service(ssim).analyze(50, (_, _) -> {
 		}).groups()).isEmpty();
@@ -133,8 +139,8 @@ class PhotoSimilarityServiceTest {
 	@Test
 	void requestAboveCeilingIsClampedToExactSsimOnly() {
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(0), sample(100), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(100), Instant.now()),
+						photo(2L, hash(0), sample(100), Instant.now())));
 
 		Assertions.assertThat(service(new LuminanceSsimService()).analyze(150, (_, _) -> {
 		}).groups()).hasSize(1);
@@ -143,8 +149,8 @@ class PhotoSimilarityServiceTest {
 	@Test
 	void pHashBeyondCandidateRadiusIsRejectedBeforeSsim() {
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(100), LocalDateTime.now()),
-						photo(2L, hash(255), sample(100), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(100), Instant.now()),
+						photo(2L, hash(255), sample(100), Instant.now())));
 
 		Assertions.assertThat(service(new LuminanceSsimService()).analyze(70, (_, _) -> {
 		}).groups()).isEmpty();
@@ -160,9 +166,9 @@ class PhotoSimilarityServiceTest {
 			return Math.abs(first - second) <= 1 ? 90 : 80;
 		});
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(1), LocalDateTime.now()),
-						photo(2L, hash(0), sample(2), LocalDateTime.now()),
-						photo(3L, hash(0), sample(3), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(1), Instant.now()),
+						photo(2L, hash(0), sample(2), Instant.now()),
+						photo(3L, hash(0), sample(3), Instant.now())));
 
 		List<AnalyzedGroup> result = service(ssim).analyze(90, (_, _) -> {
 		}).groups();
@@ -174,10 +180,10 @@ class PhotoSimilarityServiceTest {
 	@Test
 	void distantClustersBecomeSeparateGroups() {
 		when(repository.findFingerprintedPhotos(any(), any(), any()))
-				.thenReturn(List.of(photo(1L, hash(0), sample(10), LocalDateTime.now()),
-						photo(2L, hash(0), sample(10), LocalDateTime.now()),
-						photo(3L, hash(255), sample(20), LocalDateTime.now()),
-						photo(4L, hash(255), sample(20), LocalDateTime.now())));
+				.thenReturn(List.of(photo(1L, hash(0), sample(10), Instant.now()),
+						photo(2L, hash(0), sample(10), Instant.now()),
+						photo(3L, hash(255), sample(20), Instant.now()),
+						photo(4L, hash(255), sample(20), Instant.now())));
 
 		List<AnalyzedGroup> result = service(new LuminanceSsimService()).analyze(70, (_, _) -> {
 		}).groups();
@@ -188,13 +194,13 @@ class PhotoSimilarityServiceTest {
 		Assertions.assertThat(result.get(1).members()).hasSize(2);
 	}
 
-	private PhotoHashRawResponse photo(Long id, byte[] phash, byte[] luminance, LocalDateTime modifiedAt) {
+	private PhotoHashRawResponse photo(Long id, byte[] phash, byte[] luminance, Instant modifiedAt) {
 		return new PhotoHashRawResponse(id, phash, luminance, id + ".jpg", "jpg", 100, "C:/" + id + ".jpg", "C:/",
 				modifiedAt);
 	}
 
 	private PhotoHashRawResponse photoIn(Long id, String folder, byte[] phash, byte[] luminance,
-			LocalDateTime modifiedAt) {
+			Instant modifiedAt) {
 		return new PhotoHashRawResponse(id, phash, luminance, id + ".jpg", "jpg", 100, folder + "/" + id + ".jpg",
 				folder, modifiedAt);
 	}
@@ -276,7 +282,7 @@ class PhotoSimilarityServiceTest {
 	}
 
 	private PhotoSimilarityService service(LuminanceSsimService ssim) {
-		lenient().when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of());
+		lenient().when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of());
 
 		return new PhotoSimilarityService(repository,
 				new DuplicateGroupAssembler(new DuplicateKeepPolicy(), mediaQualityRepository), ssim, exclusions,

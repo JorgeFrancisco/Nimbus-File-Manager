@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.metadata.application.extractor;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.ExtensionUtils;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 @Service
 public class MetadataExtractor {
@@ -50,7 +52,7 @@ public class MetadataExtractor {
 		this.mediaOrientationResolver = mediaOrientationResolver;
 	}
 
-	public MetadataResult extract(Path file, MetadataOptions options) {
+	public MetadataResult extract(Path file, MetadataOptions options, ProcessingMetrics metrics) {
 		if (options == null) {
 			options = new MetadataOptions(false, false);
 		}
@@ -62,27 +64,28 @@ public class MetadataExtractor {
 		FileType fileType = excludedMediaContainer ? FileType.OTHER : FileType.resolve(file, mimeType);
 
 		FileSystemDates fileSystemDates = dateSourceService.resolveFileSystemDates(file);
-		LocalDateTime createdAt = fileSystemDates.createdAt();
-		LocalDateTime modifiedAt = fileSystemDates.modifiedAt();
+		Instant createdAt = fileSystemDates.createdAt();
+		Instant modifiedAt = fileSystemDates.modifiedAt();
 
 		String sha256 = null;
-		String md5 = null;
 
 		if (options.calculateHashes() && !excludedMediaContainer) {
-			var hashes = fileHashService.hashes(file);
-
-			sha256 = hashes.sha256();
-			md5 = hashes.md5();
+			sha256 = fileHashService.sha256(file);
 		}
 
 		PhotoMetadata photo = fileType.isPhoto() ? mediaMetadataReader.photo(file) : null;
-		VideoMetadata video = fileType.isVideo() ? mediaMetadataReader.video(file) : null;
+		VideoMetadata video = fileType.isVideo() ? mediaMetadataReader.video(file, metrics) : null;
 
 		LocalDateTime fileNameDate = dateSourceService.resolveFromFileName(file);
 		LocalDateTime folderLayoutDate = dateSourceService.resolveFromFolderLayout(file);
 
-		ResolvedCaptureDate resolved = resolveCaptureDate(photo, video, fileNameDate, folderLayoutDate, createdAt,
-				modifiedAt);
+		// Filesystem timestamps stop being instants here, and only here: from this line
+		// on they are candidate capture dates, which are local by nature.
+		LocalDateTime createdLocal = dateSourceService.asCaptureDate(createdAt);
+		LocalDateTime modifiedLocal = dateSourceService.asCaptureDate(modifiedAt);
+
+		ResolvedCaptureDate resolved = resolveCaptureDate(photo, video, fileNameDate, folderLayoutDate, createdLocal,
+				modifiedLocal);
 
 		LocalDateTime captureDate = resolved.captureDate();
 
@@ -90,7 +93,7 @@ public class MetadataExtractor {
 
 		// A name-derived day (midnight) gains the real time-of-day when a filesystem
 		// timestamp of the same day corroborates it (source -> FILE_NAME_CONFIRMED).
-		var refinedDate = captureDateRefiner.refine(captureDate, dateSource, createdAt, modifiedAt);
+		var refinedDate = captureDateRefiner.refine(captureDate, dateSource, createdLocal, modifiedLocal);
 
 		captureDate = refinedDate.captureDate();
 		dateSource = refinedDate.dateSource();
@@ -129,7 +132,7 @@ public class MetadataExtractor {
 		MetadataResult.MetadataResultBuilder builder = MetadataResult.builder().fileName(file.getFileName().toString())
 				.extension(ExtensionUtils.fromPath(file)).sizeBytes(getSize(file))
 
-				.sha256(sha256).md5(md5).mimeType(mimeType).fileType(fileType)
+				.sha256(sha256).mimeType(mimeType).fileType(fileType)
 
 				.createdAt(createdAt).modifiedAt(modifiedAt)
 

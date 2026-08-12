@@ -89,7 +89,7 @@ public class OrganizationService {
 	}
 
 	public Optional<StoredPlanPage> planPagePublic(UUID executionId, int page, int size, boolean onlyConflicts) {
-		return executionRepository.findByPublicId(executionId)
+		return executionRepository.findByExecutionPublicId(executionId)
 				.flatMap(execution -> organizationPlanReader.page(execution.getId(), page, size, onlyConflicts));
 	}
 
@@ -103,7 +103,7 @@ public class OrganizationService {
 	}
 
 	private Execution findExecution(UUID publicId) {
-		return executionRepository.findByPublicId(publicId)
+		return executionRepository.findByExecutionPublicId(publicId)
 				.orElseThrow(() -> new IllegalArgumentException("Execution not found: " + publicId));
 	}
 

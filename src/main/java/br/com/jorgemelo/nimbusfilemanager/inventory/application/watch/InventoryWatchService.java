@@ -30,6 +30,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionRes
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryLauncherService;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryWatchStatus;
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSource;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.watch.source.FileChangeSourceFactory;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
@@ -58,6 +59,16 @@ public class InventoryWatchService extends LocalizedComponent {
 	private static final long DEBOUNCE_MILLIS = 2_000;
 	private static final long SHUTDOWN_DRAIN_MILLIS = 2_000;
 
+	/**
+	 * How many changes one poll will try to recognise before handing the rest to
+	 * the debounced pass. A burst that large is one the pass covers anyway, and
+	 * recognising each of them costs a round trip on the thread that also has to
+	 * notice a reconfiguration - so past this point the walk is both cheaper and
+	 * complete. Nothing is dropped: what is not recognised raises the pending, as
+	 * it always did.
+	 */
+	private static final int RECOGNITION_BUDGET_PER_POLL = 500;
+
 	private final AppSettingService appSettingService;
 	private final InventoryLauncherService inventoryLauncherService;
 	private final ExecutionQueryService executionQueryService;
@@ -65,6 +76,7 @@ public class InventoryWatchService extends LocalizedComponent {
 	private final ExecutionRepository executionRepository;
 	private final OperationLockService operationLockService;
 	private final FileChangeSourceFactory fileChangeSourceFactory;
+	private final FileChangeRecognition fileChangeRecognition;
 	private final BackgroundWorkGate backgroundWorkGate;
 	private final Clock clock;
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -114,7 +126,8 @@ public class InventoryWatchService extends LocalizedComponent {
 			InventoryLauncherService inventoryLauncherService, ExecutionQueryService executionQueryService,
 			ExecutionEnqueueService executionEnqueueService, ExecutionRepository executionRepository,
 			OperationLockService operationLockService, FileChangeSourceFactory fileChangeSourceFactory, Clock clock,
-			InventoryWatchProperties watchProperties, BackgroundWorkGate backgroundWorkGate) {
+			InventoryWatchProperties watchProperties, BackgroundWorkGate backgroundWorkGate,
+			FileChangeRecognition fileChangeRecognition) {
 		this.appSettingService = appSettingService;
 		this.inventoryLauncherService = inventoryLauncherService;
 		this.executionQueryService = executionQueryService;
@@ -122,6 +135,7 @@ public class InventoryWatchService extends LocalizedComponent {
 		this.executionRepository = executionRepository;
 		this.operationLockService = operationLockService;
 		this.fileChangeSourceFactory = fileChangeSourceFactory;
+		this.fileChangeRecognition = fileChangeRecognition;
 		this.backgroundWorkGate = backgroundWorkGate;
 		this.clock = clock;
 
@@ -317,13 +331,13 @@ public class InventoryWatchService extends LocalizedComponent {
 			return;
 		}
 
-		List<Path> backlog = source.takeOfflineBacklog();
+		List<FileSystemChange> backlog = source.takeOfflineBacklog();
 
 		if (backlog.isEmpty()) {
 			return;
 		}
 
-		long gone = backlog.stream().filter(path -> !Files.exists(path)).count();
+		long gone = backlog.stream().filter(change -> !Files.exists(change.path())).count();
 
 		String reason = backlog.size() + " offline change(s) recovered from the USN journal";
 
@@ -469,13 +483,36 @@ public class InventoryWatchService extends LocalizedComponent {
 			return false;
 		}
 
-		log.info("The monitored library became {} (recursive={}); the watcher was following {} (recursive={})",
-				configured, appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true), watched,
-				watchedRecursive);
+		announceAdoption(configured, watched);
 
 		adoptAndInventory();
 
 		return true;
+	}
+
+	/**
+	 * Says which of the two things happened, because they are not the same thing
+	 * and only one of them has a "before".
+	 *
+	 * <p>
+	 * A watcher that has adopted nothing yet holds the unconfigured status - an
+	 * empty folder - and {@code watchedRecursive} still carries the default of a
+	 * field nobody has assigned. Reporting those as the previous configuration
+	 * printed an empty path and {@code recursive=false} at every startup, which
+	 * reads as a library that was being followed without recursion. Nothing was:
+	 * there was no previous configuration to report.
+	 */
+	private void announceAdoption(String configured, String watched) {
+		boolean recursive = appSettingService.booleanValue(SettingsConstants.WATCH_RECURSIVE, true);
+
+		if (watched.isBlank()) {
+			log.info("The inventory watcher adopted the configured library {} (recursive={})", configured, recursive);
+
+			return;
+		}
+
+		log.info("The monitored library became {} (recursive={}); it was previously following {} (recursive={})",
+				configured, recursive, watched, watchedRecursive);
 	}
 
 	/**
@@ -539,15 +576,34 @@ public class InventoryWatchService extends LocalizedComponent {
 		// come through for the opposite reason, so that reconcile can retire them.
 		// Screening this list by PhysicalFilePolicy, which reads as the obvious
 		// tidying, is what would drop those folders.
-		for (Path changed : currentWatcher.pollChangedFiles()) {
-			lastEventMillis = System.currentTimeMillis();
+		int budget = RECOGNITION_BUDGET_PER_POLL;
 
-			raiseUncoveredPending(changed.toString());
+		for (FileSystemChange changed : currentWatcher.pollChanges()) {
+			lastEventMillis = System.currentTimeMillis();
 
 			status.set(new InventoryWatchStatus(status.get().folder(), true, true, LocalDateTime.now(clock), null,
 					null, 0));
 
-			log.debug("File-system change detected: {}", changed);
+			log.debug("File-system change detected: {} {} (source {})", changed.kind(), changed.path(),
+					changed.source());
+
+			// A change the catalog could account for by itself asks for nothing else.
+			// That is the whole point of carrying the evidence this far: one file
+			// renamed used to mean walking a library of a hundred thousand.
+			if (budget > 0 && fileChangeRecognition.recognise(changed)) {
+				budget--;
+
+				continue;
+			}
+
+			if (budget == 0) {
+				log.info("More than {} changes arrived in one poll; the rest are left to the debounced pass",
+						RECOGNITION_BUDGET_PER_POLL);
+
+				budget--;
+			}
+
+			raiseUncoveredPending(changed.kind() + " " + changed.path());
 		}
 
 		currentWatcher.consumeRecoveryReason().ifPresent(this::requestRecovery);
@@ -665,7 +721,8 @@ public class InventoryWatchService extends LocalizedComponent {
 
 		offlineBacklogCoveredBy = null;
 
-		ExecutionStatus covered = executionRepository.findByPublicId(covering).map(Execution::getStatus).orElse(null);
+		ExecutionStatus covered = executionRepository.findByExecutionPublicId(covering).map(Execution::getStatus)
+				.orElse(null);
 
 		if (covered != ExecutionStatus.FINISHED) {
 			log.info("The inventory that was to cover {} offline change(s) ended as {}: recovering them the "

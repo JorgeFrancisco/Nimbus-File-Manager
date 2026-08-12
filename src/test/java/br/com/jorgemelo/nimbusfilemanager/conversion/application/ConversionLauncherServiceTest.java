@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.constants.ConversionConstants;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionExecutePayload;
 import br.com.jorgemelo.nimbusfilemanager.conversion.application.dto.ConversionOptions;
@@ -29,10 +30,10 @@ import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueue
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.ExecutionLabels;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
@@ -63,13 +64,13 @@ class ConversionLauncherServiceTest {
 		UUID first = UUID.randomUUID();
 		UUID second = UUID.randomUUID();
 
-		when(catalogFileRepository.findByPublicIdIn(new UUID[] { first, second }))
-				.thenReturn(List.of(CatalogFile.builder().fileKey(library.resolve("clip.mp4").toString()).build()));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(new UUID[] { first, second }))
+				.thenReturn(List.of(CatalogFiles.at(library.resolve("clip.mp4"))));
 		when(executionEnqueueService.enqueue(any())).thenAnswer(invocation -> {
 			Execution queued = invocation.getArgument(0);
 
 			queued.setStatus(ExecutionStatus.PENDING);
-			queued.setPublicId(UUID.randomUUID());
+			queued.setExecutionPublicId(UUID.randomUUID());
 
 			return Optional.of(queued);
 		});
@@ -116,9 +117,8 @@ class ConversionLauncherServiceTest {
 	void raisesWhenTheQueueRefusesARequestThatCannotBeADuplicate() {
 		UUID video = UUID.randomUUID();
 
-		when(catalogFileRepository.findByPublicIdIn(new UUID[] { video })).thenReturn(
-				List.of(CatalogFile.builder().fileKey(tempDir.resolve("library").resolve("clip.mp4").toString())
-						.build()));
+		when(catalogFileRepository.findByCatalogFilePublicIdIn(new UUID[] { video }))
+				.thenReturn(List.of(CatalogFiles.at(tempDir.resolve("library").resolve("clip.mp4"))));
 		when(executionEnqueueService.enqueue(any())).thenReturn(Optional.empty());
 
 		ConversionLauncherService launcher = launcher();
@@ -132,7 +132,8 @@ class ConversionLauncherServiceTest {
 
 	private ConversionLauncherService launcher() {
 		return new ConversionLauncherService(catalogFileRepository, executionEnqueueService, executionPayloadCodec,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class)),
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class),
+						Progress.reader(), Progress.estimator()),
 				new ExecutionMessageCodec(new ObjectMapper()));
 	}
 }

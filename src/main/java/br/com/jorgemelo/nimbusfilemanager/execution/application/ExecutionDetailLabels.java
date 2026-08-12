@@ -22,12 +22,11 @@ public class ExecutionDetailLabels extends LocalizedComponent {
 
 	public String movementStatus(MovementStatus status) {
 		return switch (status) {
-		case SIMULATED -> message("backend.movement.status.simulated");
+		case PENDING -> message("backend.movement.status.pending");
 		case MOVED -> message("backend.movement.status.moved");
 		case SKIPPED -> message("backend.movement.status.skipped");
 		case ERROR -> message("backend.movement.status.error");
 		case UNDONE -> message("backend.movement.status.undone");
-		case UNDO_ERROR -> message("backend.movement.status.undoError");
 		};
 	}
 

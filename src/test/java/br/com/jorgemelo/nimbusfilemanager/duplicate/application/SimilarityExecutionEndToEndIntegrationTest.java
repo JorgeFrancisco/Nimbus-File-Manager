@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -24,12 +25,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -43,25 +46,31 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.enums.SimilarityRunMo
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.model.MediaFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionEnqueueService;
+import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.facade.MetadataFacade;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.model.MetadataResult;
-import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionPayloadCodec;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.QuarantineRestoreLauncher;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineRestoreOptions;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
-import br.com.jorgemelo.nimbusfilemanager.shared.application.catalog.CatalogMutations;
+import br.com.jorgemelo.nimbusfilemanager.shared.CatalogFiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventEvidence;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.CatalogEventSources;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.constants.NimbusProfiles;
+import br.com.jorgemelo.nimbusfilemanager.shared.application.dto.CatalogFactProvenance;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.FileType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.MediaSubcategory;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.persistence.CatalogLifecycleWriter;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -110,7 +119,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	@Autowired
 	private SimilarityLauncher similarityLauncher;
@@ -146,7 +155,10 @@ class SimilarityExecutionEndToEndIntegrationTest {
 	private ConversionLauncherService conversionLauncherService;
 
 	@Autowired
-	private CatalogMutations catalogMutations;
+	private CatalogFileLocationRepository catalogFileLocationRepository;
+
+	@Autowired
+	private CatalogLifecycleWriter catalogLifecycleWriter;
 
 	/**
 	 * The encoder, and only the encoder. Everything the revival test is about -
@@ -194,6 +206,11 @@ class SimilarityExecutionEndToEndIntegrationTest {
 		jdbcTemplate.update("DELETE FROM movement");
 		jdbcTemplate.update("DELETE FROM catalog_file");
 		jdbcTemplate.update("DELETE FROM execution");
+
+		// The one exclusion table nothing above reaches: file exclusions go with the
+		// catalog rows they belong to, a hidden folder belongs to nobody and would
+		// outlive the test that hid it.
+		jdbcTemplate.update("DELETE FROM duplicate_folder_exclusion");
 
 		// The quarantine root is a setting, and a setting outlives the test that wrote
 		// it - a leftover temporary folder would answer "configured" for whoever runs
@@ -271,7 +288,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		int relationsBefore = relationCount();
 
-		assertThat(duplicateExclusionService.excludeFile(excluded.getPublicId())).isTrue();
+		assertThat(duplicateExclusionService.excludeFile(excluded.getCatalogFilePublicId())).isTrue();
 
 		Execution finished = awaitTerminalOf(SimilarityRunMode.REGROUP);
 
@@ -281,6 +298,33 @@ class SimilarityExecutionEndToEndIntegrationTest {
 		assertThat(modeOf(finished)).isEqualTo(SimilarityRunMode.REGROUP);
 		assertThat(relationCount()).as("exclusion is not deletion: what was computed is still stored")
 				.isEqualTo(relationsBefore);
+	}
+
+	/**
+	 * The same reachability for the other half of the exclusion screen. Hiding a
+	 * folder is a second publish in the same service, and it could have been left
+	 * unwired without a single test noticing - the file case above would go on
+	 * passing, and a user who hid a folder would be told the analysis was current
+	 * while it was computed over files that are no longer allowed in it.
+	 */
+	@Test
+	void excludingAFolderTheWayTheScreenDoesEndsInARegroupToo(@TempDir Path hidden) {
+		photo();
+		photo();
+
+		awaitTerminal(similarityLauncher.launchPhotos(MINIMUM).getId());
+
+		int relationsBefore = relationCount();
+
+		assertThat(duplicateExclusionService.excludeFolder(hidden.toString())).isTrue();
+
+		Execution finished = awaitTerminalOf(SimilarityRunMode.REGROUP);
+
+		assertThat(finished.getStatus()).isEqualTo(ExecutionStatus.FINISHED);
+		assertThat(finished.getClaimedBy()).as("a worker really took it").isNotNull();
+
+		assertThat(modeOf(finished)).isEqualTo(SimilarityRunMode.REGROUP);
+		assertThat(relationCount()).as("hiding a folder is not deletion either").isEqualTo(relationsBefore);
 	}
 
 	/**
@@ -335,7 +379,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 	void anExclusionBeforeAnyAnalysisAsksForNothing() {
 		CatalogFile never = photo();
 
-		assertThat(duplicateExclusionService.excludeFile(never.getPublicId())).isTrue();
+		assertThat(duplicateExclusionService.excludeFile(never.getCatalogFilePublicId())).isTrue();
 
 		assertThat(newestOf(SimilarityRunMode.REGROUP)).as("no analysed threshold, no regroup").isNull();
 	}
@@ -376,7 +420,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		Long beforeQuarantine = newestOf(SimilarityRunMode.REGROUP);
 
-		duplicateDeletionLauncherService.launch(List.of(removed.getPublicId()));
+		duplicateDeletionLauncherService.launch(List.of(removed.getCatalogFilePublicId()));
 
 		awaitTerminal(newestOfType(ExecutionType.DEDUP_DELETE));
 
@@ -418,15 +462,16 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		Files.writeString(file, "photo " + file.getFileName());
 
-		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file))
-				.fileName(file.getFileName().toString()).extension("jpg").sizeBytes(Files.size(file))
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).build();
+		CatalogFile stored = CatalogFile.builder()
+				.extension("jpg").sizeBytes(Files.size(file))
+				.modifiedAt(Instant.now()).fileType(FileType.PHOTO).build();
 
 		stored.setLocation(CatalogFileLocation.builder().catalogFile(stored).currentPath(PathUtils.normalize(file))
-				.currentFolder(PathUtils.normalize(library)).originalPath(PathUtils.normalize(file))
-				.originalFolder(PathUtils.normalize(library)).inventoryPath(PathUtils.normalize(library)).build());
+				.currentFolder(PathUtils.normalize(library))
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		CatalogFile saved = catalogFileRepository.saveAndFlush(stored);
+		CatalogFile saved = CatalogFiles.catalogued(new TransactionTemplate(transactionManager),
+				catalogFileRepository, catalogFileLocationRepository, stored);
 
 		mediaFingerprintRepository.saveAndFlush(MediaFingerprint.builder().catalogFileId(saved.getId())
 				.kind(FingerprintKind.PHOTO_PHASH).algorithm(FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1)
@@ -443,7 +488,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 	/** The row the Quarentena screen would offer a restore for. */
 	private UUID quarantinedMovementOf(CatalogFile file) {
-		return jdbcTemplate.queryForObject("SELECT public_id FROM movement WHERE catalog_file_id = ?"
+		return jdbcTemplate.queryForObject("SELECT movement_public_id FROM movement WHERE catalog_file_id = ?"
 				+ " AND status = 'MOVED' ORDER BY id DESC LIMIT 1", UUID.class, file.getId());
 	}
 
@@ -495,16 +540,17 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		awaitTerminal(similarityLauncher.launchPhotos(MINIMUM).getId());
 
-		assertThat(similarityViewService.photos(MINIMUM, PageRequest.of(0, 10)).outdated())
+		assertThat(similarityViewService.outdated(ExecutionType.SIMILARITY_PHOTO, MINIMUM).orElseThrow())
 				.as("the answer describes the library as it is").isFalse();
 
 		doThrow(new IllegalStateException("no transaction is in progress")).when(executionEnqueueService)
 				.enqueueOrExisting(any());
 
-		assertThat(duplicateExclusionService.excludeFile(excluded.getPublicId()))
+		assertThat(duplicateExclusionService.excludeFile(excluded.getCatalogFilePublicId()))
 				.as("the mutation is not turned into a failure by what happens after it").isTrue();
 
-		assertThat(duplicateExclusionService.excludedFilePublicIds()).containsExactly(excluded.getPublicId());
+		assertThat(duplicateExclusionService.excludedFilePublicIds())
+				.containsExactly(excluded.getCatalogFilePublicId());
 		assertThat(newestOf(SimilarityRunMode.REGROUP)).as("nothing was queued, which is the point").isNull();
 
 		assertThat(similarityViewService.photos(MINIMUM, PageRequest.of(0, 10)).published())
@@ -536,11 +582,11 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		awaitTerminal(similarityLauncher.launchPhotos(MINIMUM).getId());
 
-		assertThat(similarityViewService.photos(MINIMUM, PageRequest.of(0, 10)).outdated()).isFalse();
+		assertThat(similarityViewService.outdated(ExecutionType.SIMILARITY_PHOTO, MINIMUM).orElseThrow()).isFalse();
 
 		jdbcTemplate.update("UPDATE catalog_file SET lifecycle_status = 'DELETED' WHERE id = ?", vanished.getId());
 
-		assertThat(similarityViewService.photos(MINIMUM, PageRequest.of(0, 10)).outdated())
+		assertThat(similarityViewService.outdated(ExecutionType.SIMILARITY_PHOTO, MINIMUM).orElseThrow())
 				.as("the answer is still served, and it is served as one the library has moved past").isTrue();
 	}
 
@@ -551,7 +597,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 	 */
 	private void excludeAndThenFail(CatalogFile doomed) {
 		new TransactionTemplate(transactionManager).executeWithoutResult(_ -> {
-			duplicateExclusionService.excludeFile(doomed.getPublicId());
+			duplicateExclusionService.excludeFile(doomed.getCatalogFilePublicId());
 
 			throw new IllegalStateException("the operation failed after the exclusion was written");
 		});
@@ -599,13 +645,14 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		CatalogFile original = videoOnDisk(library);
 
-		Path output = library.resolve(original.getFileName().replace(".mp4", "_H265.mp4"));
+		Path output = library.resolve(original.getLocation().fileName().replace(".mp4", "_H265.mp4"));
 
 		encodes(workspace, output);
 
 		convertThroughTheWorker(original);
 
-		CatalogFile produced = catalogFileRepository.findByFileKey(PathUtils.normalize(output)).orElseThrow();
+		CatalogFile produced = catalogFileLocationRepository
+				.findPresentByPath(PathUtils.normalize(output), PathFlavor.current().name()).orElseThrow();
 
 		assertThat(newestOf(SimilarityRunMode.REGROUP))
 				.as("an entry new to the catalog joins by the backlog, not by a regroup").isNull();
@@ -619,7 +666,10 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		Files.delete(output);
 
-		catalogMutations.markMissing(List.of(produced.getId()), LocalDateTime.now());
+		// The walk found nothing at the path it expected, which is the whole of what
+		// this fact says and the only thing that took the file out of the analysed set.
+		catalogLifecycleWriter.markMissing(List.of(produced.getId()), new CatalogFactProvenance(Instant.now(),
+				CatalogEventSources.RECONCILE, CatalogEventEvidence.PATH_NOT_FOUND, null));
 
 		assertThat(lifecycleOf(produced)).isEqualTo(LifecycleStatus.MISSING);
 		assertThat(eligibleVideoIds()).as("a missing file takes no part in an analysis")
@@ -649,7 +699,7 @@ class SimilarityExecutionEndToEndIntegrationTest {
 	private void convertThroughTheWorker(CatalogFile original) {
 		Long before = newestOfTypeOrNull(ExecutionType.CONVERSION);
 
-		conversionLauncherService.launch(List.of(original.getPublicId()), null);
+		conversionLauncherService.launch(List.of(original.getCatalogFilePublicId()), null);
 
 		Long queued = await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(250))
 				.until(() -> newestOfTypeOrNull(ExecutionType.CONVERSION),
@@ -666,20 +716,20 @@ class SimilarityExecutionEndToEndIntegrationTest {
 		Path encoded = Files.writeString(workspace.resolve("encoded-" + System.nanoTime() + ".mp4"),
 				"converted bytes for " + output.getFileName());
 
-		when(videoTranscoder.transcode(any(), any(), any()))
+		when(videoTranscoder.transcode(any(), any(), any(), any()))
 				.thenReturn(TranscodeResult.converted(encoded, false, false, false, 1_000));
 
 		// Answered for the placed file by name rather than from the argument: the
 		// watcher notices the new file too and asks about paths of its own, and what
 		// this test is arranging is the one read the catalogue step makes.
-		when(metadataFacade.extract(any(), any())).thenReturn(facts(output));
+		when(metadataFacade.extract(any(), any(), any())).thenReturn(facts(output));
 	}
 
 	/** What reading the placed file would have said about it. */
 	private MetadataResult facts(Path file) {
 		return MetadataResult.builder().fileName(file.getFileName().toString()).extension("mp4").sizeBytes(1L)
 				.mimeType("video/mp4").fileType(FileType.VIDEO).subcategory(MediaSubcategory.OTHER)
-				.createdAt(LocalDateTime.now()).modifiedAt(LocalDateTime.now()).build();
+				.createdAt(Instant.now()).modifiedAt(Instant.now()).build();
 	}
 
 	/** A catalogued video that is also a file on disk, which a conversion needs. */
@@ -688,15 +738,16 @@ class SimilarityExecutionEndToEndIntegrationTest {
 
 		Files.writeString(file, "source bytes");
 
-		CatalogFile stored = CatalogFile.builder().fileKey(PathUtils.normalize(file))
-				.fileName(file.getFileName().toString()).extension("mp4").sizeBytes(Files.size(file))
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.VIDEO).build();
+		CatalogFile stored = CatalogFile.builder()
+				.extension("mp4").sizeBytes(Files.size(file))
+				.modifiedAt(Instant.now()).fileType(FileType.VIDEO).build();
 
 		stored.setLocation(CatalogFileLocation.builder().catalogFile(stored).currentPath(PathUtils.normalize(file))
-				.currentFolder(PathUtils.normalize(library)).originalPath(PathUtils.normalize(file))
-				.originalFolder(PathUtils.normalize(library)).inventoryPath(PathUtils.normalize(library)).build());
+				.currentFolder(PathUtils.normalize(library))
+				.pathFlavor(PathFlavor.WINDOWS).build());
 
-		return catalogFileRepository.saveAndFlush(stored);
+		return CatalogFiles.catalogued(new TransactionTemplate(transactionManager), catalogFileRepository,
+				catalogFileLocationRepository, stored);
 	}
 
 	private void fingerprint(CatalogFile video) {
@@ -742,11 +793,9 @@ class SimilarityExecutionEndToEndIntegrationTest {
 	}
 
 	private CatalogFile catalogued(String extension, FileType fileType) {
-		String unique = "similarity-e2e-" + System.nanoTime();
-
-		return catalogFileRepository.saveAndFlush(CatalogFile.builder().fileKey(unique)
-				.fileName(unique + "." + extension).extension(extension).sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now()).fileType(fileType).build());
+		return catalogFileRepository.saveAndFlush(CatalogFile.builder()
+				.extension(extension).sizeBytes(1L)
+				.modifiedAt(Instant.now()).fileType(fileType).build());
 	}
 
 	private SimilarityRunMode modeOf(Execution execution) {

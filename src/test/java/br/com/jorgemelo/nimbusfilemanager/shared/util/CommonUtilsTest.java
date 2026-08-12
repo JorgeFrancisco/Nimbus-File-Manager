@@ -99,8 +99,6 @@ class CommonUtilsTest {
 
 		Assertions.assertThat(PathUtils.normalize(path)).endsWith(Path.of("media", "file.jpg").toString());
 		Assertions.assertThat(PathUtils.normalizePath(path.toString())).isAbsolute();
-		Assertions.assertThat(PathUtils.normalizeLower(path.toString()))
-				.isEqualTo(PathUtils.normalize(path).toLowerCase());
 	}
 
 	@Test

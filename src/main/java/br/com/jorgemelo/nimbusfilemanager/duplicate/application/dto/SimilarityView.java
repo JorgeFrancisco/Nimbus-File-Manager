@@ -24,7 +24,7 @@ import org.springframework.data.domain.Page;
  * analysis; with {@code analyzedCount} it is what keeps the screen from implying
  * the whole library was looked at
  */
-public record SimilarityView(Page<PublishedGroup> groups, boolean published, boolean outdated, boolean analyzing,
+public record SimilarityView(Page<PublishedGroup> groups, boolean published, boolean analyzing,
 		int eligibleCount, int analyzedCount, int candidateLimit, boolean coverageComplete) {
 
 	/**
@@ -33,6 +33,6 @@ public record SimilarityView(Page<PublishedGroup> groups, boolean published, boo
 	 * was never set - which fails when the page renders, not when it compiles.
 	 */
 	public static SimilarityView none() {
-		return new SimilarityView(Page.empty(), false, false, false, 0, 0, 0, true);
+		return new SimilarityView(Page.empty(), false, false, 0, 0, 0, true);
 	}
 }

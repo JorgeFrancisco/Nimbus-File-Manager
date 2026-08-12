@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -38,6 +39,10 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.UuidV7;
 
 @ExtendWith(MockitoExtension.class)
 class DuplicateServiceTest {
+
+	/** What a person reads off the photograph: local by nature, and not a moment. */
+	private static final LocalDateTime CAPTURED_EARLIER = LocalDateTime.of(2023, Month.JANUARY, 1, 10, 0);
+	private static final LocalDateTime CAPTURED_LATER = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
 
 	@Mock
 	private DuplicateRepository duplicateRepository;
@@ -75,7 +80,7 @@ class DuplicateServiceTest {
 
 	@Test
 	void filesShouldMapRawResponses() {
-		LocalDateTime modifiedAt = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		Instant modifiedAt = Instant.parse("2024-01-01T10:00:00Z");
 		when(duplicateRepository.findDuplicateFiles("hash")).thenReturn(
 				List.of(new DuplicateFileRawResponse(1L, "a.jpg", "jpg", "PHOTO", 100, "C:/a.jpg", "C:/", modifiedAt)));
 
@@ -102,8 +107,9 @@ class DuplicateServiceTest {
 
 	@Test
 	void candidatesShouldSelectOldestFileToKeep() {
-		LocalDateTime older = LocalDateTime.of(2023, Month.JANUARY, 1, 10, 0);
-		LocalDateTime newer = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		// Which of two copies was written first, which is what the tiebreak reads.
+		Instant older = Instant.parse("2023-01-01T10:00:00Z");
+		Instant newer = Instant.parse("2024-01-01T10:00:00Z");
 
 		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 10))))
 				.thenReturn(new PageImpl<>(List.of(new DuplicateGroupRawResponse("hash", 2, 200, 100))));
@@ -116,9 +122,10 @@ class DuplicateServiceTest {
 		UUID id1 = UuidV7.fromLegacy(1L);
 		UUID id2 = UuidV7.fromLegacy(2L);
 
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(
-				List.of(new MediaQuality(id1, 100, 100, older, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-						new MediaQuality(id2, 100, 100, newer, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(
+				new MediaQuality(id1, 100, 100, CAPTURED_EARLIER, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
+				new MediaQuality(id2, 100, 100, CAPTURED_LATER, true, MediaSubcategory.CAMERA, DateSource.EXIF,
+						true)));
 
 		var candidates = service().candidates(PageRequest.of(0, 10), null);
 
@@ -129,7 +136,11 @@ class DuplicateServiceTest {
 
 	@Test
 	void candidatesShouldSelectLowestIdWhenModifiedAtTies() {
-		LocalDateTime modifiedAt = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
+		Instant modifiedAt = Instant.parse("2024-01-01T10:00:00Z");
+
+		// What a person reads off the photograph, which is a different kind of value
+		// and stays local - the tie being broken here is between the two above.
+		LocalDateTime captureDate = LocalDateTime.of(2024, Month.JANUARY, 1, 10, 0);
 
 		when(duplicateRepository.findDuplicateGroups(any(), eq(PageRequest.of(0, 10))))
 				.thenReturn(new PageImpl<>(List.of(new DuplicateGroupRawResponse("hash", 3, 300, 200))));
@@ -145,10 +156,10 @@ class DuplicateServiceTest {
 		UUID id2 = UuidV7.fromLegacy(2L);
 		UUID id3 = UuidV7.fromLegacy(3L);
 
-		when(mediaQualityRepository.findByPublicIdIn(any())).thenReturn(List.of(
-				new MediaQuality(id1, 100, 100, modifiedAt, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-				new MediaQuality(id2, 100, 100, modifiedAt, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
-				new MediaQuality(id3, 100, 100, modifiedAt, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
+		when(mediaQualityRepository.findByCatalogFilePublicIdIn(any())).thenReturn(List.of(
+				new MediaQuality(id1, 100, 100, captureDate, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
+				new MediaQuality(id2, 100, 100, captureDate, true, MediaSubcategory.CAMERA, DateSource.EXIF, true),
+				new MediaQuality(id3, 100, 100, captureDate, true, MediaSubcategory.CAMERA, DateSource.EXIF, true)));
 
 		var candidates = service().candidates(PageRequest.of(0, 10), null);
 

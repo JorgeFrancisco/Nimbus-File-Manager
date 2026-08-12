@@ -22,6 +22,10 @@ public final class FingerprintMessages {
 		return of("backend.duplicates.fingerprintCompleted", processed, failed);
 	}
 
+	public static ExecutionMessage failed(String detail) {
+		return of("backend.duplicates.fingerprintFailed", detail);
+	}
+
 	/**
 	 * Stepping aside is not a failure and the row says which: an inventory or a
 	 * conversion is holding what this needs, and the next one is asked for when

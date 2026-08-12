@@ -55,8 +55,8 @@ public class SimilarityGrouping {
 	@EqualsAndHashCode.Include
 	private Long id;
 
-	@Column(name = "public_id", nullable = false, unique = true)
-	private UUID publicId;
+	@Column(name = "similarity_grouping_public_id", nullable = false, unique = true)
+	private UUID similarityGroupingPublicId;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "media_type", nullable = false, length = 20)
@@ -109,8 +109,8 @@ public class SimilarityGrouping {
 
 	@PrePersist
 	void beforePersist() {
-		if (publicId == null) {
-			publicId = UUID.randomUUID();
+		if (similarityGroupingPublicId == null) {
+			similarityGroupingPublicId = UUID.randomUUID();
 		}
 
 		if (computedAt == null) {

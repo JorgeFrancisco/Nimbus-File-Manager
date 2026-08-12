@@ -74,7 +74,8 @@ public class QuarantinePurgePersistence {
 	 */
 	@Transactional
 	public boolean deleteCatalogFileIfOrphan(Long catalogFileId) {
-		if (catalogFileId == null || movementRepository.countByCatalogFileId(catalogFileId) > 0) {
+		if (catalogFileId == null || movementRepository.countByCatalogFileIdAndStatusAndReasonIn(catalogFileId,
+				MovementStatus.MOVED, QuarantineConstants.QUARANTINED_REASONS) > 0) {
 			return false;
 		}
 

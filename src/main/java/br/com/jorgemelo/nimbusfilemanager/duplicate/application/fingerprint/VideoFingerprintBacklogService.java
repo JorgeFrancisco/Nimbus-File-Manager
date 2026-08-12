@@ -24,6 +24,7 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.Fingerprin
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.FingerprintFailureDetail;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.PendingVideo;
+import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.FingerprintWriter;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.infrastructure.persistence.SimilarityRelationWriter;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionOwnership;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.ExternalToolNotRunnableException;
@@ -31,6 +32,9 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.UnsupportedVideoF
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Video half of the fingerprint backlog: the {@link FingerprintProducer} that
@@ -42,6 +46,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
  * behavior. Its {@code (kind, algorithm)} identity comes from the injected
  * algorithm, so swapping the algorithm never touches this class.
  */
+@Slf4j
 @Service
 public class VideoFingerprintBacklogService
 		implements FingerprintProducer<PendingVideo, VideoPerceptualFingerprint>, FingerprintBacklog {
@@ -49,6 +54,7 @@ public class VideoFingerprintBacklogService
 	static final int MAX_ATTEMPTS = 3;
 
 	private final MediaFingerprintRepository mediaFingerprintRepository;
+	private final FingerprintWriter fingerprintWriter;
 	private final FingerprintFailureRepository fingerprintFailureRepository;
 	private final FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository;
 	private final VideoSimilarityAlgorithm algorithm;
@@ -60,8 +66,9 @@ public class VideoFingerprintBacklogService
 			MediaFingerprintRepository mediaFingerprintRepository,
 			FingerprintFailureRepository fingerprintFailureRepository,
 			FingerprintRebuildTaskRepository fingerprintRebuildTaskRepository, VideoSimilarityAlgorithm algorithm,
-			SimilarityRelationWriter similarityRelationWriter, Clock clock) {
+			SimilarityRelationWriter similarityRelationWriter, FingerprintWriter fingerprintWriter, Clock clock) {
 		this.engine = engine;
+		this.fingerprintWriter = fingerprintWriter;
 		this.mediaFingerprintRepository = mediaFingerprintRepository;
 		this.fingerprintFailureRepository = fingerprintFailureRepository;
 		this.fingerprintRebuildTaskRepository = fingerprintRebuildTaskRepository;
@@ -113,8 +120,8 @@ public class VideoFingerprintBacklogService
 
 	@Override
 	public DrainResult drainPending(BooleanSupplier stop, ProgressListener progress,
-			ExecutionOwnership ownership) {
-		return engine.drain(this, stop, progress, ownership);
+			ExecutionOwnership ownership, ExecutionMetricsContext metricsContext) {
+		return engine.drain(this, stop, progress, ownership, metricsContext);
 	}
 
 	@Override
@@ -165,8 +172,8 @@ public class VideoFingerprintBacklogService
 	}
 
 	@Override
-	public VideoPerceptualFingerprint compute(PendingVideo video) {
-		return algorithm.fingerprint(Path.of(video.path()), video.durationSeconds());
+	public VideoPerceptualFingerprint compute(PendingVideo video, ProcessingMetrics metrics) {
+		return algorithm.fingerprint(Path.of(video.path()), video.durationSeconds(), metrics);
 	}
 
 	@Override
@@ -174,10 +181,21 @@ public class VideoFingerprintBacklogService
 		LocalDateTime computedAt = LocalDateTime.now(clock);
 
 		for (VideoFrameFingerprint frame : fingerprint.frames()) {
-			mediaFingerprintRepository.save(MediaFingerprint.builder().catalogFileId(video.catalogFileId())
-					.kind(kind()).algorithm(algorithm()).sampleIndex(frame.sampleIndex())
-					.positionMs(frame.positionMs()).hashBytes(frame.hash()).sampleBytes(frame.luminance())
-					.computedAt(computedAt).build());
+			// Every frame is guarded, not only the first: a video edited mid-way through
+			// its own fingerprinting would otherwise leave a row of frames from one
+			// generation beside rows from another.
+			boolean stored = fingerprintWriter.insertForRevision(
+					MediaFingerprint.builder().catalogFileId(video.catalogFileId()).kind(kind())
+							.algorithm(algorithm()).sampleIndex(frame.sampleIndex()).positionMs(frame.positionMs())
+							.hashBytes(frame.hash()).sampleBytes(frame.luminance()).computedAt(computedAt).build(),
+					video.contentRevision());
+
+			if (!stored) {
+				log.info("Discarded a video fingerprint for catalog file {}: its content changed while it was "
+						+ "computed", video.catalogFileId());
+
+				return;
+			}
 		}
 	}
 

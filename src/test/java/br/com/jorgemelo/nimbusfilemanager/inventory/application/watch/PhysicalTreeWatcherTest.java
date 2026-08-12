@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.inventory.application.watch;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.FileSystemChange;
 import br.com.jorgemelo.nimbusfilemanager.inventory.domain.enums.WatchRecoveryReason;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -100,11 +101,11 @@ class PhysicalTreeWatcherTest {
 		Path file = Files.writeString(tempDir.resolve("photo.jpg"), "jpg");
 
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_MODIFY, Path.of("photo.jpg")), changed);
 
-			assertThat(changed).containsExactly(file);
+			assertThat(changed).extracting(FileSystemChange::path).containsExactly(file);
 		}
 	}
 
@@ -113,22 +114,22 @@ class PhysicalTreeWatcherTest {
 		Path shortcut = Files.writeString(tempDir.resolve("target.lnk"), "lnk");
 
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, Path.of("target.lnk")), changed);
 
-			assertThat(changed).doesNotContain(shortcut);
+			assertThat(changed).extracting(FileSystemChange::path).doesNotContain(shortcut);
 		}
 	}
 
 	@Test
 	void deleteEventIsReportedSoTheReconcileCanRemoveIt() throws Exception {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_DELETE, Path.of("gone.jpg")), changed);
 
-			assertThat(changed).containsExactly(tempDir.resolve("gone.jpg"));
+			assertThat(changed).extracting(FileSystemChange::path).containsExactly(tempDir.resolve("gone.jpg"));
 		}
 	}
 
@@ -144,14 +145,14 @@ class PhysicalTreeWatcherTest {
 			Path album = Files.createDirectory(tempDir.resolve("album"));
 			Path inside = Files.createDirectory(album.resolve("2026"));
 
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, Path.of("album")), changed);
 
 			assertThat(watcher.isWatching(album)).isTrue();
 			assertThat(watcher.isWatching(inside)).isTrue();
 
-			assertThat(changed).containsExactly(album);
+			assertThat(changed).extracting(FileSystemChange::path).containsExactly(album);
 		}
 	}
 
@@ -165,7 +166,7 @@ class PhysicalTreeWatcherTest {
 		Path album = Files.createDirectory(tempDir.resolve("album"));
 
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_MODIFY, Path.of("album")), changed);
 
@@ -183,7 +184,7 @@ class PhysicalTreeWatcherTest {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, false)) {
 			Files.createDirectory(tempDir.resolve("album"));
 
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, Path.of("album")), changed);
 
@@ -223,7 +224,7 @@ class PhysicalTreeWatcherTest {
 
 			Files.delete(album);
 
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_DELETE, Path.of("album")), changed);
 
@@ -236,7 +237,7 @@ class PhysicalTreeWatcherTest {
 	@Test
 	void eventWithoutANameIsIgnored() throws Exception {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.ENTRY_CREATE, null), changed);
 
@@ -247,7 +248,7 @@ class PhysicalTreeWatcherTest {
 	@Test
 	void overflowEventSetsAConsumableFlagWithoutReportingFiles() throws Exception {
 		try (PhysicalTreeWatcher watcher = new PhysicalTreeWatcher(tempDir, true)) {
-			List<Path> changed = new ArrayList<>();
+			List<FileSystemChange> changed = new ArrayList<>();
 
 			watcher.handleEvent(tempDir, event(StandardWatchEventKinds.OVERFLOW, null), changed);
 
@@ -284,9 +285,9 @@ class PhysicalTreeWatcherTest {
 		try {
 			await().atMost(Duration.ofSeconds(15)).pollDelay(Duration.ZERO)
 					.pollInterval(Duration.ofMillis(200)).until(() -> {
-						for (Path changed : watcher.pollChangedFiles()) {
-							if (changed.getFileName().toString().equals(fileName)) {
-								found.set(changed);
+						for (FileSystemChange changed : watcher.pollChanges()) {
+							if (changed.path().getFileName().toString().equals(fileName)) {
+								found.set(changed.path());
 
 								return true;
 							}

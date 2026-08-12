@@ -98,7 +98,17 @@ public class GeoDatasetJobHandler implements ExecutionJobHandler {
 		geoDatasetProgress.attach(ownership);
 
 		try {
-			offlineGeoDataset.downloadAndImport();
+			if (!offlineGeoDataset.bringUpToDate()) {
+				// Nothing was imported, so there is nothing for the ninth stage to
+				// invalidate: every resolution in the cache was computed against the
+				// boundaries that are still installed. Clearing it here would throw away
+				// a working cache to celebrate having changed nothing.
+				executionProgressService.finishCommand(ownership, ExecutionStatus.FINISHED,
+						new ExecutionCounts(geoDatasetProgress.stagesDone(), 0, 0, 0),
+						GeoMessages.alreadyUpToDate());
+
+				return;
+			}
 
 			// The ninth stage, and the only one this class owns: the manager has
 			// already returned, and what is left is the cache the new dataset

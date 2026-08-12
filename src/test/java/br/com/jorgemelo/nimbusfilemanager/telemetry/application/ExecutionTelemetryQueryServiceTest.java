@@ -11,9 +11,13 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.ExecutionPhase;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.projection.ExecutionTelemetryRow;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.model.ExecutionMetricsCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsCategoryRepository;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionMetricsRepository;
 import br.com.jorgemelo.nimbusfilemanager.telemetry.domain.repository.ExecutionPhaseRepository;
 
 /**
@@ -25,8 +29,34 @@ class ExecutionTelemetryQueryServiceTest {
 
 	private final ExecutionRepository executionRepository = mock(ExecutionRepository.class);
 	private final ExecutionPhaseRepository executionPhaseRepository = mock(ExecutionPhaseRepository.class);
+	private final ExecutionMetricsRepository executionMetricsRepository = mock(ExecutionMetricsRepository.class);
+	private final ExecutionMetricsCategoryRepository executionMetricsCategoryRepository = mock(
+			ExecutionMetricsCategoryRepository.class);
 	private final ExecutionTelemetryQueryService service = new ExecutionTelemetryQueryService(executionRepository,
-			executionPhaseRepository);
+			executionPhaseRepository, executionMetricsRepository, executionMetricsCategoryRepository);
+
+	/**
+	 * A run nobody measured has no aggregate, and the detail screen has to render
+	 * anyway - so the absence is an empty Optional rather than an exception.
+	 */
+	@Test
+	void aggregateIsAbsentForAnExecutionNobodyMeasured() {
+		when(executionMetricsRepository.findById(7L)).thenReturn(Optional.empty());
+
+		Assertions.assertThat(service.aggregate(7L)).isEmpty();
+	}
+
+	/** Only the tools the run reached, in a stable order the screen can render. */
+	@Test
+	void categoriesComeBackForTheExecutionAsked() {
+		ExecutionMetricsCategory row = ExecutionMetricsCategory.builder()
+				.category(ExternalToolCategory.FFMPEG_PHOTO_HASH).runs(3L).build();
+
+		when(executionMetricsCategoryRepository.findByExecutionIdOrderByCategoryAsc(7L))
+				.thenReturn(List.of(row));
+
+		Assertions.assertThat(service.categories(7L)).containsExactly(row);
+	}
 
 	@Test
 	void recentShouldTreatABlankVersionAsNoFilterAndCapThePage() {

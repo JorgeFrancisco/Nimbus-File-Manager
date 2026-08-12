@@ -2,7 +2,9 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -14,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoFrameHash;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoSignature;
 import br.com.jorgemelo.nimbusfilemanager.metadata.application.VideoPerceptualHashService;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoFrameFingerprint;
+import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptualFingerprint;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.properties.VideoSimilarityProperties;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ExecutionMetricsContext;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Calibration tests for the default video similarity algorithm: they pin how
@@ -37,6 +43,32 @@ class FfmpegLanczosFramesPhashAlgorithmTest {
 
 	private VideoSimilarityProperties properties(int minConcordant, int trimmedLowest) {
 		return new VideoSimilarityProperties(minConcordant, trimmedLowest, 96, 3.0, 0.12);
+	}
+
+	/**
+	 * Fingerprinting is a delegation, and what has to survive it is the
+	 * accumulator: the drain that asked for this fingerprint is the one paying for
+	 * the ffmpeg run, so the hash service must be handed that very object and not
+	 * one of its own.
+	 */
+	@Test
+	void fingerprintAsksForTheSampledFramesAndCarriesTheCallersAccumulator() {
+		VideoPerceptualHashService hashService = mock(VideoPerceptualHashService.class);
+
+		ProcessingMetrics metrics = new ExecutionMetricsContext().processing();
+
+		Path video = Path.of("C:/media/clip.mp4");
+
+		VideoPerceptualFingerprint expected = new VideoPerceptualFingerprint(
+				List.of(new VideoFrameFingerprint(0, 1_000L, HASH_A, LUMA)));
+
+		when(hashService.compute(video, 10.0, FfmpegLanczosFramesPhashAlgorithm.FRAME_SAMPLES, metrics))
+				.thenReturn(expected);
+
+		FfmpegLanczosFramesPhashAlgorithm algorithm = new FfmpegLanczosFramesPhashAlgorithm(hashService,
+				new LuminanceSsimService(), properties(3, 1));
+
+		assertThat(algorithm.fingerprint(video, 10.0, metrics)).isSameAs(expected);
 	}
 
 	@Test

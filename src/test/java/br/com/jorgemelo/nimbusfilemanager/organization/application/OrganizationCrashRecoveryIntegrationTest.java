@@ -14,15 +14,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+
+import br.com.jorgemelo.nimbusfilemanager.shared.TestPostgres;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.InventoryBatchTestSeeder;
 import br.com.jorgemelo.nimbusfilemanager.inventory.application.dto.InventoryRequest;
 import br.com.jorgemelo.nimbusfilemanager.organization.application.dto.OrganizationReconcileRequest;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.PathFlavor;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
-import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
@@ -45,7 +48,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+	static PostgreSQLContainer<?> postgres = TestPostgres.container();
 
 	private static final Path WORKSPACE = createWorkspace();
 
@@ -56,7 +59,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 	private OrganizationReconcileApply organizationReconcileApply;
 
 	@Autowired
-	private CatalogFileRepository catalogFileRepository;
+	private CatalogFileLocationRepository catalogFileLocationRepository;
 
 	@DynamicPropertySource
 	static void properties(DynamicPropertyRegistry registry) throws IOException {
@@ -77,7 +80,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 
 		String originalKey = PathUtils.normalize(original);
 
-		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isPresent();
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(originalKey, PathFlavor.current().name())).isPresent();
 
 		// Crash simulation: the physical move happened, the catalog update did NOT.
 		Path moved = organizedDir.resolve("202401").resolve("09").resolve("photo.txt");
@@ -86,7 +89,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 		Files.move(original, moved);
 
 		Assertions.assertThat(Files.exists(original)).isFalse();
-		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isPresent();
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(originalKey, PathFlavor.current().name())).isPresent();
 
 		organizationReconcileApply
 				.reconcileAndApply(new OrganizationReconcileRequest(root.toString(), true, false, 100));
@@ -94,9 +97,9 @@ class OrganizationCrashRecoveryIntegrationTest {
 		// The catalog followed the file to its real location instead of dangling.
 		String movedKey = PathUtils.normalize(moved);
 
-		Assertions.assertThat(catalogFileRepository.findByFileKey(movedKey)).isPresent().get()
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(movedKey, PathFlavor.current().name())).isPresent().get()
 				.extracting(CatalogFile::getLifecycleStatus).isEqualTo(LifecycleStatus.ACTIVE);
-		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isEmpty();
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(originalKey, PathFlavor.current().name())).isEmpty();
 	}
 
 	@Test
@@ -110,7 +113,7 @@ class OrganizationCrashRecoveryIntegrationTest {
 
 		String originalKey = PathUtils.normalize(original);
 
-		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isPresent().get()
+		Assertions.assertThat(catalogFileLocationRepository.findPresentByPath(originalKey, PathFlavor.current().name())).isPresent().get()
 				.extracting(CatalogFile::getLifecycleStatus).isEqualTo(LifecycleStatus.ACTIVE);
 
 		// Crash simulation: file moved out of the reconcile scope, catalog untouched.
@@ -122,7 +125,10 @@ class OrganizationCrashRecoveryIntegrationTest {
 		// It cannot be relocated (the new file is outside the scanned scope), but the
 		// divergence is detected: the record is flagged MISSING, never left ACTIVE at a
 		// path that no longer exists.
-		Assertions.assertThat(catalogFileRepository.findByFileKey(originalKey)).isPresent().get()
+		// Asked of the door that answers for a file whether or not it is still there:
+		// "present" is exactly what this file stopped being.
+		Assertions.assertThat(catalogFileLocationRepository.findLastKnownByPath(originalKey,
+				PathFlavor.current().name())).singleElement()
 				.extracting(CatalogFile::getLifecycleStatus).isEqualTo(LifecycleStatus.MISSING);
 	}
 

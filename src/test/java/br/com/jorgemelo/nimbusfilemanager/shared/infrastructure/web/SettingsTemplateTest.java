@@ -2,12 +2,18 @@ package br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.RecordComponent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
+
+import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.DuplicateExclusionFileView;
 
 /** Guards Thymeleaf-parseable expressions on the settings screen. */
 class SettingsTemplateTest {
@@ -17,12 +23,34 @@ class SettingsTemplateTest {
 		String html = Files.readString(Path.of("src/main/resources/templates/app/settings.html"));
 
 		// The Thymeleaf default operator only accepts another expression (or a literal)
-		// on its right side. Closing the "${...}" before "?:" leaves a bare
-		// "file.publicId()" that is not a valid expression, so the whole attribute
-		// fails to parse and the page 500s. The fallback must stay inside a single SpEL
-		// expression: "${file.currentPath() ?: file.publicId()}".
-		assertThat(html).contains("th:text=\"${file.currentPath() ?: file.publicId()}\"")
-				.doesNotContain("${file.currentPath()} ?: file.publicId()");
+		// on its right side. Closing the "${...}" before "?:" leaves a bare accessor
+		// call that is not a valid expression, so the whole attribute fails to parse
+		// and the page 500s. The fallback must stay inside a single SpEL expression.
+		assertThat(html).contains("th:text=\"${file.currentPath() ?: file.catalogFilePublicId()}\"")
+				.doesNotContain("${file.currentPath()} ?:");
+	}
+
+	/**
+	 * And the names in it are ones the projection really answers to.
+	 *
+	 * <p>
+	 * The half the assertion above cannot see. An accessor named in a template is
+	 * text: the compiler never reads it, and the projection was renamed underneath
+	 * this one - leaving a fallback that would have thrown the first time a file
+	 * exclusion had no path to show, on a screen that shows every other setting
+	 * there is.
+	 */
+	@Test
+	void theExclusionRowOnlyNamesAccessorsTheProjectionHas() throws Exception {
+		String html = Files.readString(Path.of("src/main/resources/templates/app/settings.html"));
+
+		Set<String> named = Pattern.compile("\\bfile\\.(\\w+)\\(\\)").matcher(html).results()
+				.map(result -> result.group(1)).collect(Collectors.toSet());
+
+		Set<String> components = Arrays.stream(DuplicateExclusionFileView.class.getRecordComponents())
+				.map(RecordComponent::getName).collect(Collectors.toSet());
+
+		assertThat(named).as("the row reads the projection through these").isNotEmpty().isSubsetOf(components);
 	}
 
 	/**

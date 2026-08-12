@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import br.com.jorgemelo.nimbusfilemanager.execution.application.Progress;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMapper;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.quarantine.application.dto.QuarantineProgress;
@@ -133,13 +134,14 @@ class QuarantineProgressServiceTest {
 
 	private Execution row(ExecutionType executionType, ExecutionStatus status, LocalDateTime createdAt, int total,
 			int succeeded, int skipped, int errors) {
-		return Execution.builder().id(5L).publicId(UUID.randomUUID()).executionType(executionType).status(status)
+		return Execution.builder().id(5L).executionPublicId(UUID.randomUUID()).executionType(executionType).status(status)
 				.createdAt(createdAt).filesFound(total).filesMoved(succeeded).cacheHits(skipped).errors(errors)
 				.statusMessage(StatusMessage.raw("done")).build();
 	}
 
 	private QuarantineProgressService service() {
 		return new QuarantineProgressService(executionRepository,
-				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class)));
+				new ExecutionMapper(new ExecutionMessageCodec(new ObjectMapper()), mock(ExecutionLabels.class),
+						Progress.reader(), Progress.estimator()));
 	}
 }

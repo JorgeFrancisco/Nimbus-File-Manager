@@ -687,7 +687,215 @@ document.addEventListener('DOMContentLoaded', () => {
 		});
 	}
 
+	// Whether the published analysis still describes the library is the expensive
+	// question on this screen - it identifies the whole eligible library to compare
+	// one digest - so the server no longer answers it before sending the page. It is
+	// asked once here, after the results are already on screen, and the backend
+	// stays the only one deciding: this reads a verdict, it does not compute one.
+	function checkFreshness() {
+		const banner = document.getElementById('similarityFreshness');
+
+		if (!banner || !banner.dataset.freshnessUrl) {
+			return;
+		}
+
+		const show = (state) => {
+			banner.querySelectorAll('[data-freshness-state]').forEach((element) => {
+				element.hidden = element.dataset.freshnessState !== state;
+			});
+		};
+
+		fetch(banner.dataset.freshnessUrl, { headers: { Accept: 'application/json' } })
+			.then((response) => {
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+				return response.json();
+			})
+			.then((freshness) => {
+				if (freshness.outdated) {
+					show('outdated');
+					return;
+				}
+
+				// Current, or never published: either way there is nothing to warn about,
+				// and the banner leaves rather than saying so.
+				banner.hidden = true;
+			})
+			// A failed check never becomes "current": the screen says it could not tell,
+			// and the results already rendered stay usable.
+			.catch(() => show('error'));
+	}
+
+	// The panels that used to keep this screen alive by re-fetching all of it. They
+	// now read the activity poll the app shell already runs: one 0,9 kB request on a
+	// backoff, shared, instead of a full render of this page every few seconds -
+	// which on a large library is seconds of server work per cycle, and stacked with
+	// whatever else was running. The backend still decides what is running; this only
+	// shows or hides markup the server already sent.
+	function bindActivityPanels() {
+		const panels = Array.from(document.querySelectorAll('[data-activity-watch]'));
+
+		if (!panels.length) {
+			return;
+		}
+
+		// Every active execution, not only the one the banner draws: the snapshot names
+		// a primary and lists the rest, and an inventory can be the one it is not
+		// drawing.
+		const activeTypes = (snapshot) => {
+			const activities = [];
+
+			if (snapshot && snapshot.primary) {
+				activities.push(snapshot.primary);
+			}
+
+			if (snapshot && snapshot.others) {
+				activities.push(...snapshot.others);
+			}
+
+			return activities.map((activity) => activity.executionType);
+		};
+
+		document.addEventListener('nimbus-file-manager:activity', (event) => {
+			const running = activeTypes(event.detail);
+
+			panels.forEach((panel) => {
+				if (running.includes(panel.dataset.activityWatch)) {
+					return;
+				}
+
+				if (panel.dataset.activityOnIdle === 'hide') {
+					panel.hidden = true;
+					return;
+				}
+
+				// The analysis produced groups, and those are rendered by the server. The
+				// screen says so and offers the way there; it does not navigate on its own.
+				const announcement = panel.querySelector('[data-activity-idle-announcement]');
+
+				if (announcement) {
+					announcement.hidden = false;
+				}
+			});
+		});
+	}
+
+	// The fingerprint panel asks for its own numbers. They are catalog state - true
+	// with nothing running - so they are not in the activity snapshot, and asking for
+	// them used to mean re-fetching this entire page every four seconds. The rules of
+	// the shared poll apply here too: never two requests at once, slower while nobody
+	// is looking, and a failed answer changes nothing on screen.
+	function bindBacklogPoll() {
+		const panel = document.getElementById('fingerprintProgressRegion');
+
+		if (!panel || !panel.dataset.backlogUrl) {
+			return;
+		}
+
+		const ACTIVE_MILLIS = 4000;
+		const HIDDEN_MILLIS = 30000;
+		const ERROR_MILLIS = 15000;
+
+		let polling = false;
+		let timer = null;
+
+		const set = (selector, value) => {
+			const element = panel.querySelector(selector);
+
+			if (element) {
+				element.textContent = value;
+			}
+		};
+
+		const schedule = (wait) => {
+			window.clearTimeout(timer);
+			timer = window.setTimeout(poll, document.hidden ? HIDDEN_MILLIS : wait);
+		};
+
+		function render(backlog) {
+			const percent = `${backlog.percent.toFixed(2)}%`;
+
+			set('[data-backlog-percent]', percent);
+			set('[data-backlog-eta]', backlog.etaLabel || '');
+			set('[data-backlog-done]', backlog.done);
+			set('[data-backlog-total]', backlog.total);
+			set('[data-backlog-pending]', backlog.pending);
+			set('[data-backlog-failed]', backlog.failed);
+
+			// The other medium's fingerprint: shown while it is the one running, hidden
+			// otherwise. Which of the two runs first is the queue's business - this only
+			// draws the sentence the server sent, or nothing.
+			const other = panel.querySelector('[data-backlog-other]');
+
+			if (other) {
+				other.hidden = !backlog.other;
+
+				if (backlog.other) {
+					set('[data-backlog-other-label]', backlog.other.label);
+					set('[data-backlog-other-percent]', `${backlog.other.percent.toFixed(2)}%`);
+				}
+			}
+
+			const bar = panel.querySelector('[data-backlog-bar]');
+			const fill = panel.querySelector('[data-backlog-fill]');
+
+			if (bar) {
+				bar.setAttribute('aria-valuenow', backlog.percent);
+			}
+
+			if (fill) {
+				fill.style.width = `${backlog.percent}%`;
+			}
+
+			// Nothing left to fingerprint: the panel has said all it had to say. What
+			// appears next needs the page, and the user asks for that.
+			if (backlog.pending === 0) {
+				panel.hidden = true;
+
+				return null;
+			}
+
+			return ACTIVE_MILLIS;
+		}
+
+		function poll() {
+			if (polling) {
+				return;
+			}
+
+			polling = true;
+
+			fetch(panel.dataset.backlogUrl, { headers: { Accept: 'application/json' } })
+				.then((response) => {
+					if (!response.ok) {
+						throw new Error(`HTTP ${response.status}`);
+					}
+
+					return response.json();
+				})
+				.then((backlog) => {
+					const next = render(backlog);
+
+					if (next) {
+						schedule(next);
+					}
+				})
+				// A failed poll says nothing about the backlog: the numbers on screen stay
+				// exactly as they were rather than reading as finished.
+				.catch(() => schedule(ERROR_MILLIS))
+				.finally(() => {
+					polling = false;
+				});
+		}
+
+		schedule(ACTIVE_MILLIS);
+	}
+
 	bindThumbFallback();
 	applyStoredSelection();
 	updateSummary();
+	checkFreshness();
+	bindActivityPanels();
+	bindBacklogPoll();
 });

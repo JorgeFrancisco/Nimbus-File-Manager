@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.metadata.application;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,9 +16,10 @@ import br.com.jorgemelo.nimbusfilemanager.metadata.application.dto.VideoPerceptu
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameProcessRunner;
 import br.com.jorgemelo.nimbusfilemanager.metadata.infrastructure.FfmpegVideoFrameRunner;
 import br.com.jorgemelo.nimbusfilemanager.processing.application.ExternalToolGate;
-import br.com.jorgemelo.nimbusfilemanager.processing.domain.enums.ExternalToolCategory;
 import br.com.jorgemelo.nimbusfilemanager.settings.application.ExternalToolPaths;
 import br.com.jorgemelo.nimbusfilemanager.shared.application.CoverageGenerated;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExternalToolCategory;
+import br.com.jorgemelo.nimbusfilemanager.telemetry.application.ProcessingMetrics;
 
 /**
  * Computes a video's multi-frame perceptual fingerprint: a single ffmpeg pass
@@ -44,8 +46,9 @@ public class VideoPerceptualHashService {
 	public VideoPerceptualHashService(ExternalToolPaths externalToolPaths, VideoFrameSampler videoFrameSampler,
 			ExternalToolGate externalToolGate, FfmpegVideoFrameProcessRunner processRunner,
 			PhotoPerceptualHashService photoPerceptualHashService) {
-		this(externalToolPaths, videoFrameSampler, (ffmpegPath, file, plan) -> externalToolGate
-				.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME, () -> processRunner.run(ffmpegPath, file, plan)),
+		this(externalToolPaths, videoFrameSampler,
+				(ffmpegPath, file, plan, metrics) -> externalToolGate.run(ExternalToolCategory.FFMPEG_VIDEO_FRAME,
+						metrics, () -> processRunner.run(ffmpegPath, file, plan)),
 				photoPerceptualHashService);
 	}
 
@@ -57,7 +60,8 @@ public class VideoPerceptualHashService {
 		this.photoPerceptualHashService = photoPerceptualHashService;
 	}
 
-	public VideoPerceptualFingerprint compute(Path file, Double durationSeconds, int frameCount) {
+	public VideoPerceptualFingerprint compute(Path file, Double durationSeconds, int frameCount,
+			ProcessingMetrics metrics) {
 		FileValidationUtils.validateFile(file);
 
 		if (durationSeconds == null || !Double.isFinite(durationSeconds) || durationSeconds <= 0) {
@@ -67,14 +71,14 @@ public class VideoPerceptualHashService {
 
 		VideoFrameSamplingPlan plan = videoFrameSampler.plan(durationSeconds, frameCount);
 
-		byte[] frames = sample(file, plan);
+		byte[] frames = sample(file, plan, metrics);
 
 		// A video of a single frame - the clip a phone keeps beside a photo, or a
 		// recording stopped the instant it started - has nothing at the sampled
 		// timestamps, so sampling comes back empty. Its one frame is still a picture,
 		// and hashing it is what the photos do.
 		if (frames.length == 0) {
-			frames = firstFrame(file);
+			frames = firstFrame(file, metrics);
 			plan = SINGLE_FRAME;
 		}
 
@@ -83,6 +87,19 @@ public class VideoPerceptualHashService {
 		if (frames.length % MetadataConstants.SAMPLE_BYTES != 0) {
 			throw new UnsupportedVideoFingerprintException("FFmpeg returned frames of unexpected size for video: "
 					+ file + " (got " + frames.length + " bytes)");
+		}
+
+		// All of the planned frames or none of them. Each position is now sampled by
+		// a process of its own, so one of them coming back empty - a seek past a
+		// broken tail, a position the container cannot answer for - leaves a set that
+		// is shorter but perfectly well formed, and nothing downstream could tell it
+		// from a fingerprint of a shorter video. A fingerprint missing a frame is not
+		// a smaller fingerprint; it is a different one, and it must not be stored as
+		// if it were whole.
+		if (frames.length / MetadataConstants.SAMPLE_BYTES != plan.frameCount()) {
+			throw new UnsupportedVideoFingerprintException("Sampling produced "
+					+ frames.length / MetadataConstants.SAMPLE_BYTES + " of the " + plan.frameCount()
+					+ " frames planned for video: " + file);
 		}
 
 		return new VideoPerceptualFingerprint(toFrameFingerprints(frames, plan));
@@ -94,9 +111,9 @@ public class VideoPerceptualHashService {
 	 * photo service is the point - "treat it as an image" is exactly what this
 	 * fallback means, and that path is already wired and tested.
 	 */
-	private byte[] firstFrame(Path file) {
+	private byte[] firstFrame(Path file, ProcessingMetrics metrics) {
 		try {
-			return photoPerceptualHashService.compute(file).luminance();
+			return photoPerceptualHashService.compute(file, metrics).luminance();
 		} catch (RuntimeException failure) {
 			// Kept as a video failure on purpose: the reason recorded for a video has to
 			// read as one, and the photo path speaks about pixels and images.
@@ -105,19 +122,31 @@ public class VideoPerceptualHashService {
 		}
 	}
 
-	private byte[] sample(Path file, VideoFrameSamplingPlan plan) {
+	private byte[] sample(Path file, VideoFrameSamplingPlan plan, ProcessingMetrics metrics) {
 		try {
-			return ffmpegRunner.run(ffmpegPath(), file, plan);
+			return ffmpegRunner.run(ffmpegPath(), file, plan, metrics);
 		} catch (ExternalToolNotRunnableException exception) {
 			// Rethrown whole: wrapping it below would bury the one distinction that
 			// matters, and the caller would go on to blame the file for a tool that
 			// never ran.
 			throw exception;
-		} catch (Exception exception) {
-			throw new IllegalStateException(
-					"Could not run ffmpeg to sample video frames for file: " + file + ". " + exception.getMessage(),
-					exception);
+		} catch (InterruptedException exception) {
+			// The flag goes back on before the stack unwinds: a sampling interrupted
+			// because the run is being cancelled must not read as one that merely failed.
+			Thread.currentThread().interrupt();
+
+			throw samplingFailure(file, exception);
+		} catch (IOException | RuntimeException exception) {
+			// The tool-not-runnable case was rethrown whole above; everything else is
+			// named with the file it was sampling, which is the only thing that makes the
+			// failure legible afterwards.
+			throw samplingFailure(file, exception);
 		}
+	}
+
+	private IllegalStateException samplingFailure(Path file, Exception cause) {
+		return new IllegalStateException(
+				"Could not run ffmpeg to sample video frames for file: " + file + ". " + cause.getMessage(), cause);
 	}
 
 	private List<VideoFrameFingerprint> toFrameFingerprints(byte[] frames, VideoFrameSamplingPlan plan) {

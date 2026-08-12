@@ -65,13 +65,13 @@ class ReverseGeocodingStrategyRegistryTest {
 
 	@Test
 	void strategyForReturnsEmptyForAnUnregisteredProvider() {
-		Assertions.assertThat(registry().strategyFor(LocationProvider.MANUAL)).isEmpty();
+		Assertions.assertThat(registry().strategyFor(LocationProvider.UNKNOWN)).isEmpty();
 	}
 
 	/**
 	 * Feeds the provider dropdown on the settings screen, so it must offer only
-	 * what a strategy backs: MANUAL and UNKNOWN say where a location came from and
-	 * resolve nothing, and offering them would be offering a no-op.
+	 * what a strategy backs: UNKNOWN says where a location came from and resolves
+	 * nothing, and offering it would be offering a no-op.
 	 */
 	@Test
 	void availableListsOnlyTheProvidersThatHaveAStrategy() {

@@ -1,6 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
@@ -20,7 +20,7 @@ import java.util.UUID;
  */
 public record VideoFrameRawResponse(Long catalogFileId, UUID id, int sampleIndex, Long positionMs, byte[] phash,
 		byte[] luminance, String fileName, String extension, long sizeBytes, String currentPath, String currentFolder,
-		LocalDateTime modifiedAt, Double durationSeconds, Integer width, Integer height) {
+		Instant modifiedAt, Double durationSeconds, Integer width, Integer height) {
 
 	/**
 	 * By content, because two of the components are arrays and a record's generated
