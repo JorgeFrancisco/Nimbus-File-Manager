@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.ExecutionMessageCodec;
 import br.com.jorgemelo.nimbusfilemanager.execution.application.constants.ExecutionStatusNames;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LocationRebuildResult;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants.GeoConstants;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.Snapshot;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.LocationRebuildScope;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.Phase;
@@ -118,18 +119,35 @@ public class GeoRunReader extends LocalizedComponent {
 	}
 
 	/**
-	 * The level being worked on travels as the first argument of the message,
-	 * which is the same place every other execution keeps what its sentence is
-	 * about - and it travels as a key, so the page words it.
+	 * The level being worked on is the last segment of the message code, and the
+	 * panel words it from its own bundle.
+	 *
+	 * <p>
+	 * It used to be the message's first argument. That stopped being true when the
+	 * level moved into the code - an argument holding the key of another message is
+	 * never resolved on the way out, so the row said "Baixando
+	 * settings.geo.step.country." - and this method went on reading an argument
+	 * that was no longer there, handing the page an empty key. The page asked its
+	 * bundle for it and drew what a missing key looks like: {@code ??_pt_BR??}.
+	 *
+	 * <p>
+	 * Stages that are not about one level - the territories, the publication, the
+	 * finish - answer with the dataset itself, so the sentence stays whole instead
+	 * of trailing off after the verb.
 	 */
 	private String stepLabel(Execution execution) {
-		if (execution.getStatusMessage() == null || execution.getStatusMessage().getArgs() == null) {
-			return "";
+		String code = execution.getStatusMessage() == null ? null : execution.getStatusMessage().getCode();
+
+		if (code == null) {
+			return GeoConstants.STEP_DATASET;
 		}
 
-		Object[] args = executionMessageCodec.decode(execution.getStatusMessage().getArgs());
-
-		return args.length == 0 ? "" : String.valueOf(args[0]);
+		return switch (code.substring(code.lastIndexOf('.') + 1)) {
+		case "country" -> GeoConstants.STEP_COUNTRY;
+		case "state" -> GeoConstants.STEP_STATE;
+		case "municipality" -> GeoConstants.STEP_MUNICIPALITY;
+		default -> GeoConstants.STEP_DATASET;
+		};
 	}
 
 	private LocationRebuildResult rebuildResult(Execution execution) {

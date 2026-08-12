@@ -257,6 +257,13 @@ public class GeoBoundariesSource implements BoundarySource {
 		} else if (url == null || url.isBlank()) {
 			progress.levelNotConfigured(kind);
 		} else {
+			// Named here rather than inside the download, because the download does not
+			// always reach the line that names it: a file the server reports unchanged
+			// returns early, and the stage then finished without ever having said what
+			// it was. The size is unknown at this point, so the second bar stays away
+			// until the response says how many bytes are coming.
+			progress.downloading(kind, -1);
+
 			files.add(new LeveledBoundaryFile(kind, download(kind, url, fileName, workspaceFolder.resolve(DOWNLOADS))));
 		}
 

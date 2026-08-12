@@ -127,8 +127,11 @@ class GeoRunReaderTest {
 
 		execution.setPhase(ExecutionPhase.PROCESSING);
 		execution.setCurrentItemPercent(42);
-		execution.setStatusMessage(StatusMessage.coded("backend.geodata.importing",
-				executionMessageCodec.encode(List.of("settings.geo.step.municipality"))));
+		// The level is the last segment of the code. It used to be the message's
+		// first argument, and when it moved this reader went on decoding an argument
+		// that was no longer there - handing the panel an empty key, which the page
+		// rendered as the missing-key marker.
+		execution.setStatusMessage(StatusMessage.coded("backend.geodata.importing.municipality", null));
 
 		latest(ExecutionType.GEO_DATASET_UPDATE, execution);
 
@@ -149,8 +152,27 @@ class GeoRunReaderTest {
 		latest(ExecutionType.GEO_DATASET_UPDATE, execution);
 
 		Assertions.assertThat(reader.progress().downloading()).isTrue();
-		Assertions.assertThat(reader.progress().stepLabel()).isEmpty();
 		Assertions.assertThat(reader.progress().percent()).isEqualTo(-1);
+
+		// A run that has not said anything yet still gets a noun, or the panel says
+		// "Downloading" and stops.
+		Assertions.assertThat(reader.progress().stepLabel()).isEqualTo("settings.geo.step.dataset");
+	}
+
+	/**
+	 * The stages that are not about one administrative level - the territories, the
+	 * publication, the finish - name the dataset itself rather than nothing.
+	 */
+	@Test
+	void aStageThatIsNotAboutOneLevelStillNamesSomething() {
+		Execution execution = running(ExecutionType.GEO_DATASET_UPDATE);
+
+		execution.setPhase(ExecutionPhase.PROCESSING);
+		execution.setStatusMessage(StatusMessage.coded("backend.geodata.publishing", null));
+
+		latest(ExecutionType.GEO_DATASET_UPDATE, execution);
+
+		Assertions.assertThat(reader.progress().stepLabel()).isEqualTo("settings.geo.step.dataset");
 	}
 
 	/** A finished update is not progress: the panel shows the dataset instead. */

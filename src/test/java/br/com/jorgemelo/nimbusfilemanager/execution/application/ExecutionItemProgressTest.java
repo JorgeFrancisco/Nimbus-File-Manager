@@ -17,6 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.execution.domain.repository.ExecutionS
 import br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence.ExecutionQueue;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.StatusMessage;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
@@ -184,6 +185,29 @@ class ExecutionItemProgressTest {
 
 		Assertions.assertThatThrownBy(() -> writer.clear(1L)).isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("Execution not found");
+	}
+
+	/**
+	 * A caller with nothing new to say leaves the sentence alone rather than taking
+	 * the write down with it. The geographic dataset update hit this whenever a
+	 * file came back unchanged from the server: the acquisition returned before it
+	 * had named itself, the stage then reported its completion with no message, and
+	 * the null dereference failed the whole update.
+	 */
+	@Test
+	void aProgressWriteWithNoSentenceKeepsTheOneTheRowAlreadyHas() {
+		Execution execution = running();
+
+		ExecutionProgressService service = service();
+
+		service.updateLiveProgress(ownership, 1, 1, 0, 0, ExecutionMessages.progressUpdated());
+
+		StatusMessage said = execution.getStatusMessage();
+
+		service.updateLiveProgress(ownership, 2, 2, 0, 0, null);
+
+		Assertions.assertThat(execution.getFilesFound()).isEqualTo(2);
+		Assertions.assertThat(execution.getStatusMessage()).isEqualTo(said);
 	}
 
 	private Execution running() {

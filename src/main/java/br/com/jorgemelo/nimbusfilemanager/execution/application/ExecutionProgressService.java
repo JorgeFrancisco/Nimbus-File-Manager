@@ -569,6 +569,14 @@ public class ExecutionProgressService {
 	 * through an operation above, which names the taking it is writing under.
 	 */
 	private void applyMessage(Execution execution, ExecutionMessage message) {
+		// No sentence means leave the one the row already has. A caller with nothing
+		// new to say is ordinary - a counter moving under the same step - and it used
+		// to take the whole update down with a null dereference, which cost a
+		// geographic dataset update every time a file came back unchanged.
+		if (message == null) {
+			return;
+		}
+
 		execution.setStatusMessage(StatusMessage.coded(message.code(), messageCodec.encode(message.args())));
 	}
 

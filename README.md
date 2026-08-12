@@ -1641,6 +1641,17 @@ mocked the collaborator they belonged to. Covering the five put it at 99.04. Tha
 working as intended: the number fell, the report named the cause, and the answer was tests of
 behaviour rather than a lower floor.
 
+**Two things the nine-stage rework broke, found by running it.** A dataset update whose files the
+server reported unchanged failed outright: the acquisition returns early on a 304, before the line
+that names the stage, so the stage reported its completion with no sentence and the write died on a
+null. The stage is named before the download now, whatever the download turns out to do, and a
+progress write with nothing new to say leaves the sentence the row already has instead of taking the
+update down. The settings panel had the mirror-image problem: it read the administrative level from
+the message's first argument, which is where the level used to travel, and after the level moved
+into the message code it was handed an empty key and drew what a missing key looks like -
+{@code ??_pt_BR??}. It reads the code now, and the stages that are not about one level name the
+dataset itself so the sentence does not trail off after the verb.
+
 **Queue order stopped depending on the machine's time zone.** The reservation ranks pending work by
 priority plus how long it has waited, capped at five points - and it measured that wait against the
 database's `now()`, rendered in the JDBC session's zone, while `created_at` holds local time in the
