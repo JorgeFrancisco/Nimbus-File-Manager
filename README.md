@@ -1641,6 +1641,17 @@ mocked the collaborator they belonged to. Covering the five put it at 99.04. Tha
 working as intended: the number fell, the report named the cause, and the answer was tests of
 behaviour rather than a lower floor.
 
+**A dataset update was asking for a second one while it ran.** The timer skips its daily rule when
+nothing is installed, so that a fresh machine acquires the dataset without waiting for the hour - and
+"nothing is installed" is answered by counting rows, which the import empties before it refills. For
+the two minutes an update takes, the check therefore read the acquisition in progress as an absent
+dataset and asked again every minute. Deduplication held that to a single extra run rather than one
+per tick, which is why it looked like a duplicate rather than a storm: a second pass that downloaded
+nothing new, deleted the whole table and rebuilt it, with the panel showing a finished update beside
+a running one. The timer now stands down while a GEO acquisition is anywhere between queued and
+finished - which is what the queue already knew, so no new state was invented - and asks again the
+moment one ends, so a run that failed is still retried on the next tick.
+
 **Two things the nine-stage rework broke, found by running it.** A dataset update whose files the
 server reported unchanged failed outright: the acquisition returns early on a 304, before the line
 that names the stage, so the stage reported its completion with no sentence and the write died on a

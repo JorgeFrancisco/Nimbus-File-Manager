@@ -50,6 +50,7 @@ public class GeoDatasetAutoUpdateScheduler {
 	private final AppSettingService appSettingService;
 	private final OfflineGeoDataset offlineGeoDataset;
 	private final GeoLauncher geoLauncher;
+	private final GeoRunReader geoRunReader;
 	private final InventoryRunningState inventoryRunningState;
 	private final Clock clock;
 
@@ -64,11 +65,12 @@ public class GeoDatasetAutoUpdateScheduler {
 	private volatile LocalDate lastCheckedOn;
 
 	public GeoDatasetAutoUpdateScheduler(AppSettingService appSettingService, OfflineGeoDataset offlineGeoDataset,
-			GeoLauncher geoLauncher, InventoryRunningState inventoryRunningState, Clock clock,
-			BoundaryDatasetProperties properties) {
+			GeoLauncher geoLauncher, GeoRunReader geoRunReader, InventoryRunningState inventoryRunningState,
+			Clock clock, BoundaryDatasetProperties properties) {
 		this.appSettingService = appSettingService;
 		this.offlineGeoDataset = offlineGeoDataset;
 		this.geoLauncher = geoLauncher;
+		this.geoRunReader = geoRunReader;
 		this.inventoryRunningState = inventoryRunningState;
 		this.clock = clock;
 
@@ -122,6 +124,19 @@ public class GeoDatasetAutoUpdateScheduler {
 		// An inventory reads locations while it runs; replacing the dataset under it
 		// would change the answers halfway through.
 		if (inventoryRunningState.isRunning()) {
+			return false;
+		}
+
+		// One acquisition at a time, and this is the guard that says so - not the
+		// deduplication key, which deliberately allows one request to wait while an
+		// identical one runs. Asked without it, the branch below reads a dataset that
+		// is empty *because* an import is emptying it: the import deletes before it
+		// writes, so for the minutes it takes, "nothing installed" is true and this
+		// pass asks again every tick. Deduplication then held the damage to a single
+		// extra run, which downloaded nothing new, deleted the whole table and
+		// rebuilt it - and left the panel showing a finished update beside a running
+		// one.
+		if (geoRunReader.importRunning()) {
 			return false;
 		}
 

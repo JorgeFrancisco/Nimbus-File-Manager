@@ -43,6 +43,7 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	private final AppSettingService appSettingService = mock(AppSettingService.class);
 	private final OfflineGeoDataset offlineGeoDataset = mock(OfflineGeoDataset.class);
 	private final GeoLauncher geoLauncher = mock(GeoLauncher.class);
+	private final GeoRunReader geoRunReader = mock(GeoRunReader.class);
 	private final InventoryRunningState inventoryRunningState = mock(InventoryRunningState.class);
 
 	private static Clock at(String localDateTime) {
@@ -63,9 +64,8 @@ class GeoDatasetAutoUpdateSchedulerTest {
 
 		properties.setAutoUpdate(autoUpdate);
 
-		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, geoLauncher,
-				inventoryRunningState,
-				clock, properties);
+		return new GeoDatasetAutoUpdateScheduler(appSettingService, offlineGeoDataset, geoLauncher, geoRunReader,
+				inventoryRunningState, clock, properties);
 	}
 
 	private Set<Thread> timerThreads() {
@@ -78,6 +78,29 @@ class GeoDatasetAutoUpdateSchedulerTest {
 	 * scheduler waiting out its initial delay must never be the reason a JVM
 	 * refuses to exit.
 	 */
+	/**
+	 * An acquisition already under way is the one state this pass must not answer
+	 * with another request. It reads "nothing installed" while an import is running
+	 * - the import empties the table before it fills it - so without this guard the
+	 * timer asked again every minute, and deduplication turned that into exactly one
+	 * extra run: a second download of files the server reported unchanged, a second
+	 * delete of the whole table, and a panel showing a finished update beside a
+	 * running one.
+	 */
+	@Test
+	void doesNotAskWhileAnUpdateIsAlreadyRunning() {
+		when(appSettingService.booleanValue(eq(SettingsConstants.LOCATION_ENABLED), anyBoolean())).thenReturn(true);
+		when(geoRunReader.importRunning()).thenReturn(true);
+
+		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
+
+		// And it never even asked whether the dataset is installed: the answer is
+		// meaningless while the thing that installs it is halfway through.
+		verify(offlineGeoDataset, never()).status();
+	}
+
 	@Test
 	void schedulesTheTimerOnADaemonThreadOfItsOwn() {
 		Set<Thread> before = timerThreads();
@@ -134,6 +157,31 @@ class GeoDatasetAutoUpdateSchedulerTest {
 		locationEnabled(true);
 		installed(false);
 		scheduler(at("2026-08-01T09:15:00")).runOnce();
+
+		verify(geoLauncher).updateDataset();
+	}
+
+	/**
+	 * The guard holds the pass back while an acquisition is under way, and not one
+	 * moment longer. A run that failed leaves a terminal row, the dataset is still
+	 * not installed, and the very next tick asks again - which is the retry this
+	 * feature depends on, and the thing a guard written as "one update per day"
+	 * would have quietly broken.
+	 */
+	@Test
+	void asksAgainOnceTheRunThatFailedIsOver() {
+		locationEnabled(true);
+		installed(false);
+
+		when(geoRunReader.importRunning()).thenReturn(true, false);
+
+		GeoDatasetAutoUpdateScheduler scheduler = scheduler(at("2026-08-01T09:15:00"));
+
+		scheduler.runOnce();
+
+		verify(geoLauncher, never()).updateDataset();
+
+		scheduler.runOnce();
 
 		verify(geoLauncher).updateDataset();
 	}

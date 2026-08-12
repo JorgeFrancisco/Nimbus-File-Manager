@@ -7,7 +7,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Optional;
 
 import org.assertj.core.api.Assertions;
@@ -30,8 +29,8 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
  *
  * <p>
  * Two runners used to hold them, which worked only while the work happened in
- * the process being asked. Read from the rows, the same panel reports a run this
- * application never started and keeps reporting it after a restart.
+ * the process being asked. Read from the rows, the same panel reports a run
+ * this application never started and keeps reporting it after a restart.
  */
 class GeoRunReaderTest {
 
@@ -92,8 +91,8 @@ class GeoRunReaderTest {
 	@Test
 	void aFinishedRebuildReportsWhatItDidAndForWhichScope() {
 		Execution execution = Execution.builder().id(1L).executionType(ExecutionType.LOCATION_REBUILD)
-				.status(ExecutionStatus.FINISHED).dedupKey(LocationRebuildScope.LOW_CONFIDENCE.name())
-				.finishedAt(NOW).filesFound(100).filesMoved(80).cacheHits(15).errors(5).build();
+				.status(ExecutionStatus.FINISHED).dedupKey(LocationRebuildScope.LOW_CONFIDENCE.name()).finishedAt(NOW)
+				.filesFound(100).filesMoved(80).cacheHits(15).errors(5).build();
 
 		latest(ExecutionType.LOCATION_REBUILD, execution);
 
@@ -241,7 +240,6 @@ class GeoRunReaderTest {
 	}
 
 	private void latest(ExecutionType type, Execution execution) {
-		when(executionRepository.findFirstByExecutionTypeOrderByCreatedAtDesc(type))
-				.thenReturn(Optional.of(execution));
+		when(executionRepository.findFirstByExecutionTypeOrderByCreatedAtDesc(type)).thenReturn(Optional.of(execution));
 	}
 }
