@@ -36,18 +36,22 @@ class GeoDatasetProgressTest {
 
 	private final ExecutionOwnership ownership = Takings.owning(1L);
 
-	/** Three levels: the unit of an update is neither files nor bytes. */
+	/**
+	 * Nine stages, always: the unit of an update is neither files nor bytes, and
+	 * the denominator does not follow the work - a level already on disk still
+	 * occupies its stage, so the same pipeline reads the same length every run.
+	 */
 	@Test
-	void attachingSaysHowManyStepsTheRunHas() {
+	void attachingSaysHowManyStagesTheRunHas() {
 		progress.attach(ownership);
 
-		verify(executionProgressService).updateTotal(ownership, AdminBoundaryKind.values().length);
+		verify(executionProgressService).updateTotal(ownership, 9);
 	}
 
 	@Test
 	void aDownloadSaysWhichLevelAndStartsTheStepAtZero() {
 		progress.attach(ownership);
-		progress.startDownload(AdminBoundaryKind.STATE, 1_000);
+		progress.downloading(AdminBoundaryKind.STATE, 1_000);
 
 		ArgumentCaptor<ExecutionMessage> message = ArgumentCaptor.forClass(ExecutionMessage.class);
 
@@ -55,22 +59,25 @@ class GeoDatasetProgressTest {
 				eq(ExecutionStepType.PROGRESS_UPDATED), message.capture());
 		verify(executionProgressService).startsCurrentItem(ownership);
 
-		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.geodata.downloading");
-		Assertions.assertThat(message.getValue().args()).containsExactly("settings.geo.step.state");
+		// The level is in the code, not in an argument: an argument carrying the key
+		// of another message is never resolved on the way out, and the screen showed
+		// the key itself.
+		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.geodata.downloading.state");
+		Assertions.assertThat(message.getValue().args()).isEmpty();
 	}
 
 	@Test
 	void anImportSaysWhichLevelAndIsADifferentPhase() {
 		progress.attach(ownership);
-		progress.startImport(AdminBoundaryKind.MUNICIPALITY, 2_000);
+		progress.importing(AdminBoundaryKind.MUNICIPALITY, 2_000);
 
 		ArgumentCaptor<ExecutionMessage> message = ArgumentCaptor.forClass(ExecutionMessage.class);
 
 		verify(executionProgressService).updatePhase(eq(ownership), eq(ExecutionPhase.PROCESSING), any(),
 				message.capture());
 
-		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.geodata.importing");
-		Assertions.assertThat(message.getValue().args()).containsExactly("settings.geo.step.municipality");
+		Assertions.assertThat(message.getValue().code()).isEqualTo("backend.geodata.importing.municipality");
+		Assertions.assertThat(message.getValue().args()).isEmpty();
 	}
 
 	/**
@@ -81,7 +88,7 @@ class GeoDatasetProgressTest {
 	@Test
 	void bytesBecomeAPercentageOfTheStep() {
 		progress.attach(ownership);
-		progress.startDownload(AdminBoundaryKind.COUNTRY, 200);
+		progress.downloading(AdminBoundaryKind.COUNTRY, 200);
 		progress.addDownloadedBytes(50);
 		progress.addDownloadedBytes(50);
 
@@ -93,20 +100,26 @@ class GeoDatasetProgressTest {
 	@Test
 	void aStepOfUnknownSizeReportsNoPercentage() {
 		progress.attach(ownership);
-		progress.startImport(AdminBoundaryKind.COUNTRY, -1);
+		progress.importing(AdminBoundaryKind.COUNTRY, -1);
 		progress.addImportedBytes(500);
 
 		verify(executionProgressService, never()).updateCurrentItem(any(), anyInt());
 	}
 
+	/**
+	 * The count of finished stages goes into the counter the first bar divides, and
+	 * that is the whole correction. It used to write the <em>total</em> there and
+	 * the count beside it, so the bar read a hundred per cent the moment the first
+	 * level finished importing, with six stages still to run.
+	 */
 	@Test
-	void eachFinishedLevelCountsAsAnItemOfTheRun() {
+	void eachFinishedStageAdvancesTheCounterTheGlobalBarDivides() {
 		progress.attach(ownership);
-		progress.levelFinished();
-		progress.levelFinished();
+		progress.stageFinished();
+		progress.stageFinished();
 
-		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(3), eq(1), eq(0), eq(0), any());
-		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(3), eq(2), eq(0), eq(0), any());
+		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(1), eq(1), eq(0), eq(0), any());
+		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(2), eq(2), eq(0), eq(0), any());
 	}
 
 	@Test
@@ -125,11 +138,11 @@ class GeoDatasetProgressTest {
 	 */
 	@Test
 	void withNothingAttachedItReportsNowhere() {
-		progress.startDownload(AdminBoundaryKind.COUNTRY, 100);
+		progress.downloading(AdminBoundaryKind.COUNTRY, 100);
 		progress.addDownloadedBytes(50);
-		progress.startImport(AdminBoundaryKind.STATE, 100);
+		progress.importing(AdminBoundaryKind.STATE, 100);
 		progress.addImportedBytes(50);
-		progress.levelFinished();
+		progress.stageFinished();
 
 		verifyNoInteractions(executionProgressService);
 	}
@@ -140,7 +153,7 @@ class GeoDatasetProgressTest {
 		progress.addImportedRecords(7);
 		progress.detach();
 
-		progress.levelFinished();
+		progress.stageFinished();
 
 		Assertions.assertThat(progress.recordsImported()).isEqualTo(7);
 

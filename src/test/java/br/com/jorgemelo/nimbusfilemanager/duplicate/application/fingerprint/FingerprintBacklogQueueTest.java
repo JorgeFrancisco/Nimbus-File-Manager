@@ -435,8 +435,11 @@ class FingerprintBacklogQueueTest {
 
 		photos.handle(execution(), claimed(payload(1, false)), Takings.unfenced(1L));
 
+		// The backlog it started with is the denominator and belongs in the total;
+		// what has been hashed is the numerator. Repeating the backlog in both made
+		// every run read as complete before it began.
 		verify(executionProgressService).updateTotal(any(), eq(120));
-		verify(executionProgressService).updateLiveProgress(any(), eq(120), eq(30), eq(0), eq(2), any());
+		verify(executionProgressService).updateLiveProgress(any(), eq(30), eq(30), eq(0), eq(2), any());
 	}
 
 	/**

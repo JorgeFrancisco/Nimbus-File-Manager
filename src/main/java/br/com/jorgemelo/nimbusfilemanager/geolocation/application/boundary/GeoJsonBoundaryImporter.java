@@ -60,10 +60,19 @@ public class GeoJsonBoundaryImporter {
 
 		long total = 0;
 
-		for (LeveledBoundaryFile file : files) {
-			total += importLevel(file.kind(), file.file(), source, datasetVersion);
+		// Walked by level rather than by file, so the three import stages happen in
+		// the same order every run and a level that never arrived still occupies its
+		// place in the sequence instead of shortening it.
+		for (AdminBoundaryKind kind : AdminBoundaryKind.values()) {
+			Path file = fileOf(files, kind);
 
-			progress.levelFinished();
+			if (file == null) {
+				progress.nothingToImport(kind);
+			} else {
+				total += importLevel(kind, file, source, datasetVersion);
+			}
+
+			progress.stageFinished();
 		}
 
 		if (total == 0) {
@@ -91,12 +100,18 @@ public class GeoJsonBoundaryImporter {
 		return total;
 	}
 
+	/** The file this run acquired for the level, or null when it has none. */
+	private static Path fileOf(List<LeveledBoundaryFile> files, AdminBoundaryKind kind) {
+		return files.stream().filter(file -> file.kind() == kind).map(LeveledBoundaryFile::file).findFirst()
+				.orElse(null);
+	}
+
 	private long importLevel(AdminBoundaryKind kind, Path file, String source, String datasetVersion) {
 		WKBWriter writer = new WKBWriter();
 
 		// Progress percentage comes from bytes of the file consumed by the
 		// parser (the total feature count is unknown without a full pre-scan).
-		progress.startImport(kind, fileSize(file));
+		progress.importing(kind, fileSize(file));
 
 		List<SqlParameterSource> batch = new ArrayList<>(BATCH_SIZE);
 

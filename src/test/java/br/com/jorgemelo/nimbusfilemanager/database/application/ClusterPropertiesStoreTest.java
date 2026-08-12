@@ -56,7 +56,9 @@ class ClusterPropertiesStoreTest {
 	void refusesToGuessWhenTheApplicationWroteNothing(@TempDir Path workspace) {
 		Path file = workspace.resolve("cluster.properties");
 
-		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+		ClusterPropertiesStore store = new ClusterPropertiesStore(file);
+
+		Assertions.assertThatThrownBy(store::require)
 			.isInstanceOf(IllegalStateException.class).hasMessageContaining("no embedded database connection")
 			.hasMessageContaining(file.toString());
 	}
@@ -68,7 +70,9 @@ class ClusterPropertiesStoreTest {
 
 		Files.writeString(file, "port=6432");
 
-		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+		ClusterPropertiesStore store = new ClusterPropertiesStore(file);
+
+		Assertions.assertThatThrownBy(store::require)
 			.isInstanceOf(IllegalStateException.class);
 	}
 
@@ -79,7 +83,9 @@ class ClusterPropertiesStoreTest {
 
 		Files.writeString(file, "port=not-a-port" + System.lineSeparator() + "password=secret");
 
-		Assertions.assertThatThrownBy(() -> new ClusterPropertiesStore(file).require())
+		ClusterPropertiesStore store = new ClusterPropertiesStore(file);
+
+		Assertions.assertThatThrownBy(store::require)
 			.isInstanceOf(IllegalStateException.class).hasMessageContaining("usable port");
 	}
 

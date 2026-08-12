@@ -79,8 +79,11 @@ public class LocationRebuildJobHandler implements ExecutionJobHandler {
 				(int) locationRebuildService.countCandidates(payload.scope()));
 
 		LocationRebuildResult result = locationRebuildService.rebuild(payload.scope(),
-				processed -> executionProgressService.updateLiveProgress(ownership, 0, (int) processed, 0, 0,
-						GeoMessages.rebuilding()),
+				// The opposite mistake of the others: a constant zero in the counter left
+				// the bar at nothing for the whole rebuild, however many candidates it
+				// had already resolved.
+				processed -> executionProgressService.updateLiveProgress(ownership, (int) processed, (int) processed, 0,
+						0, GeoMessages.rebuilding()),
 				() -> shouldStop(execution.getId()));
 
 		finish(execution, ownership, result);

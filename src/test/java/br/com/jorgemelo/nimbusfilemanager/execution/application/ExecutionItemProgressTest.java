@@ -132,6 +132,60 @@ class ExecutionItemProgressTest {
 		Assertions.assertThat(execution.getCurrentItemPercent()).isEqualTo(42);
 	}
 
+	/**
+	 * A stretch of work with nothing to count takes the number away rather than
+	 * setting it to zero. The two are different claims: zero says the item has
+	 * barely begun, absent says there is no item to measure - and only the second
+	 * makes the bar disappear instead of sitting empty and looking stuck.
+	 */
+	@Test
+	void takesTheNumberAwayForWorkWithNothingToCount() {
+		Execution execution = running();
+
+		ExecutionProgressService service = service();
+
+		service.updateCurrentItem(ownership, 42);
+
+		service.clearsCurrentItem(ownership);
+
+		Assertions.assertThat(execution.getCurrentItemPercent()).isNull();
+	}
+
+	/**
+	 * And it forgets what the throttle remembered, so the next stage that does have
+	 * something to count is written at once rather than being mistaken for a repeat
+	 * of the number that was cleared.
+	 */
+	@Test
+	void clearingLetsTheNextRealNumberThroughImmediately() {
+		Execution execution = running();
+
+		ExecutionProgressService service = service();
+
+		service.updateCurrentItem(ownership, 42);
+
+		service.clearsCurrentItem(ownership);
+
+		service.updateCurrentItem(ownership, 42);
+
+		Assertions.assertThat(execution.getCurrentItemPercent()).isEqualTo(42);
+	}
+
+	/**
+	 * A row that is no longer there is not written around quietly: the percentage
+	 * belongs to an execution, and an execution that vanished mid-run is a fault
+	 * somebody has to see rather than a write to nowhere.
+	 */
+	@Test
+	void refusesToWriteAgainstARowThatIsNoLongerThere() {
+		when(executionRepository.findById(1L)).thenReturn(Optional.empty());
+
+		ExecutionItemProgressWriter writer = new ExecutionItemProgressWriter(executionRepository);
+
+		Assertions.assertThatThrownBy(() -> writer.clear(1L)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Execution not found");
+	}
+
 	private Execution running() {
 		Execution execution = Execution.builder().id(1L).status(ExecutionStatus.RUNNING).build();
 

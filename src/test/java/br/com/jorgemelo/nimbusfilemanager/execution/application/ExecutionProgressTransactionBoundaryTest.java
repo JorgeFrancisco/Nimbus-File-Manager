@@ -38,7 +38,8 @@ class ExecutionProgressTransactionBoundaryTest {
 	 * the proxy, so the write lives in a bean of its own and carries the boundary
 	 * there.
 	 */
-	private static final Set<String> WRITE_SOMEWHERE_ELSE = Set.of("updateCurrentItem", "startsCurrentItem");
+	private static final Set<String> WRITE_SOMEWHERE_ELSE = Set.of("updateCurrentItem", "startsCurrentItem",
+			"clearsCurrentItem");
 
 	@Test
 	void everyPublicOperationDeclaresItsTransactionOrSaysWhyItDoesNotNeedOne() {

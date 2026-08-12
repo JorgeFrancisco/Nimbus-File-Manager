@@ -7,9 +7,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
@@ -19,10 +17,7 @@ import br.com.jorgemelo.nimbusfilemanager.geolocation.application.OfflineGeoData
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.BoundaryMetadata;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoAdminBoundaryRepository;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -47,20 +42,20 @@ public class BoundaryDatasetManager implements OfflineGeoDataset {
 	private final BoundaryMetadataStore metadataStore;
 	private final GeoAdminBoundaryRepository repository;
 	private final BoundaryGeometryCache geometryCache;
-	private final AppSettingService appSettingService;
+	private final BoundaryTerritoryCompletion territoryCompletion;
 	private final Clock clock;
 
 	public BoundaryDatasetManager(WorkspaceManager workspaceManager, BoundarySource boundarySource,
 			GeoJsonBoundaryImporter importer, BoundaryMetadataStore metadataStore,
 			GeoAdminBoundaryRepository repository, BoundaryGeometryCache geometryCache,
-			AppSettingService appSettingService, Clock clock) {
+			BoundaryTerritoryCompletion territoryCompletion, Clock clock) {
 		this.workspaceManager = workspaceManager;
 		this.boundarySource = boundarySource;
 		this.importer = importer;
 		this.metadataStore = metadataStore;
 		this.repository = repository;
 		this.geometryCache = geometryCache;
-		this.appSettingService = appSettingService;
+		this.territoryCompletion = territoryCompletion;
 		this.clock = clock;
 	}
 
@@ -98,7 +93,7 @@ public class BoundaryDatasetManager implements OfflineGeoDataset {
 
 			long imported = importer.importDataset(files, boundarySource.sourceTag(), boundarySource.version());
 
-			imported += completeMissingTerritories();
+			imported += territoryCompletion.complete(workspaceManager.geodata());
 
 			// Everything downloaded and imported: only now do the new files replace
 			// the ones resolution reads. Until this line the previous dataset is
@@ -147,42 +142,6 @@ public class BoundaryDatasetManager implements OfflineGeoDataset {
 		metadataStore.delete();
 
 		log.info("Geographic dataset removed");
-	}
-
-	/**
-	 * The main dataset dissolves some dependent territories into their sovereign
-	 * state (e.g. Aruba inside the Netherlands polygon), making photos taken there
-	 * resolve to the wrong country. After the main import, every ISO country left
-	 * without a polygon of its own is fetched individually from the source and
-	 * imported additively - fully data-driven, no hardcoded territory list.
-	 * Failures here never undo the main dataset.
-	 */
-	private long completeMissingTerritories() {
-		if (!appSettingService.booleanValue(SettingsConstants.BOUNDARY_AUTO_TERRITORIES, true)) {
-			return 0;
-		}
-
-		Set<String> present = Set.copyOf(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY));
-
-		List<String> missing = CountryCodes.alpha3ToAlpha2().entrySet().stream()
-				.filter(entry -> !present.contains(entry.getValue())).map(Map.Entry::getKey).sorted().toList();
-
-		if (missing.isEmpty()) {
-			return 0;
-		}
-
-		List<LeveledBoundaryFile> files = boundarySource.fetchMissingCountries(missing, workspaceManager.geodata());
-
-		if (files.isEmpty()) {
-			return 0;
-		}
-
-		long imported = importer.importExtra(files, boundarySource.sourceTag(), boundarySource.version());
-
-		log.info("Imported {} supplemental territory boundaries ({} ISO codes had no polygon)", imported,
-				missing.size());
-
-		return imported;
 	}
 
 	private long folderSize(Path folder) {

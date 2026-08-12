@@ -1,14 +1,16 @@
 package br.com.jorgemelo.nimbusfilemanager.database.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -219,19 +221,21 @@ class StandaloneWorkerHandoffIntegrationTest {
 	 * otherwise block on.
 	 */
 	private void waitUntilReady(Process worker, Path output) throws Exception {
-		for (int attempt = 0; attempt < STARTUP_GUARD_SECONDS * 2; attempt++) {
-			if (Files.exists(output) && Files.readString(output).contains(READY)) {
-				return;
-			}
+		try {
+			await().atMost(Duration.ofSeconds(STARTUP_GUARD_SECONDS)).pollDelay(Duration.ZERO)
+					.pollInterval(Duration.ofMillis(500)).until(() -> {
+						// A worker that ended is not a worker that is late, and waiting out
+						// the rest of the budget for one would only delay the same failure.
+						if (!worker.isAlive()) {
+							throw new AssertionError(
+									"the worker ended before it was ready:\n" + Files.readString(output));
+						}
 
-			if (!worker.isAlive()) {
-				throw new AssertionError("the worker ended before it was ready:\n" + Files.readString(output));
-			}
-
-			TimeUnit.MILLISECONDS.sleep(500);
+						return Files.exists(output) && Files.readString(output).contains(READY);
+					});
+		} catch (ConditionTimeoutException _) {
+			throw new AssertionError("the worker never became ready:\n" + Files.readString(output));
 		}
-
-		throw new AssertionError("the worker never became ready:\n" + Files.readString(output));
 	}
 
 	/** What the application leaves behind once its cluster is up. */

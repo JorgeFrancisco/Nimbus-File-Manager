@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepository;
 
 /**
@@ -31,8 +32,21 @@ public class ExecutionItemProgressWriter {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void write(long executionId, int percent) {
-		executionRepository.findById(executionId)
-				.orElseThrow(() -> new IllegalStateException("Execution not found: " + executionId))
-				.setCurrentItemPercent(percent);
+		found(executionId).setCurrentItemPercent(percent);
+	}
+
+	/**
+	 * Takes the number away rather than setting it to zero, for a stretch of work
+	 * that has nothing to count. Null is what the read side already treats as "no
+	 * second bar", so nothing downstream has to learn a new case.
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void clear(long executionId) {
+		found(executionId).setCurrentItemPercent(null);
+	}
+
+	private Execution found(long executionId) {
+		return executionRepository.findById(executionId)
+				.orElseThrow(() -> new IllegalStateException("Execution not found: " + executionId));
 	}
 }

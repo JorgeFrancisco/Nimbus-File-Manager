@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.application;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import java.util.function.LongConsumer;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -222,7 +224,9 @@ class GeoQueueTest {
 
 		rebuildHandler.handle(execution(ExecutionType.LOCATION_REBUILD), claimed(rebuildPayload(1)), null);
 
-		verify(executionProgressService).updateLiveProgress(any(), eq(0), eq(7), eq(0), eq(0), any());
+		// Seven candidates resolved is seven, not nought: the counter used to be a
+		// constant zero, so the bar stayed empty for the whole rebuild.
+		verify(executionProgressService).updateLiveProgress(any(), eq(7), eq(7), eq(0), eq(0), any());
 	}
 
 	/**
@@ -232,6 +236,7 @@ class GeoQueueTest {
 	@Test
 	void aFinishedUpdateInvalidatesTheAnswersTheOldBoundariesGave() {
 		when(geoDatasetProgress.recordsImported()).thenReturn(1_234L);
+		when(geoDatasetProgress.stagesDone()).thenReturn(9);
 
 		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
 
@@ -239,8 +244,35 @@ class GeoQueueTest {
 		verify(mediaLocationService).clearCache();
 		verify(geoDatasetProgress).attach(any());
 		verify(geoDatasetProgress).detach();
+		// Nine of nine, not one thousand two hundred and thirty-four of nine. The
+		// counter and its total are the first bar; feeding it the boundary count made
+		// a finished update read as a ratio nobody could mean, and it only looked
+		// right because the percentage is clamped at a hundred. What was imported is
+		// what the sentence carries.
 		verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED),
-				eq(new ExecutionCounts(1234, 1234, 0, 0)), any());
+				eq(new ExecutionCounts(9, 1234, 0, 0)), any());
+	}
+
+	/**
+	 * The ninth stage happens after the last functional work rather than beside it:
+	 * the cache the new dataset invalidates is cleared first, and only then is the
+	 * stage counted and the row closed. The other order would have the bar reach a
+	 * hundred per cent with work still to do.
+	 */
+	@Test
+	void theLastStageIsCountedOnlyAfterTheCacheTheNewDatasetInvalidates() {
+		when(geoDatasetProgress.stagesDone()).thenReturn(9);
+
+		datasetHandler.handle(execution(ExecutionType.GEO_DATASET_UPDATE), claimed(datasetPayload(1)), null);
+
+		InOrder order = inOrder(offlineGeoDataset, geoDatasetProgress, mediaLocationService,
+				executionProgressService);
+
+		order.verify(offlineGeoDataset).downloadAndImport();
+		order.verify(geoDatasetProgress).finishing();
+		order.verify(mediaLocationService).clearCache();
+		order.verify(geoDatasetProgress).stageFinished();
+		order.verify(executionProgressService).finishCommand(any(), eq(ExecutionStatus.FINISHED), any(), any());
 	}
 
 	/**

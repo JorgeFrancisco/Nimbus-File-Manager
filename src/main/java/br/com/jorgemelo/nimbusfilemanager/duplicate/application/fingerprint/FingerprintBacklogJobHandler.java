@@ -101,8 +101,11 @@ abstract class FingerprintBacklogJobHandler implements ExecutionJobHandler {
 		executionProgressService.updateTotal(ownership, (int) before.pending());
 
 		DrainResult result = backlog.drainPending(() -> shouldStop(execution.getId()),
-				(done, failures) -> executionProgressService.updateLiveProgress(ownership, (int) before.pending(),
-						(int) done, 0, (int) failures, FingerprintMessages.started(before.pending())),
+				// Done, not pending: the backlog it started with is the denominator and
+				// already lives in totalExpected, so repeating it as the numerator made
+				// the bar full before the first hash was written.
+				(done, failures) -> executionProgressService.updateLiveProgress(ownership, (int) done, (int) done, 0,
+						(int) failures, FingerprintMessages.started(before.pending())),
 				ownership);
 
 		afterDrain(result, ownership);

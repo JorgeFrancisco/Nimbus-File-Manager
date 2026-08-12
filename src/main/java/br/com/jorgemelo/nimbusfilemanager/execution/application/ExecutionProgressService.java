@@ -212,6 +212,28 @@ public class ExecutionProgressService {
 	}
 
 	/**
+	 * What is happening now has nothing to measure, so the second bar goes away
+	 * rather than sitting at a number.
+	 *
+	 * <p>
+	 * The counterpart of {@link #startsCurrentItem(ExecutionOwnership)}, and the
+	 * distinction is the whole point: zero means "this item has barely begun",
+	 * absent means "there is no item to measure". Writing zero for a stage with no
+	 * denominator - publishing files, invalidating a cache - would draw an empty
+	 * bar that reads as stuck, which is the same lie as inventing a percentage,
+	 * told from the other end.
+	 */
+	public void clearsCurrentItem(ExecutionOwnership ownership) {
+		if (!ownership.takingIsStillCurrent()) {
+			return;
+		}
+
+		executionItemProgressWriter.clear(ownership.executionId());
+
+		lastItemWrites.remove(ownership.executionId());
+	}
+
+	/**
 	 * Nothing is mid-item once the execution has ended, so the column says so and
 	 * the throttle forgets it. Without the second half a worker that ran for days
 	 * would keep one entry per execution it had ever run.

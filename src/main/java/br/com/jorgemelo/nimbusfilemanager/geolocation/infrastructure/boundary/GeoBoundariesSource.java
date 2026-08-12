@@ -235,20 +235,34 @@ public class GeoBoundariesSource implements BoundarySource {
 		return LocalDate.now(clock).toString();
 	}
 
+	/**
+	 * The acquisition stage of one level, and the single place that decides where
+	 * its file comes from. Three outcomes and no fourth: the file is already on
+	 * disk, it has to be downloaded, or the level is not configured at all.
+	 *
+	 * <p>
+	 * Whichever it was, that was the stage - it names itself and is counted. Two of
+	 * the three cost no time, and they are still stages for the reason the sequence
+	 * is fixed at nine: a run that skipped straight past them would read as a
+	 * shorter pipeline, and nobody watching could tell that from a failure.
+	 */
 	private void add(List<LeveledBoundaryFile> files, AdminBoundaryKind kind, String url, String fileName,
 			Path workspaceFolder) {
 		Path local = localFile(fileName);
 
 		if (local != null) {
+			progress.alreadyAvailable(kind);
+
 			files.add(new LeveledBoundaryFile(kind, local));
-			return;
+		} else if (url == null || url.isBlank()) {
+			progress.levelNotConfigured(kind);
+		} else {
+			files.add(new LeveledBoundaryFile(kind, download(kind, url, fileName, workspaceFolder.resolve(DOWNLOADS))));
 		}
 
-		if (url == null || url.isBlank()) {
-			return;
-		}
-
-		files.add(new LeveledBoundaryFile(kind, download(kind, url, fileName, workspaceFolder.resolve(DOWNLOADS))));
+		// Reached only when the branch above returned without throwing, which is
+		// what keeps a failed acquisition out of the count.
+		progress.stageFinished();
 	}
 
 	private Path localFile(String fileName) {
@@ -304,7 +318,7 @@ public class GeoBoundariesSource implements BoundarySource {
 
 			temp = Files.createTempFile(targetFolder, fileName, ".part");
 
-			progress.startDownload(kind, response.headers().firstValueAsLong("content-length").orElse(-1));
+			progress.downloading(kind, response.headers().firstValueAsLong("content-length").orElse(-1));
 
 			copyLimited(response.body(), temp, uri.toString());
 
@@ -339,10 +353,14 @@ public class GeoBoundariesSource implements BoundarySource {
 	 */
 	@Override
 	public void commit(Path workspaceFolder) {
+		progress.publishing();
+
 		Path downloads = workspaceFolder.resolve(DOWNLOADS);
 
 		if (pendingEtags.isEmpty() || !Files.isDirectory(downloads)) {
 			pendingEtags.clear();
+
+			progress.stageFinished();
 
 			return;
 		}
@@ -374,6 +392,8 @@ public class GeoBoundariesSource implements BoundarySource {
 		pendingEtags.clear();
 
 		log.info("Geographic dataset files published into {}", downloads);
+
+		progress.stageFinished();
 	}
 
 	/** Drops what was downloaded, leaving the previous dataset untouched. */

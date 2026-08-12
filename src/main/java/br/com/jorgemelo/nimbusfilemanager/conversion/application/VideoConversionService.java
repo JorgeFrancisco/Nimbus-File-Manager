@@ -218,8 +218,14 @@ public class VideoConversionService extends LocalizedComponent {
 
 			processed++;
 
-			executionProgressService.updateLiveProgress(ownership, total, processed, skipped, errors,
-					ExecutionMessages.processing(file.getFileName()));
+			// Items concluded, never the batch size: the counter is what the global bar
+			// divides by the total, so writing the total here read a hundred per cent
+			// from the first file on - and the next file's report, which counts
+			// properly, then took the bar backwards. Same expression as
+			// reportFileStarted, because one execution cannot have two opinions about
+			// how far along it is.
+			executionProgressService.updateLiveProgress(ownership, converted + skipped + errors, processed, skipped,
+					errors, ExecutionMessages.processing(file.getFileName()));
 		}
 
 		// Once for the batch, whatever it did and however many files it did it to. Two

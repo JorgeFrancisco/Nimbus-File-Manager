@@ -1610,8 +1610,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       3863 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.63% instruction, 92.95% branch, 98.15% line, 99.01% method, 100.00% class
+Tests:       3887 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.64% instruction, 92.94% branch, 98.15% line, 99.04% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1629,12 +1629,30 @@ Goal:   98.75% instruction, 93.00% branch, 98.25% line, 99.00% method, 100.00% c
 
 **The run above clears the floor on all five, and the floor stays where it was.** No margin is
 wide enough to raise into: against the drift this suite is known to have between runs (*A medição
-varia entre execuções* in `AGENTS.md`: up to 0.16 on branch and ~0.03 on the rest), instruction is
-0.02 above its floor and method 0.02 - both inside the band outright - while line at 0.04 and
-branch at 0.17 clear it by a single hundredth. A floor set at any of those readings would leave the
+varia entre execuções* in `AGENTS.md`: up to 0.16 on branch and ~0.03 on the rest), instruction sits
+0.03 above its floor and branch 0.16 - both exactly at the edge of the band - while line at 0.04 and
+method at 0.05 clear it by a hundredth or two. A floor set at any of those readings would leave the
 next measurement of the same tree no room at all, which is how ordinary noise becomes a red build.
-Branch is the one worth naming: it read 92.94 on the previous slice and 92.95 on this one, two
-different trees agreeing, so the value is real - and still only a hundredth clear of its own drift.
+
+**Method is the one this slice had to earn back.** The first measurement of it came in at 98.90,
+0.09 under the floor and well outside the drift - not noise, and the JaCoCo report said exactly why:
+five methods this slice added had no test touching the real object, because the tests around them
+mocked the collaborator they belonged to. Covering the five put it at 99.04. That is the ratchet
+working as intended: the number fell, the report named the cause, and the answer was tests of
+behaviour rather than a lower floor.
+
+**The global progress bar stopped lying, in five kinds of execution at once.** A dataset update
+read "3 of 3, 100%" while a second bar underneath still moved - and the cause was not geography. The
+first bar is `filesFound / totalExpected`, computed once, and five producers were writing the total
+into the counter it divides: the bar was full from the first item on. The conversion did worse,
+alternating between the total and a real count, so it went backwards between one file and the next;
+the location rebuild did the opposite, writing a constant zero that never moved at all. Each is now
+the count of items actually concluded, and a contract test replays those readings through the real
+formula to hold it: nothing starts full, nothing goes backwards, a hundred per cent arrives only
+with the last item. The dataset update models its own pipeline as nine fixed stages - three
+acquisitions, three imports, territories, publication, finish - so a stage that costs no time still
+names itself and still counts, and the run reaches nine of nine only after the last functional work.
+Where nothing can be measured the second bar is taken away rather than parked at zero.
 
 **A folder that arrives is a change, and a change already asked for outlives a queue that refused
 it.** Two ways the watcher could lose a filesystem change outright, both closed here and both held

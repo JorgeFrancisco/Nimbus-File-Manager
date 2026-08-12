@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -408,10 +407,12 @@ class DuplicateDeletionServiceTest {
 		delete(service, List.of(UUID.randomUUID(), UUID.randomUUID()));
 
 		// The bar reads the row now, so the total is declared once and each file
-		// finished moves the counter the screen polls.
+		// finished moves the counter the screen polls - one at a time. It used to be
+		// given the total on every report, which drew a full bar while the second
+		// file had not been looked at.
 		verify(executionProgressService).updateTotal(ownership, 2);
-		verify(executionProgressService, times(2)).updateLiveProgress(eq(ownership), eq(2), anyInt(), anyInt(),
-				anyInt(), any());
+		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(1), eq(1), anyInt(), anyInt(), any());
+		verify(executionProgressService).updateLiveProgress(eq(ownership), eq(2), eq(2), anyInt(), anyInt(), any());
 	}
 
 	@Test

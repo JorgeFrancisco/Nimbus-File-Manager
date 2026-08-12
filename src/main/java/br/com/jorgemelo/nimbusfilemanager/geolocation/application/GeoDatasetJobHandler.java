@@ -100,14 +100,27 @@ public class GeoDatasetJobHandler implements ExecutionJobHandler {
 		try {
 			offlineGeoDataset.downloadAndImport();
 
+			// The ninth stage, and the only one this class owns: the manager has
+			// already returned, and what is left is the cache the new dataset
+			// invalidates. It is the last functional work of the run, which is why
+			// the row cannot read complete before it.
+			geoDatasetProgress.finishing();
+
 			// A new dataset version invalidates previous resolutions; clear the
 			// persistent cache so rebuilds resolve against fresh data.
 			mediaLocationService.clearCache();
 
+			geoDatasetProgress.stageFinished();
+
 			long records = geoDatasetProgress.recordsImported();
 
+			// Stages completed, never records. The counter and its total are the
+			// first bar, and feeding it a boundary count made a finished update read
+			// "1,234,567 of 9" - which only looked right because the percentage is
+			// clamped at a hundred. What was imported is what the sentence says.
 			executionProgressService.finishCommand(ownership, ExecutionStatus.FINISHED,
-					new ExecutionCounts((int) records, (int) records, 0, 0), GeoMessages.updated(records));
+					new ExecutionCounts(geoDatasetProgress.stagesDone(), (int) records, 0, 0),
+					GeoMessages.updated(records));
 		} finally {
 			geoDatasetProgress.detach();
 		}

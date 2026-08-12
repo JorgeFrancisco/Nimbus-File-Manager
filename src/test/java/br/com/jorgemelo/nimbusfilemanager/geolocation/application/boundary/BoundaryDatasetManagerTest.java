@@ -1,7 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.geolocation.application.boundary;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -25,12 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.BoundaryMetadata;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.LeveledBoundaryFile;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.application.dto.OfflineGeoDatasetStatus;
-import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.repository.GeoAdminBoundaryRepository;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.AppSettingService;
-import br.com.jorgemelo.nimbusfilemanager.settings.application.constants.SettingsConstants;
 import br.com.jorgemelo.nimbusfilemanager.shared.infrastructure.config.WorkspaceManager;
 
 /**
@@ -46,7 +41,7 @@ class BoundaryDatasetManagerTest {
 	private final BoundaryMetadataStore metadataStore = mock(BoundaryMetadataStore.class);
 	private final GeoAdminBoundaryRepository repository = mock(GeoAdminBoundaryRepository.class);
 	private final BoundaryGeometryCache geometryCache = mock(BoundaryGeometryCache.class);
-	private final AppSettingService appSettingService = mock(AppSettingService.class);
+	private final BoundaryTerritoryCompletion territoryCompletion = mock(BoundaryTerritoryCompletion.class);
 
 	private BoundaryDatasetManager manager;
 
@@ -62,7 +57,7 @@ class BoundaryDatasetManagerTest {
 		when(boundarySource.license()).thenReturn("ODbL");
 
 		manager = new BoundaryDatasetManager(workspaceManager, boundarySource, importer, metadataStore, repository,
-				geometryCache, appSettingService, Clock.systemDefaultZone());
+				geometryCache, territoryCompletion, Clock.systemDefaultZone());
 	}
 
 	@Test
@@ -142,11 +137,9 @@ class BoundaryDatasetManagerTest {
 	}
 
 	@Test
-	void downloadAndImportWritesMetadataAndSkipsTerritoriesWhenDisabled() {
+	void downloadAndImportWritesTheMetadataOfWhatItImported() {
 		when(boundarySource.fetch(any())).thenReturn(List.of());
 		when(importer.importDataset(any(), eq("geoBoundaries"), eq("v1"))).thenReturn(100L);
-		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
-				.thenReturn(false);
 		when(metadataStore.read()).thenReturn(Optional.of(
 				BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).version("v1").build()));
 		when(repository.count()).thenReturn(100L);
@@ -165,15 +158,10 @@ class BoundaryDatasetManagerTest {
 	}
 
 	@Test
-	void downloadAndImportAddsSupplementalTerritories() {
+	void downloadAndImportCountsWhatTheTerritoryStageAddedOnTopOfTheMainImport() {
 		when(boundarySource.fetch(any())).thenReturn(List.of());
 		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
-				.thenReturn(true);
-		when(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY)).thenReturn(List.of());
-		when(boundarySource.fetchMissingCountries(any(), any()))
-				.thenReturn(List.of(new LeveledBoundaryFile(AdminBoundaryKind.COUNTRY, geodata)));
-		when(importer.importExtra(any(), any(), any())).thenReturn(5L);
+		when(territoryCompletion.complete(any())).thenReturn(5L);
 		when(metadataStore.read()).thenReturn(
 				Optional.of(BoundaryMetadata.builder().importedRecords(105).importedAt(LocalDateTime.now()).build()));
 		when(repository.count()).thenReturn(105L);
@@ -197,52 +185,7 @@ class BoundaryDatasetManagerTest {
 		Assertions.assertThat(manager.status().available()).isFalse();
 	}
 
-	/**
-	 * Every ISO code already has its own polygon, so there is nothing supplemental
-	 * to fetch and the source is never asked.
-	 */
-	@Test
-	void downloadAndImportSkipsTerritoriesWhenEveryCountryAlreadyHasAPolygon() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
-				.thenReturn(true);
-		when(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY))
-				.thenReturn(List.copyOf(CountryCodes.alpha3ToAlpha2().values()));
-		when(metadataStore.read()).thenReturn(
-				Optional.of(BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).build()));
-		when(repository.count()).thenReturn(100L);
 
-		manager.downloadAndImport();
-
-		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(100);
-
-		verify(boundarySource, never()).fetchMissingCountries(any(), any());
-		verify(importer, never()).importExtra(any(), any(), any());
-	}
-
-	/**
-	 * A source with no per-territory data returns nothing, which must leave the
-	 * import count untouched rather than trigger an empty extra import.
-	 */
-	@Test
-	void downloadAndImportSkipsTheExtraImportWhenTheSourceHasNoTerritoryFiles() {
-		when(boundarySource.fetch(any())).thenReturn(List.of());
-		when(importer.importDataset(any(), any(), any())).thenReturn(100L);
-		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
-				.thenReturn(true);
-		when(repository.findDistinctCountryCodes(AdminBoundaryKind.COUNTRY)).thenReturn(List.of());
-		when(boundarySource.fetchMissingCountries(any(), any())).thenReturn(List.of());
-		when(metadataStore.read()).thenReturn(
-				Optional.of(BoundaryMetadata.builder().importedRecords(100).importedAt(LocalDateTime.now()).build()));
-		when(repository.count()).thenReturn(100L);
-
-		manager.downloadAndImport();
-
-		Assertions.assertThat(captureWrittenMetadata().getImportedRecords()).isEqualTo(100);
-
-		verify(importer, never()).importExtra(any(), any(), any());
-	}
 
 	@Test
 	void removeShouldSucceedWhenThereIsNoDownloadsFolderToClean() {
@@ -258,8 +201,6 @@ class BoundaryDatasetManagerTest {
 		when(workspaceManager.geodata()).thenReturn(geodata.resolve("absent"));
 		when(boundarySource.fetch(any())).thenReturn(List.of());
 		when(importer.importDataset(any(), any(), any())).thenReturn(1L);
-		when(appSettingService.booleanValue(eq(SettingsConstants.BOUNDARY_AUTO_TERRITORIES), anyBoolean()))
-				.thenReturn(false);
 		when(metadataStore.read()).thenReturn(
 				Optional.of(BoundaryMetadata.builder().importedRecords(1).importedAt(LocalDateTime.now()).build()));
 		when(repository.count()).thenReturn(1L);

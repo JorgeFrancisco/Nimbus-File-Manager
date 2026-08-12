@@ -3,6 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.geolocation.application.constants;
 import java.util.List;
 
 import br.com.jorgemelo.nimbusfilemanager.execution.application.dto.ExecutionMessage;
+import br.com.jorgemelo.nimbusfilemanager.geolocation.domain.enums.AdminBoundaryKind;
 
 /**
  * What a location rebuild and a dataset update write on their executions, as a
@@ -28,16 +29,91 @@ public final class GeoMessages {
 	}
 
 	/**
-	 * The step, as the level being worked on rather than as a byte count: the
-	 * numbers live on the row, and what the sentence adds is which of the three
-	 * administrative levels the run is on.
+	 * The stage, as the level being worked on rather than as a byte count: the
+	 * numbers live on the row, and what the sentence adds is which of the nine
+	 * stages the run is on.
+	 *
+	 * <p>
+	 * The level is part of the <em>code</em> and not an argument. It used to be an
+	 * argument carrying the key of another message, on the belief that the read
+	 * side would resolve it - and nothing does: {@code MessageSource} resolves an
+	 * argument only when it is a {@code MessageSourceResolvable}, so a plain string
+	 * reaches {@code MessageFormat} verbatim and the screen read "Baixando
+	 * settings.geo.step.country.". One code per level costs three lines a bundle
+	 * and needs no resolution that does not exist.
+	 *
+	 * <p>
+	 * Written out whole rather than assembled from a prefix, because the build
+	 * reads these literals: {@code BackendMessageKeysTest} scans the source for
+	 * {@code backend.*} keys and fails when one is missing from a bundle, and a key
+	 * built by concatenation is a key it cannot see. Five methods of three lines buy
+	 * back that guarantee.
 	 */
-	public static ExecutionMessage downloading(String levelKey) {
-		return of("backend.geodata.downloading", levelKey);
+	public static ExecutionMessage downloading(AdminBoundaryKind kind) {
+		return of(switch (kind) {
+		case COUNTRY -> "backend.geodata.downloading.country";
+		case STATE -> "backend.geodata.downloading.state";
+		case MUNICIPALITY -> "backend.geodata.downloading.municipality";
+		});
 	}
 
-	public static ExecutionMessage importing(String levelKey) {
-		return of("backend.geodata.importing", levelKey);
+	/**
+	 * The acquisition stage of a level whose file was already on disk. The stage
+	 * happened - there was simply nothing left for it to do - and saying so is what
+	 * keeps the nine-stage sequence readable when one of them costs no time.
+	 */
+	public static ExecutionMessage alreadyAvailable(AdminBoundaryKind kind) {
+		return of(switch (kind) {
+		case COUNTRY -> "backend.geodata.alreadyAvailable.country";
+		case STATE -> "backend.geodata.alreadyAvailable.state";
+		case MUNICIPALITY -> "backend.geodata.alreadyAvailable.municipality";
+		});
+	}
+
+	/** A level nobody configured: not an error, and not work either. */
+	public static ExecutionMessage levelNotConfigured(AdminBoundaryKind kind) {
+		return of(switch (kind) {
+		case COUNTRY -> "backend.geodata.levelNotConfigured.country";
+		case STATE -> "backend.geodata.levelNotConfigured.state";
+		case MUNICIPALITY -> "backend.geodata.levelNotConfigured.municipality";
+		});
+	}
+
+	public static ExecutionMessage importing(AdminBoundaryKind kind) {
+		return of(switch (kind) {
+		case COUNTRY -> "backend.geodata.importing.country";
+		case STATE -> "backend.geodata.importing.state";
+		case MUNICIPALITY -> "backend.geodata.importing.municipality";
+		});
+	}
+
+	/** The import stage of a level that never arrived, for the same reason. */
+	public static ExecutionMessage nothingToImport(AdminBoundaryKind kind) {
+		return of(switch (kind) {
+		case COUNTRY -> "backend.geodata.nothingToImport.country";
+		case STATE -> "backend.geodata.nothingToImport.state";
+		case MUNICIPALITY -> "backend.geodata.nothingToImport.municipality";
+		});
+	}
+
+	public static ExecutionMessage completingTerritories() {
+		return of("backend.geodata.completingTerritories");
+	}
+
+	/**
+	 * Turned off, or every ISO country already has a polygon of its own. Both are
+	 * ordinary, and both leave the seventh stage with nothing to do.
+	 */
+	public static ExecutionMessage noTerritoriesMissing() {
+		return of("backend.geodata.noTerritoriesMissing");
+	}
+
+	public static ExecutionMessage publishing() {
+		return of("backend.geodata.publishing");
+	}
+
+	public static ExecutionMessage finishing() {
+		return of("backend.geodata.finishing");
 	}
 
 	public static ExecutionMessage updated(long records) {

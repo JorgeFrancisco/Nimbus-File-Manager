@@ -165,7 +165,12 @@ public class DuplicateDeletionService extends LocalizedComponent {
 			}
 			}
 
-			executionProgressService.updateLiveProgress(ownership, total, ++processed, skipped, errors,
+			processed++;
+
+			// What has been dealt with, not what was asked for: the total belongs in
+			// totalExpected, and putting it here made the bar full before the second
+			// file was looked at.
+			executionProgressService.updateLiveProgress(ownership, processed, processed, skipped, errors,
 					ExecutionMessages.processing(file.getFileName()));
 		}
 
