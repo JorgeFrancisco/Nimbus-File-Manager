@@ -116,7 +116,7 @@ class OrganizationReconcileServiceTest {
 
 		Assertions.assertThat(catalogFile.getFileKey()).isEqualTo(oldPath.toAbsolutePath().normalize().toString());
 
-		verify(catalogFileRepository).markMissingByIds(eq(List.of(1L)), any());
+		verify(catalogFileRepository).markMissingByIds(eq(new Long[] { 1L }), any());
 	}
 
 	/**
@@ -186,7 +186,7 @@ class OrganizationReconcileServiceTest {
 		Assertions.assertThat(catalogFileA.getFileKey()).isEqualTo(oldA.toAbsolutePath().normalize().toString());
 		Assertions.assertThat(catalogFileB.getFileKey()).isEqualTo(oldB.toAbsolutePath().normalize().toString());
 
-		verify(catalogFileRepository).markMissingByIds(eq(List.of(1L, 2L)), any());
+		verify(catalogFileRepository).markMissingByIds(eq(new Long[] { 1L, 2L }), any());
 	}
 
 	@Test

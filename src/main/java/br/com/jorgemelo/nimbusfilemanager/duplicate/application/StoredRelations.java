@@ -36,9 +36,9 @@ import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection
 final class StoredRelations {
 
 	private final List<RelationRow> rows;
-	private final List<Long> participants;
+	private final Long[] participants;
 
-	private StoredRelations(List<RelationRow> rows, List<Long> participants) {
+	private StoredRelations(List<RelationRow> rows, Long[] participants) {
 		this.rows = rows;
 		this.participants = participants;
 	}
@@ -50,8 +50,12 @@ final class StoredRelations {
 	/**
 	 * The catalog ids that take part in at least one relation, ascending - which
 	 * is the order the analysis visits candidates in.
+	 *
+	 * <p>
+	 * An array because that is what the queries reading these files bind: one
+	 * parameter carrying every id, rather than one placeholder each.
 	 */
-	List<Long> participants() {
+	Long[] participants() {
 		return participants;
 	}
 
@@ -94,7 +98,7 @@ final class StoredRelations {
 	 * appears twice, so a boxed set would allocate an object per endpoint to
 	 * answer a question two passes over primitives answer.
 	 */
-	private static List<Long> participants(List<RelationRow> rows) {
+	private static Long[] participants(List<RelationRow> rows) {
 		long[] ids = new long[rows.size() * 2];
 		int index = 0;
 
@@ -113,6 +117,6 @@ final class StoredRelations {
 			}
 		}
 
-		return distinct;
+		return distinct.toArray(Long[]::new);
 	}
 }

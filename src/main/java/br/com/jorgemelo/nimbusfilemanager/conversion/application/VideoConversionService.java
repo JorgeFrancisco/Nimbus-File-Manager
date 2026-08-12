@@ -127,7 +127,7 @@ public class VideoConversionService extends LocalizedComponent {
 			quarantineRoot = configured.get();
 		}
 
-		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds);
+		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new));
 
 		executionProgressService.updateTotal(ownership, publicIds.size());
 
@@ -423,7 +423,7 @@ public class VideoConversionService extends LocalizedComponent {
 	private Map<UUID, ConversionSource> sourcesById(Collection<UUID> publicIds) {
 		Map<UUID, ConversionSource> sources = new HashMap<>();
 
-		for (ConversionSource source : conversionCandidateRepository.findSourcesByPublicIdIn(publicIds)) {
+		for (ConversionSource source : conversionCandidateRepository.findSourcesByPublicIdIn(publicIds.toArray(UUID[]::new))) {
 			sources.put(source.publicId(), source);
 		}
 

@@ -3,7 +3,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,7 +92,7 @@ public class DuplicateDeletionPersistence {
 			throw new IllegalStateException("Movement has no media file: " + movement.getId());
 		}
 
-		CatalogFile catalogFile = catalogFileRepository.findByPublicIdIn(List.of(detached.getPublicId())).stream()
+		CatalogFile catalogFile = catalogFileRepository.findByPublicIdIn(new UUID[] { detached.getPublicId() }).stream()
 				.findFirst()
 				.orElseThrow(() -> new IllegalStateException("CatalogFile not found: " + detached.getPublicId()));
 

@@ -10,12 +10,13 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.FingerprintAlgorithm;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.dto.VideoFrameHash;
@@ -219,7 +220,7 @@ final class VideoSimilarityLibrary {
 		when(fingerprints.countEligibleForSimilarity(any(), any())).thenAnswer(_ -> eligible.size());
 
 		when(fingerprints.findFingerprintedVideoFrames(any(), any(), any())).thenAnswer(call -> {
-			Collection<Long> wanted = call.getArgument(2);
+			Set<Long> wanted = Arrays.stream(call.<Long[]>getArgument(2)).collect(Collectors.toSet());
 
 			List<VideoFrameRawResponse> rows = new ArrayList<>();
 
@@ -233,7 +234,7 @@ final class VideoSimilarityLibrary {
 		});
 
 		when(fingerprints.findVideoCompositionRows(any(), any(), any())).thenAnswer(call -> {
-			Collection<Long> wanted = call.getArgument(2);
+			Set<Long> wanted = Arrays.stream(call.<Long[]>getArgument(2)).collect(Collectors.toSet());
 
 			return videos.entrySet().stream().filter(entry -> wanted.contains(entry.getKey()))
 					.map(entry -> new CompositionRow(entry.getValue().getFirst().id(),

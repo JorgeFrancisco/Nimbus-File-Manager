@@ -63,7 +63,7 @@ class ConversionLauncherServiceTest {
 		UUID first = UUID.randomUUID();
 		UUID second = UUID.randomUUID();
 
-		when(catalogFileRepository.findByPublicIdIn(List.of(first, second)))
+		when(catalogFileRepository.findByPublicIdIn(new UUID[] { first, second }))
 				.thenReturn(List.of(CatalogFile.builder().fileKey(library.resolve("clip.mp4").toString()).build()));
 		when(executionEnqueueService.enqueue(any())).thenAnswer(invocation -> {
 			Execution queued = invocation.getArgument(0);
@@ -116,7 +116,7 @@ class ConversionLauncherServiceTest {
 	void raisesWhenTheQueueRefusesARequestThatCannotBeADuplicate() {
 		UUID video = UUID.randomUUID();
 
-		when(catalogFileRepository.findByPublicIdIn(List.of(video))).thenReturn(
+		when(catalogFileRepository.findByPublicIdIn(new UUID[] { video })).thenReturn(
 				List.of(CatalogFile.builder().fileKey(tempDir.resolve("library").resolve("clip.mp4").toString())
 						.build()));
 		when(executionEnqueueService.enqueue(any())).thenReturn(Optional.empty());

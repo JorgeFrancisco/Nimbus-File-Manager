@@ -91,7 +91,7 @@ public class ConversionLauncherService extends LocalizedComponent {
 	 * itself used to work out once it had loaded them.
 	 */
 	private String folderOf(List<UUID> publicIds) {
-		return catalogFileRepository.findByPublicIdIn(publicIds).stream().findFirst().map(CatalogFile::getFileKey)
+		return catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new)).stream().findFirst().map(CatalogFile::getFileKey)
 				.map(PathUtils::normalizePath).map(Path::getParent).map(Path::toString).orElse(null);
 	}
 

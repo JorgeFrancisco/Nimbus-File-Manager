@@ -95,7 +95,10 @@ public class SimilarityResultReader {
 	}
 
 	private Map<UUID, SimilarityMemberFile> filesOf(List<SimilarityGroupMember> members) {
-		List<UUID> ids = members.stream().map(SimilarityGroupMember::getMediaPublicId).distinct().toList();
+		// One page of groups, but a group has no size limit: a burst, or the same
+		// export repeated, clusters into one. So the ids are bound as an array like
+		// everywhere else this set can grow with the library.
+		UUID[] ids = members.stream().map(SimilarityGroupMember::getMediaPublicId).distinct().toArray(UUID[]::new);
 
 		return mediaFingerprintRepository.findSimilarityMembers(ids).stream()
 				.collect(Collectors.toMap(SimilarityMemberFile::publicId, Function.identity(), (first, _) -> first));

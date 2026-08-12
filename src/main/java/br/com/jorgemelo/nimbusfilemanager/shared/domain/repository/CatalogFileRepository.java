@@ -1,7 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,10 +54,10 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 			   set mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.MISSING,
 			       mf.lifecycleChangedAt = :changedAt,
 			       mf.version = mf.version + 1
-			 where mf.id in :ids
+			 where inArray(mf.id, :ids)
 			   and mf.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
 			""")
-	int markMissingByIds(@Param("ids") List<Long> ids, @Param("changedAt") LocalDateTime changedAt);
+	int markMissingByIds(@Param("ids") Long[] ids, @Param("changedAt") LocalDateTime changedAt);
 
 	/**
 	 * Permanently removes {@code catalog_file} rows that have been MISSING since
@@ -156,7 +155,20 @@ public interface CatalogFileRepository extends JpaRepository<CatalogFile, Long> 
 	 * and needs its current placement in the same read.
 	 */
 	@EntityGraph(attributePaths = { "location" })
-	List<CatalogFile> findByPublicIdIn(Collection<UUID> publicIds);
+	/**
+	 * The files the user picked, by public id.
+	 *
+	 * <p>
+	 * An array parameter because what bounds this list is a selection on a screen
+	 * - "select all" over a large library included - and not anything structural.
+	 * One placeholder per id is a ceiling at 65.535 that nobody would meet until
+	 * the library was big enough for it to matter.
+	 */
+	@Query("""
+			select mf from CatalogFile mf
+			where inArray(mf.publicId, :publicIds)
+			""")
+	List<CatalogFile> findByPublicIdIn(@Param("publicIds") UUID[] publicIds);
 
 	/**
 	 * Lightweight existence check that returns only the {@code fileKey}s already

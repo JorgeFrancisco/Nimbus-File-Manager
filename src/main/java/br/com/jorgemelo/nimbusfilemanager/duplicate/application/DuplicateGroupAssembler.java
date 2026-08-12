@@ -38,9 +38,15 @@ public class DuplicateGroupAssembler {
 	/**
 	 * Media-quality signals for the given public ids, keyed by id (empty when
 	 * none).
+	 *
+	 * <p>
+	 * An array rather than a list because that is what the query binds - one
+	 * parameter for the whole set. A similarity run asks about every file it
+	 * analysed, and naming those one placeholder each is more than the wire
+	 * protocol carries.
 	 */
-	Map<UUID, MediaQuality> qualityByPublicId(List<UUID> ids) {
-		if (ids.isEmpty()) {
+	Map<UUID, MediaQuality> qualityByPublicId(UUID[] ids) {
+		if (ids.length == 0) {
 			return Map.of();
 		}
 

@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionCandidate;
 import br.com.jorgemelo.nimbusfilemanager.conversion.domain.repository.projection.ConversionSource;
@@ -66,7 +67,7 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 			SELECT m.publicId
 			FROM CatalogFile m
 			LEFT JOIN m.video v
-			WHERE m.publicId IN :publicIds
+			WHERE inArray(m.publicId, :publicIds)
 			  AND m.fileType = :videoType
 			  AND m.lifecycleStatus = :active
 			  AND (LOWER(m.extension) <> :outputExtension
@@ -87,7 +88,7 @@ public interface ConversionCandidateRepository extends JpaRepository<CatalogFile
 			FROM CatalogFile m
 			LEFT JOIN m.video v
 			LEFT JOIN m.metadata md
-			WHERE m.publicId IN :publicIds
+			WHERE inArray(m.publicId, :publicIds)
 			""")
-	List<ConversionSource> findSourcesByPublicIdIn(Collection<UUID> publicIds);
+	List<ConversionSource> findSourcesByPublicIdIn(@Param("publicIds") UUID[] publicIds);
 }

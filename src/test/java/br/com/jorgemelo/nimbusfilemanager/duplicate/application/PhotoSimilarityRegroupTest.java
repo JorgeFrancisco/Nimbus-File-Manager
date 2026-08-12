@@ -133,7 +133,7 @@ class PhotoSimilarityRegroupTest {
 		assertThat(groupsOf(service.regroup(MINIMUM, SILENT)))
 				.containsExactly(Set.of(publicId(2L), publicId(4L)));
 
-		verify(repository).findFingerprintedPhotos(any(), any(), eq(List.of(2L, 4L)));
+		verify(repository).findFingerprintedPhotos(any(), any(), eq(new Long[] { 2L, 4L }));
 	}
 
 	/**

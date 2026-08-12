@@ -1,6 +1,5 @@
 package br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -155,6 +154,12 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 	 * The cap is no longer here: both sides take the ids from
 	 * {@link #findEligibleForSimilarity}, which is what makes them select the same
 	 * files by construction instead of by two filters kept identical by hand.
+	 *
+	 * <p>
+	 * The ids arrive as one array parameter rather than as an {@code IN} list -
+	 * here and in the three queries below - for the reason and the measurements
+	 * on the {@code ArrayMembershipFunctionContributor} that renders it. A library names
+	 * more files than the wire protocol has bind parameters.
 	 */
 	@Query("""
 			SELECT new br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.projection.CompositionRow(
@@ -164,11 +169,11 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN m.location l
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND m.id IN :catalogFileIds
+			  AND inArray(m.id, :catalogFileIds)
 			ORDER BY m.id ASC
 			""")
 	List<CompositionRow> findPhotoCompositionRows(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("catalogFileIds") Collection<Long> catalogFileIds);
+			@Param("algorithm") String algorithm, @Param("catalogFileIds") Long[] catalogFileIds);
 
 	/**
 	 * The video candidates, one row per sampled frame - the same shape the heavy
@@ -189,11 +194,11 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN m.location l
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND m.id IN :catalogFileIds
+			  AND inArray(m.id, :catalogFileIds)
 			ORDER BY m.id ASC, f.sampleIndex ASC
 			""")
 	List<CompositionRow> findVideoCompositionRows(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("catalogFileIds") Collection<Long> catalogFileIds);
+			@Param("algorithm") String algorithm, @Param("catalogFileIds") Long[] catalogFileIds);
 
 	/**
 	 * The catalog side of the members on one page of a published analysis.
@@ -216,9 +221,9 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			FROM CatalogFile m
 			LEFT JOIN m.location l
 			LEFT JOIN m.metadata md
-			WHERE m.publicId IN :publicIds
+			WHERE inArray(m.publicId, :publicIds)
 			""")
-	List<SimilarityMemberFile> findSimilarityMembers(@Param("publicIds") Collection<UUID> publicIds);
+	List<SimilarityMemberFile> findSimilarityMembers(@Param("publicIds") UUID[] publicIds);
 
 	/**
 	 * Everything one file holds for a target, so a replacement can put back a
@@ -267,11 +272,11 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN m.location l
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND m.id IN :catalogFileIds
+			  AND inArray(m.id, :catalogFileIds)
 			ORDER BY m.id ASC
 			""")
 	List<PhotoHashRawResponse> findFingerprintedPhotos(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("catalogFileIds") Collection<Long> catalogFileIds);
+			@Param("algorithm") String algorithm, @Param("catalogFileIds") Long[] catalogFileIds);
 
 	/**
 	 * Every fingerprinted photo's hash, without its sample and without asking
@@ -372,11 +377,11 @@ public interface MediaFingerprintRepository extends JpaRepository<MediaFingerpri
 			LEFT JOIN m.location l
 			WHERE f.kind = :kind AND f.algorithm = :algorithm
 			  AND m.lifecycleStatus = br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LifecycleStatus.ACTIVE
-			  AND m.id IN :catalogFileIds
+			  AND inArray(m.id, :catalogFileIds)
 			ORDER BY m.id ASC, f.sampleIndex ASC
 			""")
 	List<VideoFrameRawResponse> findFingerprintedVideoFrames(@Param("kind") FingerprintKind kind,
-			@Param("algorithm") String algorithm, @Param("catalogFileIds") Collection<Long> catalogFileIds);
+			@Param("algorithm") String algorithm, @Param("catalogFileIds") Long[] catalogFileIds);
 
 	/**
 	 * Every fingerprinted video's duration and display size, which is all the

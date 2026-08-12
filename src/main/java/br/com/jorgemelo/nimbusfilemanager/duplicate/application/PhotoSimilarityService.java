@@ -186,9 +186,9 @@ class PhotoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	 * The query takes no limit at all any more - neither medium caps, so there is
 	 * nothing to pass and nothing that could be passed by mistake.
 	 */
-	private List<Long> eligibleIds() {
+	private Long[] eligibleIds() {
 		return mediaFingerprintRepository.findEligibleForSimilarity(FingerprintKind.PHOTO_PHASH.name(),
-				FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1);
+				FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1).toArray(Long[]::new);
 	}
 
 	private SimilarityComposition compositionOf(List<CompositionRow> rows) {
@@ -306,13 +306,13 @@ class PhotoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	public SimilarityAnalysisResult add(int minSimilarityPercent, SimilarityProgressCallback progress) {
 		int minimumSsim = SimilarityBounds.clamp(minSimilarityPercent);
 
-		List<Long> eligible = eligibleIds();
+		Long[] eligible = eligibleIds();
 
 		RelationParameters parameters = relationParameters(minimumSsim);
 
 		List<Long> newcomers = similarityRelationRepository.findEligibleNotCovered(parameters.algorithmId(),
 				parameters.maxDistance(), parameters.minSimilarity(), parameters.relationDigest(),
-				eligible.toArray(Long[]::new));
+				eligible);
 
 		if (newcomers.isEmpty()) {
 			return regroupOver(eligible, minimumSsim, progress);
@@ -399,13 +399,13 @@ class PhotoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	 * rather than read again so that the relations, the composition and the
 	 * arrivals are all about one set
 	 */
-	private SimilarityAnalysisResult regroupOver(List<Long> eligible, int minimumSsim,
+	private SimilarityAnalysisResult regroupOver(Long[] eligible, int minimumSsim,
 			SimilarityProgressCallback progress) {
 		RelationParameters parameters = relationParameters(minimumSsim);
 
 		StoredRelations stored = StoredRelations.of(similarityRelationRepository.findEligibleRelations(
 				parameters.algorithmId(), parameters.maxDistance(), parameters.minSimilarity(),
-				parameters.relationDigest(), eligible.toArray(Long[]::new)));
+				parameters.relationDigest(), eligible));
 
 		List<PhotoHashRawResponse> related = mediaFingerprintRepository.findFingerprintedPhotos(
 				FingerprintKind.PHOTO_PHASH, FingerprintAlgorithm.FFMPEG_LANCZOS_PHASH_256_V1, stored.participants());
@@ -447,7 +447,7 @@ class PhotoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	 */
 	private List<SimilarPhotoGroupResponse> group(List<PhotoHashRawResponse> candidates, int minimumSsim,
 			SimilarityProgressCallback progress) {
-		List<UUID> allIds = candidates.stream().map(PhotoHashRawResponse::id).toList();
+		UUID[] allIds = candidates.stream().map(PhotoHashRawResponse::id).toArray(UUID[]::new);
 
 		Map<UUID, MediaQuality> quality = duplicateGroupAssembler.qualityByPublicId(allIds);
 
@@ -492,7 +492,7 @@ class PhotoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 		}
 
 		Map<UUID, MediaQuality> quality = duplicateGroupAssembler
-				.qualityByPublicId(candidates.stream().map(PhotoHashRawResponse::id).toList());
+				.qualityByPublicId(candidates.stream().map(PhotoHashRawResponse::id).toArray(UUID[]::new));
 
 		ApprovedRelations relations = stored.indexedBy(nodes);
 

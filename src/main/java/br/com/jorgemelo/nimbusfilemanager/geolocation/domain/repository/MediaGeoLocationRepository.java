@@ -14,7 +14,21 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.LocationConfidence
 
 public interface MediaGeoLocationRepository extends JpaRepository<MediaGeoLocation, Long> {
 
-	List<MediaGeoLocation> findByIdIn(List<Long> catalogFileIds);
+	/**
+	 * The resolved locations of the given media.
+	 *
+	 * <p>
+	 * An array parameter rather than an {@code IN} list because organizing a
+	 * folder plans up to {@code OrganizationPreviewRequest.MAX_LIMIT} files in one
+	 * pass and asks this about all of them - more than the wire protocol's 65.535
+	 * bind parameters, so naming them one placeholder each failed on exactly the
+	 * libraries the limit exists for.
+	 */
+	@Query("""
+			select gl from MediaGeoLocation gl
+			where inArray(gl.id, :catalogFileIds)
+			""")
+	List<MediaGeoLocation> findByIdIn(@Param("catalogFileIds") Long[] catalogFileIds);
 
 	@Modifying
 	@Query("delete from MediaGeoLocation gl where gl.manual = false")

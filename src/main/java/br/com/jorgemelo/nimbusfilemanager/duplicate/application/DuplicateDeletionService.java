@@ -92,7 +92,7 @@ public class DuplicateDeletionService extends LocalizedComponent {
 
 		Path quarantineRoot = configured.get();
 
-		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds);
+		List<CatalogFile> files = catalogFileRepository.findByPublicIdIn(publicIds.toArray(UUID[]::new));
 
 		Path[] lockedPaths = Stream
 				.concat(Stream.of(quarantineRoot),

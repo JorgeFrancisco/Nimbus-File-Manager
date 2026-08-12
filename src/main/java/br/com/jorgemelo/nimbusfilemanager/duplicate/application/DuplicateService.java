@@ -80,8 +80,8 @@ public class DuplicateService {
 		Map<String, List<DuplicateFileResponse>> filesByGroup = filesByGroup(
 				groupsPage.getContent().stream().map(DuplicateGroupRawResponse::sha256).toList(), fileTypes);
 
-		List<UUID> allIds = filesByGroup.values().stream().flatMap(List::stream).map(DuplicateFileResponse::id)
-				.toList();
+		UUID[] allIds = filesByGroup.values().stream().flatMap(List::stream).map(DuplicateFileResponse::id)
+				.toArray(UUID[]::new);
 		Map<UUID, MediaQuality> quality = duplicateGroupAssembler.qualityByPublicId(allIds);
 
 		return groupsPage.map(group -> {

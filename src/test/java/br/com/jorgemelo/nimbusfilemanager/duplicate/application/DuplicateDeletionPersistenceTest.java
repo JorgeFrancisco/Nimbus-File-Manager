@@ -80,7 +80,7 @@ class DuplicateDeletionPersistenceTest {
 		// asked for it: there is nothing left to repoint, and writing the reversal
 		// anyway would leave a movement trail describing a file that no longer
 		// exists.
-		when(catalogFileRepository.findByPublicIdIn(List.of(filePublicId))).thenReturn(List.of());
+		when(catalogFileRepository.findByPublicIdIn(new UUID[] { filePublicId })).thenReturn(List.of());
 
 		Execution restoreExecution = mock(Execution.class);
 
@@ -109,7 +109,7 @@ class DuplicateDeletionPersistenceTest {
 		when(movement.getCatalogFile()).thenReturn(detached);
 		when(movement.getId()).thenReturn(7L);
 
-		when(catalogFileRepository.findByPublicIdIn(List.of(filePublicId))).thenReturn(List.of(managed));
+		when(catalogFileRepository.findByPublicIdIn(new UUID[] { filePublicId })).thenReturn(List.of(managed));
 		when(movementRepository.findById(7L)).thenReturn(Optional.of(movement));
 
 		when(movement.getTargetPath()).thenReturn(quarantine.toString());

@@ -204,8 +204,9 @@ class VideoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	 * The query takes no limit at all any more - neither medium caps, so there is
 	 * nothing to pass and nothing that could be passed by mistake.
 	 */
-	private List<Long> eligibleIds() {
-		return mediaFingerprintRepository.findEligibleForSimilarity(algorithm.kind().name(), algorithm.algorithm());
+	private Long[] eligibleIds() {
+		return mediaFingerprintRepository.findEligibleForSimilarity(algorithm.kind().name(), algorithm.algorithm())
+				.toArray(Long[]::new);
 	}
 
 	private SimilarityComposition compositionOf(List<CompositionRow> rows) {
@@ -278,13 +279,13 @@ class VideoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	public SimilarityAnalysisResult add(int minSimilarityPercent, SimilarityProgressCallback progress) {
 		int minimum = SimilarityBounds.clamp(minSimilarityPercent);
 
-		List<Long> eligible = eligibleIds();
+		Long[] eligible = eligibleIds();
 
 		RelationParameters parameters = relationParameters(minimum);
 
 		List<Long> newcomers = similarityRelationRepository.findEligibleNotCovered(parameters.algorithmId(),
 				parameters.maxDistance(), parameters.minSimilarity(), parameters.relationDigest(),
-				eligible.toArray(Long[]::new));
+				eligible);
 
 		if (newcomers.isEmpty()) {
 			return regroupOver(eligible, minimum, progress);
@@ -387,13 +388,13 @@ class VideoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 	 * rather than read again so that the relations, the composition and the
 	 * arrivals are all about one set
 	 */
-	private SimilarityAnalysisResult regroupOver(List<Long> eligible, int minimum,
+	private SimilarityAnalysisResult regroupOver(Long[] eligible, int minimum,
 			SimilarityProgressCallback progress) {
 		RelationParameters parameters = relationParameters(minimum);
 
 		StoredRelations stored = StoredRelations.of(
 				similarityRelationRepository.findEligibleRelations(parameters.algorithmId(), parameters.maxDistance(),
-						parameters.minSimilarity(), parameters.relationDigest(), eligible.toArray(Long[]::new)));
+						parameters.minSimilarity(), parameters.relationDigest(), eligible));
 
 		List<VideoFrameRawResponse> rows = mediaFingerprintRepository.findFingerprintedVideoFrames(algorithm.kind(),
 				algorithm.algorithm(), stored.participants());
@@ -497,7 +498,8 @@ class VideoSimilarityService implements SimilarityAnalyzer, SimilarityRegrouper,
 
 	private Map<UUID, MediaQuality> qualityOf(List<VideoCandidate> candidates) {
 		return duplicateGroupAssembler
-				.qualityByPublicId(candidates.stream().map(candidate -> candidate.signature().id()).toList());
+				.qualityByPublicId(candidates.stream().map(candidate -> candidate.signature().id())
+						.toArray(UUID[]::new));
 	}
 
 	private List<SimilarVideoGroupResponse> toResponses(List<List<Integer>> clusters, List<VideoCandidate> candidates,

@@ -179,7 +179,7 @@ class MediaLocationServiceResolveTest {
 		MediaGeoLocation a = MediaGeoLocation.builder().id(1L).build();
 		MediaGeoLocation b = MediaGeoLocation.builder().id(2L).build();
 
-		when(locationRepository.findByIdIn(List.of(1L, 2L))).thenReturn(List.of(a, b));
+		when(locationRepository.findByIdIn(new Long[] { 1L, 2L })).thenReturn(List.of(a, b));
 
 		Map<Long, MediaGeoLocation> map = service.locationsOf(List.of(1L, 2L));
 

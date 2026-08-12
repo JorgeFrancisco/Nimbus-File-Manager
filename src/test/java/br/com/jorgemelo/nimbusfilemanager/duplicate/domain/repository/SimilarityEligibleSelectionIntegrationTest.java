@@ -83,7 +83,7 @@ class SimilarityEligibleSelectionIntegrationTest extends SharedPostgresIntegrati
 		givenAnExcludedRunFollowedByEligibleFiles();
 
 		List<CompositionRow> rows = mediaFingerprintRepository.findPhotoCompositionRows(FingerprintKind.PHOTO_PHASH,
-				PHOTO_ALGORITHM, selected());
+				PHOTO_ALGORITHM, selected().toArray(Long[]::new));
 
 		Assertions.assertThat(rows).isNotEmpty()
 				.allSatisfy(row -> Assertions.assertThat(row.currentFolder()).doesNotContain("oculta"));
@@ -114,9 +114,9 @@ class SimilarityEligibleSelectionIntegrationTest extends SharedPostgresIntegrati
 		List<Long> ids = selected();
 
 		Assertions.assertThat(mediaFingerprintRepository.findPhotoCompositionRows(FingerprintKind.PHOTO_PHASH,
-				PHOTO_ALGORITHM, ids)).hasSize(ids.size());
+				PHOTO_ALGORITHM, ids.toArray(Long[]::new))).hasSize(ids.size());
 		Assertions.assertThat(mediaFingerprintRepository.findFingerprintedPhotos(FingerprintKind.PHOTO_PHASH,
-				PHOTO_ALGORITHM, ids)).hasSize(ids.size());
+				PHOTO_ALGORITHM, ids.toArray(Long[]::new))).hasSize(ids.size());
 	}
 
 	@Test

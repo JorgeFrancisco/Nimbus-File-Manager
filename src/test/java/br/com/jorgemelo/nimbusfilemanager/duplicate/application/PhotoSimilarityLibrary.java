@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.time.Month;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import br.com.jorgemelo.nimbusfilemanager.duplicate.application.constants.DuplicateConstants;
 import br.com.jorgemelo.nimbusfilemanager.duplicate.domain.repository.MediaFingerprintRepository;
@@ -175,13 +176,13 @@ final class PhotoSimilarityLibrary {
 		when(fingerprints.countEligibleForSimilarity(any(), any())).thenAnswer(_ -> eligible.size());
 
 		when(fingerprints.findFingerprintedPhotos(any(), any(), any())).thenAnswer(call -> {
-			Collection<Long> wanted = call.getArgument(2);
+			Set<Long> wanted = Arrays.stream(call.<Long[]>getArgument(2)).collect(Collectors.toSet());
 
 			return photos.values().stream().filter(photo -> wanted.contains(photo.catalogFileId())).toList();
 		});
 
 		when(fingerprints.findPhotoCompositionRows(any(), any(), any())).thenAnswer(call -> {
-			Collection<Long> wanted = call.getArgument(2);
+			Set<Long> wanted = Arrays.stream(call.<Long[]>getArgument(2)).collect(Collectors.toSet());
 
 			return photos.values().stream().filter(photo -> wanted.contains(photo.catalogFileId()))
 					.map(photo -> new CompositionRow(photo.id(), photo.currentFolder())).toList();

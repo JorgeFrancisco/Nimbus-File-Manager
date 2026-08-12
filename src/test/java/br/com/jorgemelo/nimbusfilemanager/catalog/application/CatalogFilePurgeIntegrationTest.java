@@ -2,7 +2,6 @@ package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 
 import java.time.LocalDateTime;
 import java.time.Month;
-import java.util.List;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -97,7 +96,7 @@ class CatalogFilePurgeIntegrationTest extends SharedPostgresIntegrationTest {
 		LocalDateTime firstMark = LocalDateTime.of(2020, Month.JANUARY, 1, 12, 0);
 		LocalDateTime secondMark = LocalDateTime.of(2024, Month.JUNE, 1, 12, 0);
 
-		int firstUpdated = catalogFileRepository.markMissingByIds(List.of(id), firstMark);
+		int firstUpdated = catalogFileRepository.markMissingByIds(new Long[] { id }, firstMark);
 
 		CatalogFile afterFirst = catalogFileRepository.findById(id).orElseThrow();
 
@@ -105,7 +104,7 @@ class CatalogFilePurgeIntegrationTest extends SharedPostgresIntegrationTest {
 		Assertions.assertThat(afterFirst.getLifecycleStatus()).isEqualTo(LifecycleStatus.MISSING);
 		Assertions.assertThat(afterFirst.getLifecycleChangedAt()).isEqualTo(firstMark);
 
-		int secondUpdated = catalogFileRepository.markMissingByIds(List.of(id), secondMark);
+		int secondUpdated = catalogFileRepository.markMissingByIds(new Long[] { id }, secondMark);
 
 		CatalogFile afterSecond = catalogFileRepository.findById(id).orElseThrow();
 

@@ -1610,8 +1610,8 @@ Run unit/integration tests with JaCoCo:
 Most recent clean local build (PostgreSQL):
 
 ```text
-Tests:       3887 run, 0 failures, 0 errors, 10 skipped
-JaCoCo:      98.64% instruction, 92.94% branch, 98.15% line, 99.04% method, 100.00% class
+Tests:       3900 run, 0 failures, 0 errors, 10 skipped
+JaCoCo:      98.64% instruction, 92.95% branch, 98.14% line, 99.05% method, 100.00% class
 ```
 
 ### Coverage ratchet
@@ -1640,6 +1640,27 @@ five methods this slice added had no test touching the real object, because the 
 mocked the collaborator they belonged to. Covering the five put it at 99.04. That is the ratchet
 working as intended: the number fell, the report named the cause, and the answer was tests of
 behaviour rather than a lower floor.
+
+**Similarity analysis could not be asked about a large library.** Choosing the eligible files and then
+naming them back to the database spent one bind parameter per file, and the PostgreSQL wire protocol
+carries 65.535 of them: a library of 119.870 eligible photos asked for 119.872 and the driver refused
+to prepare the statement, so the feature simply stopped working above a size this product treats as
+ordinary. The query that threw was one of six on that path - two the screen uses to identify the
+analysis it is about to request, two the worker uses to run it, one that asks what each analysed file
+is worth, and one that reads a published group back - so fixing only the one that failed would have
+moved the failure from the click to the job, and then from the job to the screen. Three more sat
+outside the feature on the same footing: organizing a folder plans up to a hundred thousand files and
+asked for all their locations at once; reconciling a folder marks missing files from a sample whose
+limit has no upper clamp; and a selection on screen, "select all" included, is not bounded by the
+paging around it.
+
+They now bind the ids as a single array parameter, matched with `= any(?)`: a constant number of
+parameters whatever the library's size. The rendering is the point rather than a detail - Hibernate's
+own array predicate binds one parameter too, but asks PostgreSQL to re-scan the array once per row,
+which on 120.000 files is a sequential scan taking 56 seconds against 145 ms for the index-only scan
+the array equality plans into. What was left alone is as deliberate: an `IN` list whose size is held
+by a fixed batch, a capped page, or an enum is still an `IN` list, because the ceiling this removed
+is a missing bound, not a syntax.
 
 **A dataset update was asking for a second one while it ran.** The timer skips its daily rule when
 nothing is installed, so that a fresh machine acquires the dataset without waiting for the hour - and

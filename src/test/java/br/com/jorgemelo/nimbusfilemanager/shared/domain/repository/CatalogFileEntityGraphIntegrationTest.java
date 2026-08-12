@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.shared.domain.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,6 @@ class CatalogFileEntityGraphIntegrationTest extends SharedPostgresIntegrationTes
 	void publicIdLookupResolvesItsGraph() {
 		CatalogFile stored = catalogFileRepository.findByFileKey(FILE_KEY).orElseThrow();
 
-		Assertions.assertThat(catalogFileRepository.findByPublicIdIn(List.of(stored.getPublicId()))).hasSize(1);
+		Assertions.assertThat(catalogFileRepository.findByPublicIdIn(new UUID[] { stored.getPublicId() })).hasSize(1);
 	}
 }

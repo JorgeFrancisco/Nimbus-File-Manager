@@ -42,7 +42,10 @@ public class CollectionCatalogMutations implements CatalogMutations {
 	@Override
 	@Transactional
 	public int markMissing(List<Long> catalogFileIds, LocalDateTime changedAt) {
-		return catalogFileRepository.markMissingByIds(catalogFileIds, changedAt);
+		// An array and not a list: the reconcile sample limit this list comes from has
+		// no upper clamp, so its size is decided by the caller rather than by anything
+		// structural - and one placeholder each is a ceiling at 65.535.
+		return catalogFileRepository.markMissingByIds(catalogFileIds.toArray(Long[]::new), changedAt);
 	}
 
 	@Override

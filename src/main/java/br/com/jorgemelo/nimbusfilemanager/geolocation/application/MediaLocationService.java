@@ -155,7 +155,7 @@ public class MediaLocationService {
 			return Map.of();
 		}
 
-		return mediaGeoLocationRepository.findByIdIn(catalogFileIds).stream()
+		return mediaGeoLocationRepository.findByIdIn(catalogFileIds.toArray(Long[]::new)).stream()
 				.collect(Collectors.toMap(MediaGeoLocation::getId, Function.identity()));
 	}
 
