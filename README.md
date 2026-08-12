@@ -1641,6 +1641,26 @@ mocked the collaborator they belonged to. Covering the five put it at 99.04. Tha
 working as intended: the number fell, the report named the cause, and the answer was tests of
 behaviour rather than a lower floor.
 
+**Queue order stopped depending on the machine's time zone.** The reservation ranks pending work by
+priority plus how long it has waited, capped at five points - and it measured that wait against the
+database's `now()`, rendered in the JDBC session's zone, while `created_at` holds local time in the
+zone the application is configured with. Wherever the two differ, every pending row was credited
+with the offset as waiting it had not done, and the cap turned that into an inversion: a row already
+at five gained nothing from the phantom hours while a young one pocketed all of them. Measured on a
+UTC machine against a Sao Paulo setting, a request created seconds earlier at priority two scored
+5.0000083 against 5.0 for one that had genuinely waited five hours. The age is now measured against
+the same `:now` the rest of the statement already binds - the application's clock, the one that wrote
+the column.
+
+**Nine test classes were reading a different clock than the code they test.** They compared values
+the application had written through its configured-zone clock against `LocalDateTime.now()`, which
+reads the JVM's zone. On the developer's machine the two coincide and everything passed; on any
+runner they do not, and a fresh lease looked hours expired while an expired one looked fresh - which
+is what twenty of the twenty-one failures on the Linux pipeline were. Four more were Windows-shaped
+path literals that only describe a path on Windows: normalised on Linux they become a relative
+segment under the working directory, so a folder repoint matched no row at all. Those fixtures now
+stand on a real temporary root.
+
 **The global progress bar stopped lying, in five kinds of execution at once.** A dataset update
 read "3 of 3, 100%" while a second bar underneath still moved - and the cause was not geography. The
 first bar is `filesFound / totalExpected`, computed once, and five producers were writing the total

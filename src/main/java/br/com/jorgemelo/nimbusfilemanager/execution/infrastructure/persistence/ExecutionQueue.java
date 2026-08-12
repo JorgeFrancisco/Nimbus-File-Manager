@@ -46,6 +46,21 @@ public class ExecutionQueue {
 	 * keeps the scan off the history, which is what actually grows.
 	 *
 	 * <p>
+	 * The age is measured against {@code :now} - the application's clock, the same
+	 * one the rest of this statement uses and the same one that wrote
+	 * {@code created_at}. It used to be measured against the database's
+	 * {@code now()}, and those are not the same instant expressed two ways: the
+	 * column is a {@code timestamp without time zone} holding local time in the
+	 * <em>configured</em> zone, while {@code now()} is rendered in the
+	 * <em>session</em> zone, which the JDBC driver takes from the client JVM.
+	 * Wherever the two zones differ, every pending row was credited with the
+	 * offset as waiting it had not done - and the cap turned that into an
+	 * inversion, because a row already at five gains nothing from the phantom
+	 * hours while a young one pockets all of them. Measured on a UTC machine
+	 * against a Sao Paulo setting, a brand new request at priority two scored
+	 * 5.0000083 against 5.0 for one that had genuinely waited five hours.
+	 *
+	 * <p>
 	 * The {@code NOT EXISTS} is the other half of the 1 + 1 rule. One request may
 	 * wait while an identical one runs, but the waiting one cannot be claimed
 	 * while the running one is still running: taking it writes RUNNING a second
@@ -72,7 +87,8 @@ public class ExecutionQueue {
 			                                   AND running.dedup_key = queued.dedup_key
 			                                   AND running.execution_type = queued.execution_type)
 			              ORDER BY queued.priority
-			                     + LEAST(EXTRACT(EPOCH FROM (now() - queued.created_at)) / 3600, 5) DESC, queued.id
+			                     + LEAST(EXTRACT(EPOCH FROM (CAST(:now AS timestamp) - queued.created_at))
+			                             / 3600, 5) DESC, queued.id
 			              FOR UPDATE SKIP LOCKED
 			              LIMIT 1)
 			RETURNING id, execution_type, source_path, target_path, request_payload

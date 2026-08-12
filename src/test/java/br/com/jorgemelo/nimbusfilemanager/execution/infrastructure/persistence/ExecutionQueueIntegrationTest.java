@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,16 @@ class ExecutionQueueIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private ExecutionQueue executionQueue;
@@ -145,7 +156,7 @@ class ExecutionQueueIntegrationTest {
 		Assertions.assertThat(stored.getStatus()).isEqualTo(ExecutionStatus.PENDING);
 		Assertions.assertThat(stored.getClaimedBy()).isNull();
 		Assertions.assertThat(stored.getClaimCount()).isZero();
-		Assertions.assertThat(stored.getAvailableAt()).isAfter(LocalDateTime.now().minusSeconds(1));
+		Assertions.assertThat(stored.getAvailableAt()).isAfter(LocalDateTime.now(clock).minusSeconds(1));
 	}
 
 	@Test
@@ -212,7 +223,7 @@ class ExecutionQueueIntegrationTest {
 
 		abandoned.setStatus(ExecutionStatus.RUNNING);
 		abandoned.setClaimedBy("worker-dead");
-		abandoned.setLeaseUntil(LocalDateTime.now().minusMinutes(10));
+		abandoned.setLeaseUntil(LocalDateTime.now(clock).minusMinutes(10));
 
 		executionRepository.save(abandoned);
 
@@ -287,7 +298,7 @@ class ExecutionQueueIntegrationTest {
 	void letsWaitingOutweighPriority() {
 		Execution waiting = enqueue(ExecutionType.INVENTORY, "D:\\old", 0);
 
-		waiting.setCreatedAt(LocalDateTime.now().minusHours(5));
+		waiting.setCreatedAt(LocalDateTime.now(clock).minusHours(5));
 
 		executionRepository.save(waiting);
 
@@ -334,7 +345,7 @@ class ExecutionQueueIntegrationTest {
 
 		lapsed.setStatus(ExecutionStatus.RUNNING);
 		lapsed.setClaimedBy("worker-dead");
-		lapsed.setLeaseUntil(LocalDateTime.now().minusMinutes(10));
+		lapsed.setLeaseUntil(LocalDateTime.now(clock).minusMinutes(10));
 
 		executionRepository.save(lapsed);
 
@@ -358,7 +369,7 @@ class ExecutionQueueIntegrationTest {
 
 		Assertions.assertThat(claimed.getStatus()).isEqualTo(ExecutionStatus.RUNNING);
 		Assertions.assertThat(claimed.getClaimedBy()).isEqualTo("worker-a");
-		Assertions.assertThat(claimed.getLeaseUntil()).isAfter(LocalDateTime.now());
+		Assertions.assertThat(claimed.getLeaseUntil()).isAfter(LocalDateTime.now(clock));
 	}
 
 	/**

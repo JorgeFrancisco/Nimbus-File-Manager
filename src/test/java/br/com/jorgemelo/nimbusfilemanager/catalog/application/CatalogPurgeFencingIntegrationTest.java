@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.catalog.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.OptionalInt;
 
@@ -50,6 +51,16 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 	private static final String WORKER = "worker-that-came-back";
 
 	private static final int DAYS = 90;
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private CatalogFileRetentionService catalogFileRetentionService;
@@ -141,7 +152,7 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 
 		Execution row = executionRepository.findById(executionId).orElseThrow();
 
-		row.setLeaseUntil(LocalDateTime.now().minusMinutes(1));
+		row.setLeaseUntil(LocalDateTime.now(clock).minusMinutes(1));
 
 		executionRepository.saveAndFlush(row);
 
@@ -165,14 +176,14 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 	private long claimedAt(int claimCount) {
 		return executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.CATALOG_PURGE)
 				.status(ExecutionStatus.RUNNING).recursive(false).executeFlag(true).claimedBy(WORKER)
-				.claimCount(claimCount).leaseUntil(LocalDateTime.now().plusMinutes(10)).build()).getId();
+				.claimCount(claimCount).leaseUntil(LocalDateTime.now(clock).plusMinutes(10)).build()).getId();
 	}
 
 	private void takenAgainAt(long executionId, int claimCount) {
 		Execution row = executionRepository.findById(executionId).orElseThrow();
 
 		row.setClaimCount(claimCount);
-		row.setLeaseUntil(LocalDateTime.now().plusMinutes(10));
+		row.setLeaseUntil(LocalDateTime.now(clock).plusMinutes(10));
 
 		executionRepository.saveAndFlush(row);
 
@@ -185,8 +196,8 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 		String path = "C:/test/" + key + ".jpg";
 
 		CatalogFile file = CatalogFile.builder().fileKey(key).fileName(key + ".jpg").extension("jpg").sizeBytes(1L)
-				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING)
-				.lifecycleChangedAt(LocalDateTime.now().minusDays(days)).build();
+				.modifiedAt(LocalDateTime.now(clock)).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.MISSING)
+				.lifecycleChangedAt(LocalDateTime.now(clock).minusDays(days)).build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder("C:/test")
 				.originalPath(path).originalFolder("C:/test").build());
 
@@ -196,7 +207,7 @@ class CatalogPurgeFencingIntegrationTest extends SharedPostgresIntegrationTest {
 	private Movement movedBySomeEarlierRun(CatalogFile file) {
 		Execution organization = executionRepository.saveAndFlush(Execution.builder()
 				.executionType(ExecutionType.ORGANIZATION).status(ExecutionStatus.FINISHED).startedAt(
-						LocalDateTime.now())
+						LocalDateTime.now(clock))
 				.sourcePath("D:/src").targetPath("D:/dst").recursive(true).executeFlag(true).build());
 
 		return movementRepository.saveAndFlush(Movement.builder().execution(organization).catalogFile(file)

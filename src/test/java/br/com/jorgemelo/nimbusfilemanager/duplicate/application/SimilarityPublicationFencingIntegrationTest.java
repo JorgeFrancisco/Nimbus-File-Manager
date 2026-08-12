@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.duplicate.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -67,6 +68,16 @@ class SimilarityPublicationFencingIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private SimilarityPublisher publisher;
@@ -182,7 +193,7 @@ class SimilarityPublicationFencingIntegrationTest {
 
 		Execution row = executionRepository.findById(executionId).orElseThrow();
 
-		row.setLeaseUntil(LocalDateTime.now().minusMinutes(1));
+		row.setLeaseUntil(LocalDateTime.now(clock).minusMinutes(1));
 
 		executionRepository.saveAndFlush(row);
 
@@ -199,7 +210,7 @@ class SimilarityPublicationFencingIntegrationTest {
 	private long claimedAt(int claimCount) {
 		return executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.SIMILARITY_PHOTO)
 				.status(ExecutionStatus.RUNNING).recursive(false).executeFlag(true).claimedBy(WORKER)
-				.claimCount(claimCount).leaseUntil(LocalDateTime.now().plusMinutes(10)).build()).getId();
+				.claimCount(claimCount).leaseUntil(LocalDateTime.now(clock).plusMinutes(10)).build()).getId();
 	}
 
 	/** Recovery put the row back and the same worker took it again. */
@@ -207,7 +218,7 @@ class SimilarityPublicationFencingIntegrationTest {
 		Execution row = executionRepository.findById(executionId).orElseThrow();
 
 		row.setClaimCount(claimCount);
-		row.setLeaseUntil(LocalDateTime.now().plusMinutes(10));
+		row.setLeaseUntil(LocalDateTime.now(clock).plusMinutes(10));
 
 		executionRepository.saveAndFlush(row);
 
@@ -233,7 +244,7 @@ class SimilarityPublicationFencingIntegrationTest {
 				.groupingVersion(SimilarityConstants.GROUPING_VERSION).parametersDigest(PARAMETERS)
 				.compositionDigest(COMPOSITION).eligibleCount(120).analyzedCount(120).candidateLimit(8000)
 				.selectionPolicy(SimilarityConstants.SELECTION_OLDEST_ELIGIBLE_FIRST).status(GroupingStatus.ACTIVE)
-				.computedAt(LocalDateTime.now().minusHours(1)).publishedAt(LocalDateTime.now().minusHours(1))
+				.computedAt(LocalDateTime.now(clock).minusHours(1)).publishedAt(LocalDateTime.now(clock).minusHours(1))
 				.groupCount(1).memberCount(2).build());
 	}
 

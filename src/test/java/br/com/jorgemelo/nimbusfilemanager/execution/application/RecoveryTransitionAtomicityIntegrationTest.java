@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -49,6 +50,16 @@ class RecoveryTransitionAtomicityIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private ExecutionProgressService executionProgressService;
@@ -197,10 +208,10 @@ class RecoveryTransitionAtomicityIntegrationTest {
 	}
 
 	private LocalDateTime inThePast() {
-		return LocalDateTime.now().minusMinutes(30);
+		return LocalDateTime.now(clock).minusMinutes(30);
 	}
 
 	private LocalDateTime inTheFuture() {
-		return LocalDateTime.now().plusMinutes(30);
+		return LocalDateTime.now(clock).plusMinutes(30);
 	}
 }

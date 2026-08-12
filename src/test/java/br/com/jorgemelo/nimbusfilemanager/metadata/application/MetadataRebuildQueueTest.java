@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.List;
@@ -14,8 +15,10 @@ import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +41,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.DateSource;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionStatus;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.enums.ExecutionType;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
  * The metadata rebuild as an intention and as a run.
@@ -51,7 +55,21 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.Execution;
  */
 class MetadataRebuildQueueTest {
 
-	private static final String FOLDER = "D:\\photos";
+	/**
+	 * A real absolute folder, because the launcher normalizes what it is given: a
+	 * Windows-shaped literal is a single relative segment on Linux, and normalizing
+	 * one prefixes the working directory - so the payload stopped carrying what the
+	 * caller had asked for.
+	 */
+	@TempDir
+	static Path requestedFolder;
+
+	private static String FOLDER;
+
+	@BeforeAll
+	static void nameTheFolder() {
+		FOLDER = PathUtils.normalize(requestedFolder);
+	}
 
 	private static final List<MetadataRebuildField> FIELDS = List.of(MetadataRebuildField.DATE);
 

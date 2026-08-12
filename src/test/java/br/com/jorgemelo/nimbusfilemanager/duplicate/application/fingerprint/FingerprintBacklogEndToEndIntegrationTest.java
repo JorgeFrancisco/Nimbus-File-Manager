@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,16 @@ class FingerprintBacklogEndToEndIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private FingerprintBacklogLauncher fingerprintBacklogLauncher;
@@ -105,8 +116,8 @@ class FingerprintBacklogEndToEndIntegrationTest {
 
 	private Execution leftBehindByADeadWorker() {
 		return Execution.builder().executionType(ExecutionType.FINGERPRINT_PHOTO).status(ExecutionStatus.RUNNING)
-				.claimedBy("worker-that-is-gone").claimedAt(LocalDateTime.now().minusHours(1))
-				.leaseUntil(LocalDateTime.now().minusMinutes(30)).claimCount(0).recursive(false).executeFlag(true)
+				.claimedBy("worker-that-is-gone").claimedAt(LocalDateTime.now(clock).minusHours(1))
+				.leaseUntil(LocalDateTime.now(clock).minusMinutes(30)).claimCount(0).recursive(false).executeFlag(true)
 				.dedupKey("FINGERPRINT_PHOTO:recovered")
 				.requestPayload(executionPayloadCodec.encode(
 						new FingerprintBacklogPayload(DuplicateConstants.FINGERPRINT_PAYLOAD_SCHEMA_VERSION, false)))

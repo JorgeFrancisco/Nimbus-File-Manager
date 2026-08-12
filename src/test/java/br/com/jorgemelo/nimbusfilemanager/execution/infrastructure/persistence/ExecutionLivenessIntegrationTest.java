@@ -1,5 +1,6 @@
 package br.com.jorgemelo.nimbusfilemanager.execution.infrastructure.persistence;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +49,16 @@ class ExecutionLivenessIntegrationTest {
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
+
 	@Autowired
 	private ExecutionQueue executionQueue;
 
@@ -77,7 +88,7 @@ class ExecutionLivenessIntegrationTest {
 
 		Assertions.assertThat(row.getStatus()).isEqualTo(ExecutionStatus.RUNNING);
 		Assertions.assertThat(row.getClaimedBy()).isEqualTo("worker-a");
-		Assertions.assertThat(row.getLeaseUntil()).isAfter(LocalDateTime.now());
+		Assertions.assertThat(row.getLeaseUntil()).isAfter(LocalDateTime.now(clock));
 	}
 
 	/**
@@ -204,7 +215,7 @@ class ExecutionLivenessIntegrationTest {
 	private void expireTheLeaseOf(Execution execution) {
 		Execution row = executionRepository.findById(execution.getId()).orElseThrow();
 
-		row.setLeaseUntil(LocalDateTime.now().minusMinutes(1));
+		row.setLeaseUntil(LocalDateTime.now(clock).minusMinutes(1));
 
 		executionRepository.saveAndFlush(row);
 	}

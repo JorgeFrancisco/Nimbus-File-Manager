@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -57,6 +58,16 @@ class WorkerProtocolIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private ExecutionEnqueueService executionEnqueueService;
@@ -151,7 +162,7 @@ class WorkerProtocolIntegrationTest {
 		Execution waiting = pendingInventory(folder);
 
 		waiting.setDedupKey(OperationPathKey.canonical(folder));
-		waiting.setAvailableAt(LocalDateTime.now().plusHours(1));
+		waiting.setAvailableAt(LocalDateTime.now(clock).plusHours(1));
 
 		executionRepository.saveAndFlush(waiting);
 
@@ -238,8 +249,8 @@ class WorkerProtocolIntegrationTest {
 
 	private Execution pendingInventory(Path folder) {
 		return Execution.builder().executionType(ExecutionType.INVENTORY).status(ExecutionStatus.PENDING)
-				.sourcePath(folder.toString()).recursive(true).executeFlag(true).createdAt(LocalDateTime.now())
-				.availableAt(LocalDateTime.now()).build();
+				.sourcePath(folder.toString()).recursive(true).executeFlag(true).createdAt(LocalDateTime.now(clock))
+				.availableAt(LocalDateTime.now(clock)).build();
 	}
 
 	private Execution awaitTerminal(Long executionId) {

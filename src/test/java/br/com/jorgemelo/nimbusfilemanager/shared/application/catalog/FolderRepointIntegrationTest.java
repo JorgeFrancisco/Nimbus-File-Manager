@@ -1,9 +1,12 @@
 package br.com.jorgemelo.nimbusfilemanager.shared.application.catalog;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import br.com.jorgemelo.nimbusfilemanager.shared.SharedPostgresIntegrationTest;
@@ -13,6 +16,7 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFile;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.model.CatalogFileLocation;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileLocationRepository;
 import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRepository;
+import br.com.jorgemelo.nimbusfilemanager.shared.util.PathUtils;
 
 /**
  * Renaming a folder moves everything under it in one operating-system call, and
@@ -20,20 +24,29 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.CatalogFileRe
  *
  * <p>
  * Against a real Postgres because that is where it runs: the prefix is matched
- * by a fixed-length head rather than by {@code LIKE}, precisely so a Windows
- * path full of backslashes - the escape character - and file names full of
+ * by a fixed-length head rather than by {@code LIKE}, precisely so a path full
+ * of separators - the escape character, on Windows - and file names full of
  * {@code _} and {@code %} - the wildcards - cannot change what it matches. A
  * test over mocks would prove none of that.
  *
  * <p>
- * The paths here are Windows-shaped strings on purpose and never touch a disk:
- * what is under test is a string rewrite in the database, so it runs the same on
- * a Linux runner.
+ * The folders are real and absolute, under a temporary root, and the reason is
+ * that the repoint is not the pure string rewrite this class used to claim it
+ * was: it normalizes what it is given and takes the separator from the running
+ * file system. Windows-shaped literals therefore described nothing on Linux - a
+ * single relative segment, prefixed with the working directory - and the
+ * statement matched no row at all. Nothing is written to disk even so; the root
+ * is borrowed only for its shape.
+ *
+ * <p>
+ * What the names carry is the whole point and survives the change: a {@code %}
+ * and an {@code _} that must not act as wildcards, and a sibling folder whose
+ * name merely begins the same.
  */
 class FolderRepointIntegrationTest extends SharedPostgresIntegrationTest {
 
-	private static final String OLD_FOLDER = "D:\\fotos\\album_2008";
-	private static final String NEW_FOLDER = "D:\\fotos\\viagem 100%";
+	@TempDir
+	Path library;
 
 	@Autowired
 	private CatalogMutations catalogMutations;
@@ -44,19 +57,30 @@ class FolderRepointIntegrationTest extends SharedPostgresIntegrationTest {
 	@Autowired
 	private CatalogFileLocationRepository catalogFileLocationRepository;
 
+	private String oldFolder;
+	private String newFolder;
+	private String siblingFolder;
+
+	@BeforeEach
+	void nameTheFolders() {
+		oldFolder = at("fotos", "album_2008");
+		newFolder = at("fotos", "viagem 100%");
+		siblingFolder = at("fotos", "album_2009");
+	}
+
 	@Test
 	void movesEveryCataloguedFileUnderTheFolderAndLeavesTheNeighboursAlone() {
-		Long direct = catalogued(OLD_FOLDER + "\\a_1.jpg", OLD_FOLDER);
-		Long deep = catalogued(OLD_FOLDER + "\\2008\\praia\\b%2.jpg", OLD_FOLDER + "\\2008\\praia");
-		Long sibling = catalogued("D:\\fotos\\album_2009\\c.jpg", "D:\\fotos\\album_2009");
+		Long direct = catalogued(under(oldFolder, "a_1.jpg"), oldFolder);
+		Long deep = catalogued(under(oldFolder, "2008", "praia", "b%2.jpg"), under(oldFolder, "2008", "praia"));
+		Long sibling = catalogued(under(siblingFolder, "c.jpg"), siblingFolder);
 
-		int repointed = catalogMutations.repointFolder(OLD_FOLDER, NEW_FOLDER, LocalDateTime.now());
+		int repointed = catalogMutations.repointFolder(oldFolder, newFolder, LocalDateTime.now());
 
 		Assertions.assertThat(repointed).isEqualTo(2);
-		Assertions.assertThat(keyOf(direct)).isEqualTo(NEW_FOLDER + "\\a_1.jpg");
-		Assertions.assertThat(keyOf(deep)).isEqualTo(NEW_FOLDER + "\\2008\\praia\\b%2.jpg");
+		Assertions.assertThat(keyOf(direct)).isEqualTo(under(newFolder, "a_1.jpg"));
+		Assertions.assertThat(keyOf(deep)).isEqualTo(under(newFolder, "2008", "praia", "b%2.jpg"));
 		Assertions.assertThat(keyOf(sibling)).as("a folder whose name merely starts the same is not under it")
-				.isEqualTo("D:\\fotos\\album_2009\\c.jpg");
+				.isEqualTo(under(siblingFolder, "c.jpg"));
 	}
 
 	/**
@@ -67,15 +91,15 @@ class FolderRepointIntegrationTest extends SharedPostgresIntegrationTest {
 	 */
 	@Test
 	void movesThePlacementAndTheFolderItRecords() {
-		Long direct = catalogued(OLD_FOLDER + "\\a.jpg", OLD_FOLDER);
-		Long deep = catalogued(OLD_FOLDER + "\\2008\\b.jpg", OLD_FOLDER + "\\2008");
+		Long direct = catalogued(under(oldFolder, "a.jpg"), oldFolder);
+		Long deep = catalogued(under(oldFolder, "2008", "b.jpg"), under(oldFolder, "2008"));
 
-		catalogMutations.repointFolder(OLD_FOLDER, NEW_FOLDER, LocalDateTime.now());
+		catalogMutations.repointFolder(oldFolder, newFolder, LocalDateTime.now());
 
-		Assertions.assertThat(currentPathOf(direct)).isEqualTo(NEW_FOLDER + "\\a.jpg");
-		Assertions.assertThat(currentFolderOf(direct)).isEqualTo(NEW_FOLDER);
-		Assertions.assertThat(currentPathOf(deep)).isEqualTo(NEW_FOLDER + "\\2008\\b.jpg");
-		Assertions.assertThat(currentFolderOf(deep)).isEqualTo(NEW_FOLDER + "\\2008");
+		Assertions.assertThat(currentPathOf(direct)).isEqualTo(under(newFolder, "a.jpg"));
+		Assertions.assertThat(currentFolderOf(direct)).isEqualTo(newFolder);
+		Assertions.assertThat(currentPathOf(deep)).isEqualTo(under(newFolder, "2008", "b.jpg"));
+		Assertions.assertThat(currentFolderOf(deep)).isEqualTo(under(newFolder, "2008"));
 	}
 
 	/**
@@ -84,12 +108,21 @@ class FolderRepointIntegrationTest extends SharedPostgresIntegrationTest {
 	 */
 	@Test
 	void leavesTheOriginalPlacementUntouched() {
-		Long direct = catalogued(OLD_FOLDER + "\\a.jpg", OLD_FOLDER);
+		Long direct = catalogued(under(oldFolder, "a.jpg"), oldFolder);
 
-		catalogMutations.repointFolder(OLD_FOLDER, NEW_FOLDER, LocalDateTime.now());
+		catalogMutations.repointFolder(oldFolder, newFolder, LocalDateTime.now());
 
 		Assertions.assertThat(catalogFileLocationRepository.findById(direct).orElseThrow().getOriginalPath())
-				.isEqualTo(OLD_FOLDER + "\\a.jpg");
+				.isEqualTo(under(oldFolder, "a.jpg"));
+	}
+
+	/** A folder under the temporary root, named the way this file system names. */
+	private String at(String... names) {
+		return PathUtils.normalize(Path.of(library.toString(), names));
+	}
+
+	private String under(String folder, String... names) {
+		return PathUtils.normalize(Path.of(folder, names));
 	}
 
 	private String keyOf(Long catalogFileId) {
@@ -105,9 +138,10 @@ class FolderRepointIntegrationTest extends SharedPostgresIntegrationTest {
 	}
 
 	private Long catalogued(String path, String folder) {
-		CatalogFile file = CatalogFile.builder().fileKey(path).fileName(path.substring(path.lastIndexOf('\\') + 1))
-				.extension("jpg").sizeBytes(4L).modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO)
-				.lifecycleStatus(LifecycleStatus.ACTIVE).build();
+		CatalogFile file = CatalogFile.builder().fileKey(path)
+				.fileName(Path.of(path).getFileName().toString()).extension("jpg").sizeBytes(4L)
+				.modifiedAt(LocalDateTime.now()).fileType(FileType.PHOTO).lifecycleStatus(LifecycleStatus.ACTIVE)
+				.build();
 		file.setLocation(CatalogFileLocation.builder().catalogFile(file).currentPath(path).currentFolder(folder)
 				.originalPath(path).originalFolder(folder).build());
 

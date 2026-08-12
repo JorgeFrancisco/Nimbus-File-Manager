@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -65,6 +66,16 @@ class OwnershipLossIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private OperationLockService operationLockService;
@@ -250,7 +261,7 @@ class OwnershipLossIntegrationTest {
 	private ClaimedExecution claim(Path folder) {
 		executionRepository.saveAndFlush(Execution.builder().executionType(ExecutionType.INVENTORY)
 				.status(ExecutionStatus.PENDING).sourcePath(folder.toString()).recursive(true).executeFlag(true)
-				.createdAt(LocalDateTime.now()).availableAt(LocalDateTime.now()).build());
+				.createdAt(LocalDateTime.now(clock)).availableAt(LocalDateTime.now(clock)).build());
 
 		return executionQueue.reserve(identity.workerId(), List.of(ExecutionType.INVENTORY.name()), MAX_CLAIMS,
 				LEASE_SECONDS).orElseThrow();

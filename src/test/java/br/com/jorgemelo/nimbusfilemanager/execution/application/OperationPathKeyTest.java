@@ -49,10 +49,15 @@ class OperationPathKeyTest {
 	}
 
 	@Test
+	/**
+	 * The separator of the file system this runs on, not a backslash: on Linux a
+	 * backslash is an ordinary character in a name, so the old literal asked about a
+	 * different folder instead of about a trailing separator.
+	 */
 	void ignoresATrailingSeparator(@TempDir Path folder) {
 		Path target = folder.resolve("fotos");
 
-		assertThat(OperationPathKey.canonical(target)).isEqualTo(OperationPathKey.canonical(Path.of(target + "\\")));
+		assertThat(OperationPathKey.canonical(target)).isEqualTo(OperationPathKey.canonical(Path.of(target + target.getFileSystem().getSeparator())));
 	}
 
 	@Test

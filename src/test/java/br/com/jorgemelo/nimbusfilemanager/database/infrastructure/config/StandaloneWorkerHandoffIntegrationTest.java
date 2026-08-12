@@ -41,16 +41,16 @@ import br.com.jorgemelo.nimbusfilemanager.shared.domain.repository.ExecutionRepo
  * Everything before this proved the decision inside one JVM. What the product
  * actually does is start a second one, and the only thing that crosses is the
  * environment: the workspace. The worker has to find the database from that
- * alone - no URL on its command line, no password in its arguments, nothing held
- * in the application's memory.
+ * alone - no URL on its command line, no password in its arguments, nothing
+ * held in the application's memory.
  *
  * <p>
  * The test plays the application: it owns a PostgreSQL, has the schema, writes
  * the connection down where the application writes it, and puts a row in the
- * database. Then it launches a real JVM with the {@code worker} profile and asks
- * it what it found. A worker that reached some other PostgreSQL would boot
- * perfectly well and count zero, which is why the count is the assertion and not
- * the exit code.
+ * database. Then it launches a real JVM with the {@code worker} profile and
+ * asks it what it found. A worker that reached some other PostgreSQL would boot
+ * perfectly well and count zero, which is why the count is the assertion and
+ * not the exit code.
  */
 @SpringBootTest
 @Testcontainers
@@ -60,11 +60,14 @@ class StandaloneWorkerHandoffIntegrationTest {
 
 	private static final int STARTUP_GUARD_SECONDS = 180;
 
-	/** Long enough to cover the second in which it used to end, with room to spare. */
+	/**
+	 * Long enough to cover the second in which it used to end, with room to spare.
+	 */
 	private static final int STAYS_UP_SECONDS = 20;
 
 	private static final String READY = "Worker ready";
 
+	@SuppressWarnings("resource")
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
@@ -110,14 +113,13 @@ class StandaloneWorkerHandoffIntegrationTest {
 		runWorkerIn(workspace);
 
 		assertThat(workspace.resolve(WorkspaceFolders.DATABASE).resolve("cluster")).doesNotExist();
-		assertThat(connectionFile(workspace)).as("and what the application wrote is untouched")
-			.hasContent(written);
+		assertThat(connectionFile(workspace)).as("and what the application wrote is untouched").hasContent(written);
 	}
 
 	/**
 	 * The worker that follows a worker that ended reads the same file and reaches
-	 * the same database. Nothing had to be kept in the application's memory to
-	 * hand over again, which is the point of writing it down.
+	 * the same database. Nothing had to be kept in the application's memory to hand
+	 * over again, which is the point of writing it down.
 	 */
 	@Test
 	void aSecondWorkerAfterTheFirstOneEndedReachesTheSameDatabase(@TempDir Path workspace) throws Exception {
@@ -145,8 +147,7 @@ class StandaloneWorkerHandoffIntegrationTest {
 		ProbeResult probe = runWorkerIn(workspace);
 
 		assertThat(probe.exitCode()).as("it did not start").isNotZero();
-		assertThat(probe.output()).contains("no embedded database connection")
-				.contains(WorkspaceFolders.DATABASE);
+		assertThat(probe.output()).contains("no embedded database connection").contains(WorkspaceFolders.DATABASE);
 		assertThat(probe.output()).as("and never reached anything").doesNotContain(StandaloneWorkerProbe.REACHED);
 		assertThat(probe.output()).as("nor the password").doesNotContain("handoff-password");
 	}
@@ -199,7 +200,10 @@ class StandaloneWorkerHandoffIntegrationTest {
 		}
 	}
 
-	/** The real application under the worker profile, not a probe that reports and exits. */
+	/**
+	 * The real application under the worker profile, not a probe that reports and
+	 * exits.
+	 */
 	private Process startRealWorkerIn(Path workspace, Path output) throws IOException {
 		List<String> command = List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(), "-cp",
 				System.getProperty("java.class.path"), NimbusFileManagerApplication.class.getName(),

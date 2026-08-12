@@ -2,6 +2,7 @@ package br.com.jorgemelo.nimbusfilemanager.worker.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -57,6 +58,16 @@ class ExecutionReclaimIntegrationTest {
 	@Container
 	@ServiceConnection
 	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+
+	/**
+	 * The clock the application writes with, so what this test compares against is
+	 * in the same frame as what production stored. {@code LocalDateTime.now()} reads
+	 * the JVM's default zone while the row was written in the configured one, and
+	 * on any machine where the two differ - every CI runner - a fresh lease looked
+	 * hours expired and an expired one looked fresh.
+	 */
+	@Autowired
+	private Clock clock;
 
 	@Autowired
 	private ExecutionReclaim executionReclaim;
@@ -170,8 +181,8 @@ class ExecutionReclaimIntegrationTest {
 
 	private Execution abandonedRunning() {
 		return Execution.builder().executionType(ExecutionType.GEO_DATASET_UPDATE).status(ExecutionStatus.RUNNING)
-				.dedupKey(KEY).claimedBy("worker-that-is-gone").claimedAt(LocalDateTime.now().minusHours(1))
-				.leaseUntil(LocalDateTime.now().minusMinutes(30)).claimCount(1).recursive(false).executeFlag(true)
+				.dedupKey(KEY).claimedBy("worker-that-is-gone").claimedAt(LocalDateTime.now(clock).minusHours(1))
+				.leaseUntil(LocalDateTime.now(clock).minusMinutes(30)).claimCount(1).recursive(false).executeFlag(true)
 				.build();
 	}
 
